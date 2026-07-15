@@ -1,0 +1,133 @@
+- generic [ref=e24]:
+  - generic [ref=e25]:
+    - generic [ref=e26]:
+      - generic [ref=e27]: ◈
+      - text: QA
+      - generic [ref=e28]: 🏆 3
+    - generic [ref=e29]: 15/7 15:19
+  - generic:
+    - generic [ref=e30]:
+      - img [ref=e32]
+      - generic [ref=e35]: Users
+    - generic [ref=e36]:
+      - img [ref=e38]
+      - generic [ref=e41]: Career
+    - generic [ref=e42]:
+      - img [ref=e44]
+      - generic [ref=e46]: Projects
+    - generic [ref=e47]:
+      - img [ref=e49]
+      - generic [ref=e53]: Skills
+    - generic [ref=e54]:
+      - img [ref=e56]
+      - generic [ref=e60]: Photo
+    - generic [ref=e61]:
+      - img [ref=e63]
+      - generic [ref=e66]: Video
+    - generic [ref=e67]:
+      - img [ref=e69]
+      - generic [ref=e74]: Game
+    - generic [ref=e75]:
+      - img [ref=e77]
+      - generic [ref=e80]: TV
+    - generic [ref=e81]:
+      - img [ref=e83]
+      - generic [ref=e85]: News
+    - generic [ref=e86]:
+      - img [ref=e88]
+      - generic [ref=e92]: Music
+    - generic [ref=e93]:
+      - img [ref=e95]
+      - generic [ref=e98]: Network
+    - generic [ref=e99]:
+      - img [ref=e101]
+      - generic [ref=e104]: Settings
+  - generic:
+    - generic [ref=e216]:
+      - img [ref=e218]
+      - generic [ref=e222]: Add Photos…
+    - generic [ref=e224]:
+      - img [ref=e226]
+      - generic [ref=e228]:
+        - generic [ref=e229]: Art Gallery
+        - generic [ref=e236]: Masterpieces · The Met, New York
+    - generic [ref=e230]:
+      - img [ref=e232]
+      - generic [ref=e235]: Astronomy Photo of the Day
+  - generic [ref=e237]:
+    - generic [ref=e238]:
+      - generic [ref=e239]:
+        - generic [ref=e240]: ART GALLERY — THE MET, NEW YORK
+        - textbox "Search art… (monet, samurai, gothic, waves)" [active] [ref=e241]
+      - generic [ref=e242]: 20 works
+    - generic [ref=e243]:
+      - generic [ref=e245] [cursor=pointer]:
+        - text: The Organ Rehearsal
+        - generic [ref=e246]: — Henry Lerolle
+      - generic [ref=e248] [cursor=pointer]:
+        - text: By the Seashore
+        - generic [ref=e249]: — Auguste Renoir
+      - generic [ref=e251] [cursor=pointer]:
+        - text: The Shepherd's Song
+        - generic [ref=e252]: — Pierre Puvis de Chavannes
+      - generic [ref=e254] [cursor=pointer]:
+        - text: Mont Sainte-Victoire and the Viaduct of the Arc River Valley
+        - generic [ref=e255]: — Paul Cézanne
+      - generic [ref=e257] [cursor=pointer]:
+        - text: Low Tide, Riverside Yacht Club
+        - generic [ref=e258]: — Theodore Robinson
+      - generic [ref=e260] [cursor=pointer]:
+        - text: Still Life with Flowers and Prickly Pears
+        - generic [ref=e261]: — Auguste Renoir
+      - generic [ref=e263] [cursor=pointer]:
+        - text: Still Life with Teapot and Fruit
+        - generic [ref=e264]: — Paul Gauguin
+      - generic [ref=e266] [cursor=pointer]:
+        - text: Madame Manet (Suzanne Leenhoff, 1829–1906) at Bellevue
+        - generic [ref=e267]: — Edouard Manet
+      - generic [ref=e269] [cursor=pointer]:
+        - text: Eugène Murer (Hyacinthe-Eugène Meunier, 1841–1906)
+        - generic [ref=e270]: — Auguste Renoir
+      - generic [ref=e272] [cursor=pointer]:
+        - text: The Pink Dress (Albertie-Marguerite Carré, later Madame Ferdinand-Henri Himmes, 1854–1935)
+        - generic [ref=e273]: — Berthe Morisot
+      - generic [ref=e275] [cursor=pointer]:
+        - text: Dancer
+        - generic [ref=e276]: — Edgar Degas
+      - generic [ref=e278] [cursor=pointer]:
+        - text: Roses in a Bowl
+        - generic [ref=e279]: — Henri Fantin-Latour
+      - generic [ref=e281] [cursor=pointer]:
+        - text: Princess Pauline Metternich (1836–1921) on the Beach
+        - generic [ref=e282]: — Eugène Boudin
+      - generic [ref=e284] [cursor=pointer]:
+        - text: The Siesta
+        - generic [ref=e285]: — Paul Gauguin
+      - generic [ref=e287] [cursor=pointer]:
+        - text: La Berceuse (Woman Rocking a Cradle; Augustine-Alix Pellicot Roulin, 1851–1930)
+        - generic [ref=e288]: — Vincent van Gogh
+      - generic [ref=e290] [cursor=pointer]:
+        - text: Boats
+        - generic [ref=e291]: — Julian Alden Weir
+      - generic [ref=e293] [cursor=pointer]:
+        - text: Chrysanthemums in the Garden at Petit-Gennevilliers
+        - generic [ref=e294]: — Gustave Caillebotte
+      - generic [ref=e296] [cursor=pointer]:
+        - text: Tilla Durieux (Ottilie Godeffroy, 1880–1971)
+        - generic [ref=e297]: — Auguste Renoir
+      - generic [ref=e299] [cursor=pointer]:
+        - text: Asters and Fruit on a Table
+        - generic [ref=e300]: — Henri Fantin-Latour
+      - generic [ref=e302] [cursor=pointer]:
+        - text: Still-Life with a Watermelon and Pomegranates
+        - generic [ref=e303]: — Paul Cézanne
+    - generic [ref=e304]:
+      - text: view full-screen ·
+      - text: back
+  - generic [ref=e141]:
+    - generic [ref=e142]:
+      - generic [ref=e143]: ←→↑↓
+      - text: navigate
+    - generic [ref=e144]: Enter — select
+    - generic [ref=e146]: Esc — back
+    - generic [ref=e148]: 🎮 supported

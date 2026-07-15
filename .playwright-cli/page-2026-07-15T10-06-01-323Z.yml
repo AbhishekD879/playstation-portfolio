@@ -1,0 +1,85 @@
+- generic [ref=e24]:
+  - generic [ref=e25]:
+    - generic [ref=e26]:
+      - generic [ref=e27]: ◈
+      - text: FLASHQA
+      - generic [ref=e28]: 🏆 1
+    - generic [ref=e29]: 15/7 15:35
+  - generic:
+    - generic [ref=e30]:
+      - img [ref=e32]
+      - generic [ref=e35]: Users
+    - generic [ref=e36]:
+      - img [ref=e38]
+      - generic [ref=e41]: Career
+    - generic [ref=e42]:
+      - img [ref=e44]
+      - generic [ref=e46]: Projects
+    - generic [ref=e47]:
+      - img [ref=e49]
+      - generic [ref=e53]: Skills
+    - generic [ref=e54]:
+      - img [ref=e56]
+      - generic [ref=e60]: Photo
+    - generic [ref=e61]:
+      - img [ref=e63]
+      - generic [ref=e66]: Video
+    - generic [ref=e67]:
+      - img [ref=e69]
+      - generic [ref=e74]: Game
+    - generic [ref=e75]:
+      - img [ref=e77]
+      - generic [ref=e80]: TV
+    - generic [ref=e81]:
+      - img [ref=e83]
+      - generic [ref=e85]: News
+    - generic [ref=e86]:
+      - img [ref=e88]
+      - generic [ref=e92]: Music
+    - generic [ref=e93]:
+      - img [ref=e95]
+      - generic [ref=e98]: Network
+    - generic [ref=e99]:
+      - img [ref=e101]
+      - generic [ref=e104]: Settings
+  - generic:
+    - generic:
+      - generic:
+        - img
+      - generic:
+        - generic: DOOM
+    - generic [ref=e260]:
+      - img [ref=e262]
+      - generic [ref=e266]: Chess vs Stockfish
+    - generic [ref=e267]:
+      - img [ref=e269]
+      - generic [ref=e273]: Lichess TV
+    - generic [ref=e274]:
+      - img [ref=e276]
+      - generic [ref=e281]: Trivia Arcade
+    - generic [ref=e282]:
+      - img [ref=e284]
+      - generic [ref=e286]:
+        - generic [ref=e287]: Flash Arcade
+        - generic [ref=e298]: Ruffle WASM + the Internet Archive
+    - generic [ref=e289]:
+      - img [ref=e291]
+      - generic [ref=e295]: Insert Disc…
+  - generic [ref=e430]:
+    - iframe [ref=e431]:
+      - generic [active] [ref=f1e1]:
+        - link "Skip to main content" [ref=f1e2] [cursor=pointer]:
+          - /url: "#maincontent"
+        - generic [ref=f1e4]:
+          - link "[screenshot] Click to Begin":
+            - /url: "#loading"
+            - img "[screenshot]" [ref=f1e6] [cursor=pointer]
+            - img "Click to Begin" [ref=f1e7] [cursor=pointer]
+    - 'button "⏏ QUIT — The Binding Of Isaac: Wrath of" [ref=e432] [cursor=pointer]'
+  - generic [ref=e141]:
+    - generic [ref=e142]:
+      - generic [ref=e143]: ←→↑↓
+      - text: navigate
+    - generic [ref=e144]: Enter — select
+    - generic [ref=e146]: Esc — back
+    - generic [ref=e148]: 🎮 supported

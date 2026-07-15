@@ -1,0 +1,130 @@
+- generic [ref=e25]:
+  - generic [ref=e26]:
+    - generic [ref=e27]:
+      - generic [ref=e28]: ◈
+      - text: PLAYER1
+      - generic [ref=e29]: 🏆 2
+    - generic [ref=e30]: 15/7 14:29
+  - generic:
+    - generic [ref=e31]:
+      - img [ref=e33]
+      - generic [ref=e36]: Users
+    - generic [ref=e37]:
+      - img [ref=e39]
+      - generic [ref=e42]: Career
+    - generic [ref=e43]:
+      - img [ref=e45]
+      - generic [ref=e47]: Projects
+    - generic [ref=e48]:
+      - img [ref=e50]
+      - generic [ref=e54]: Skills
+    - generic [ref=e55]:
+      - img [ref=e57]
+      - generic [ref=e61]: Photo
+    - generic [ref=e62]:
+      - img [ref=e64]
+      - generic [ref=e67]: Video
+    - generic [ref=e68]:
+      - img [ref=e70]
+      - generic [ref=e75]: Game
+    - generic [ref=e76]:
+      - img [ref=e78]
+      - generic [ref=e81]: TV
+    - generic [ref=e82]:
+      - img [ref=e84]
+      - generic [ref=e86]: News
+    - generic [ref=e87]:
+      - img [ref=e89]
+      - generic [ref=e93]: Music
+    - generic [ref=e94]:
+      - img [ref=e96]
+      - generic [ref=e99]: Network
+    - generic [ref=e100]:
+      - img [ref=e102]
+      - generic [ref=e105]: Settings
+  - generic:
+    - generic [ref=e401]:
+      - img [ref=e403]
+      - generic [ref=e406]:
+        - generic [ref=e407]: Archive Cinema
+        - generic [ref=e408]: Public-domain films from archive.org
+    - generic [ref=e409]:
+      - img [ref=e411]
+      - generic [ref=e415]: YouTube
+  - generic [ref=e416]:
+    - generic [ref=e417]:
+      - generic [ref=e418]:
+        - generic [ref=e419]: ARCHIVE CINEMA — PUBLIC-DOMAIN FILMS · ARCHIVE.ORG
+        - 'textbox "Search films… (try: detour, dementia, plan 9)" [active] [ref=e420]'
+      - generic [ref=e421]: 60 films · most-watched first
+    - generic [ref=e422]:
+      - generic [ref=e424] [cursor=pointer]: Sci-Fi / Horror
+      - generic [ref=e426] [cursor=pointer]: Silent Films
+      - generic [ref=e428] [cursor=pointer]: Comedy Films
+      - generic [ref=e430] [cursor=pointer]: Film Noir
+      - generic [ref=e432] [cursor=pointer]: Miscellaneous Feature Films
+      - generic [ref=e434] [cursor=pointer]: The Video Cellar Collection
+      - generic [ref=e436] [cursor=pointer]: Picfixer Feature Film Collection
+      - generic [ref=e438] [cursor=pointer]: CUKESIM's New Job! ( Charles Chaplin-1915)
+      - generic [ref=e440] [cursor=pointer]: Silent Hall of Fame
+      - generic [ref=e442] [cursor=pointer]: Sex Madness
+      - generic [ref=e444] [cursor=pointer]: Colorized and Upscaled Movies
+      - generic [ref=e446] [cursor=pointer]: German Cinema from Lutz Mommartz
+      - generic [ref=e448] [cursor=pointer]: Charlie Chaplin Festival
+      - generic [ref=e450] [cursor=pointer]: The Fast And The Furious
+      - generic [ref=e452] [cursor=pointer]: Dr. Sex.
+      - generic [ref=e454] [cursor=pointer]: Return of the Kung Fu Dragon
+      - generic [ref=e456] [cursor=pointer]: His Girl Friday
+      - generic [ref=e458] [cursor=pointer]: Voyage to the Planet of Prehistoric Women
+      - generic [ref=e460] [cursor=pointer]: House on Haunted Hill
+      - generic [ref=e462] [cursor=pointer]: Jungle Book
+      - generic [ref=e464] [cursor=pointer]: Reefer Madness
+      - generic [ref=e466] [cursor=pointer]: Sita Sings the Blues
+      - generic [ref=e468] [cursor=pointer]: Utopia
+      - generic [ref=e470] [cursor=pointer]: The Pied Piper of Hamelin
+      - generic [ref=e472] [cursor=pointer]: Escape From Sobibor
+      - generic [ref=e474] [cursor=pointer]: Nazi Concentration Camps
+      - generic [ref=e476] [cursor=pointer]: Bloody Pit of Horror
+      - generic [ref=e478] [cursor=pointer]: Abraham Lincoln
+      - generic [ref=e480] [cursor=pointer]: Dressed To Kill
+      - generic [ref=e482] [cursor=pointer]: Diary of a Nudist
+      - generic [ref=e484] [cursor=pointer]: The Child Molester (1964)
+      - generic [ref=e486] [cursor=pointer]: Three Stooges Episodes
+      - generic [ref=e488] [cursor=pointer]: Suddenly
+      - generic [ref=e490] [cursor=pointer]: Recurring Dinosaur Infestation Films
+      - generic [ref=e492] [cursor=pointer]: The Stranger
+      - generic [ref=e494] [cursor=pointer]: The Georges Méliès Collection
+      - generic [ref=e496] [cursor=pointer]: Tarzan's Revenge
+      - generic [ref=e498] [cursor=pointer]: The Naked Witch
+      - generic [ref=e500] [cursor=pointer]: McLintock!
+      - generic [ref=e502] [cursor=pointer]: Mclintock
+      - generic [ref=e504] [cursor=pointer]: My Favorite Brunette
+      - generic [ref=e506] [cursor=pointer]: Science Fiction Films
+      - generic [ref=e508] [cursor=pointer]: Gulliver's Travels
+      - generic [ref=e510] [cursor=pointer]: The Phantom of the Opera
+      - generic [ref=e512] [cursor=pointer]: 20,000 Leagues Under the Sea
+      - generic [ref=e514] [cursor=pointer]: The House On Haunted Hill
+      - generic [ref=e516] [cursor=pointer]: Invasion of the Bee girls
+      - generic [ref=e518] [cursor=pointer]: The Lost World
+      - generic [ref=e520] [cursor=pointer]: Grave of the Vampire
+      - generic [ref=e522] [cursor=pointer]: Killers From Space
+      - generic [ref=e524] [cursor=pointer]: New Adventures of Tarzan
+      - generic [ref=e526] [cursor=pointer]: Das Kabinett des Doktor Caligari ( The Cabinet of Dr. Caligari )
+      - generic [ref=e528] [cursor=pointer]: As You Like It
+      - generic [ref=e530] [cursor=pointer]: Royal Wedding
+      - generic [ref=e532] [cursor=pointer]: Sex Madness
+      - generic [ref=e534] [cursor=pointer]: Scarlet Street
+      - generic [ref=e536] [cursor=pointer]: The Flying Deuces
+      - generic [ref=e538] [cursor=pointer]: Meet John Doe
+      - generic [ref=e540] [cursor=pointer]: Charlie Chaplin's " The Pawnshop"
+      - generic [ref=e542] [cursor=pointer]: Little Princess, The
+    - generic [ref=e543]:
+      - text: watch ·
+      - text: back
+  - generic [ref=e148]:
+    - generic [ref=e149]:
+      - generic [ref=e150]: ←→↑↓
+      - text: navigate
+    - generic [ref=e151]: Enter — select
+    - generic [ref=e153]: Esc — back
+    - generic [ref=e155]: 🎮 supported

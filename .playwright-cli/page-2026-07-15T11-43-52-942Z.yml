@@ -1,0 +1,8 @@
+- generic [active] [ref=e1]:
+  - link "Skip to main content" [ref=e2] [cursor=pointer]:
+    - /url: "#maincontent"
+  - generic [ref=e4]:
+    - link "[screenshot] Click to Begin":
+      - /url: "#loading"
+      - img "[screenshot]" [ref=e6] [cursor=pointer]
+      - img "Click to Begin" [ref=e7] [cursor=pointer]

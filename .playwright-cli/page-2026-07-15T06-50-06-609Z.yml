@@ -1,0 +1,7 @@
+- generic [ref=e12]:
+  - generic [ref=e13]: Who's playing?
+  - generic [ref=e19]:
+    - generic [ref=e20]: ✦
+    - generic [ref=e21]: ◀ choose avatar ▶
+    - textbox "ENTER NAME" [active] [ref=e22]
+    - generic [ref=e23]: ENTER — create · ESC — back

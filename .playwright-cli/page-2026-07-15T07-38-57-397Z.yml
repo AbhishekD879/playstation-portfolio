@@ -1,0 +1,81 @@
+- generic [ref=e25]:
+  - generic [ref=e26]:
+    - generic [ref=e27]:
+      - generic [ref=e28]: ●
+      - text: TESTER
+      - generic [ref=e29]: 🏆 2
+    - generic [ref=e30]: 15/7 13:08
+  - generic:
+    - generic [ref=e31]:
+      - img [ref=e33]
+      - generic [ref=e36]: Users
+    - generic [ref=e37]:
+      - img [ref=e39]
+      - generic [ref=e42]: Career
+    - generic [ref=e43]:
+      - img [ref=e45]
+      - generic [ref=e47]: Projects
+    - generic [ref=e48]:
+      - img [ref=e50]
+      - generic [ref=e54]: Skills
+    - generic [ref=e55]:
+      - img [ref=e57]
+      - generic [ref=e62]: Game
+    - generic [ref=e63]:
+      - img [ref=e65]
+      - generic [ref=e68]: TV
+    - generic [ref=e69]:
+      - img [ref=e71]
+      - generic [ref=e73]: News
+    - generic [ref=e74]:
+      - img [ref=e76]
+      - generic [ref=e80]: Music
+    - generic [ref=e81]:
+      - img [ref=e83]
+      - generic [ref=e86]: Network
+    - generic [ref=e87]:
+      - img [ref=e89]
+      - generic [ref=e92]: Settings
+  - generic:
+    - generic [ref=e218]:
+      - img [ref=e220]
+      - generic [ref=e223]:
+        - generic [ref=e224]: NASA TV
+        - generic [ref=e225]: Space, launches & ISS live
+    - generic [ref=e226]:
+      - img [ref=e228]
+      - generic [ref=e232]: Red Bull TV
+    - generic [ref=e233]:
+      - img [ref=e235]
+      - generic [ref=e239]: Al Jazeera English
+    - generic [ref=e240]:
+      - img [ref=e242]
+      - generic [ref=e246]: DW English
+    - generic [ref=e247]:
+      - img [ref=e249]
+      - generic [ref=e253]: Add Channel…
+  - generic [ref=e254]:
+    - generic [ref=e256]:
+      - generic [ref=e257]:
+        - generic [ref=e258]: ● OFFLINE
+        - text: NASA TV
+      - button "✕ close" [ref=e259] [cursor=pointer]
+    - generic [ref=e260]:
+      - generic [ref=e261]: 📡 Channel offline
+      - generic [ref=e262]: This stream isn't answering right now — public feeds come and go. Try another channel.
+  - generic [ref=e263]:
+    - generic [ref=e264]: ▮
+    - generic [ref=e265]:
+      - generic [ref=e266]: Trophy earned — Channel Surfer
+      - generic [ref=e267]: Watched live TV
+  - generic [ref=e135]:
+    - generic [ref=e136]:
+      - generic [ref=e137]: ←→↑↓
+      - text: navigate
+    - generic [ref=e138]:
+      - generic [ref=e139]: ✕
+      - text: Enter — select
+    - generic [ref=e140]:
+      - generic [ref=e141]: ○
+      - text: Esc — back
+    - generic [ref=e142]: 🎮 supported

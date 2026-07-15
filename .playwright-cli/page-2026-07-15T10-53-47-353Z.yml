@@ -1,0 +1,90 @@
+- generic [ref=e24]:
+  - generic [ref=e25]:
+    - generic [ref=e26]:
+      - generic [ref=e27]: ●
+      - text: CHESSQA
+      - generic [ref=e28]: 🏆 1
+    - generic [ref=e29]: 15/7 16:23
+  - generic:
+    - generic [ref=e30]:
+      - img [ref=e32]
+      - generic [ref=e35]: Users
+    - generic [ref=e36]:
+      - img [ref=e38]
+      - generic [ref=e41]: Career
+    - generic [ref=e42]:
+      - img [ref=e44]
+      - generic [ref=e46]: Projects
+    - generic [ref=e47]:
+      - img [ref=e49]
+      - generic [ref=e53]: Skills
+    - generic [ref=e54]:
+      - img [ref=e56]
+      - generic [ref=e60]: Photo
+    - generic [ref=e61]:
+      - img [ref=e63]
+      - generic [ref=e66]: Video
+    - generic [ref=e67]:
+      - img [ref=e69]
+      - generic [ref=e74]: Game
+    - generic [ref=e75]:
+      - img [ref=e77]
+      - generic [ref=e80]: TV
+    - generic [ref=e81]:
+      - img [ref=e83]
+      - generic [ref=e85]: News
+    - generic [ref=e86]:
+      - img [ref=e88]
+      - generic [ref=e92]: Music
+    - generic [ref=e93]:
+      - img [ref=e95]
+      - generic [ref=e98]: Network
+    - generic [ref=e99]:
+      - img [ref=e101]
+      - generic [ref=e104]: Settings
+  - generic:
+    - generic:
+      - generic:
+        - img
+      - generic:
+        - generic: Send Mail
+    - generic [ref=e475]:
+      - img [ref=e477]
+      - generic [ref=e480]: LinkedIn
+    - generic [ref=e481]:
+      - img [ref=e483]
+      - generic [ref=e486]: Call
+    - generic [ref=e487]:
+      - img [ref=e489]
+      - generic [ref=e492]: Weather
+    - generic [ref=e493]:
+      - img [ref=e495]
+      - generic [ref=e498]:
+        - generic [ref=e499]: Planet Earth
+        - generic [ref=e522]: Live map — quakes & rain radar
+    - generic [ref=e501]:
+      - img [ref=e503]
+      - generic [ref=e506]: Time Machine
+    - generic [ref=e508]:
+      - img [ref=e510]
+      - generic [ref=e514]: Dictionary
+    - generic [ref=e516]:
+      - img [ref=e518]
+      - generic [ref=e521]: Wikipedia
+  - generic [ref=e523]:
+    - generic [ref=e524]:
+      - generic [ref=e525]: PLANET EARTH — LIVE
+      - button "🗺 flat map" [ref=e526] [cursor=pointer]
+      - textbox "Search a place… (ENTER)" [ref=e527]: tokyo
+      - button "⌖ where am I" [ref=e528] [cursor=pointer]
+      - button "◉ quakes 24h" [active] [ref=e529] [cursor=pointer]
+      - button "🌧 rain radar" [ref=e530] [cursor=pointer]
+      - button "✕ close" [ref=e531] [cursor=pointer]
+    - generic: "◉ strongest today: M6.2 — 34 km WSW of Sarangani, Philippines"
+  - generic [ref=e141]:
+    - generic [ref=e142]:
+      - generic [ref=e143]: ←→↑↓
+      - text: navigate
+    - generic [ref=e144]: Enter — select
+    - generic [ref=e146]: Esc — back
+    - generic [ref=e148]: 🎮 supported

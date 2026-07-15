@@ -1,0 +1,198 @@
+- generic [ref=e24]:
+  - generic [ref=e25]:
+    - generic [ref=e26]:
+      - generic [ref=e27]: ◈
+      - text: QA
+      - generic [ref=e28]: 🏆 3
+    - generic [ref=e29]: 15/7 15:14
+  - generic:
+    - generic [ref=e30]:
+      - img [ref=e32]
+      - generic [ref=e35]: Users
+    - generic [ref=e36]:
+      - img [ref=e38]
+      - generic [ref=e41]: Career
+    - generic [ref=e42]:
+      - img [ref=e44]
+      - generic [ref=e46]: Projects
+    - generic [ref=e47]:
+      - img [ref=e49]
+      - generic [ref=e53]: Skills
+    - generic [ref=e54]:
+      - img [ref=e56]
+      - generic [ref=e60]: Photo
+    - generic [ref=e61]:
+      - img [ref=e63]
+      - generic [ref=e66]: Video
+    - generic [ref=e67]:
+      - img [ref=e69]
+      - generic [ref=e74]: Game
+    - generic [ref=e75]:
+      - img [ref=e77]
+      - generic [ref=e80]: TV
+    - generic [ref=e81]:
+      - img [ref=e83]
+      - generic [ref=e85]: News
+    - generic [ref=e86]:
+      - img [ref=e88]
+      - generic [ref=e92]: Music
+    - generic [ref=e93]:
+      - img [ref=e95]
+      - generic [ref=e98]: Network
+    - generic [ref=e99]:
+      - img [ref=e101]
+      - generic [ref=e104]: Settings
+  - generic:
+    - generic [ref=e1207]:
+      - img [ref=e1209]
+      - generic [ref=e1213]: Add Photos…
+    - generic [ref=e1215]:
+      - img [ref=e1217]
+      - generic [ref=e1219]:
+        - generic [ref=e1220]: Art Gallery
+        - generic [ref=e1227]: Masterpieces · Art Institute of Chicago
+    - generic [ref=e1221]:
+      - img [ref=e1223]
+      - generic [ref=e1226]: Astronomy Photo of the Day
+  - generic [ref=e1228]:
+    - generic [ref=e1229]:
+      - generic [ref=e1230]:
+        - generic [ref=e1231]: ART GALLERY — ART INSTITUTE OF CHICAGO
+        - textbox "Search art… (monet, samurai, gothic, waves)" [active] [ref=e1232]
+      - generic [ref=e1233]: 40 works
+    - generic [ref=e1234]:
+      - generic [ref=e1236] [cursor=pointer]:
+        - text: Early Morning, Tarpon Springs
+        - generic [ref=e1237]: — George Inness (American, 1825–1894)
+      - generic [ref=e1239] [cursor=pointer]:
+        - text: Sunlight
+        - generic [ref=e1240]: — Richard E. Miller (American, 1875–1943)
+      - generic [ref=e1242] [cursor=pointer]:
+        - text: Flower Girl in Holland
+        - generic [ref=e1243]: — George Hitchcock
+      - generic [ref=e1245] [cursor=pointer]:
+        - text: Afterglow
+        - generic [ref=e1246]: — Jonas Lie (American, 1880–1940)
+      - generic [ref=e1248] [cursor=pointer]:
+        - text: Lady in Green and Gray
+        - generic [ref=e1249]: — Thomas Wilmer Dewing (American, 1851–1938)
+      - generic [ref=e1251] [cursor=pointer]:
+        - text: A Sunday on La Grande Jatte — 1884
+        - generic [ref=e1252]: — Georges Seurat (French, 1859–1891)
+      - generic [ref=e1254] [cursor=pointer]:
+        - text: Snow-Crowned Hills
+        - generic [ref=e1255]: — Guy Carleton Wiggins (American, 1883–1962)
+      - generic [ref=e1257] [cursor=pointer]:
+        - text: A Holiday
+        - generic [ref=e1258]: — Edward Henry Potthast (American, 1857–1927)
+      - generic [ref=e1260] [cursor=pointer]:
+        - text: The Scream
+        - generic [ref=e1261]: — Edvard Munch
+      - generic [ref=e1263] [cursor=pointer]:
+        - text: Mrs. George Swinton (Elizabeth Ebsworth)
+        - generic [ref=e1264]: — John Singer Sargent (American, 1856–1925)
+      - generic [ref=e1266] [cursor=pointer]:
+        - text: Portrait of Charles Deering
+        - generic [ref=e1267]: — John Singer Sargent (American, 1856–1925)
+      - generic [ref=e1269] [cursor=pointer]:
+        - text: An Alcove in the Art Students' League
+        - generic [ref=e1270]: — Charles Courtney Curran (American, 1861–1942)
+      - generic [ref=e1272] [cursor=pointer]:
+        - text: Coast Scene, Bathers
+        - generic [ref=e1273]: — James McNeill Whistler (American, 1834–1903)
+      - generic [ref=e1275] [cursor=pointer]:
+        - text: The Annunciation
+        - generic [ref=e1276]: — George Hitchcock (American, 1850–1913)
+      - generic [ref=e1278] [cursor=pointer]:
+        - text: Dorothea and Francesca
+        - generic [ref=e1279]: — Cecilia Beaux (American, 1855–1942)
+      - generic [ref=e1281] [cursor=pointer]:
+        - text: Boats at Rest
+        - generic [ref=e1282]: — Arthur Wesley Dow (American, 1857–1922)
+      - generic [ref=e1284] [cursor=pointer]:
+        - text: The Puff of Smoke
+        - generic [ref=e1285]: — Gifford Beal (American, 1879–1956)
+      - generic [ref=e1287] [cursor=pointer]:
+        - text: Madame Paul Escudier (Louise Lefevre)
+        - generic [ref=e1288]: — John Singer Sargent (American, 1856–1925)
+      - generic [ref=e1290] [cursor=pointer]:
+        - text: The Shoe Shop
+        - generic [ref=e1291]: — Elizabeth Sparhawk-Jones (American, 1885–1968)
+      - generic [ref=e1293] [cursor=pointer]:
+        - text: On a Balcony
+        - generic [ref=e1294]: — Mary Cassatt (American, 1844–1926)
+      - generic [ref=e1296] [cursor=pointer]:
+        - text: The Mill Pond
+        - generic [ref=e1297]: — George Inness (American, 1825–1894)
+      - generic [ref=e1299] [cursor=pointer]:
+        - text: The Coffee House
+        - generic [ref=e1300]: — Alson Skinner Clark (American, 1876–1949)
+      - generic [ref=e1302] [cursor=pointer]:
+        - text: Violet and Silver—The Deep Sea
+        - generic [ref=e1303]: — James McNeill Whistler (American, 1834–1903)
+      - generic [ref=e1305] [cursor=pointer]:
+        - text: Woman Bathing
+        - generic [ref=e1306]: — Mary Cassatt (American, 1844-1926)
+      - generic [ref=e1308] [cursor=pointer]:
+        - text: The Hippodrome, London
+        - generic [ref=e1309]: — Everett Shinn (American, 1876–1953)
+      - generic [ref=e1311] [cursor=pointer]:
+        - text: After the Bullfight
+        - generic [ref=e1312]: — Mary Cassatt (American, 1844–1926)
+      - generic [ref=e1314] [cursor=pointer]:
+        - text: Blue Rafters
+        - generic [ref=e1315]: — Frederic Clay Bartlett (American, 1873–1953)
+      - generic [ref=e1317] [cursor=pointer]:
+        - text: The Child's Bath
+        - generic [ref=e1318]: — Mary Cassatt (American, 1844–1926)
+      - generic [ref=e1320] [cursor=pointer]:
+        - text: Alice
+        - generic [ref=e1321]: — William Merritt Chase (American, 1849–1916)
+      - generic [ref=e1323] [cursor=pointer]:
+        - text: The Powerhouse, Falls Village, Connecticut
+        - generic [ref=e1324]: — Walter Elmer Schofield (American, 1866–1944)
+      - generic [ref=e1326] [cursor=pointer]:
+        - text: Icebound
+        - generic [ref=e1327]: — Willard Metcalf (American, 1858–1925)
+      - generic [ref=e1329] [cursor=pointer]:
+        - text: Coast of Maine
+        - generic [ref=e1330]: — Winslow Homer (American, 1836–1910)
+      - generic [ref=e1332] [cursor=pointer]:
+        - text: The Northwest Wind
+        - generic [ref=e1333]: — Charles Harold Davis (American, 1856–1933)
+      - generic [ref=e1335] [cursor=pointer]:
+        - text: Wind-Swept Sands
+        - generic [ref=e1336]: — William Merritt Chase (American, 1849–1916)
+      - generic [ref=e1338] [cursor=pointer]:
+        - text: Mrs. Charles Deering (Marion Denison Whipple)
+        - generic [ref=e1339]: — John Singer Sargent (American, 1856–1925)
+      - generic [ref=e1341] [cursor=pointer]:
+        - text: Nude with Cats
+        - generic [ref=e1342]: — Pablo Picasso
+      - generic [ref=e1344] [cursor=pointer]:
+        - text: The White Bridge
+        - generic [ref=e1345]: — John Henry Twachtman (American, 1853–1902)
+      - generic [ref=e1347] [cursor=pointer]:
+        - text: Thistles
+        - generic [ref=e1348]: — John Singer Sargent (American, 1856–1925)
+      - generic [ref=e1350] [cursor=pointer]:
+        - text: Spring in France
+        - generic [ref=e1351]: — Robert William Vonnoh
+      - generic [ref=e1353] [cursor=pointer]:
+        - text: Two Women on the Shore
+        - generic [ref=e1354]: — Edvard Munch
+    - generic [ref=e1355]:
+      - text: view full-screen ·
+      - text: back
+  - generic [ref=e1358]:
+    - generic [ref=e1359]: ▮
+    - generic [ref=e1360]:
+      - generic [ref=e1361]: Trophy earned — Curator
+      - generic [ref=e1362]: Toured the art gallery
+  - generic [ref=e141]:
+    - generic [ref=e142]:
+      - generic [ref=e143]: ←→↑↓
+      - text: navigate
+    - generic [ref=e144]: Enter — select
+    - generic [ref=e146]: Esc — back
+    - generic [ref=e148]: 🎮 supported

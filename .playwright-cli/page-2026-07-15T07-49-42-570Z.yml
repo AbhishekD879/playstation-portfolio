@@ -1,0 +1,69 @@
+- generic [ref=e268]:
+  - generic [ref=e269]:
+    - generic [ref=e270]:
+      - generic [ref=e271]: ●
+      - text: TESTER
+      - generic [ref=e272]: 🏆 2
+    - generic [ref=e273]: 15/7 13:19
+  - generic:
+    - generic [ref=e274]:
+      - img [ref=e276]
+      - generic [ref=e279]: Users
+    - generic [ref=e280]:
+      - img [ref=e282]
+      - generic [ref=e285]: Career
+    - generic [ref=e286]:
+      - img [ref=e288]
+      - generic [ref=e290]: Projects
+    - generic [ref=e291]:
+      - img [ref=e293]
+      - generic [ref=e297]: Skills
+    - generic [ref=e298]:
+      - img [ref=e300]
+      - generic [ref=e305]: Game
+    - generic [ref=e306]:
+      - img [ref=e308]
+      - generic [ref=e311]: TV
+    - generic [ref=e312]:
+      - img [ref=e314]
+      - generic [ref=e316]: News
+    - generic [ref=e317]:
+      - img [ref=e319]
+      - generic [ref=e323]: Music
+    - generic [ref=e324]:
+      - img [ref=e326]
+      - generic [ref=e329]: Network
+    - generic [ref=e330]:
+      - img [ref=e332]
+      - generic [ref=e335]: Settings
+  - generic:
+    - generic [ref=e465]:
+      - img [ref=e467]
+      - generic [ref=e470]:
+        - generic [ref=e471]: Red Bull TV
+        - generic [ref=e472]: Extreme sports & music, live
+    - generic [ref=e473]:
+      - img [ref=e475]
+      - generic [ref=e479]: CBS News
+    - generic [ref=e480]:
+      - img [ref=e482]
+      - generic [ref=e486]: DW English
+    - generic [ref=e487]:
+      - img [ref=e489]
+      - generic [ref=e493]: Add Channel…
+  - generic [ref=e496]:
+    - generic [ref=e497]:
+      - generic [ref=e498]: ● LIVE
+      - text: Red Bull TV
+    - button "✕ close" [ref=e499] [cursor=pointer]
+  - generic [ref=e372]:
+    - generic [ref=e373]:
+      - generic [ref=e374]: ←→↑↓
+      - text: navigate
+    - generic [ref=e375]:
+      - generic [ref=e376]: ✕
+      - text: Enter — select
+    - generic [ref=e377]:
+      - generic [ref=e378]: ○
+      - text: Esc — back
+    - generic [ref=e379]: 🎮 supported

@@ -1,0 +1,114 @@
+- generic [ref=e24]:
+  - generic [ref=e25]:
+    - generic [ref=e26]:
+      - generic [ref=e27]: ●
+      - text: CHESSQA
+      - generic [ref=e28]: 🏆 1
+    - generic [ref=e29]: 15/7 16:37
+  - generic:
+    - generic [ref=e30]:
+      - img [ref=e32]
+      - generic [ref=e35]: Users
+    - generic [ref=e36]:
+      - img [ref=e38]
+      - generic [ref=e41]: Career
+    - generic [ref=e42]:
+      - img [ref=e44]
+      - generic [ref=e46]: Projects
+    - generic [ref=e47]:
+      - img [ref=e49]
+      - generic [ref=e53]: Skills
+    - generic [ref=e54]:
+      - img [ref=e56]
+      - generic [ref=e60]: Photo
+    - generic [ref=e61]:
+      - img [ref=e63]
+      - generic [ref=e66]: Video
+    - generic [ref=e67]:
+      - img [ref=e69]
+      - generic [ref=e74]: Game
+    - generic [ref=e75]:
+      - img [ref=e77]
+      - generic [ref=e80]: TV
+    - generic [ref=e81]:
+      - img [ref=e83]
+      - generic [ref=e85]: News
+    - generic [ref=e86]:
+      - img [ref=e88]
+      - generic [ref=e92]: Music
+    - generic [ref=e93]:
+      - img [ref=e95]
+      - generic [ref=e98]: Network
+    - generic [ref=e99]:
+      - img [ref=e101]
+      - generic [ref=e104]: Settings
+  - generic:
+    - generic [ref=e251]:
+      - img [ref=e253]
+      - generic [ref=e258]: DOOM
+    - generic [ref=e260]:
+      - img [ref=e262]
+      - generic [ref=e265]:
+        - generic [ref=e266]: Chess vs Stockfish
+        - generic [ref=e552]: The real engine, running on this device
+    - generic [ref=e267]:
+      - img [ref=e269]
+      - generic [ref=e273]: Lichess TV
+    - generic [ref=e274]:
+      - img [ref=e276]
+      - generic [ref=e281]: Trivia Arcade
+    - generic [ref=e282]:
+      - img [ref=e284]
+      - generic [ref=e287]: Flash Arcade
+    - generic [ref=e289]:
+      - img [ref=e291]
+      - generic [ref=e295]: Insert Disc…
+  - generic [ref=e553]:
+    - generic [ref=e554]:
+      - generic [ref=e555]: CHESS — STOCKFISH 18 · WASM, ON THIS DEVICE
+      - generic [ref=e556] [cursor=pointer]: "engine: Club"
+    - generic [ref=e557]:
+      - generic [ref=e558] [cursor=pointer]: ♜
+      - generic [ref=e559] [cursor=pointer]: ♞
+      - generic [ref=e560] [cursor=pointer]: ♝
+      - generic [ref=e561] [cursor=pointer]: ♛
+      - generic [ref=e562] [cursor=pointer]: ♚
+      - generic [ref=e563] [cursor=pointer]: ♝
+      - generic [ref=e564] [cursor=pointer]: ♞
+      - generic [ref=e565] [cursor=pointer]: ♜
+      - generic [ref=e566] [cursor=pointer]: ♟
+      - generic [ref=e567] [cursor=pointer]: ♟
+      - generic [ref=e568] [cursor=pointer]: ♟
+      - generic [ref=e569] [cursor=pointer]: ♟
+      - generic [ref=e570] [cursor=pointer]: ♟
+      - generic [ref=e571] [cursor=pointer]: ♟
+      - generic [ref=e572] [cursor=pointer]: ♟
+      - generic [ref=e573] [cursor=pointer]: ♟
+      - generic [ref=e606] [cursor=pointer]: ♙
+      - generic [ref=e607] [cursor=pointer]: ♙
+      - generic [ref=e608] [cursor=pointer]: ♙
+      - generic [ref=e609] [cursor=pointer]: ♙
+      - generic [ref=e610] [cursor=pointer]: ♙
+      - generic [ref=e611] [cursor=pointer]: ♙
+      - generic [ref=e612] [cursor=pointer]: ♙
+      - generic [ref=e613] [cursor=pointer]: ♙
+      - generic [ref=e614] [cursor=pointer]: ♖
+      - generic [ref=e615] [cursor=pointer]: ♘
+      - generic [ref=e616] [cursor=pointer]: ♗
+      - generic [ref=e617] [cursor=pointer]: ♕
+      - generic [ref=e618] [cursor=pointer]: ♔
+      - generic [ref=e619] [cursor=pointer]: ♗
+      - generic [ref=e620] [cursor=pointer]: ♘
+      - generic [ref=e621] [cursor=pointer]: ♖
+    - generic [ref=e622]: You’re white — click or drag a piece, dots show where it can go.
+    - generic [ref=e623]:
+      - text: arrows move ·
+      - text: pick / drop · O — engine level ·
+      - text: quit
+  - generic [ref=e141]:
+    - generic [ref=e142]:
+      - generic [ref=e143]: ←→↑↓
+      - text: navigate
+    - generic [ref=e144]: Enter — select
+    - generic [ref=e146]: Esc — back
+    - generic [ref=e148]: 🎮 supported

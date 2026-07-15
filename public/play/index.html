@@ -1,0 +1,79 @@
+<!doctype html>
+<!-- Minimal same-origin host for Play! (jpd002/Play-, BSD-2-Clause — see
+     https://github.com/jpd002/Play-). We drive the emscripten module directly:
+     the parent posts a File; we boot it. No third-party UI, full-bleed canvas. -->
+<html>
+<head>
+<meta charset="utf-8" />
+<style>
+  html, body { margin: 0; height: 100%; background: #000; overflow: hidden; }
+  canvas { width: 100%; height: 100%; display: block; object-fit: contain; outline: none; }
+</style>
+</head>
+<body>
+<!-- id MUST be "outputCanvas": the wasm hardcodes the "#outputCanvas" selector
+     for its WebGL context — any other id boots to a black screen. -->
+<canvas id="outputCanvas" width="640" height="480" tabindex="0"></canvas>
+<script type="module">
+  import Play from "/play/Play.js";
+  // The wasm reads the disc through this device (mirrors upstream's wiring).
+  class DiscImageDevice {
+    constructor(module) { this.module = module; this.doneFlag = false; this.file = null; }
+    read(ptr, offset, size) {
+      if (!this.file) throw new Error("No file set.");
+      this.doneFlag = false;
+      this.file.slice(offset, offset + size).arrayBuffer().then((buf) => {
+        this.module.HEAPU8.set(new Uint8Array(buf), ptr);
+        this.doneFlag = true;
+      });
+    }
+    getFileSize() { if (!this.file) throw new Error("No file set."); return this.file.size; }
+    isDone() { return this.doneFlag; }
+    setFile(f) { this.file = f; }
+  }
+
+  const canvas = document.getElementById("outputCanvas");
+  let mod = null;
+  const tell = (type, extra) => parent.postMessage(Object.assign({ type }, extra || {}), location.origin);
+
+  Play({
+    canvas,
+    locateFile: (f) => "/play/" + f,
+    mainScriptUrlOrBlob: location.origin + "/play/Play.js",
+  }).then((m) => {
+    mod = m;
+    window.__mod = m; // debug/stats handle (same-origin parent can read fps)
+    mod.discImageDevice = new DiscImageDevice(mod);
+    mod.FS.mkdir("/work");
+    // initVm creates the VM + WebGL context (#outputCanvas) + input + sound.
+    // Without this ccall nothing boots — bootElf/bootDiscImage assume the VM exists.
+    mod.ccall("initVm", "", [], []);
+    tell("play-ready");
+  }).catch((e) => tell("play-error", { message: String(e).slice(0, 200) }));
+
+  addEventListener("message", async (e) => {
+    if (e.origin !== location.origin || !e.data) return;
+    if (e.data.type === "play-boot" && e.data.file && mod) {
+      try {
+        const f = e.data.file, name = f.name;
+        if (name.toLowerCase().endsWith(".elf")) {
+          const bytes = new Uint8Array(await f.arrayBuffer());
+          const h = mod.FS.open(name, "w+");
+          mod.FS.write(h, bytes, 0, bytes.length, 0);
+          mod.FS.close(h);
+          mod.bootElf(name);
+        } else {
+          mod.discImageDevice.setFile(f);
+          mod.bootDiscImage(name);
+        }
+        canvas.focus();
+        tell("play-booted");
+      } catch (err) {
+        tell("play-error", { message: String(err).slice(0, 200) });
+      }
+    }
+  });
+  addEventListener("click", () => canvas.focus());
+</script>
+</body>
+</html>

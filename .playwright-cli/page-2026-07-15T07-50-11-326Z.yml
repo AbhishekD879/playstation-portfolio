@@ -1,0 +1,128 @@
+- generic [ref=e268]:
+  - generic [ref=e269]:
+    - generic [ref=e270]:
+      - generic [ref=e271]: ●
+      - text: TESTER
+      - generic [ref=e272]: 🏆 3
+    - generic [ref=e273]: 15/7 13:20
+  - generic:
+    - generic [ref=e274]:
+      - img [ref=e276]
+      - generic [ref=e279]: Users
+    - generic [ref=e280]:
+      - img [ref=e282]
+      - generic [ref=e285]: Career
+    - generic [ref=e286]:
+      - img [ref=e288]
+      - generic [ref=e290]: Projects
+    - generic [ref=e291]:
+      - img [ref=e293]
+      - generic [ref=e297]: Skills
+    - generic [ref=e298]:
+      - img [ref=e300]
+      - generic [ref=e305]: Game
+    - generic [ref=e306]:
+      - img [ref=e308]
+      - generic [ref=e311]: TV
+    - generic [ref=e312]:
+      - img [ref=e314]
+      - generic [ref=e316]: News
+    - generic [ref=e317]:
+      - img [ref=e319]
+      - generic [ref=e323]: Music
+    - generic [ref=e324]:
+      - img [ref=e326]
+      - generic [ref=e329]: Network
+    - generic [ref=e330]:
+      - img [ref=e332]
+      - generic [ref=e335]: Settings
+  - generic:
+    - generic [ref=e500]:
+      - img [ref=e502]
+      - generic [ref=e504]:
+        - generic [ref=e505]: Hacker News
+        - generic [ref=e506]: Front page, live
+    - generic [ref=e507]:
+      - img [ref=e509]
+      - generic [ref=e512]: DEV Community
+    - generic [ref=e513]:
+      - img [ref=e515]
+      - generic [ref=e519]: Add RSS Feed…
+  - generic [ref=e521]:
+    - generic [ref=e522]: NEWS — HACKER NEWS
+    - generic [ref=e523]:
+      - generic [ref=e524] [cursor=pointer]:
+        - generic [ref=e525]: Your 'app' could have been a webpage (so I fixed it for you)
+        - generic [ref=e526]: ▲ 788 · 473 comments
+      - generic [ref=e527] [cursor=pointer]:
+        - generic [ref=e528]: "Bonsai 27B: A 27B-Class model that runs on a phone"
+        - generic [ref=e529]: ▲ 557 · 199 comments
+      - generic [ref=e530] [cursor=pointer]:
+        - generic [ref=e531]: How to stop Claude from saying load-bearing
+        - generic [ref=e532]: ▲ 513 · 539 comments
+      - generic [ref=e533] [cursor=pointer]:
+        - generic [ref=e534]: Are we offloading too much of our thinking to AI?
+        - generic [ref=e535]: ▲ 453 · 418 comments
+      - generic [ref=e536] [cursor=pointer]:
+        - generic [ref=e537]: The Tower Keeps Rising
+        - generic [ref=e538]: ▲ 447 · 211 comments
+      - generic [ref=e539] [cursor=pointer]:
+        - generic [ref=e540]: "Cursor 0day: When Full Disclosure Becomes the Only Protection Left"
+        - generic [ref=e541]: ▲ 336 · 160 comments
+      - generic [ref=e542] [cursor=pointer]:
+        - generic [ref=e543]: Jurassic Park computers in excruciating detail
+        - generic [ref=e544]: ▲ 329 · 79 comments
+      - generic [ref=e545] [cursor=pointer]:
+        - generic [ref=e546]: I'm a USB-C Maximalist
+        - generic [ref=e547]: ▲ 259 · 357 comments
+      - generic [ref=e548] [cursor=pointer]:
+        - generic [ref=e549]: Vancouver PD website features Quick Escape button that wipes itself from history
+        - generic [ref=e550]: ▲ 241 · 94 comments
+      - generic [ref=e551] [cursor=pointer]:
+        - generic [ref=e552]: "Show HN: Juggler – an open-source GUI coding agent, by the creator of JUCE"
+        - generic [ref=e553]: ▲ 222 · 99 comments
+      - generic [ref=e554] [cursor=pointer]:
+        - generic [ref=e555]: How I use HTMX with Go
+        - generic [ref=e556]: ▲ 211 · 53 comments
+      - generic [ref=e557] [cursor=pointer]:
+        - generic [ref=e558]: The largest available Minecraft world, totalling 15 TB
+        - generic [ref=e559]: ▲ 205 · 70 comments
+      - generic [ref=e560] [cursor=pointer]:
+        - generic [ref=e561]: The kids with phones are alright
+        - generic [ref=e562]: ▲ 194 · 168 comments
+      - generic [ref=e563] [cursor=pointer]:
+        - generic [ref=e564]: Dependabot version updates introduce default package cooldown
+        - generic [ref=e565]: ▲ 167 · 102 comments
+      - generic [ref=e566] [cursor=pointer]:
+        - generic [ref=e567]: "TS-2026-009: Insecure argument handling in Tailscale SSH permitted root access"
+        - generic [ref=e568]: ▲ 129 · 58 comments
+      - generic [ref=e569] [cursor=pointer]:
+        - generic [ref=e570]: Solving 20 Erdős Problems with 20 Codex Accounts Running in Parallel
+        - generic [ref=e571]: ▲ 118 · 52 comments
+      - generic [ref=e572] [cursor=pointer]:
+        - generic [ref=e573]: Microsoft has released software updates to plug at least 570 security holes
+        - generic [ref=e574]: ▲ 106 · 50 comments
+      - generic [ref=e575] [cursor=pointer]:
+        - generic [ref=e576]: I tricked Claude into leaking your deepest, darkest secrets
+        - generic [ref=e577]: ▲ 106 · 35 comments
+    - generic [ref=e578]:
+      - generic [ref=e579]: ✕
+      - text: open article ·
+      - generic [ref=e580]: ○
+      - text: back
+  - generic [ref=e582]:
+    - generic [ref=e583]: ▮
+    - generic [ref=e584]:
+      - generic [ref=e585]: Trophy earned — Well Read
+      - generic [ref=e586]: Opened the news
+  - generic [ref=e372]:
+    - generic [ref=e373]:
+      - generic [ref=e374]: ←→↑↓
+      - text: navigate
+    - generic [ref=e375]:
+      - generic [ref=e376]: ✕
+      - text: Enter — select
+    - generic [ref=e377]:
+      - generic [ref=e378]: ○
+      - text: Esc — back
+    - generic [ref=e379]: 🎮 supported

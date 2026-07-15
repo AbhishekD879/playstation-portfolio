@@ -1,0 +1,82 @@
+- generic [ref=e45]:
+  - generic [ref=e46]:
+    - generic [ref=e47]:
+      - generic [ref=e48]: ◎
+      - text: NAV
+      - generic [ref=e49]: 🏆 1
+    - generic [ref=e50]: 15/7 14:40
+  - generic:
+    - generic [ref=e51]:
+      - img [ref=e53]
+      - generic [ref=e56]: Users
+    - generic [ref=e57]:
+      - img [ref=e59]
+      - generic [ref=e62]: Career
+    - generic [ref=e63]:
+      - img [ref=e65]
+      - generic [ref=e67]: Projects
+    - generic [ref=e68]:
+      - img [ref=e70]
+      - generic [ref=e74]: Skills
+    - generic [ref=e75]:
+      - img [ref=e77]
+      - generic [ref=e81]: Photo
+    - generic [ref=e82]:
+      - img [ref=e84]
+      - generic [ref=e87]: Video
+    - generic [ref=e88]:
+      - img [ref=e90]
+      - generic [ref=e95]: Game
+    - generic [ref=e96]:
+      - img [ref=e98]
+      - generic [ref=e101]: TV
+    - generic [ref=e102]:
+      - img [ref=e104]
+      - generic [ref=e106]: News
+    - generic [ref=e107]:
+      - img [ref=e109]
+      - generic [ref=e113]: Music
+    - generic [ref=e114]:
+      - img [ref=e116]
+      - generic [ref=e119]: Network
+    - generic [ref=e120]:
+      - img [ref=e122]
+      - generic [ref=e125]: Settings
+  - generic:
+    - generic [ref=e176]:
+      - img [ref=e178]
+      - generic [ref=e182]:
+        - generic [ref=e183]: AI Abhishek
+        - generic [ref=e184]: On-device LLM — ask about my work
+    - generic [ref=e185]:
+      - img [ref=e187]
+      - generic [ref=e190]: What's New
+    - generic [ref=e191]:
+      - img [ref=e193]
+      - generic [ref=e197]: Trophy Collection
+    - generic [ref=e198]:
+      - img [ref=e200]
+      - generic [ref=e205]: Profile Photo
+    - generic [ref=e206]:
+      - img [ref=e208]
+      - generic [ref=e214]: Switch User
+    - generic:
+      - generic:
+        - img
+      - generic:
+        - generic: About Abhishek
+  - generic [ref=e215]:
+    - generic [ref=e216]:
+      - generic [ref=e217]: AI ABHISHEK — Llama-3.2-1B-Instruct-q4f16_1 · WEBGPU, ON-DEVICE, NO SERVER
+      - button "✕ close" [ref=e218] [cursor=pointer]
+    - generic [ref=e219]:
+      - generic [ref=e220]: Run a real LLM in your browser?
+      - paragraph [ref=e221]: Downloads ~700 MB once (then cached), runs fully on your GPU — nothing you type leaves this device. Not recommended on mobile data.
+      - button "▶ WAKE THE MODEL" [ref=e222] [cursor=pointer]
+  - generic [ref=e168]:
+    - generic [ref=e169]:
+      - generic [ref=e170]: ←→↑↓
+      - text: navigate
+    - generic [ref=e171]: Enter — select
+    - generic [ref=e173]: Esc — back
+    - generic [ref=e175]: 🎮 supported

@@ -1,0 +1,59 @@
+- generic [ref=e4]:
+  - generic [ref=e5]:
+    - generic [ref=e6]:
+      - generic [ref=e7]: ✦
+      - text: ABHISHEK
+      - generic [ref=e8]: 🏆 2
+    - generic [ref=e9]: 15/7 12:28
+  - generic:
+    - generic [ref=e10]:
+      - img [ref=e12]
+      - generic [ref=e15]: Users
+    - generic [ref=e16]:
+      - img [ref=e18]
+      - generic [ref=e21]: Career
+    - generic [ref=e22]:
+      - img [ref=e24]
+      - generic [ref=e26]: Projects
+    - generic [ref=e27]:
+      - img [ref=e29]
+      - generic [ref=e33]: Skills
+    - generic [ref=e34]:
+      - img [ref=e36]
+      - generic [ref=e41]: Game
+    - generic [ref=e42]:
+      - img [ref=e44]
+      - generic [ref=e48]: Music
+    - generic [ref=e49]:
+      - img [ref=e51]
+      - generic [ref=e54]: Network
+    - generic [ref=e55]:
+      - img [ref=e57]
+      - generic [ref=e60]: Settings
+  - generic:
+    - generic [ref=e61]:
+      - img [ref=e63]
+      - generic [ref=e66]:
+        - generic [ref=e67]: GoHighLevel
+        - generic [ref=e68]: MAY 2026 – PRESENT
+    - generic [ref=e69]:
+      - img [ref=e71]
+      - generic [ref=e75]: Phenom People
+    - generic [ref=e76]:
+      - img [ref=e78]
+      - generic [ref=e82]: Ivy Comptech
+    - generic [ref=e83]:
+      - img [ref=e85]
+      - generic [ref=e89]: Outlearn
+    - generic [ref=e90]:
+      - img [ref=e92]
+      - generic [ref=e96]: SPPU
+  - generic [ref=e97]:
+    - generic [ref=e98]: ←→↑↓ navigate
+    - generic [ref=e99]:
+      - generic [ref=e100]: ✕
+      - text: Enter — select
+    - generic [ref=e101]:
+      - generic [ref=e102]: ○
+      - text: Esc — back
+    - generic [ref=e103]: 🎮 supported

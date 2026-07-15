@@ -1,0 +1,66 @@
+- generic [ref=e23]:
+  - generic [ref=e24]:
+    - generic [ref=e25]:
+      - text: TESTER
+      - generic [ref=e26]: 🏆 3
+    - generic [ref=e27]: 15/7 13:23
+  - generic:
+    - generic [ref=e28]:
+      - img [ref=e30]
+      - generic [ref=e33]: Users
+    - generic [ref=e34]:
+      - img [ref=e36]
+      - generic [ref=e39]: Career
+    - generic [ref=e40]:
+      - img [ref=e42]
+      - generic [ref=e44]: Projects
+    - generic [ref=e45]:
+      - img [ref=e47]
+      - generic [ref=e51]: Skills
+    - generic [ref=e52]:
+      - img [ref=e54]
+      - generic [ref=e59]: Game
+    - generic [ref=e60]:
+      - img [ref=e62]
+      - generic [ref=e65]: TV
+    - generic [ref=e66]:
+      - img [ref=e68]
+      - generic [ref=e70]: News
+    - generic [ref=e71]:
+      - img [ref=e73]
+      - generic [ref=e77]: Music
+    - generic [ref=e78]:
+      - img [ref=e80]
+      - generic [ref=e83]: Network
+    - generic [ref=e84]:
+      - img [ref=e86]
+      - generic [ref=e89]: Settings
+  - generic:
+    - generic [ref=e90]:
+      - img [ref=e92]
+      - generic [ref=e95]:
+        - generic [ref=e96]: GoHighLevel
+        - generic [ref=e97]: MAY 2026 – PRESENT
+    - generic [ref=e98]:
+      - img [ref=e100]
+      - generic [ref=e104]: Phenom People
+    - generic [ref=e105]:
+      - img [ref=e107]
+      - generic [ref=e111]: Ivy Comptech
+    - generic [ref=e112]:
+      - img [ref=e114]
+      - generic [ref=e118]: Outlearn
+    - generic [ref=e119]:
+      - img [ref=e121]
+      - generic [ref=e125]: SPPU
+  - generic [ref=e126]:
+    - generic [ref=e127]:
+      - generic [ref=e128]: ←→↑↓
+      - text: navigate
+    - generic [ref=e129]:
+      - generic [ref=e130]: ✕
+      - text: Enter — select
+    - generic [ref=e131]:
+      - generic [ref=e132]: ○
+      - text: Esc — back
+    - generic [ref=e133]: 🎮 supported
