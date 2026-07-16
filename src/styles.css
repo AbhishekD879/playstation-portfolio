@@ -99,6 +99,26 @@ img.status-avatar, img.ptile-avatar { object-fit: cover; border: 1px solid rgba(
 @keyframes battBlink { 50% { opacity: 0.25; } }
 @keyframes battCharge { 0%, 100% { background: rgba(255,255,255,0.14); } 40% { background: #fff; } }
 
+/* ———— the XMB crossbar (categories × items) ———— */
+.xmb-cross {
+  position: absolute; left: 0; right: 0;
+  top: calc(22vh + 40px); height: 1px; z-index: 1; pointer-events: none;
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.05) 8%, rgba(255,255,255,0.16) 50%, rgba(255,255,255,0.05) 92%, transparent);
+}
+.xmb-cross::after {
+  content: ""; position: absolute; top: 50%; left: calc(22vw + 55px);
+  width: 320px; height: 5px; transform: translate(-50%, -50%); border-radius: 3px;
+  background: radial-gradient(closest-side, color-mix(in oklab, var(--xmb-tint) 35%, #fff), transparent);
+  opacity: 0.8; filter: blur(1.5px);
+}
+
+/* faint △○✕□ watermark — the PlayStation signature */
+.ps-motif {
+  position: absolute; right: 4.5vw; bottom: 9vh; z-index: 0;
+  display: flex; gap: 20px; opacity: 0.08; pointer-events: none;
+}
+.ps-motif svg { width: 30px; height: 30px; color: #fff; }
+
 /* ———— category strip ———— */
 .cat-strip {
   position: absolute;

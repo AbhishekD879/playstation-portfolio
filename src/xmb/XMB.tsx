@@ -108,7 +108,7 @@ export default function XMB(props: {
     { id: "trivia", title: "Trivia Arcade", sub: "10 questions · Open Trivia DB", icon: "question", action: { type: "trivia" } },
     { id: "flash", title: "Flash Arcade", sub: "Ruffle WASM + the Internet Archive", icon: "lightning", action: { type: "flash" } },
     { id: "ps2", title: "PlayStation 2", sub: "Experimental emulator · desktop only", icon: "disc", action: { type: "ps2" } },
-    { id: "pc", title: "Other OS", sub: "A whole x86 PC — KolibriOS, runs in the console", icon: "power", action: { type: "pc" } },
+    { id: "pc", title: "Other OS", sub: "A whole x86 PC — KolibriOS, runs in the console", icon: "monitor", action: { type: "pc" } },
     { id: "insert", title: "Insert Disc…", sub: "Load a ROM you own — read locally, never uploaded", icon: "plus", action: { type: "insert-disc" } },
     ...games().map((g) => ({
       id: `g-${g.id}`,
@@ -121,7 +121,7 @@ export default function XMB(props: {
 
   const musicItems = createMemo<XmbItem[]>(() => [
     { id: "radio-guide", title: "Radio Stations", sub: "Search ~3,000 live stations worldwide", icon: "globe", action: { type: "radio-guide" } },
-    { id: "podcasts", title: "Podcasts", sub: "Search any show — plays in the background", icon: "rss", action: { type: "podcasts" } },
+    { id: "podcasts", title: "Podcasts", sub: "Search any show — plays in the background", icon: "mic", action: { type: "podcasts" } },
     { id: "winamp", title: "Winamp", sub: "The 1997 legend, resurrected in JS", icon: "lightning", action: { type: "webamp" } },
     ...(station()
       ? [{ id: "radio-stop", title: `■ Stop — ${station()!.label}`, sub: "Now playing", icon: "speaker", action: { type: "radio-play" as const, url: "", label: "" } }]
@@ -133,7 +133,7 @@ export default function XMB(props: {
         action: { type: "radio-play" as const, url: r.url, label: r.label },
       })),
     { id: "radio", title: "Console Radio", sub: "Generative lo-fi — synthesized live", icon: "note", action: { type: "music-toggle" } },
-    { id: "visualizer", title: "Visualizer", sub: "Music visualizations — reacts to the radio & mic", icon: "spark", action: { type: "visualizer" } },
+    { id: "visualizer", title: "Visualizer", sub: "Music visualizations — reacts to the radio & mic", icon: "wave", action: { type: "visualizer" } },
     {
       id: "sp-default", title: "lofi beats", sub: "Spotify · curated focus playlist", icon: "disc",
       action: { type: "spotify", url: "https://open.spotify.com/embed/playlist/37i9dQZF1DWWQRwui0ExPn", label: "lofi beats" },
@@ -991,6 +991,13 @@ export default function XMB(props: {
           </span>
         </Show>
         <div class="status-clock">{clock()}</div>
+      </div>
+
+      {/* the XMB crossbar — horizontal categories meet the vertical item column */}
+      <div class="xmb-cross" />
+      {/* faint PlayStation face-button signature */}
+      <div class="ps-motif">
+        <Icon name="triangle" /><Icon name="circle" /><Icon name="cross" /><Icon name="square" />
       </div>
 
       {/* category strip */}

@@ -39,6 +39,16 @@ export const ICONS: Record<string, () => JSX.Element> = {
   knight: () => S(<><path d="M14 40h20M17 36c0-10 2-16 10-19l-2-7 6 3c5 2.5 8 8 8 15v8" /><path d="M17 36h20M24 15l-7 8" /></>),
   question: () => S(<><circle cx="24" cy="24" r="16" /><path d="M18.5 19a5.5 5.5 0 1 1 8 4.9c-1.8 1-2.5 2-2.5 4.1" /><circle cx="24" cy="33" r="0.6" fill="currentColor" /></>),
   lightning: () => S(<><path d="M27 6 12 27h9l-2 15 15-21h-9l2-15Z" /></>),
+  clock: () => S(<><circle cx="24" cy="24" r="16" /><path d="M24 14v10l7 4" /></>),
+  monitor: () => S(<><rect x="6" y="10" width="36" height="23" rx="3" /><path d="M18 40h12M24 33v7" /></>),
+  wave: () => S(<><path d="M9 20v8M16.5 13v22M24 8v32M31.5 15v18M39 21v6" /></>),
+  mic: () => S(<><rect x="18" y="7" width="12" height="21" rx="6" /><path d="M12 23a12 12 0 0 0 24 0M24 35v6M17 41h14" /></>),
+  pen: () => S(<><path d="M9 39l3-9L31 11l6 6-19 19-9 3Z" /><path d="M28 14l6 6" /></>),
+  // the PlayStation face-button glyphs — the signature visual language
+  triangle: () => S(<><path d="M24 9 41 38H7L24 9Z" /></>),
+  circle: () => S(<><circle cx="24" cy="24" r="15" /></>),
+  cross: () => S(<><path d="M12 12 36 36M36 12 12 36" /></>),
+  square: () => S(<><rect x="11" y="11" width="26" height="26" rx="1.5" /></>),
 };
 
 export function Icon(props: { name: string }) {
