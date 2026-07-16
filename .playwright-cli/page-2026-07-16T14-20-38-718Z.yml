@@ -1,0 +1,87 @@
+- generic [ref=e11]:
+  - generic [ref=e12]:
+    - generic [ref=e13]:
+      - generic [ref=e14]: ▲
+      - text: ELF
+      - generic [ref=e15]: 🏆 3
+    - button "voice command (on-device)" [ref=e16] [cursor=pointer]:
+      - img [ref=e17]
+    - generic "Battery 100% — charging" [ref=e20]
+    - generic [ref=e26]: 16/7 19:50
+  - generic:
+    - img
+    - img
+    - img
+    - img
+  - generic:
+    - generic [ref=e27]:
+      - img [ref=e29]
+      - generic [ref=e32]: Users
+    - generic [ref=e33]:
+      - img [ref=e35]
+      - generic [ref=e38]: Career
+    - generic [ref=e39]:
+      - img [ref=e41]
+      - generic [ref=e43]: Projects
+    - generic [ref=e44]:
+      - img [ref=e46]
+      - generic [ref=e50]: Skills
+    - generic [ref=e51]:
+      - img [ref=e53]
+      - generic [ref=e57]: Photo
+    - generic [ref=e58]:
+      - img [ref=e60]
+      - generic [ref=e64]: Music
+    - generic [ref=e65]:
+      - img [ref=e67]
+      - generic [ref=e70]: Video
+    - generic [ref=e71]:
+      - img [ref=e73]
+      - generic [ref=e76]: TV
+    - generic [ref=e77]:
+      - img [ref=e79]
+      - generic [ref=e84]: Game
+    - generic [ref=e85]:
+      - img [ref=e87]
+      - generic [ref=e89]: News
+    - generic [ref=e90]:
+      - img [ref=e92]
+      - generic [ref=e95]: Web
+    - generic [ref=e96]:
+      - img [ref=e98]
+      - generic [ref=e101]: Contact
+    - generic [ref=e102]:
+      - img [ref=e104]
+      - generic [ref=e107]: Settings
+  - generic:
+    - generic [ref=e411]:
+      - img [ref=e413]
+      - generic [ref=e416]:
+        - generic [ref=e417]: GoHighLevel
+        - generic [ref=e418]: MAY 2026 – PRESENT
+    - generic [ref=e419]:
+      - img [ref=e421]
+      - generic [ref=e425]: Phenom People
+    - generic [ref=e426]:
+      - img [ref=e428]
+      - generic [ref=e432]: Ivy Comptech
+    - generic [ref=e433]:
+      - img [ref=e435]
+      - generic [ref=e439]: Outlearn
+    - generic [ref=e440]:
+      - img [ref=e442]
+      - generic [ref=e446]: SPPU
+  - generic [ref=e448]:
+    - generic [ref=e449]: MAY 2026 – PRESENT · Voice AI · current mission
+    - generic [ref=e450]: SDE 3 · AI — GoHighLevel
+    - generic [ref=e451]:
+      - paragraph [ref=e452]: Built Performance AI Prompt Optimizer workflows for Voice AI agents — prompt evaluation, optimization review, scenario scoring, production apply paths.
+      - paragraph [ref=e453]: "Designed production-safe eval-clone KB lifecycle: post-apply promote, detach, delete & runtime cleanup."
+      - paragraph [ref=e454]: Fixed daily-usage billing from billed call-duration seconds; unified Review & Apply CTAs behind a shared validation modal.
+    - generic [ref=e455]: Back
+  - generic [ref=e144]:
+    - generic [ref=e145]:
+      - generic [ref=e146]: ←→↑↓
+      - text: navigate
+    - generic [ref=e147]: Enter — select
+    - generic [ref=e149]: Esc — back

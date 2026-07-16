@@ -1491,7 +1491,6 @@ export default function XMB(props: {
         <span><b>←→↑↓</b> navigate</span>
         <span><span class="btn-x" /> Enter — select</span>
         <span><span class="btn-o" /> Esc — back</span>
-        <span>🎮 supported</span>
       </div>
 
       {/* on-screen controller — shown on touch devices; drives the exact same

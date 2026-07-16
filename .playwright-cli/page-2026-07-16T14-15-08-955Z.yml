@@ -1,0 +1,102 @@
+- generic [ref=e11]:
+  - generic [ref=e12]:
+    - generic [ref=e13]:
+      - generic [ref=e14]: ▲
+      - text: ELF
+      - generic [ref=e15]: 🏆 3
+    - button "voice command (on-device)" [ref=e16] [cursor=pointer]:
+      - img [ref=e17]
+    - generic "Battery 100% — charging" [ref=e20]
+    - generic [ref=e26]: 16/7 19:45
+  - generic:
+    - img
+    - img
+    - img
+    - img
+  - generic:
+    - generic [ref=e27]:
+      - img [ref=e29]
+      - generic [ref=e32]: Users
+    - generic [ref=e33]:
+      - img [ref=e35]
+      - generic [ref=e38]: Career
+    - generic [ref=e39]:
+      - img [ref=e41]
+      - generic [ref=e43]: Projects
+    - generic [ref=e44]:
+      - img [ref=e46]
+      - generic [ref=e50]: Skills
+    - generic [ref=e51]:
+      - img [ref=e53]
+      - generic [ref=e57]: Photo
+    - generic [ref=e58]:
+      - img [ref=e60]
+      - generic [ref=e64]: Music
+    - generic [ref=e65]:
+      - img [ref=e67]
+      - generic [ref=e70]: Video
+    - generic [ref=e71]:
+      - img [ref=e73]
+      - generic [ref=e76]: TV
+    - generic [ref=e77]:
+      - img [ref=e79]
+      - generic [ref=e84]: Game
+    - generic [ref=e85]:
+      - img [ref=e87]
+      - generic [ref=e89]: News
+    - generic [ref=e90]:
+      - img [ref=e92]
+      - generic [ref=e95]: Web
+    - generic [ref=e96]:
+      - img [ref=e98]
+      - generic [ref=e101]: Contact
+    - generic [ref=e102]:
+      - img [ref=e104]
+      - generic [ref=e107]: Settings
+  - generic:
+    - generic [ref=e350]:
+      - img [ref=e352]
+      - generic [ref=e357]: About Abhishek
+    - generic [ref=e359]:
+      - img [ref=e361]
+      - generic [ref=e366]: AI Abhishek
+    - generic [ref=e367]:
+      - img [ref=e369]
+      - generic [ref=e372]:
+        - generic [ref=e373]: Guestbook
+        - generic [ref=e396]: Sign the console — notes from visitors
+    - generic [ref=e374]:
+      - img [ref=e376]
+      - generic [ref=e379]: What's New
+    - generic [ref=e380]:
+      - img [ref=e382]
+      - generic [ref=e386]: Trophy Collection
+    - generic [ref=e388]:
+      - img [ref=e390]
+      - generic [ref=e395]: Profile Photo
+    - generic [ref=e397]:
+      - img [ref=e399]
+      - generic [ref=e405]: Switch User
+  - generic [ref=e406]:
+    - generic [ref=e407]:
+      - generic [ref=e408]: GUESTBOOK — SIGN THE CONSOLE
+      - button "✕ close" [ref=e409] [cursor=pointer]
+    - generic [ref=e410]:
+      - textbox "your name" [ref=e411]: ELF
+      - textbox "leave a note — it stays on the console" [ref=e412]
+      - button "✒ SIGN" [ref=e413] [cursor=pointer]
+    - generic [ref=e415]:
+      - generic [ref=e416]:
+        - generic [ref=e417]: Test
+        - generic [ref=e418]: 16 Jul 2026
+      - generic [ref=e419]: local check
+    - generic [ref=e420]:
+      - text: ENTER — sign ·
+      - text: close
+  - generic [ref=e144]:
+    - generic [ref=e145]:
+      - generic [ref=e146]: ←→↑↓
+      - text: navigate
+    - generic [ref=e147]: Enter — select
+    - generic [ref=e149]: Esc — back
+    - generic [ref=e151]: 🎮 supported
