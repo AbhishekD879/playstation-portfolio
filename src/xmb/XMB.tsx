@@ -211,14 +211,30 @@ export default function XMB(props: {
   }, 30_000);
   onCleanup(() => clearInterval(ptId));
 
-  // —— clock ——
+  // —— clock (12/24h — Date and Time Settings) ——
+  const [clock24, setClock24] = createSignal(localStorage.getItem("asp.clock24") !== "12");
   const tickClock = () => {
     const d = new Date();
-    setClock(`${d.getDate()}/${d.getMonth() + 1}  ${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`);
+    const h = d.getHours(), mm = String(d.getMinutes()).padStart(2, "0");
+    const t = clock24() ? `${String(h).padStart(2, "0")}:${mm}` : `${((h + 11) % 12) + 1}:${mm} ${h < 12 ? "AM" : "PM"}`;
+    setClock(`${d.getDate()}/${d.getMonth() + 1}  ${t}`);
   };
   tickClock();
   const clockId = setInterval(tickClock, 5000);
   onCleanup(() => clearInterval(clockId));
+
+  // —— battery: PS3-style status icon via the Battery API (Chromium only —
+  // icon simply doesn't render where the API doesn't exist) ——
+  const [battery, setBattery] = createSignal<{ level: number; charging: boolean } | null>(null);
+  let battCleanup: (() => void) | undefined;
+  (navigator as any).getBattery?.().then((b: any) => {
+    const upd = () => setBattery({ level: b.level, charging: b.charging });
+    upd();
+    b.addEventListener("levelchange", upd);
+    b.addEventListener("chargingchange", upd);
+    battCleanup = () => { b.removeEventListener("levelchange", upd); b.removeEventListener("chargingchange", upd); };
+  });
+  onCleanup(() => battCleanup?.());
 
   // —— toasts & trophies ——
   const pushToast = (title: string, sub: string, tier?: string) => {
@@ -499,6 +515,47 @@ export default function XMB(props: {
       case "sound-toggle": {
         const muted = sfx.toggleMute();
         pushToast("Sound", muted ? "Console muted" : "Console audio on");
+        break;
+      }
+      case "clock-format": {
+        sfx.confirm();
+        const v = !clock24();
+        setClock24(v);
+        localStorage.setItem("asp.clock24", v ? "24" : "12");
+        tickClock();
+        pushToast("Date and Time", v ? "24-hour clock" : "12-hour clock");
+        break;
+      }
+      case "saver-cycle": {
+        sfx.confirm();
+        const OPTS = [1.5, 3, 5, 10, 0];
+        const next = OPTS[(OPTS.indexOf(saverMins()) + 1) % OPTS.length];
+        setSaverMins(next);
+        localStorage.setItem("asp.saver", String(next));
+        pushToast("Power Save", next === 0 ? "Screen saver off" : `Screen saver after ${next === 1.5 ? "90 seconds" : `${next} minutes`}`);
+        break;
+      }
+      case "sysinfo": {
+        sfx.confirm();
+        const nav = navigator as any;
+        const gl = document.createElement("canvas").getContext("webgl");
+        const dbg = gl?.getExtension("WEBGL_debug_renderer_info");
+        const gpu = dbg ? String(gl!.getParameter(dbg.UNMASKED_RENDERER_WEBGL)) : "not reported";
+        const ua = navigator.userAgent;
+        const browser = ua.match(/(Edg|OPR|Firefox|Chrome|Safari)\/[\d.]+/)?.[0]?.replace("/", " ") ?? "unknown browser";
+        const os = /Mac/.test(ua) ? "macOS" : /Windows/.test(ua) ? "Windows" : /Android/.test(ua) ? "Android" : /Linux/.test(ua) ? "Linux" : /iPhone|iPad/.test(ua) ? "iOS" : "unknown OS";
+        const b = battery();
+        setPanel({
+          heading: "System Information",
+          tag: "SYSTEM SOFTWARE 1.2 — SOLIDJS + THREE.JS + GSAP",
+          body: [
+            `System: ${os} · ${browser} · ${navigator.hardwareConcurrency ?? "?"} cores${nav.deviceMemory ? ` · ${nav.deviceMemory} GB RAM` : ""}`,
+            `Graphics: ${gpu}`,
+            `Display: ${screen.width} × ${screen.height} @ ${devicePixelRatio}× · ${crossOriginIsolated ? "cross-origin isolated (PS2 core available)" : "not isolated"}`,
+            b ? `Battery: ${Math.round(b.level * 100)}%${b.charging ? " — charging" : ""}` : "Battery: not reported by this browser",
+            "Storage: profiles, trophies, themes & your game library live only in this browser.",
+          ],
+        });
         break;
       }
       case "switch-user":
@@ -803,14 +860,15 @@ export default function XMB(props: {
     }
   };
 
-  // —— screensaver: PS-style drifting clock after 90s idle ——
+  // —— screensaver: PS-style drifting clock after idle (Power Save Settings) ——
+  const [saverMins, setSaverMins] = createSignal(Number(localStorage.getItem("asp.saver") ?? 1.5));
   const poke = () => { lastActive = Date.now(); if (saver()) setSaver(false); };
   addEventListener("pointermove", poke);
   addEventListener("pointerdown", poke);
   addEventListener("keydown", poke);
   const saverId = setInterval(() => {
     const busy = tv() || guideOpen() || spotify() || news() || inputMode() || viewerOpen() || app() || yt() || apod() || dict();
-    if (!busy && Date.now() - lastActive > 90_000) setSaver(true);
+    if (!busy && saverMins() > 0 && Date.now() - lastActive > saverMins() * 60_000) setSaver(true);
   }, 5000);
   onCleanup(() => {
     if (gesturesOn()) stopGestures();
@@ -889,6 +947,20 @@ export default function XMB(props: {
         </div>
         <Show when={statusWeather()}><span class="status-weather">{statusWeather()}</span></Show>
         <Show when={padName()}><span class="status-pad" title={padName()!}>🎮</span></Show>
+        <Show when={battery()}>
+          <span
+            class="status-batt"
+            classList={{ low: battery()!.level <= 0.15 && !battery()!.charging, charging: battery()!.charging }}
+            title={`Battery ${Math.round(battery()!.level * 100)}%${battery()!.charging ? " — charging" : ""}`}
+          >
+            <span class="batt-body">
+              <span class="batt-cell" classList={{ on: battery()!.level > 0.05 }} />
+              <span class="batt-cell" classList={{ on: battery()!.level > 0.4 }} />
+              <span class="batt-cell" classList={{ on: battery()!.level > 0.7 }} />
+            </span>
+            <span class="batt-cap" />
+          </span>
+        </Show>
         <div class="status-clock">{clock()}</div>
       </div>
 

@@ -59,6 +59,9 @@ export interface XmbItem {
     | { type: "lichess-tv" }
     | { type: "themes" }
     | { type: "sound-toggle" }
+    | { type: "clock-format" }
+    | { type: "saver-cycle" }
+    | { type: "sysinfo" }
     | { type: "switch-user" }
     | { type: "trophies" }
     | { type: "restart" };
@@ -322,22 +325,13 @@ export const CATEGORIES: XmbCategory[] = [
     label: "Settings",
     icon: "gear",
     items: [
-      { id: "theme", title: "Theme", sub: "Change the console colour", icon: "spark", action: { type: "themes" } },
-      { id: "sound", title: "Sound", sub: "Toggle console audio", icon: "speaker", action: { type: "sound-toggle" } },
+      { id: "theme", title: "Theme Settings", sub: "Change the console colour", icon: "spark", action: { type: "themes" } },
+      { id: "sound", title: "Sound Settings", sub: "Toggle console audio", icon: "speaker", action: { type: "sound-toggle" } },
+      { id: "datetime", title: "Date and Time Settings", sub: "12-hour / 24-hour clock", icon: "info", action: { type: "clock-format" } },
+      { id: "powersave", title: "Power Save Settings", sub: "Screen saver — start time", icon: "power", action: { type: "saver-cycle" } },
       { id: "gesture", title: "Camera Navigation", sub: "Beta — wave at the webcam to browse", icon: "camera", action: { type: "gesture-toggle" } },
       { id: "padtest", title: "Controller Test", sub: "Live diagnostic — is your gamepad seen?", icon: "gamepad", action: { type: "gamepad-test" } },
-      {
-        id: "sysinfo", title: "System Information", sub: "Portfolio console", icon: "info",
-        action: {
-          type: "panel", heading: "Portfolio Console", tag: "SYSTEM SOFTWARE 1.1",
-          body: [
-            "Interface: cross-media bar — SolidJS + TypeScript + Three.js + GSAP.",
-            "Disc drive: EmulatorJS — reads GBA, GB/GBC, NES, SNES, Mega Drive, N64, NDS. Discs are read locally in your browser; nothing is uploaded.",
-            "Music: built-in generative radio, plus Spotify playback.",
-            "Profiles, trophies, themes and your game library are stored only in this browser.",
-          ],
-        },
-      },
+      { id: "sysinfo", title: "System Information", sub: "Hardware, display & battery", icon: "info", action: { type: "sysinfo" } },
       { id: "backup", title: "Back Up Console Data", sub: "Profiles, trophies & links → JSON file", icon: "disc-doc", action: { type: "backup" } },
       { id: "restore", title: "Restore Backup", sub: "Load a console backup file", icon: "folder", action: { type: "restore" } },
       { id: "restart", title: "Restart Console", sub: "Full boot sequence", icon: "power", action: { type: "restart" } },
