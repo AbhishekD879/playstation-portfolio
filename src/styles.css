@@ -795,6 +795,30 @@ img.status-avatar, img.ptile-avatar { object-fit: cover; border: 1px solid rgba(
 .gbook-m { font-size: 14px; line-height: 1.45; overflow-wrap: anywhere; }
 .gbook-empty { color: var(--dim); text-align: center; padding: 40px 0; letter-spacing: 0.06em; }
 
+/* —— Dream (on-device image gen) —— */
+.dream { position: fixed; inset: 0; z-index: 32; display: flex; flex-direction: column;
+  background: linear-gradient(200deg, rgba(8,6,22,0.98), rgba(2,2,10,0.99)); }
+.dream-bar { display: flex; align-items: center; justify-content: space-between; padding: 14px 22px; background: rgba(10,8,26,0.6); }
+.dream-stage { flex: 1; display: grid; place-items: center; padding: 20px; position: relative; }
+.dream-canvas {
+  width: min(512px, 80vmin); height: min(512px, 80vmin); border-radius: 12px;
+  background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.1);
+  opacity: 0; transition: opacity 0.5s; image-rendering: auto;
+}
+.dream-canvas.show { opacity: 1; }
+.dream-placeholder, .dream-progress { position: absolute; text-align: center; color: var(--dim); font-size: 15px; letter-spacing: 0.06em; max-width: 480px; }
+.dream-progress { display: flex; flex-direction: column; align-items: center; gap: 14px; color: var(--text); }
+.dream-err { color: #e0796e; }
+.dream-spinner { width: 34px; height: 34px; border-radius: 50%; border: 3px solid rgba(255,255,255,0.15);
+  border-top-color: color-mix(in oklab, var(--xmb-tint) 80%, #fff); animation: dreamSpin 0.9s linear infinite; }
+@keyframes dreamSpin { to { transform: rotate(360deg); } }
+.dream-form { display: flex; gap: 10px; padding: 0 8vw 6px; }
+.dream-prompt { flex: 1; }
+.dream-go { font-size: 13px; padding: 10px 26px; }
+.dream-note { text-align: center; color: var(--dim); font-size: 11.5px; letter-spacing: 0.05em; padding: 6px 0 16px; }
+.dream-gate { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; text-align: center; padding: 40px; color: var(--dim); }
+.dream-gate p { max-width: 520px; font-size: 14.5px; line-height: 1.6; }
+
 /* —— Music Visualizer —— */
 .viz { position: fixed; inset: 0; z-index: 32; display: flex; flex-direction: column; background: radial-gradient(90% 90% at 50% 45%, #0a1226 0%, #01020a 100%); }
 .viz-bar { display: flex; align-items: center; gap: 12px; padding: 14px 22px; background: rgba(6,10,20,0.6); }

@@ -18,6 +18,7 @@ import PcApp from "./PcApp";
 import Guestbook from "./Guestbook";
 import Browser from "./Browser";
 import Visualizer from "./Visualizer";
+import Dream from "./Dream";
 import Doom from "./Doom";
 import ChessApp from "./ChessApp";
 import Trivia from "./Trivia";
@@ -80,7 +81,7 @@ export default function XMB(props: {
   const [padName, setPadName] = createSignal<string | null>(null);
   const [ytQuery, setYtQuery] = createSignal(""); // AI agent → YouTube search handoff
   const [padTest, setPadTest] = createSignal(false);
-  const [app, setApp] = createSignal<null | "doom" | "chess" | "trivia" | "flash" | "cinema" | "podcasts" | "library" | "map" | "ai" | "webamp" | "youtube" | "timemachine" | "art" | "wiki" | "lichess" | "ps2" | "pc" | "guestbook" | "browser" | "visualizer">(null);
+  const [app, setApp] = createSignal<null | "doom" | "chess" | "trivia" | "flash" | "cinema" | "podcasts" | "library" | "map" | "ai" | "webamp" | "youtube" | "timemachine" | "art" | "wiki" | "lichess" | "ps2" | "pc" | "guestbook" | "browser" | "visualizer" | "dream">(null);
   let appNav: ((a: Parameters<Parameters<typeof onNav>[0]>[0]) => void) | undefined;
   const [apod, setApod] = createSignal<{ loading: boolean; data?: Apod } | null>(null);
   const [dict, setDict] = createSignal<{ result?: Definition | null; looking: boolean } | null>(null);
@@ -177,6 +178,7 @@ export default function XMB(props: {
       ? [{ id: "slideshow", title: "Slideshow", sub: `${photos().length} photo${photos().length > 1 ? "s" : ""} · Ken Burns drift`, icon: "camera", action: { type: "photos-view" as const } }]
       : []),
     { id: "photos-add", title: "Add Photos…", sub: "Stored in this browser only — never uploaded", icon: "plus", action: { type: "photos-add" } },
+    { id: "dream", title: "Dream", sub: "Generate images on your GPU — Stable Diffusion, on-device", icon: "spark", action: { type: "dream" } },
     { id: "art", title: "Art Gallery", sub: "Masterpieces · The Met, New York", icon: "spark", action: { type: "art" } },
     { id: "apod", title: "Astronomy Photo of the Day", sub: "Live from NASA", icon: "spark", action: { type: "apod" } },
   ]);
@@ -450,6 +452,10 @@ export default function XMB(props: {
       case "visualizer":
         sfx.confirm();
         setApp("visualizer");
+        break;
+      case "dream":
+        sfx.confirm();
+        setApp("dream");
         break;
       case "gesture-toggle":
         if (gesturesOn()) {
@@ -728,6 +734,7 @@ export default function XMB(props: {
       case "guestbook": return openApp("guestbook");
       case "browser": case "web": case "internet": return openApp("browser");
       case "visualizer": case "visualiser": return openApp("visualizer");
+      case "dream": case "imagine": case "generate": return openApp("dream");
       case "doom": awardT("doomguy"); return openApp("doom");
       case "chess": return openApp("chess");
       case "lichess": return openApp("lichess");
@@ -1205,6 +1212,7 @@ export default function XMB(props: {
       <Show when={app() === "guestbook"}><Guestbook userName={props.profile.name} onClose={() => setApp(null)} /></Show>
       <Show when={app() === "browser"}><Browser onClose={() => setApp(null)} /></Show>
       <Show when={app() === "visualizer"}><Visualizer onClose={() => setApp(null)} /></Show>
+      <Show when={app() === "dream"}><Dream onClose={() => setApp(null)} /></Show>
       <Show when={app() === "lichess"}>
         <div class="fullapp">
           <iframe credentialless={true} class="fullapp-frame" src="https://lichess.org/tv/frame?theme=brown&bg=dark" allow="fullscreen" title="Lichess TV" />
