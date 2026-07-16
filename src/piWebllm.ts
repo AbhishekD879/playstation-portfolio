@@ -188,7 +188,7 @@ export function webllmStreamFn(getEngine: () => MLCEngine | null) {
           }
           // salvage the attribute mangle: <tool_call name="open_app" arguments="doom">
           const attr = text.match(/<tool_call\s+name="([\w-]+)"([^>]*)>?/);
-          if (attr && known.has(attr[1])) {
+          if (!calls.length && attr && known.has(attr[1])) {
             const tool = (context.tools ?? []).find((t) => t.name === attr[1])!;
             const props = Object.keys((tool.parameters as any)?.properties ?? {});
             const vals = [...attr[2].matchAll(/(\w+)="([^"]*)"/g)].filter(([, k]) => !["parameters", "type"].includes(k));
@@ -198,6 +198,19 @@ export function webllmStreamFn(getEngine: () => MLCEngine | null) {
             if (!Object.keys(args).length && props.length === 1 && vals[0]) args[props[0]] = vals[0][2];
             addCall({ name: attr[1], arguments: args });
             text = "";
+          }
+          // salvage the tool-name-as-tag mangle: <show_contact>{...}</show_contact>
+          if (!calls.length) {
+            for (const name of known) {
+              const re = new RegExp(`<${name}\\b[^>]*>([\\s\\S]*?)(?:</${name}>|$)`);
+              const m = text.match(re);
+              if (m) {
+                const inner = parseLoose(m[1] ?? "");
+                addCall({ name, arguments: inner && typeof inner === "object" && !("name" in inner) ? inner : {} });
+                text = text.replace(re, "").trim();
+                break;
+              }
+            }
           }
         }
 

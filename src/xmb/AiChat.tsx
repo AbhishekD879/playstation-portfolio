@@ -11,6 +11,7 @@ import { CAREER, OWNER, PROJECTS, SKILLS } from "../content";
 import { fetchWeather, wmo, type Weather } from "../apps";
 import { webllmModel, webllmStreamFn } from "../piWebllm";
 import { loadTTS, speak, stopSpeaking, ttsSupported } from "../tts";
+import { Icon } from "./icons";
 import { setNavEnabled } from "../input";
 import * as sfx from "../audio";
 
@@ -255,8 +256,8 @@ export default function AiChat(props: {
           AI ABHISHEK — {model() ? `${MODELS[model()!].label} · ` : ""}PI.DEV AGENT · WEBGPU, ON-DEVICE
         </div>
         <Show when={ready() && ttsSupported()}>
-          <button class="ghost-btn" classList={{ on: voice() }} title="speak replies aloud (on-device)" onClick={toggleVoice}>
-            {voiceLoading() ? "◌ voice…" : voice() ? "🔊 voice on" : "🔈 voice"}
+          <button class="ghost-btn ai-iconbtn" classList={{ on: voice() }} title="speak replies aloud (on-device)" onClick={toggleVoice}>
+            <span class="ai-ico"><Icon name="speaker" /></span>{voiceLoading() ? "voice…" : voice() ? "voice on" : "voice"}
           </button>
         </Show>
         <button class="ghost-btn" onClick={() => { sfx.back(); props.onClose(); }}>✕ close</button>
@@ -282,7 +283,7 @@ export default function AiChat(props: {
                   <For each={Object.entries(MODELS) as [ModelKey, (typeof MODELS)[ModelKey]][]}>
                     {([key, m]) => (
                       <button class="ai-model-card" onClick={() => { sfx.confirm(); boot(key); }}>
-                        <span class="ai-model-name">{key === "agent" ? "🤖 " : "⚡ "}{m.label}</span>
+                        <span class="ai-model-name"><span class="ai-ico"><Icon name={key === "agent" ? "chip" : "lightning"} /></span>{m.label}</span>
                         <span class="ai-model-dl">{m.dl}</span>
                         <span class="ai-model-blurb">{m.blurb}</span>
                       </button>
@@ -328,7 +329,7 @@ export default function AiChat(props: {
                     classList={{ listening: listening() }}
                     title={listening() ? "stop listening" : "speak"}
                     onClick={toggleMic}
-                  >🎤</button>
+                  ><span class="ai-ico"><Icon name="mic" /></span></button>
                 </Show>
               </div>
             </Show>
@@ -345,7 +346,7 @@ function AiWidget(props: { w: Widget }) {
   return (
     <Switch>
       <Match when={w.t === "app"}>
-        <div class="ai-widget ai-w-app">🕹 {(w as any).ok ? `Launching ${(w as any).app}…` : `Couldn't find “${(w as any).app}”`}</div>
+        <div class="ai-widget ai-w-app"><span class="ai-ico"><Icon name="gamepad" /></span>{(w as any).ok ? `Launching ${(w as any).app}…` : `Couldn't find “${(w as any).app}”`}</div>
       </Match>
       <Match when={w.t === "career"}>
         <div class="ai-widget">
@@ -387,9 +388,9 @@ function AiWidget(props: { w: Widget }) {
       </Match>
       <Match when={w.t === "contact"}>
         <div class="ai-widget ai-w-contactrow">
-          <a class="ps2-launch ai-w-btn" href={`mailto:${OWNER.email}`}>✉ Email</a>
-          <a class="ps2-launch ai-w-btn" href={OWNER.linkedin} target="_blank">🔗 LinkedIn</a>
-          <a class="ps2-launch ai-w-btn" href={`tel:${OWNER.phone.replace(/\s/g, "")}`}>📞 Call</a>
+          <a class="ps2-launch ai-w-btn" href={`mailto:${OWNER.email}`}><span class="ai-ico"><Icon name="mail" /></span>Email</a>
+          <a class="ps2-launch ai-w-btn" href={OWNER.linkedin} target="_blank"><span class="ai-ico"><Icon name="link" /></span>LinkedIn</a>
+          <a class="ps2-launch ai-w-btn" href={`tel:${OWNER.phone.replace(/\s/g, "")}`}><span class="ai-ico"><Icon name="phone" /></span>Call</a>
         </div>
       </Match>
       <Match when={w.t === "weather"}>
