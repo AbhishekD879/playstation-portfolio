@@ -4,6 +4,7 @@
 // system prompt, so answers stay grounded and the context stays lean. ~23 MB
 // model, downloaded once, cached. All local.
 import { CAREER, OWNER, PROJECTS, SKILLS } from "./content";
+import { capabilityChunks } from "./consoleBus";
 
 // —— the knowledge base: one chunk per fact cluster ——
 const CHUNKS: string[] = [
@@ -12,11 +13,15 @@ const CHUNKS: string[] = [
   ...CAREER.map((c) => `Career — ${c.title} (${c.tag}, ${c.meta}): ${c.bullets.join(" ")}`),
   ...PROJECTS.map((p) => `Project — ${p.title} (${p.meta}): ${p.bullets.join(" ")}`),
   ...SKILLS.map((s) => `Skills — ${s.name}: ${s.items.join(", ")}.`),
+  // what this console itself is + its apps, so the copilot can explain them
+  "This console (AbhishekStation) is a PlayStation-XMB-style portfolio. Categories: Users (profile, AI, guestbook, trophies), Career, Projects, Skills, Photo (gallery, art, NASA APOD), Music (radio, podcasts, Winamp, Visualizer, Studio synth), Video (YouTube, Archive cinema), TV (live channels), Game (DOOM, Chess vs Stockfish, Trivia, Flash arcade, PS2 emulator, Other OS x86 PC, Code Playground, game library), News (Hacker News, dev.to, RSS), Web (reader Browser, Wikipedia, Dictionary, Time Machine, Planet Earth globe, Weather), Contact, Settings.",
+  "Planet Earth app: a real CesiumJS globe with satellite imagery — world tour (cinematic city dives), live ISS tracking, earthquakes, rain radar, place search. The Code Playground runs sandboxed JavaScript and Python with formatting and linting. The PS2 emulator plays real ISO games with memory-card saves. The Studio is a playable synth + drum machine with MIDI support.",
 ];
 
 let extractor: any = null;
 let index: Float32Array[] | null = null;
 let building: Promise<void> | null = null;
+let corpus: string[] = []; // CHUNKS + live console capabilities, frozen at build
 
 const cosine = (a: Float32Array, b: Float32Array) => {
   let d = 0;
@@ -39,7 +44,8 @@ export function buildIndex(): Promise<void> {
       const { pipeline } = await import("@huggingface/transformers");
       const device = typeof (navigator as any).gpu !== "undefined" ? "webgpu" : "wasm";
       extractor = await pipeline("feature-extraction", "Xenova/all-MiniLM-L6-v2", { device } as any);
-      index = await embed(CHUNKS);
+      corpus = [...CHUNKS, ...capabilityChunks()]; // include the control-bus manifest
+      index = await embed(corpus);
     })().catch((e) => { building = null; throw e; });
   }
   return building;
@@ -56,7 +62,7 @@ export async function retrieve(query: string, k = 4): Promise<string[]> {
       .sort((a, b) => b.s - a.s)
       .slice(0, k)
       .filter((x) => x.s > 0.2) // drop weak matches
-      .map((x) => CHUNKS[x.i]);
+      .map((x) => corpus[x.i]);
   } catch {
     return []; // retrieval is best-effort; the agent still answers without it
   }

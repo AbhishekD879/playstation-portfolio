@@ -27,7 +27,7 @@ const CITIES = [
   { name: "Cape Town", lat: -33.92, lon: 18.42 },
 ];
 
-export default function MapApp(props: { onClose: () => void }) {
+export default function MapApp(props: { onClose: () => void; initialAction?: "tour" | "iss" | "satellite" | "" }) {
   const [status, setStatus] = createSignal("");
   const [quakesOn, setQuakesOn] = createSignal(false);
   const [rainOn, setRainOn] = createSignal(false);
@@ -83,6 +83,10 @@ export default function MapApp(props: { onClose: () => void }) {
       maxZoom: 19,
     }).addTo(map);
     onCleanup(() => map.remove());
+    // the AI co-pilot can open us with an action to perform on arrival
+    if (props.initialAction === "tour") setTimeout(() => { if (!tour()) toggleTour(); }, 900);
+    if (props.initialAction === "iss") setTimeout(() => flyToIss(), 2600); // after the first ISS poll
+    if (props.initialAction === "satellite") setTimeout(() => { setMode("2d"); setSatellite(true); setTimeout(() => map.invalidateSize(), 80); }, 400);
   });
 
   function flyToIss() {

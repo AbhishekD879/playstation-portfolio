@@ -143,11 +143,12 @@ export function webllmStreamFn(getEngine: () => MLCEngine | null) {
         const addCall = (p: any): boolean => {
           if (typeof p?.name !== "string") return false;
           let args = p.arguments ?? p.parameters ?? {};
-          // tiny models pad arguments with schema junk ("type", "parameters") —
-          // keep only keys the tool actually declares, or validation rejects it
-          const props = (toolByName.get(p.name)?.parameters as any)?.properties;
-          if (props && typeof args === "object") {
-            args = Object.fromEntries(Object.entries(args).filter(([k]) => k in props));
+          // tiny models pad arguments with schema junk — strip those keys, but
+          // KEEP unknown ones (models also flatten nested args to the top level;
+          // tools like console_control merge them back)
+          const JUNK = new Set(["type", "properties", "required", "parameters", "description", "additionalProperties"]);
+          if (args && typeof args === "object") {
+            args = Object.fromEntries(Object.entries(args).filter(([k]) => !JUNK.has(k)));
           }
           calls.push({ type: "toolCall", id: `call_${Date.now().toString(36)}_${calls.length}`, name: p.name, arguments: args });
           return true;
@@ -164,12 +165,14 @@ export function webllmStreamFn(getEngine: () => MLCEngine | null) {
           return null;
         };
         // parse with escalating repairs: balanced slice → strip trailing junk
-        // (stray ">" etc.) → close any dangling braces
+        // (stray ">" etc.) → quote bare keys ({name:"x"} → {"name":"x"}) →
+        // close any dangling braces
         const parseLoose = (s: string): any => {
           let js = (balanced(s) ?? s).trim();
           try { return JSON.parse(js); } catch { /* try repair */ }
           js = js.slice(0, js.lastIndexOf("}") + 1);
           if (!js) return null;
+          js = js.replace(/([{,]\s*)([A-Za-z_][A-Za-z0-9_]*)\s*:/g, '$1"$2":');
           const open = (js.match(/\{/g) ?? []).length - (js.match(/\}/g) ?? []).length;
           try { return JSON.parse(js + "}".repeat(Math.max(0, open))); } catch { return null; }
         };

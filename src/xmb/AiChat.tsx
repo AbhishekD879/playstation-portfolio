@@ -13,6 +13,7 @@ import { webllmModel, webllmStreamFn } from "../piWebllm";
 import { loadTTS, speak, stopSpeaking, ttsSupported } from "../tts";
 import { clearChat, loadChat, saveChat, type StoredChat } from "../chatStore";
 import { buildIndex, retrieve } from "../rag";
+import { capabilitySummary, runAction } from "../consoleBus";
 import { asrSupported, record } from "../asr";
 import { Icon } from "./icons";
 import { setNavEnabled } from "../input";
@@ -121,10 +122,25 @@ export default function AiChat(props: {
       }),
     T("console_status", "Console status", "Report this console's stats: trophies earned, games in the library, and time played. Use when the user asks what they've done here, their progress, or their trophies count.",
       Type.Object({}), async () => ({ text: props.consoleStatus(), terminate: false })),
-    T("change_theme", "Change theme", "Open the console theme (colour) picker.",
-      Type.Object({}), async () => { const ok = props.onCommand("themes"); if (ok) setTimeout(() => props.onClose(), 600); return { text: ok ? "Opening theme settings." : "Couldn't open themes.", terminate: ok }; }),
-    T("toggle_sound", "Toggle sound", "Mute or unmute the console audio.",
-      Type.Object({}), async () => { props.onCommand("sound"); return { text: "Toggled console sound.", terminate: true }; }),
+    T("console_control", "Console control", "Operate the console: run any action from the CONSOLE ACTIONS list (settings, radio, themes, world tour, ISS, screensaver, XMB navigation…). Pass the action id plus that action's parameter, e.g. {\"action\":\"settings.theme\",\"name\":\"Crimson\"}.",
+      Type.Object({
+        action: Type.String({ description: "action id, e.g. settings.theme or map.world_tour" }),
+        name: Type.Optional(Type.String({ description: "for app.open (app name) / settings.theme (theme name)" })),
+        state: Type.Optional(Type.String({ description: "on or off — for settings.sound / settings.rumble" })),
+        query: Type.Optional(Type.String({ description: "for youtube.search" })),
+        format: Type.Optional(Type.String({ description: "12 or 24 — for settings.clock" })),
+        minutes: Type.Optional(Type.String({ description: "for settings.screensaver" })),
+        category: Type.Optional(Type.String({ description: "for xmb.goto" })),
+        args: Type.Optional(Type.Object({}, { additionalProperties: true })),
+      }),
+      async (p: any) => {
+        // models sometimes flatten args to the top level — merge them back
+        const { action, args, ...flat } = p ?? {};
+        const text = await runAction(String(action), { ...(args ?? {}), ...flat });
+        const ok = !/^(Unknown action|Action ")/i.test(text);
+        widget({ t: "app", app: String(action), ok });
+        return { text, terminate: ok };
+      }),
   ];
 
   onMount(() => {
@@ -159,9 +175,22 @@ export default function AiChat(props: {
         initProgressCallback: (p) => setProgress(p.text),
       });
       buildIndex().catch(() => {}); // warm the RAG index in the background
+      // the control-bus manifest goes straight into the system prompt, so the
+      // copilot always knows exactly what it can operate
+      const SYSTEM_LIVE = `${SYSTEM}
+
+# CONSOLE ACTIONS (invoke with the console_control tool)
+${capabilitySummary()}
+Examples — these MUST become console_control calls (flat JSON, no nesting):
+- "turn the music on/off" → {"action":"radio.lofi"} / {"action":"radio.stop"}
+- "mute" / "unmute" → {"action":"settings.sound","state":"off"} / {"action":"settings.sound","state":"on"}
+- "make the console purple/red" → {"action":"settings.theme","name":"Orchid"} / {"action":"settings.theme","name":"Crimson"}
+- "start the world tour" / "show me the ISS" → {"action":"map.world_tour"} / {"action":"map.iss"}
+- "12 hour clock" → {"action":"settings.clock","format":"12"}
+- "turn off vibration" → {"action":"settings.rumble","state":"off"}`;
       agent = new Agent({
         // seed the model's memory with the prior conversation so it remembers
-        initialState: { systemPrompt: SYSTEM, model: webllmModel(MODELS[key].id), tools, messages: (restored?.messages as any) ?? [] },
+        initialState: { systemPrompt: SYSTEM_LIVE, model: webllmModel(MODELS[key].id), tools, messages: (restored?.messages as any) ?? [] },
         streamFn: webllmStreamFn(() => engine),
         // RAG: pull the most relevant facts for the latest question and slot
         // them in just before it — grounds answers without bloating memory

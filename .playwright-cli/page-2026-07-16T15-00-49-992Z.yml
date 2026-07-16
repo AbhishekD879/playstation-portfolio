@@ -1,0 +1,79 @@
+- generic [ref=e11]:
+  - generic [ref=e12]:
+    - generic [ref=e13]:
+      - generic [ref=e14]: ▲
+      - text: ELF
+      - generic [ref=e15]: 🏆 3
+    - button "voice command (on-device)" [ref=e16] [cursor=pointer]:
+      - img [ref=e17]
+    - generic "Battery 100% — charging" [ref=e20]
+    - generic [ref=e26]: 16/7 20:30
+  - generic:
+    - img
+    - img
+    - img
+    - img
+  - generic:
+    - generic [ref=e27]:
+      - img [ref=e29]
+      - generic [ref=e32]: Users
+    - generic [ref=e33]:
+      - img [ref=e35]
+      - generic [ref=e38]: Career
+    - generic [ref=e39]:
+      - img [ref=e41]
+      - generic [ref=e43]: Projects
+    - generic [ref=e44]:
+      - img [ref=e46]
+      - generic [ref=e50]: Skills
+    - generic [ref=e51]:
+      - img [ref=e53]
+      - generic [ref=e57]: Photo
+    - generic [ref=e58]:
+      - img [ref=e60]
+      - generic [ref=e64]: Music
+    - generic [ref=e65]:
+      - img [ref=e67]
+      - generic [ref=e70]: Video
+    - generic [ref=e71]:
+      - img [ref=e73]
+      - generic [ref=e76]: TV
+    - generic [ref=e77]:
+      - img [ref=e79]
+      - generic [ref=e84]: Game
+    - generic [ref=e85]:
+      - img [ref=e87]
+      - generic [ref=e89]: News
+    - generic [ref=e90]:
+      - img [ref=e92]
+      - generic [ref=e95]: Web
+    - generic [ref=e96]:
+      - img [ref=e98]
+      - generic [ref=e101]: Contact
+    - generic [ref=e102]:
+      - img [ref=e104]
+      - generic [ref=e107]: Settings
+  - generic:
+    - generic [ref=e108]:
+      - img [ref=e110]
+      - generic [ref=e113]:
+        - generic [ref=e114]: GoHighLevel
+        - generic [ref=e115]: MAY 2026 – PRESENT
+    - generic [ref=e116]:
+      - img [ref=e118]
+      - generic [ref=e122]: Phenom People
+    - generic [ref=e123]:
+      - img [ref=e125]
+      - generic [ref=e129]: Ivy Comptech
+    - generic [ref=e130]:
+      - img [ref=e132]
+      - generic [ref=e136]: Outlearn
+    - generic [ref=e137]:
+      - img [ref=e139]
+      - generic [ref=e143]: SPPU
+  - generic [ref=e144]:
+    - generic [ref=e145]:
+      - generic [ref=e146]: ←→↑↓
+      - text: navigate
+    - generic [ref=e147]: Enter — select
+    - generic [ref=e149]: Esc — back

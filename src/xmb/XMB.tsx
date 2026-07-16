@@ -9,6 +9,7 @@ import { CHANNELS, fetchDevto, fetchGuide, fetchHN, fetchRadio, fetchRss, fetchW
 import * as sfx from "../audio";
 import { onNav, onPadChange, rumble, rumbleEnabled, setNavEnabled, setRumble } from "../input";
 import { asrSupported, record } from "../asr";
+import { registerActions } from "../consoleBus";
 import { Icon } from "./icons";
 import Tv from "./Tv";
 import Guide from "./Guide";
@@ -827,6 +828,43 @@ export default function XMB(props: {
     return `${trophyCount()} trophies earned · ${games().length} game${games().length === 1 ? "" : "s"} in the library · ${mins < 60 ? mins + " min" : (mins / 60).toFixed(1) + " h"} played on this console.`;
   };
 
+  // —— console control bus: every granular action the AI co-pilot can drive.
+  // This is the console's internal "MCP" — ids + descriptions feed the agent's
+  // RAG memory and system prompt, and console_control invokes them. ——
+  const [mapCmd, setMapCmd] = createSignal<"tour" | "iss" | "satellite" | "">("");
+  const APP_NAMES = "doom, chess, lichess, trivia, flash, ps2, pc, code, guestbook, browser, visualizer, studio, youtube, cinema, podcasts, winamp, library, wiki, dictionary, map, timemachine, art, apod, weather, tv, news, photos, trophies, whatsnew, themes, ai";
+  registerActions([
+    { id: "app.open", description: `Open any console app by name. Valid names: ${APP_NAMES}.`, params: [{ name: "name", description: "app name", required: true }],
+      run: (a) => (aiCommand(String(a.name).toLowerCase().trim()) ? `Opened ${a.name}.` : `No app called "${a.name}". Valid: ${APP_NAMES}`) },
+    { id: "youtube.search", description: "Open YouTube and search for videos, ready to play.", params: [{ name: "query", description: "what to search", required: true }],
+      run: (a) => { aiCommand("youtube-search", String(a.query)); return `Searching YouTube for ${a.query}.`; } },
+    { id: "map.world_tour", description: "Open Planet Earth and start the cinematic world tour — Google-Earth style dives into world cities with live weather.",
+      run: () => { setMapCmd("tour"); aiCommand("map"); return "Starting the world tour."; } },
+    { id: "map.iss", description: "Open Planet Earth and fly to the live position of the International Space Station.",
+      run: () => { setMapCmd("iss"); aiCommand("map"); return "Flying to the ISS."; } },
+    { id: "map.satellite", description: "Open Planet Earth in real satellite-imagery view.",
+      run: () => { setMapCmd("satellite"); aiCommand("map"); return "Opening satellite view."; } },
+    { id: "radio.lofi", description: "Play the console's generative lo-fi radio (background music).",
+      run: () => { if (!sfx.radioPlaying()) sfx.radioToggle(); return "Lo-fi radio playing."; } },
+    { id: "radio.stop", description: "Stop the console radio / background music.",
+      run: () => { if (sfx.radioPlaying()) sfx.radioToggle(); return "Radio stopped."; } },
+    { id: "settings.sound", description: "Turn the console's sound on or off (mute/unmute).", params: [{ name: "state", description: "on or off", required: true }],
+      run: (a) => { const wantOn = String(a.state).toLowerCase() !== "off"; if (wantOn === sfx.isMuted()) sfx.toggleMute(); return `Sound ${wantOn ? "on" : "off"}.`; } },
+    { id: "settings.theme", description: `Set the console colour theme by name. Themes: ${THEMES.map((t) => t.name).join(", ")}.`, params: [{ name: "name", description: "theme name", required: true }],
+      run: (a) => { const t = THEMES.find((x) => x.name.toLowerCase().includes(String(a.name).toLowerCase())); if (!t) return `No theme "${a.name}". Themes: ${THEMES.map((x) => x.name).join(", ")}`; applyTheme(t.color); pushToast("Theme", t.name); return `Theme set to ${t.name}.`; } },
+    { id: "settings.clock", description: "Set the status clock to 12-hour or 24-hour format.", params: [{ name: "format", description: "12 or 24", required: true }],
+      run: (a) => { const v = String(a.format).includes("24"); setClock24(v); localStorage.setItem("asp.clock24", v ? "24" : "12"); tickClock(); return `Clock set to ${v ? 24 : 12}-hour.`; } },
+    { id: "settings.rumble", description: "Turn controller vibration (rumble) on or off.", params: [{ name: "state", description: "on or off", required: true }],
+      run: (a) => { const on = String(a.state).toLowerCase() !== "off"; setRumble(on); if (on) rumble(0.8, 0.6, 200); return `Rumble ${on ? "on" : "off"}.`; } },
+    { id: "settings.screensaver", description: "Set when the screensaver starts, in minutes (0 = off).", params: [{ name: "minutes", description: "0, 1.5, 3, 5 or 10", required: true }],
+      run: (a) => { const m = parseFloat(String(a.minutes)) || 0; setSaverMins(m); localStorage.setItem("asp.saver", String(m)); return m ? `Screensaver after ${m} minutes.` : "Screensaver off."; } },
+    { id: "xmb.goto", description: `Move the XMB menu to a category. Categories: ${CATEGORIES.map((c) => c.label).join(", ")}.`, params: [{ name: "category", description: "category name", required: true }],
+      run: (a) => { const i = CATEGORIES.findIndex((c) => c.label.toLowerCase() === String(a.category).toLowerCase().trim()); if (i < 0) return `No category "${a.category}".`; setCat(i); return `On ${CATEGORIES[i].label}.`; } },
+    { id: "trophies.show", description: "Open the trophy collection panel.", run: () => { setTrophiesOpen(true); return "Trophies open."; } },
+    { id: "screensaver.start", description: "Start the screensaver (drifting clock) right now.", run: () => { setSaver(true); return "Screensaver on — any key wakes it."; } },
+    { id: "console.status", description: "Report the visitor's stats: trophies, game library size, playtime.", run: () => consoleStatus() },
+  ]);
+
   // —— navigation (keyboard + gamepad via onNav; mouse clicks & wheel reuse it) ——
   const handleNav = (action: Parameters<Parameters<typeof onNav>[0]>[0]) => {
     lastActive = Date.now();
@@ -1253,7 +1291,7 @@ export default function XMB(props: {
       <Show when={app() === "library"}>
         <Library bind={(f) => (appNav = f)} onClose={() => setApp(null)} />
       </Show>
-      <Show when={app() === "map"}><MapApp onClose={() => setApp(null)} /></Show>
+      <Show when={app() === "map"}><MapApp initialAction={mapCmd()} onClose={() => { setMapCmd(""); setApp(null); }} /></Show>
       <Show when={app() === "ai"}>
         <AiChat
           profileId={props.profile.id}

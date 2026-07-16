@@ -1,0 +1,107 @@
+- generic [ref=e11]:
+  - generic [ref=e12]:
+    - generic [ref=e13]:
+      - generic [ref=e14]: ▲
+      - text: ELF
+      - generic [ref=e15]: 🏆 3
+    - button "voice command (on-device)" [ref=e16] [cursor=pointer]:
+      - img [ref=e17]
+    - generic "Battery 100% — charging" [ref=e20]
+    - generic [ref=e26]: 16/7 20:33
+  - generic:
+    - img
+    - img
+    - img
+    - img
+  - generic:
+    - generic [ref=e27]:
+      - img [ref=e29]
+      - generic [ref=e32]: Users
+    - generic [ref=e33]:
+      - img [ref=e35]
+      - generic [ref=e38]: Career
+    - generic [ref=e39]:
+      - img [ref=e41]
+      - generic [ref=e43]: Projects
+    - generic [ref=e44]:
+      - img [ref=e46]
+      - generic [ref=e50]: Skills
+    - generic [ref=e51]:
+      - img [ref=e53]
+      - generic [ref=e57]: Photo
+    - generic [ref=e58]:
+      - img [ref=e60]
+      - generic [ref=e64]: Music
+    - generic [ref=e65]:
+      - img [ref=e67]
+      - generic [ref=e70]: Video
+    - generic [ref=e71]:
+      - img [ref=e73]
+      - generic [ref=e76]: TV
+    - generic [ref=e77]:
+      - img [ref=e79]
+      - generic [ref=e84]: Game
+    - generic [ref=e85]:
+      - img [ref=e87]
+      - generic [ref=e89]: News
+    - generic [ref=e90]:
+      - img [ref=e92]
+      - generic [ref=e95]: Web
+    - generic [ref=e96]:
+      - img [ref=e98]
+      - generic [ref=e101]: Contact
+    - generic [ref=e102]:
+      - img [ref=e104]
+      - generic [ref=e107]: Settings
+  - generic:
+    - generic [ref=e151]:
+      - img [ref=e153]
+      - generic [ref=e158]: About Abhishek
+    - generic [ref=e160]:
+      - img [ref=e162]
+      - generic [ref=e166]:
+        - generic [ref=e167]: AI Abhishek
+        - generic [ref=e188]: On-device LLM — ask about my work
+    - generic [ref=e168]:
+      - img [ref=e170]
+      - generic [ref=e174]: Guestbook
+    - generic [ref=e175]:
+      - img [ref=e177]
+      - generic [ref=e180]: What's New
+    - generic [ref=e181]:
+      - img [ref=e183]
+      - generic [ref=e187]: Trophy Collection
+    - generic [ref=e189]:
+      - img [ref=e191]
+      - generic [ref=e196]: Profile Photo
+    - generic:
+      - generic:
+        - img
+      - generic:
+        - generic: Switch User
+  - generic [ref=e197]:
+    - generic [ref=e198]:
+      - generic [ref=e199]: AI ABHISHEK — PI.DEV AGENT · WEBGPU, ON-DEVICE
+      - button "✕ close" [ref=e200] [cursor=pointer]
+    - generic [ref=e201]:
+      - generic [ref=e202]: Pick a brain
+      - paragraph [ref=e203]: Both run fully on your GPU — downloaded once, cached, nothing you type leaves this device. Not recommended on mobile data.
+      - generic [ref=e204]:
+        - button "Hermes 3 · 3B ~1.9 GB recommended — smart with tools, memory & recall" [ref=e205] [cursor=pointer]:
+          - generic [ref=e206]:
+            - img [ref=e208]
+            - text: Hermes 3 · 3B
+          - generic [ref=e212]: ~1.9 GB
+          - generic [ref=e213]: recommended — smart with tools, memory & recall
+        - button "Llama 3.2 · 1B ~700 MB lighter & faster, for a modest GPU" [ref=e214] [cursor=pointer]:
+          - generic [ref=e215]:
+            - img [ref=e217]
+            - text: Llama 3.2 · 1B
+          - generic [ref=e219]: ~700 MB
+          - generic [ref=e220]: lighter & faster, for a modest GPU
+  - generic [ref=e144]:
+    - generic [ref=e145]:
+      - generic [ref=e146]: ←→↑↓
+      - text: navigate
+    - generic [ref=e147]: Enter — select
+    - generic [ref=e149]: Esc — back
