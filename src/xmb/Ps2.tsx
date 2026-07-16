@@ -9,9 +9,10 @@ import { startBridge, stopBridge, PS2_CONFIG } from "../gamepadBridge";
 
 type Stage = "insert" | "reading" | "playing" | "error";
 
-export default function Ps2(props: { onClose: () => void }) {
+export default function Ps2(props: { onClose: () => void; profileId: string }) {
   const isDesktop = matchMedia("(pointer: fine)").matches && innerWidth >= 900 && typeof WebAssembly === "object";
   const isolated = (globalThis as any).crossOriginIsolated === true;
+  const saveKey = `ps2:${props.profileId}`; // one memory card per profile
   const [stage, setStage] = createSignal<Stage>("insert");
   const [disc, setDisc] = createSignal<File | null>(null);
   const [err, setErr] = createSignal("");
@@ -20,6 +21,8 @@ export default function Ps2(props: { onClose: () => void }) {
   let container!: HTMLDivElement;
   let pending: File | null = null;
   let ready = false;
+  let saveTimer: ReturnType<typeof setInterval> | null = null;
+  const requestSave = () => frame?.contentWindow?.postMessage({ type: "play-save", saveKey }, location.origin);
 
   const goFullscreen = () => {
     const el = container as any;
@@ -46,6 +49,8 @@ export default function Ps2(props: { onClose: () => void }) {
         // document), so the bridge must dispatch straight onto it.
         startBridge(frame.contentDocument?.getElementById("outputCanvas") ?? frame.contentDocument, () => {}, PS2_CONFIG);
         frame.contentWindow?.focus();
+        // auto-save the memory card every 15s so progress survives a reload
+        saveTimer = setInterval(requestSave, 15_000);
       }
       if (e.data.type === "play-error") {
         setErr(e.data.message || "The emulator refused this disc.");
@@ -53,9 +58,16 @@ export default function Ps2(props: { onClose: () => void }) {
       }
     };
     addEventListener("message", onMsg);
+    // flush the card if the tab is hidden/closed mid-game
+    const onHide = () => { if (stage() === "playing") requestSave(); };
+    addEventListener("pagehide", onHide);
+    addEventListener("visibilitychange", onHide);
     onCleanup(() => {
       removeEventListener("keydown", esc);
       removeEventListener("message", onMsg);
+      removeEventListener("pagehide", onHide);
+      removeEventListener("visibilitychange", onHide);
+      if (saveTimer) clearInterval(saveTimer);
       stopBridge();
       setNavEnabled(true);
       exitFullscreen();
@@ -64,7 +76,7 @@ export default function Ps2(props: { onClose: () => void }) {
 
   function bootNow(f: File) {
     pending = null;
-    frame.contentWindow?.postMessage({ type: "play-boot", file: f }, location.origin);
+    frame.contentWindow?.postMessage({ type: "play-boot", file: f, saveKey }, location.origin);
   }
 
   function insert(f: File) {
@@ -79,10 +91,12 @@ export default function Ps2(props: { onClose: () => void }) {
 
   function eject() {
     sfx.back();
+    requestSave(); // final flush before we tear the emulator down
+    if (saveTimer) clearInterval(saveTimer);
     stopBridge();
     setNavEnabled(true);
     exitFullscreen();
-    props.onClose(); // tearing down the iframe fully stops the emulator
+    setTimeout(() => props.onClose(), 150); // give the snapshot a beat to write
   }
 
   return (

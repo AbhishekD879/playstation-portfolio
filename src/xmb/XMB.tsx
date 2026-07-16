@@ -1223,7 +1223,7 @@ export default function XMB(props: {
       <Show when={app() === "wiki"}>
         <WikiApp bind={(f) => (appNav = f)} onClose={() => setApp(null)} />
       </Show>
-      <Show when={app() === "ps2"}><Ps2 onClose={() => setApp(null)} /></Show>
+      <Show when={app() === "ps2"}><Ps2 profileId={props.profile.id} onClose={() => setApp(null)} /></Show>
       <Show when={app() === "pc"}><PcApp onClose={() => setApp(null)} /></Show>
       <Show when={app() === "guestbook"}><Guestbook userName={props.profile.name} onClose={() => setApp(null)} /></Show>
       <Show when={app() === "browser"}><Browser onClose={() => setApp(null)} /></Show>

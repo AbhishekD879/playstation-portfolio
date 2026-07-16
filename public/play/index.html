@@ -36,6 +36,51 @@
   let mod = null;
   const tell = (type, extra) => parent.postMessage(Object.assign({ type }, extra || {}), location.origin);
 
+  // —— save persistence ——————————————————————————————————————————————
+  // Play! keeps memory cards (vfs/mc0, vfs/mc1) and save states in this MEMFS
+  // dir, which vanishes on reload. We snapshot it to IndexedDB (one record per
+  // profile — like one physical memory card) and restore it before a game
+  // boots, so saves survive. Only vfs + states are persisted (the rest is
+  // rebuilt by initVm).
+  const DATA = "/home/web_user/.local/share/Play Data Files";
+  const PERSIST = ["/vfs", "/states"];
+  const SAVE_DB = "asp-ps2", SAVE_STORE = "cards";
+  const idb = () => new Promise((res, rej) => {
+    const r = indexedDB.open(SAVE_DB, 1);
+    r.onupgradeneeded = () => r.result.createObjectStore(SAVE_STORE);
+    r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error);
+  });
+  const idbGet = async (k) => { const d = await idb(); return new Promise((res) => { const q = d.transaction(SAVE_STORE, "readonly").objectStore(SAVE_STORE).get(k); q.onsuccess = () => res(q.result ?? null); q.onerror = () => res(null); }); };
+  const idbPut = async (k, v) => { const d = await idb(); return new Promise((res) => { const q = d.transaction(SAVE_STORE, "readwrite").objectStore(SAVE_STORE).put(v, k); q.onsuccess = () => res(); q.onerror = () => res(); }); };
+
+  function walkFiles(dir, out) {
+    let ents; try { ents = mod.FS.readdir(dir); } catch { return out; }
+    for (const n of ents) {
+      if (n === "." || n === "..") continue;
+      const fp = dir + "/" + n;
+      let m; try { m = mod.FS.stat(fp).mode; } catch { continue; }
+      if (mod.FS.isDir(m)) walkFiles(fp, out);
+      else { try { out[fp] = mod.FS.readFile(fp); } catch { /* skip */ } }
+    }
+    return out;
+  }
+  async function snapshot(key) {
+    if (!mod || !key) return;
+    const files = {};
+    for (const sub of PERSIST) walkFiles(DATA + sub, files);
+    await idbPut(key, files);
+  }
+  async function restore(key) {
+    if (!mod || !key) return;
+    const files = await idbGet(key);
+    if (!files) return;
+    for (const fp of Object.keys(files)) {
+      const dir = fp.slice(0, fp.lastIndexOf("/"));
+      try { mod.FS.mkdirTree(dir); } catch { /* exists */ }
+      try { mod.FS.writeFile(fp, files[fp]); } catch { /* skip */ }
+    }
+  }
+
   Play({
     canvas,
     locateFile: (f) => "/play/" + f,
@@ -55,6 +100,7 @@
     if (e.origin !== location.origin || !e.data) return;
     if (e.data.type === "play-boot" && e.data.file && mod) {
       try {
+        await restore(e.data.saveKey); // bring back this profile's memory card first
         const f = e.data.file, name = f.name;
         if (name.toLowerCase().endsWith(".elf")) {
           const bytes = new Uint8Array(await f.arrayBuffer());
@@ -71,6 +117,10 @@
       } catch (err) {
         tell("play-error", { message: String(err).slice(0, 200) });
       }
+    }
+    if (e.data.type === "play-save" && mod) {
+      await snapshot(e.data.saveKey);
+      tell("play-saved");
     }
   });
   addEventListener("click", () => canvas.focus());

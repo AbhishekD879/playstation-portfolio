@@ -1,0 +1,100 @@
+- generic [ref=e11]:
+  - generic [ref=e12]:
+    - generic [ref=e13]:
+      - generic [ref=e14]: ▲
+      - text: ELF
+      - generic [ref=e15]: 🏆 3
+    - generic "Battery 100% — charging" [ref=e16]
+    - generic [ref=e22]: 16/7 17:54
+  - generic:
+    - img
+    - img
+    - img
+    - img
+  - generic:
+    - generic [ref=e23]:
+      - img [ref=e25]
+      - generic [ref=e28]: Users
+    - generic [ref=e29]:
+      - img [ref=e31]
+      - generic [ref=e34]: Career
+    - generic [ref=e35]:
+      - img [ref=e37]
+      - generic [ref=e39]: Projects
+    - generic [ref=e40]:
+      - img [ref=e42]
+      - generic [ref=e46]: Skills
+    - generic [ref=e47]:
+      - img [ref=e49]
+      - generic [ref=e53]: Photo
+    - generic [ref=e54]:
+      - img [ref=e56]
+      - generic [ref=e60]: Music
+    - generic [ref=e61]:
+      - img [ref=e63]
+      - generic [ref=e66]: Video
+    - generic [ref=e67]:
+      - img [ref=e69]
+      - generic [ref=e72]: TV
+    - generic [ref=e73]:
+      - img [ref=e75]
+      - generic [ref=e80]: Game
+    - generic [ref=e81]:
+      - img [ref=e83]
+      - generic [ref=e85]: News
+    - generic [ref=e86]:
+      - img [ref=e88]
+      - generic [ref=e91]: Web
+    - generic [ref=e92]:
+      - img [ref=e94]
+      - generic [ref=e97]: Contact
+    - generic [ref=e98]:
+      - img [ref=e100]
+      - generic [ref=e103]: Settings
+  - generic:
+    - generic:
+      - generic:
+        - img
+      - generic:
+        - generic: DOOM
+    - generic:
+      - generic:
+        - img
+      - generic:
+        - generic: Chess vs Stockfish
+    - generic [ref=e164]:
+      - img [ref=e166]
+      - generic [ref=e170]: Lichess TV
+    - generic [ref=e171]:
+      - img [ref=e173]
+      - generic [ref=e178]: Trivia Arcade
+    - generic [ref=e179]:
+      - img [ref=e181]
+      - generic [ref=e184]: Flash Arcade
+    - generic [ref=e186]:
+      - img [ref=e188]
+      - generic [ref=e192]:
+        - generic [ref=e193]: PlayStation 2
+        - generic [ref=e211]: Experimental emulator · desktop only
+    - generic [ref=e195]:
+      - img [ref=e197]
+      - generic [ref=e201]: Other OS
+    - generic [ref=e203]:
+      - img [ref=e205]
+      - generic [ref=e209]: Insert Disc…
+  - generic [ref=e231]:
+    - generic [ref=e232]:
+      - generic [ref=e233]: PLAYSTATION 2 — POWERED BY PLAY! · RUNS ON THIS CONSOLE
+      - button "✕ close" [ref=e234] [cursor=pointer]
+    - generic [ref=e235]:
+      - generic [ref=e238]: Insert a PlayStation 2 disc
+      - paragraph [ref=e239]: A game image you own — .iso, .cso, .chd, .isz, .bin or .elf. It's read locally by the emulator, never uploaded. No BIOS needed.
+      - button "⏏ INSERT DISC" [ref=e240] [cursor=pointer]
+      - paragraph [ref=e241]: "Experimental core — many titles run slowly or not at all. 🎮 Xbox pad mapped: A=✕ B=◯ X=◻ Y=△ · sticks work · Start/Back = Start/Select."
+  - generic [ref=e140]:
+    - generic [ref=e141]:
+      - generic [ref=e142]: ←→↑↓
+      - text: navigate
+    - generic [ref=e143]: Enter — select
+    - generic [ref=e145]: Esc — back
+    - generic [ref=e147]: 🎮 supported
