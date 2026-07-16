@@ -821,6 +821,47 @@ img.status-avatar, img.ptile-avatar { object-fit: cover; border: 1px solid rgba(
 .gbook-m { font-size: 14px; line-height: 1.45; overflow-wrap: anywhere; }
 .gbook-empty { color: var(--dim); text-align: center; padding: 40px 0; letter-spacing: 0.06em; }
 
+/* —— Studio (synth + drums + MIDI) —— */
+.studio { position: fixed; inset: 0; z-index: 32; display: flex; flex-direction: column;
+  background: linear-gradient(200deg, rgba(8,8,20,0.98), rgba(2,2,10,0.99)); }
+.studio-bar { display: flex; align-items: center; gap: 14px; padding: 14px 22px; background: rgba(10,10,24,0.6); }
+.studio-bar .ghost-btn:last-child { margin-left: auto; }
+.studio-midi { font-size: 12px; color: #7fe0a0; letter-spacing: 0.06em; }
+.studio-body { flex: 1; display: flex; flex-direction: column; gap: 22px; justify-content: center; align-items: center; padding: 20px; overflow: auto; }
+
+.studio-drums { display: flex; flex-direction: column; gap: 8px; }
+.studio-transport { display: flex; align-items: center; gap: 18px; margin-bottom: 8px; }
+.studio-play { font-size: 13px; padding: 9px 22px; }
+.studio-bpm { font-size: 12px; color: var(--dim); letter-spacing: 0.08em; display: flex; align-items: center; gap: 10px; }
+.studio-row { display: flex; align-items: center; gap: 12px; }
+.studio-rowname { width: 56px; font-size: 12px; letter-spacing: 0.08em; color: var(--dim); text-align: right; }
+.studio-cells { display: grid; grid-template-columns: repeat(16, 1fr); gap: 4px; }
+.studio-cell {
+  width: 26px; height: 26px; border-radius: 5px; cursor: pointer;
+  background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.12);
+}
+.studio-cell.beat { background: rgba(255,255,255,0.1); }
+.studio-cell.on { background: color-mix(in oklab, var(--xmb-tint) 70%, #fff); border-color: #fff; }
+.studio-cell.cursor { outline: 2px solid rgba(255,255,255,0.8); outline-offset: 1px; }
+
+.studio-synth { display: flex; flex-direction: column; gap: 12px; align-items: center; }
+.studio-waves { display: flex; gap: 8px; }
+.studio-waves .ghost-btn { font-size: 11px; text-transform: capitalize; }
+.studio-keys { position: relative; display: flex; height: 140px; }
+.studio-key {
+  width: 44px; height: 140px; margin: 0 1px; cursor: pointer;
+  background: linear-gradient(#fff, #dfe4ee); border: 1px solid #9aa3b2; border-radius: 0 0 6px 6px;
+  display: flex; align-items: flex-end; justify-content: center; padding-bottom: 8px;
+}
+.studio-key.sharp {
+  width: 28px; height: 90px; margin: 0 -14px; z-index: 2;
+  background: linear-gradient(#2a2f3a, #10141c); border-color: #000; color: #aab;
+}
+.studio-key.lit { background: linear-gradient(color-mix(in oklab, var(--xmb-tint) 60%, #fff), color-mix(in oklab, var(--xmb-tint) 80%, #000)); }
+.studio-key.sharp.lit { background: linear-gradient(color-mix(in oklab, var(--xmb-tint) 70%, #fff), color-mix(in oklab, var(--xmb-tint) 90%, #000)); }
+.studio-keylabel { font-size: 10px; color: #6b7280; letter-spacing: 0.05em; }
+.studio-key.sharp .studio-keylabel { color: #8891a0; }
+
 /* —— Music Visualizer —— */
 .viz { position: fixed; inset: 0; z-index: 32; display: flex; flex-direction: column; background: radial-gradient(90% 90% at 50% 45%, #0a1226 0%, #01020a 100%); }
 .viz-bar { display: flex; align-items: center; gap: 12px; padding: 14px 22px; background: rgba(6,10,20,0.6); }

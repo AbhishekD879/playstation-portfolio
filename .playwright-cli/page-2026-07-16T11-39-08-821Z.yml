@@ -1,0 +1,218 @@
+- generic [ref=e11]:
+  - generic [ref=e12]:
+    - generic [ref=e13]:
+      - generic [ref=e14]: ▲
+      - text: ELF
+      - generic [ref=e15]: 🏆 3
+    - generic "Battery 100% — charging" [ref=e16]
+    - generic [ref=e22]: 16/7 17:09
+  - generic:
+    - img
+    - img
+    - img
+    - img
+  - generic:
+    - generic [ref=e23]:
+      - img [ref=e25]
+      - generic [ref=e28]: Users
+    - generic [ref=e29]:
+      - img [ref=e31]
+      - generic [ref=e34]: Career
+    - generic [ref=e35]:
+      - img [ref=e37]
+      - generic [ref=e39]: Projects
+    - generic [ref=e40]:
+      - img [ref=e42]
+      - generic [ref=e46]: Skills
+    - generic [ref=e47]:
+      - img [ref=e49]
+      - generic [ref=e53]: Photo
+    - generic [ref=e54]:
+      - img [ref=e56]
+      - generic [ref=e60]: Music
+    - generic [ref=e61]:
+      - img [ref=e63]
+      - generic [ref=e66]: Video
+    - generic [ref=e67]:
+      - img [ref=e69]
+      - generic [ref=e72]: TV
+    - generic [ref=e73]:
+      - img [ref=e75]
+      - generic [ref=e80]: Game
+    - generic [ref=e81]:
+      - img [ref=e83]
+      - generic [ref=e85]: News
+    - generic [ref=e86]:
+      - img [ref=e88]
+      - generic [ref=e91]: Web
+    - generic [ref=e92]:
+      - img [ref=e94]
+      - generic [ref=e97]: Contact
+    - generic [ref=e98]:
+      - img [ref=e100]
+      - generic [ref=e103]: Settings
+  - generic:
+    - generic:
+      - generic:
+        - img
+      - generic:
+        - generic: Radio Stations
+    - generic:
+      - generic:
+        - img
+      - generic:
+        - generic: Podcasts
+    - generic [ref=e163]:
+      - img [ref=e165]
+      - generic [ref=e168]: Winamp
+    - generic [ref=e169]:
+      - img [ref=e171]
+      - generic [ref=e176]: Console Radio
+    - generic [ref=e177]:
+      - img [ref=e179]
+      - generic [ref=e182]: Visualizer
+    - generic [ref=e184]:
+      - img [ref=e186]
+      - generic [ref=e190]:
+        - generic [ref=e191]: Studio
+        - generic [ref=e210]: Playable synth, drum machine & MIDI — synthesized live
+    - generic [ref=e193]:
+      - img [ref=e195]
+      - generic [ref=e200]: lofi beats
+    - generic [ref=e202]:
+      - img [ref=e204]
+      - generic [ref=e208]: Connect Spotify…
+  - generic [ref=e211]:
+    - generic [ref=e212]:
+      - generic [ref=e213]: STUDIO — SYNTH · DRUM MACHINE · MIDI
+      - button "✕ close" [ref=e214] [cursor=pointer]
+    - generic [ref=e215]:
+      - generic [ref=e216]:
+        - generic [ref=e217]:
+          - button "▶ play" [ref=e218] [cursor=pointer]
+          - generic [ref=e219]:
+            - text: 110 BPM
+            - slider "110 BPM" [ref=e220]: "110"
+        - generic [ref=e221]:
+          - generic [ref=e222]: Kick
+          - generic [ref=e223]:
+            - button [ref=e224] [cursor=pointer]
+            - button [ref=e225] [cursor=pointer]
+            - button [ref=e226] [cursor=pointer]
+            - button [ref=e227] [cursor=pointer]
+            - button [ref=e228] [cursor=pointer]
+            - button [ref=e229] [cursor=pointer]
+            - button [ref=e230] [cursor=pointer]
+            - button [ref=e231] [cursor=pointer]
+            - button [ref=e232] [cursor=pointer]
+            - button [ref=e233] [cursor=pointer]
+            - button [ref=e234] [cursor=pointer]
+            - button [ref=e235] [cursor=pointer]
+            - button [ref=e236] [cursor=pointer]
+            - button [ref=e237] [cursor=pointer]
+            - button [ref=e238] [cursor=pointer]
+            - button [ref=e239] [cursor=pointer]
+        - generic [ref=e240]:
+          - generic [ref=e241]: Snare
+          - generic [ref=e242]:
+            - button [ref=e243] [cursor=pointer]
+            - button [ref=e244] [cursor=pointer]
+            - button [ref=e245] [cursor=pointer]
+            - button [ref=e246] [cursor=pointer]
+            - button [ref=e247] [cursor=pointer]
+            - button [ref=e248] [cursor=pointer]
+            - button [ref=e249] [cursor=pointer]
+            - button [ref=e250] [cursor=pointer]
+            - button [ref=e251] [cursor=pointer]
+            - button [ref=e252] [cursor=pointer]
+            - button [ref=e253] [cursor=pointer]
+            - button [ref=e254] [cursor=pointer]
+            - button [ref=e255] [cursor=pointer]
+            - button [ref=e256] [cursor=pointer]
+            - button [ref=e257] [cursor=pointer]
+            - button [ref=e258] [cursor=pointer]
+        - generic [ref=e259]:
+          - generic [ref=e260]: Hat
+          - generic [ref=e261]:
+            - button [ref=e262] [cursor=pointer]
+            - button [ref=e263] [cursor=pointer]
+            - button [ref=e264] [cursor=pointer]
+            - button [ref=e265] [cursor=pointer]
+            - button [ref=e266] [cursor=pointer]
+            - button [ref=e267] [cursor=pointer]
+            - button [ref=e268] [cursor=pointer]
+            - button [ref=e269] [cursor=pointer]
+            - button [ref=e270] [cursor=pointer]
+            - button [ref=e271] [cursor=pointer]
+            - button [ref=e272] [cursor=pointer]
+            - button [ref=e273] [cursor=pointer]
+            - button [ref=e274] [cursor=pointer]
+            - button [ref=e275] [cursor=pointer]
+            - button [ref=e276] [cursor=pointer]
+            - button [ref=e277] [cursor=pointer]
+        - generic [ref=e278]:
+          - generic [ref=e279]: Clap
+          - generic [ref=e280]:
+            - button [ref=e281] [cursor=pointer]
+            - button [ref=e282] [cursor=pointer]
+            - button [ref=e283] [cursor=pointer]
+            - button [ref=e284] [cursor=pointer]
+            - button [ref=e285] [cursor=pointer]
+            - button [ref=e286] [cursor=pointer]
+            - button [ref=e287] [cursor=pointer]
+            - button [ref=e288] [cursor=pointer]
+            - button [ref=e289] [cursor=pointer]
+            - button [ref=e290] [cursor=pointer]
+            - button [ref=e291] [cursor=pointer]
+            - button [ref=e292] [cursor=pointer]
+            - button [ref=e293] [cursor=pointer]
+            - button [ref=e294] [cursor=pointer]
+            - button [ref=e295] [cursor=pointer]
+            - button [ref=e296] [cursor=pointer]
+      - generic [ref=e297]:
+        - generic [ref=e298]:
+          - button "sawtooth" [ref=e299] [cursor=pointer]
+          - button "square" [ref=e300] [cursor=pointer]
+          - button "triangle" [ref=e301] [cursor=pointer]
+          - button "sine" [ref=e302] [cursor=pointer]
+        - generic [ref=e303]:
+          - button "A" [ref=e304] [cursor=pointer]:
+            - generic [ref=e305]: A
+          - button "W" [ref=e306] [cursor=pointer]:
+            - generic [ref=e307]: W
+          - button "S" [ref=e308] [cursor=pointer]:
+            - generic [ref=e309]: S
+          - button "E" [ref=e310] [cursor=pointer]:
+            - generic [ref=e311]: E
+          - button "D" [ref=e312] [cursor=pointer]:
+            - generic [ref=e313]: D
+          - button "F" [ref=e314] [cursor=pointer]:
+            - generic [ref=e315]: F
+          - button "T" [ref=e316] [cursor=pointer]:
+            - generic [ref=e317]: T
+          - button "G" [ref=e318] [cursor=pointer]:
+            - generic [ref=e319]: G
+          - button "Y" [ref=e320] [cursor=pointer]:
+            - generic [ref=e321]: "Y"
+          - button "H" [ref=e322] [cursor=pointer]:
+            - generic [ref=e323]: H
+          - button "U" [ref=e324] [cursor=pointer]:
+            - generic [ref=e325]: U
+          - button "J" [ref=e326] [cursor=pointer]:
+            - generic [ref=e327]: J
+          - button "K" [ref=e328] [cursor=pointer]:
+            - generic [ref=e329]: K
+          - button "O" [ref=e330] [cursor=pointer]:
+            - generic [ref=e331]: O
+          - button "L" [ref=e332] [cursor=pointer]:
+            - generic [ref=e333]: L
+    - generic [ref=e334]:
+      - text: play the keys (A–L row) · plug in MIDI ·
+      - text: close
+  - generic [ref=e140]:
+    - generic [ref=e141]:
+      - generic [ref=e142]: ←→↑↓
+      - text: navigate
+    - generic [ref=e143]: Enter — select
+    - generic [ref=e145]: Esc — back
+    - generic [ref=e147]: 🎮 supported

@@ -36,6 +36,9 @@ export function getAnalyser(): AnalyserNode {
   return analyser;
 }
 export function audioContext(): AudioContext { return ac(); }
+/** The master bus — connect app-generated audio here so it's muted with the
+ *  console and picked up by the visualizer's analyser. */
+export function masterBus(): GainNode { ac(); return master!; }
 
 function tone(freq: number, dur: number, opts: { type?: OscillatorType; gain?: number; at?: number; slide?: number } = {}) {
   const c = ac();
