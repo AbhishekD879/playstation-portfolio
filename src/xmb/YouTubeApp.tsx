@@ -10,7 +10,7 @@ import TileGrid, { COLS } from "./TileGrid";
 const fmtLen = (s: number) => (s >= 3600 ? `${Math.floor(s / 3600)}:${String(Math.floor((s % 3600) / 60)).padStart(2, "0")}` : `${Math.floor(s / 60)}`) + ":" + String(s % 60).padStart(2, "0");
 const fmtViews = (v?: number) => (v == null ? "" : v >= 1e6 ? `${(v / 1e6).toFixed(1)}M views` : v >= 1e3 ? `${Math.round(v / 1e3)}K views` : `${v} views`);
 
-export default function YouTubeApp(props: { onClose: () => void; bind: (nav: (a: NavAction) => void) => void }) {
+export default function YouTubeApp(props: { onClose: () => void; bind: (nav: (a: NavAction) => void) => void; initialQuery?: string }) {
   const [vids, setVids] = createSignal<YtVideo[] | null>(null);
   const [note, setNote] = createSignal("");
   const [q, setQ] = createSignal("");
@@ -21,9 +21,15 @@ export default function YouTubeApp(props: { onClose: () => void; bind: (nav: (a:
   let lastSearched = "";
 
   onMount(() => {
-    ytTrending()
-      .then((v) => { setVids(v); if (!v.length) setNote("Trending is napping — search still works, or paste a YouTube URL."); })
-      .catch(() => { setVids([]); setNote("The instance network is down right now — paste a YouTube URL instead."); });
+    // the AI agent can hand us a search to run on arrival
+    if (props.initialQuery?.trim()) {
+      setQ(props.initialQuery);
+      runSearch(props.initialQuery);
+    } else {
+      ytTrending()
+        .then((v) => { setVids(v); if (!v.length) setNote("Trending is napping — search still works, or paste a YouTube URL."); })
+        .catch(() => { setVids([]); setNote("The instance network is down right now — paste a YouTube URL instead."); });
+    }
     setTimeout(() => input?.focus(), 60);
   });
 

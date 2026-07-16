@@ -74,6 +74,7 @@ export default function XMB(props: {
   let viewerNav: ((a: Parameters<Parameters<typeof onNav>[0]>[0]) => void) | undefined;
   const [statusWeather, setStatusWeather] = createSignal("");
   const [padName, setPadName] = createSignal<string | null>(null);
+  const [ytQuery, setYtQuery] = createSignal(""); // AI agent → YouTube search handoff
   const [padTest, setPadTest] = createSignal(false);
   const [app, setApp] = createSignal<null | "doom" | "chess" | "trivia" | "flash" | "cinema" | "podcasts" | "library" | "map" | "ai" | "webamp" | "youtube" | "timemachine" | "art" | "wiki" | "lichess" | "ps2">(null);
   let appNav: ((a: Parameters<Parameters<typeof onNav>[0]>[0]) => void) | undefined;
@@ -696,9 +697,11 @@ export default function XMB(props: {
   }
 
   // —— the AI agent's hands: map spoken app names onto real console actions ——
-  function aiCommand(app: string): boolean {
+  function aiCommand(app: string, arg?: string): boolean {
     const openApp = (a: typeof app) => { setApp(a as any); return true; };
     switch (app) {
+      case "youtube-search": setYtQuery(arg ?? ""); return openApp("youtube");
+      case "ps2": case "playstation": return openApp("ps2");
       case "doom": awardT("doomguy"); return openApp("doom");
       case "chess": return openApp("chess");
       case "lichess": return openApp("lichess");
@@ -1152,7 +1155,7 @@ export default function XMB(props: {
       <Show when={app() === "ai"}>
         <AiChat
           onFirstChat={() => awardT("aifriend")}
-          onCommand={(a) => aiCommand(a)}
+          onCommand={(a, arg) => aiCommand(a, arg)}
           onClose={() => setApp((cur) => (cur === "ai" ? null : cur))}
         />
       </Show>
@@ -1160,7 +1163,7 @@ export default function XMB(props: {
         <WinampApp stations={recentStations()} onClose={() => setApp(null)} />
       </Show>
       <Show when={app() === "youtube"}>
-        <YouTubeApp bind={(f) => (appNav = f)} onClose={() => setApp(null)} />
+        <YouTubeApp bind={(f) => (appNav = f)} initialQuery={ytQuery()} onClose={() => { setYtQuery(""); setApp(null); }} />
       </Show>
       <Show when={app() === "timemachine"}>
         <TimeMachine onClose={() => setApp(null)} />

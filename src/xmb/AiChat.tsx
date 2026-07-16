@@ -1,57 +1,116 @@
-// AI Abhishek — a real LLM running ON THIS DEVICE via WebGPU. Two brains:
-// Llama 3.2 1B (fast, ~700 MB) or Hermes 3 3B (Nous Research's agent-tuned
-// model, ~1.9 GB) which can also OPERATE the console — open apps, play radio,
-// change themes — through a simple command protocol. No servers, no keys.
-import { For, Show, createSignal, onCleanup, onMount } from "solid-js";
+// AI Abhishek — a real agent running ON THIS DEVICE. pi.dev's agent runtime
+// (pi-agent-core) drives a proper tool-calling loop; WebLLM supplies the model
+// on WebGPU (Llama 3.2 1B or Hermes 3 3B). The agent can open console apps,
+// search YouTube, and pop rich widgets (career, skills, contact, weather)
+// right in the chat. Speak or type. No servers, no keys.
+import { For, Match, Show, Switch, createSignal, onCleanup, onMount } from "solid-js";
 import { CreateMLCEngine, type MLCEngine } from "@mlc-ai/web-llm";
+import { Agent, type AgentTool } from "@earendil-works/pi-agent-core";
+import { Type } from "typebox";
 import { CAREER, OWNER, PROJECTS, SKILLS } from "../content";
+import { fetchWeather, wmo, type Weather } from "../apps";
+import { webllmModel, webllmStreamFn } from "../piWebllm";
 import { setNavEnabled } from "../input";
 import * as sfx from "../audio";
 
 const MODELS = {
   fast: { id: "Llama-3.2-1B-Instruct-q4f16_1-MLC", label: "Llama 3.2 · 1B", dl: "~700 MB", blurb: "quick answers, light on the GPU" },
-  agent: { id: "Hermes-3-Llama-3.2-3B-q4f16_1-MLC", label: "Hermes 3 · 3B", dl: "~1.9 GB", blurb: "smarter — and it can drive the console" },
+  agent: { id: "Hermes-3-Llama-3.2-3B-q4f16_1-MLC", label: "Hermes 3 · 3B", dl: "~1.9 GB", blurb: "smarter — tuned for tool use" },
 } as const;
 type ModelKey = keyof typeof MODELS;
 
-// console apps the agent may open — keep ids in sync with XMB's executor
-const APPS = "doom, chess, lichess, trivia, flash, youtube, cinema, podcasts, radio, spotify, winamp, library, wiki, dictionary, map, timemachine, art, apod, weather, tv, news, photos, trophies, whatsnew, themes";
+const APPS = "doom, chess, lichess, trivia, flash, ps2, youtube, cinema, podcasts, radio, spotify, winamp, library, wiki, dictionary, map, timemachine, art, apod, weather, tv, news, photos, trophies, whatsnew, themes";
 
-function systemPrompt(agentic: boolean) {
-  return `You are "AI Abhishek" — a friendly, capable general-purpose assistant running fully on the visitor's device, embedded in ${OWNER.name}'s portfolio console. Chat naturally about anything: code, career advice, trivia, ideas. Keep answers concise (2-5 sentences) unless asked for depth.
+const SYSTEM = `You are "AI Abhishek" — a friendly assistant running fully on the visitor's device, embedded in ${OWNER.name}'s PlayStation-style portfolio console. Chat naturally about anything. Keep answers concise (2-4 sentences) unless asked for depth.
 
-You are also the expert on ${OWNER.name} (${OWNER.title}, ${OWNER.location}). When someone asks about him — who he is, what he's done, what he can build, whether to hire him — use ONLY these facts, never invented ones:
+You are the expert on ${OWNER.name} (${OWNER.title}, ${OWNER.location}). Use ONLY these facts about him:
 ${CAREER.map((c) => `- ${c.tag}: ${c.title}. ${c.bullets.join(" ")}`).join("\n")}
 Projects: ${PROJECTS.map((p) => p.title).join(", ")}.
 Skills: ${SKILLS.map((s) => `${s.name}: ${s.items.join("/")}`).join("; ")}.
+Contact: ${OWNER.email} · ${OWNER.linkedin}.
 
-Services he can offer: agentic AI systems & LLM workflow design, voice-AI tooling & prompt-optimization pipelines, RAG systems, full-stack product engineering, test automation. Contact: ${OWNER.email} · ${OWNER.linkedin}.
+When the user asks about his career, projects, skills, or how to reach him, CALL the matching show_* tool — the console renders a beautiful card. Add one short sentence of commentary, not a recital of the card's contents. When asked to open/play/launch something, call open_app. When asked to find or play a video, call search_youtube. Do NOT steer unrelated conversations back to Abhishek.
 
-Do NOT steer unrelated conversations back to Abhishek — just be helpful.${agentic ? `
+These requests MUST become tool calls, never prose:
+- "open doom" / "play chess" → open_app
+- "search lofi on youtube" / "find videos of X" / "play some music videos" → search_youtube
+- "what are his skills" / "his tech stack" → show_skills
+- "what has he worked on" / "his experience" → show_career
+- "his projects" → show_projects
+- "how do I contact/hire him" → show_contact
+- "what's the weather" → get_weather`;
 
-CONSOLE CONTROL: you can operate this console. When — and only when — the user asks you to open, play, launch, or show something the console has, reply with EXACTLY one line and nothing else:
-<command>{"app":"NAME"}</command>
-where NAME is one of: ${APPS}.
-Examples: "play doom" → <command>{"app":"doom"}</command> · "put some music on" → <command>{"app":"radio"}</command> · "show me old websites" → <command>{"app":"timemachine"}</command>.
-For everything else, reply with normal text and no command tags.` : ""}`;
-}
-
-type Msg = { role: "user" | "assistant"; text: string };
+type Widget =
+  | { t: "career" } | { t: "projects" } | { t: "skills" } | { t: "contact" }
+  | { t: "weather"; data: Weather }
+  | { t: "app"; app: string; ok: boolean };
+type ChatItem = { kind: "msg"; role: "user" | "assistant"; text: string } | { kind: "widget"; w: Widget };
 
 export default function AiChat(props: {
   onFirstChat: () => void;
-  onCommand: (app: string) => boolean;
+  onCommand: (app: string, arg?: string) => boolean;
   onClose: () => void;
 }) {
   const [supported, setSupported] = createSignal<boolean | null>(null);
   const [ready, setReady] = createSignal(false);
   const [model, setModel] = createSignal<ModelKey | null>(null);
   const [progress, setProgress] = createSignal("");
-  const [msgs, setMsgs] = createSignal<Msg[]>([]);
+  const [items, setItems] = createSignal<ChatItem[]>([]);
   const [busy, setBusy] = createSignal(false);
+  const [listening, setListening] = createSignal(false);
   let engine: MLCEngine | null = null;
+  let agent: Agent | null = null;
+  let rec: any = null;
   let input!: HTMLInputElement;
   let scroller!: HTMLDivElement;
+
+  const scroll = () => requestAnimationFrame(() => { if (scroller) scroller.scrollTop = scroller.scrollHeight; });
+  const pushItem = (it: ChatItem) => { setItems((x) => [...x, it]); scroll(); };
+  const widget = (w: Widget) => pushItem({ kind: "widget", w });
+
+  // —— the agent's hands: what it can actually do on this console ——
+  const T = (name: string, label: string, description: string, parameters: any,
+    execute: (params: any) => Promise<{ text: string; terminate?: boolean }>): AgentTool<any> => ({
+    name, label, description, parameters,
+    execute: async (_id, params) => {
+      const r = await execute(params);
+      return { content: [{ type: "text", text: r.text }], details: null, terminate: r.terminate };
+    },
+  });
+
+  const tools: AgentTool<any>[] = [
+    T("open_app", "Open app", `Open one of the console's apps. Valid names: ${APPS}.`,
+      Type.Object({ app: Type.String({ description: "app name from the valid list" }) }),
+      async ({ app }) => {
+        const a = String(app).toLowerCase().trim();
+        const ok = props.onCommand(a);
+        widget({ t: "app", app: a, ok });
+        if (ok) { sfx.confirm(); setTimeout(() => props.onClose(), 750); }
+        return { text: ok ? `Opened ${a}.` : `No app called "${a}" on this console.`, terminate: ok };
+      }),
+    T("search_youtube", "YouTube search", "Search YouTube and show the results, ready to play.",
+      Type.Object({ query: Type.String({ description: "what to search for" }) }),
+      async ({ query }) => {
+        const ok = props.onCommand("youtube-search", String(query));
+        widget({ t: "app", app: `youtube — “${query}”`, ok });
+        if (ok) { sfx.confirm(); setTimeout(() => props.onClose(), 750); }
+        return { text: ok ? `Searching YouTube for ${query}.` : "YouTube app unavailable.", terminate: ok };
+      }),
+    T("show_career", "Career card", "Show Abhishek's career timeline card.",
+      Type.Object({}), async () => { widget({ t: "career" }); return { text: "Career card shown.", terminate: true }; }),
+    T("show_projects", "Projects card", "Show Abhishek's projects card.",
+      Type.Object({}), async () => { widget({ t: "projects" }); return { text: "Projects card shown.", terminate: true }; }),
+    T("show_skills", "Skills card", "Show Abhishek's skills card.",
+      Type.Object({}), async () => { widget({ t: "skills" }); return { text: "Skills card shown.", terminate: true }; }),
+    T("show_contact", "Contact card", "Show contact options for Abhishek (email, LinkedIn, phone).",
+      Type.Object({}), async () => { widget({ t: "contact" }); return { text: "Contact card shown.", terminate: true }; }),
+    T("get_weather", "Weather", "Show current weather at the visitor's location.",
+      Type.Object({}), async () => {
+        const data = await fetchWeather();
+        widget({ t: "weather", data });
+        return { text: `It's ${data.temp}° with ${wmo(data.code)[1]} in ${data.place}.`, terminate: true };
+      }),
+  ];
 
   onMount(() => {
     setNavEnabled(false);
@@ -61,6 +120,7 @@ export default function AiChat(props: {
     onCleanup(() => {
       setNavEnabled(true);
       removeEventListener("keydown", esc);
+      rec?.abort?.();
       engine?.unload();
     });
     (async () => {
@@ -81,13 +141,48 @@ export default function AiChat(props: {
       engine = await CreateMLCEngine(MODELS[key].id, {
         initProgressCallback: (p) => setProgress(p.text),
       });
+      agent = new Agent({
+        initialState: { systemPrompt: SYSTEM, model: webllmModel(MODELS[key].id), tools },
+        streamFn: webllmStreamFn(() => engine),
+      });
+      if (import.meta.env.DEV) (window as any).__agent = agent;
+      agent.subscribe((ev) => {
+        if (ev.type === "message_start" && (ev as any).message?.role === "assistant") {
+          pushItem({ kind: "msg", role: "assistant", text: "" });
+        }
+        if (ev.type === "message_update" && ev.assistantMessageEvent.type === "text_delta") {
+          const d = ev.assistantMessageEvent.delta;
+          setItems((x) => {
+            const out = [...x];
+            for (let i = out.length - 1; i >= 0; i--) {
+              const it = out[i];
+              if (it.kind === "msg" && it.role === "assistant") { out[i] = { ...it, text: it.text + d }; break; }
+            }
+            return out;
+          });
+          scroll();
+        }
+        if (ev.type === "message_end" && (ev as any).message?.role === "assistant") {
+          // a turn that was pure tool-call leaves an empty bubble — drop it
+          setItems((x) => {
+            const out = [...x];
+            for (let i = out.length - 1; i >= 0; i--) {
+              const it = out[i];
+              if (it.kind === "msg" && it.role === "assistant") {
+                if (!it.text.trim()) out.splice(i, 1);
+                break;
+              }
+            }
+            return out;
+          });
+        }
+        if (ev.type === "agent_end") { setBusy(false); setTimeout(() => input?.focus(), 30); }
+      });
       setReady(true);
       setProgress("");
-      setMsgs([{
-        role: "assistant",
-        text: key === "agent"
-          ? "Hermes online — running on your GPU. Ask me about Abhishek, or tell me to do things: “open doom”, “put some radio on”, “show the art gallery”."
-          : "Hi — I'm a 1B model running entirely on your GPU. Ask me anything about Abhishek's work.",
+      setItems([{
+        kind: "msg", role: "assistant",
+        text: "Online — a pi.dev agent running on your GPU. Ask about Abhishek (I'll pull up cards), or tell me things: “open doom”, “search lofi on youtube”, “what's the weather”. Tap the mic to talk.",
       }]);
       setTimeout(() => input?.focus(), 60);
     } catch (e) {
@@ -95,60 +190,44 @@ export default function AiChat(props: {
     }
   }
 
-  async function send() {
-    const text = input.value.trim();
-    if (!text || busy() || !engine) return;
+  function send(text?: string) {
+    const t = (text ?? input.value).trim();
+    if (!t || busy() || !agent) return;
     input.value = "";
     props.onFirstChat();
-    setMsgs((m) => [...m, { role: "user", text }, { role: "assistant", text: "" }]);
+    pushItem({ kind: "msg", role: "user", text: t });
     setBusy(true);
-    try {
-      const chunks = await engine.chat.completions.create({
-        messages: [
-          { role: "system", content: systemPrompt(model() === "agent") },
-          ...msgs().filter((m) => m.text).map((m) => ({ role: m.role, content: m.text })),
-          { role: "user", content: text },
-        ] as any,
-        stream: true,
-        max_tokens: 260,
-        temperature: 0.7,
-      });
-      let full = "";
-      for await (const c of chunks) {
-        const delta = c.choices[0]?.delta?.content ?? "";
-        if (delta) {
-          full += delta;
-          setMsgs((m) => {
-            const out = [...m];
-            out[out.length - 1] = { role: "assistant", text: full };
-            return out;
-          });
-          scroller.scrollTop = scroller.scrollHeight;
-        }
-      }
-      // did the agent issue a console command?
-      const cmd = full.match(/<command>\s*({[^}]*})\s*<\/command>/);
-      if (cmd) {
-        let app = "";
-        try { app = JSON.parse(cmd[1]).app?.toLowerCase?.() ?? ""; } catch { /* malformed */ }
-        const ok = app && props.onCommand(app);
-        setMsgs((m) => [
-          ...m.slice(0, -1),
-          { role: "assistant", text: ok ? `🕹 On it — opening ${app}.` : `I tried to open “${app}” but couldn't find it on this console.` },
-        ]);
-        if (ok) setTimeout(() => props.onClose(), 650); // hand the stage to the app
-      }
-    } catch {
-      setMsgs((m) => [...m.slice(0, -1), { role: "assistant", text: "…my circuits hiccuped. Try again?" }]);
-    }
-    setBusy(false);
+    agent.prompt(t).catch(() => {
+      pushItem({ kind: "msg", role: "assistant", text: "…my circuits hiccuped. Try again?" });
+      setBusy(false);
+    });
+  }
+
+  // —— voice input: hold a thought, not a keyboard ——
+  const SR = (window as any).SpeechRecognition ?? (window as any).webkitSpeechRecognition;
+  function toggleMic() {
+    if (listening()) { rec?.stop(); return; }
+    rec = new SR();
+    rec.lang = navigator.language || "en-US";
+    rec.interimResults = true;
+    rec.onresult = (e: any) => {
+      input.value = Array.from(e.results as any[]).map((r: any) => r[0].transcript).join("");
+    };
+    rec.onend = () => {
+      setListening(false);
+      if (input.value.trim()) send(); // speak → it just sends
+    };
+    rec.onerror = () => setListening(false);
+    setListening(true);
+    sfx.tickH();
+    rec.start();
   }
 
   return (
     <div class="ai">
       <div class="ai-head">
         <div class="panel-tag">
-          AI ABHISHEK — {model() ? `${MODELS[model()!].label} · ` : ""}WEBGPU, ON-DEVICE, NO SERVER
+          AI ABHISHEK — {model() ? `${MODELS[model()!].label} · ` : ""}PI.DEV AGENT · WEBGPU, ON-DEVICE
         </div>
         <button class="ghost-btn" onClick={() => { sfx.back(); props.onClose(); }}>✕ close</button>
       </div>
@@ -185,29 +264,115 @@ export default function AiChat(props: {
           >
             <Show when={ready()} fallback={<div class="guide-loading ai-progress">{progress()}</div>}>
               <div class="ai-log" ref={scroller}>
-                <For each={msgs()}>
-                  {(m) => (
-                    <div class="ai-msg" classList={{ user: m.role === "user" }}>
-                      {m.text || "▋"}
-                    </div>
+                <For each={items()}>
+                  {(it) => (
+                    <Switch>
+                      <Match when={it.kind === "msg"}>
+                        <div class="ai-msg" classList={{ user: (it as any).role === "user" }}>
+                          {(it as any).text || "▋"}
+                        </div>
+                      </Match>
+                      <Match when={it.kind === "widget"}>
+                        <AiWidget w={(it as any).w} />
+                      </Match>
+                    </Switch>
                   )}
                 </For>
+                <Show when={busy()}><div class="ai-msg ai-thinking">▋</div></Show>
               </div>
-              <input
-                ref={input}
-                class="ai-input"
-                placeholder={busy() ? "thinking…" : model() === "agent" ? "Ask anything — or tell me to open something…" : "Ask about Abhishek's work…"}
-                disabled={busy()}
-                onKeyDown={(e) => {
-                  e.stopPropagation();
-                  if (e.key === "Enter") send();
-                  if (e.key === "Escape") { sfx.back(); props.onClose(); }
-                }}
-              />
+              <div class="ai-inputrow">
+                <input
+                  ref={input}
+                  class="ai-input"
+                  placeholder={busy() ? "thinking…" : listening() ? "listening…" : "Ask, or say: open doom · search lofi on youtube · show his skills"}
+                  disabled={busy()}
+                  onKeyDown={(e) => {
+                    e.stopPropagation();
+                    if (e.key === "Enter") send();
+                    if (e.key === "Escape") { sfx.back(); props.onClose(); }
+                  }}
+                />
+                <Show when={SR}>
+                  <button
+                    class="ai-mic"
+                    classList={{ listening: listening() }}
+                    title={listening() ? "stop listening" : "speak"}
+                    onClick={toggleMic}
+                  >🎤</button>
+                </Show>
+              </div>
             </Show>
           </Show>
         </Show>
       </Show>
     </div>
+  );
+}
+
+// —— the widgets: portfolio cards that pop right into the conversation ——
+function AiWidget(props: { w: Widget }) {
+  const w = props.w;
+  return (
+    <Switch>
+      <Match when={w.t === "app"}>
+        <div class="ai-widget ai-w-app">🕹 {(w as any).ok ? `Launching ${(w as any).app}…` : `Couldn't find “${(w as any).app}”`}</div>
+      </Match>
+      <Match when={w.t === "career"}>
+        <div class="ai-widget">
+          <div class="ai-w-title">CAREER</div>
+          <For each={CAREER}>
+            {(c) => (
+              <div class="ai-w-row">
+                <div class="ai-w-tag">{c.tag}</div>
+                <div><div class="ai-w-strong">{c.title}</div><div class="ai-w-dim">{c.bullets[0]}</div></div>
+              </div>
+            )}
+          </For>
+        </div>
+      </Match>
+      <Match when={w.t === "projects"}>
+        <div class="ai-widget">
+          <div class="ai-w-title">PROJECTS</div>
+          <For each={PROJECTS}>
+            {(p) => (
+              <div class="ai-w-row">
+                <div><div class="ai-w-strong">{p.title}</div><div class="ai-w-dim">{p.meta} — {p.bullets[0]}</div></div>
+              </div>
+            )}
+          </For>
+        </div>
+      </Match>
+      <Match when={w.t === "skills"}>
+        <div class="ai-widget">
+          <div class="ai-w-title">SKILLS</div>
+          <For each={SKILLS}>
+            {(s) => (
+              <div class="ai-w-skill">
+                <span class="ai-w-tag">{s.name}</span>
+                <span class="ai-w-chips"><For each={s.items}>{(i) => <span class="ai-w-chip">{i}</span>}</For></span>
+              </div>
+            )}
+          </For>
+        </div>
+      </Match>
+      <Match when={w.t === "contact"}>
+        <div class="ai-widget ai-w-contactrow">
+          <a class="ps2-launch ai-w-btn" href={`mailto:${OWNER.email}`}>✉ Email</a>
+          <a class="ps2-launch ai-w-btn" href={OWNER.linkedin} target="_blank">🔗 LinkedIn</a>
+          <a class="ps2-launch ai-w-btn" href={`tel:${OWNER.phone.replace(/\s/g, "")}`}>📞 Call</a>
+        </div>
+      </Match>
+      <Match when={w.t === "weather"}>
+        <div class="ai-widget">
+          <div class="ai-w-title">WEATHER — {(w as any).data.place.toUpperCase()}</div>
+          <div class="ai-w-weathernow">{wmo((w as any).data.code)[0]} {(w as any).data.temp}° <span class="ai-w-dim">wind {(w as any).data.wind} km/h</span></div>
+          <div class="ai-w-days">
+            <For each={(w as any).data.days.slice(0, 3)}>
+              {(d: any) => <span class="ai-w-chip">{d.day} {wmo(d.code)[0]} {d.min}–{d.max}°</span>}
+            </For>
+          </div>
+        </div>
+      </Match>
+    </Switch>
   );
 }

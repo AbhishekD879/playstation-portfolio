@@ -1,0 +1,91 @@
+- generic [ref=e11]:
+  - generic [ref=e12]:
+    - generic [ref=e13]:
+      - generic [ref=e14]: ▲
+      - text: ELF
+      - generic [ref=e15]: 🏆 1
+    - generic "Battery 100% — charging" [ref=e16]
+    - generic [ref=e22]: 16/7 13:23
+  - generic:
+    - generic [ref=e23]:
+      - img [ref=e25]
+      - generic [ref=e28]: Users
+    - generic [ref=e29]:
+      - img [ref=e31]
+      - generic [ref=e34]: Career
+    - generic [ref=e35]:
+      - img [ref=e37]
+      - generic [ref=e39]: Projects
+    - generic [ref=e40]:
+      - img [ref=e42]
+      - generic [ref=e46]: Skills
+    - generic [ref=e47]:
+      - img [ref=e49]
+      - generic [ref=e53]: Photo
+    - generic [ref=e54]:
+      - img [ref=e56]
+      - generic [ref=e59]: Video
+    - generic [ref=e60]:
+      - img [ref=e62]
+      - generic [ref=e67]: Game
+    - generic [ref=e68]:
+      - img [ref=e70]
+      - generic [ref=e73]: TV
+    - generic [ref=e74]:
+      - img [ref=e76]
+      - generic [ref=e78]: News
+    - generic [ref=e79]:
+      - img [ref=e81]
+      - generic [ref=e85]: Music
+    - generic [ref=e86]:
+      - img [ref=e88]
+      - generic [ref=e91]: Network
+    - generic [ref=e92]:
+      - img [ref=e94]
+      - generic [ref=e97]: Settings
+  - generic:
+    - generic [ref=e175]:
+      - img [ref=e177]
+      - generic [ref=e181]:
+        - generic [ref=e182]: AI Abhishek
+        - generic [ref=e233]: On-device LLM — ask about my work
+    - generic [ref=e184]:
+      - img [ref=e186]
+      - generic [ref=e189]: What's New
+    - generic [ref=e190]:
+      - img [ref=e192]
+      - generic [ref=e196]: Trophy Collection
+    - generic [ref=e197]:
+      - img [ref=e199]
+      - generic [ref=e204]: Profile Photo
+    - generic [ref=e205]:
+      - img [ref=e207]
+      - generic [ref=e213]: Switch User
+    - generic:
+      - generic:
+        - img
+      - generic:
+        - generic: About Abhishek
+  - generic [ref=e234]:
+    - generic [ref=e235]:
+      - generic [ref=e236]: AI ABHISHEK — PI.DEV AGENT · WEBGPU, ON-DEVICE
+      - button "✕ close" [ref=e237] [cursor=pointer]
+    - generic [ref=e238]:
+      - generic [ref=e239]: Pick a brain
+      - paragraph [ref=e240]: Both run fully on your GPU — downloaded once, cached, nothing you type leaves this device. Not recommended on mobile data.
+      - generic [ref=e241]:
+        - button "⚡ Llama 3.2 · 1B ~700 MB quick answers, light on the GPU" [ref=e242] [cursor=pointer]:
+          - generic [ref=e243]: ⚡ Llama 3.2 · 1B
+          - generic [ref=e244]: ~700 MB
+          - generic [ref=e245]: quick answers, light on the GPU
+        - button "🤖 Hermes 3 · 3B ~1.9 GB smarter — tuned for tool use" [ref=e246] [cursor=pointer]:
+          - generic [ref=e247]: 🤖 Hermes 3 · 3B
+          - generic [ref=e248]: ~1.9 GB
+          - generic [ref=e249]: smarter — tuned for tool use
+  - generic [ref=e134]:
+    - generic [ref=e135]:
+      - generic [ref=e136]: ←→↑↓
+      - text: navigate
+    - generic [ref=e137]: Enter — select
+    - generic [ref=e139]: Esc — back
+    - generic [ref=e141]: 🎮 supported
