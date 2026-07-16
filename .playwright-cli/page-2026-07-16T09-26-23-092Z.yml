@@ -1,0 +1,103 @@
+- generic [ref=e11]:
+  - generic [ref=e12]:
+    - generic [ref=e13]:
+      - generic [ref=e14]: ▲
+      - text: ELF
+      - generic [ref=e15]: 🏆 3
+    - generic "Battery 100% — charging" [ref=e16]
+    - generic [ref=e22]: 16/7 14:56
+  - generic:
+    - generic [ref=e23]:
+      - img [ref=e25]
+      - generic [ref=e28]: Users
+    - generic [ref=e29]:
+      - img [ref=e31]
+      - generic [ref=e34]: Career
+    - generic [ref=e35]:
+      - img [ref=e37]
+      - generic [ref=e39]: Projects
+    - generic [ref=e40]:
+      - img [ref=e42]
+      - generic [ref=e46]: Skills
+    - generic [ref=e47]:
+      - img [ref=e49]
+      - generic [ref=e53]: Photo
+    - generic [ref=e54]:
+      - img [ref=e56]
+      - generic [ref=e59]: Video
+    - generic [ref=e60]:
+      - img [ref=e62]
+      - generic [ref=e67]: Game
+    - generic [ref=e68]:
+      - img [ref=e70]
+      - generic [ref=e73]: TV
+    - generic [ref=e74]:
+      - img [ref=e76]
+      - generic [ref=e78]: News
+    - generic [ref=e79]:
+      - img [ref=e81]
+      - generic [ref=e85]: Music
+    - generic [ref=e86]:
+      - img [ref=e88]
+      - generic [ref=e91]: Network
+    - generic [ref=e92]:
+      - img [ref=e94]
+      - generic [ref=e97]: Settings
+  - generic:
+    - generic:
+      - generic:
+        - img
+      - generic:
+        - generic: Send Mail
+    - generic:
+      - generic:
+        - img
+      - generic:
+        - generic: LinkedIn
+    - generic [ref=e156]:
+      - img [ref=e158]
+      - generic [ref=e161]: Call
+    - generic [ref=e162]:
+      - img [ref=e164]
+      - generic [ref=e167]: Weather
+    - generic [ref=e168]:
+      - img [ref=e170]
+      - generic [ref=e174]: Planet Earth
+    - generic [ref=e176]:
+      - img [ref=e178]
+      - generic [ref=e181]:
+        - generic [ref=e182]: Browser
+        - generic [ref=e205]: Search & read the web — reader mode
+    - generic [ref=e184]:
+      - img [ref=e186]
+      - generic [ref=e189]: Time Machine
+    - generic [ref=e191]:
+      - img [ref=e193]
+      - generic [ref=e197]: Dictionary
+    - generic [ref=e199]:
+      - img [ref=e201]
+      - generic [ref=e204]: Wikipedia
+  - generic [ref=e206]:
+    - generic [ref=e207]:
+      - generic [ref=e208]: BROWSER — READER MODE
+      - textbox "search the web, or type a URL…" [active] [ref=e209]
+      - button "go" [ref=e210] [cursor=pointer]
+      - button "✕ close" [ref=e211] [cursor=pointer]
+    - generic [ref=e212]:
+      - generic [ref=e213]: 🌐 Reader Browser
+      - paragraph [ref=e214]: Type a search or a web address above. Pages open in a clean, reader-friendly view — text and images, no scripts or ads. Read-only.
+      - generic [ref=e215]:
+        - button "wikipedia.org" [ref=e216] [cursor=pointer]
+        - button "news.ycombinator.com" [ref=e217] [cursor=pointer]
+        - button "bbc.com/news" [ref=e218] [cursor=pointer]
+        - button "en.wikipedia.org/wiki/PlayStation_3" [ref=e219] [cursor=pointer]
+    - generic [ref=e220]:
+      - text: ENTER — go · links open in the reader ·
+      - text: close
+  - generic [ref=e134]:
+    - generic [ref=e135]:
+      - generic [ref=e136]: ←→↑↓
+      - text: navigate
+    - generic [ref=e137]: Enter — select
+    - generic [ref=e139]: Esc — back
+    - generic [ref=e141]: 🎮 supported

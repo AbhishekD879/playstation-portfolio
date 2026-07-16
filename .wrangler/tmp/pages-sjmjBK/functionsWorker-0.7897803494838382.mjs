@@ -1,12 +1,81 @@
 var __defProp = Object.defineProperty;
 var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
 
+// api/browse.ts
+var abs = /* @__PURE__ */ __name((u, base) => {
+  try {
+    return new URL(u, base).href;
+  } catch {
+    return "";
+  }
+}, "abs");
+var prox = /* @__PURE__ */ __name((u) => u && /^https?:/.test(u) ? `/api/browse?url=${encodeURIComponent(u)}` : u, "prox");
+var onRequestGet = /* @__PURE__ */ __name(async ({ request, env }) => {
+  const ip = request.headers.get("cf-connecting-ip") ?? "?";
+  const rlKey = `br:${ip}:${Math.floor(Date.now() / 6e4)}`;
+  const n = parseInt(await env.GB.get(rlKey) ?? "0", 10);
+  if (n > 40) return new Response("Rate limit \u2014 one page at a time.", { status: 429 });
+  await env.GB.put(rlKey, String(n + 1), { expirationTtl: 120 });
+  const p = new URL(request.url).searchParams;
+  let target = p.get("url") ?? "";
+  const q = p.get("q");
+  if (q) target = "https://html.duckduckgo.com/html/?q=" + encodeURIComponent(q);
+  if (!/^https?:\/\//i.test(target)) return new Response("Bad URL", { status: 400 });
+  let up;
+  try {
+    up = await fetch(target, {
+      headers: { "user-agent": "Mozilla/5.0 (compatible; AbhishekStation reader)", accept: "text/html,application/xhtml+xml,*/*" },
+      redirect: "follow"
+    });
+  } catch {
+    return new Response(
+      "<body style='background:#0a0e18;color:#ccc;font-family:sans-serif;padding:40px'>That site refused the connection.</body>",
+      { status: 502, headers: { "content-type": "text/html" } }
+    );
+  }
+  const ct = up.headers.get("content-type") ?? "";
+  const base = up.url;
+  const headers = {
+    "content-type": ct || "text/html; charset=utf-8",
+    "cross-origin-embedder-policy": "credentialless",
+    "content-security-policy": "default-src https: data: 'unsafe-inline'; script-src 'none'; frame-src 'none'",
+    "cache-control": "no-store"
+  };
+  if (!ct.includes("text/html")) return new Response(up.body, { headers });
+  const strip = { element: /* @__PURE__ */ __name((e) => e.remove(), "element") };
+  return new HTMLRewriter().on("script, iframe, object, embed, frame, noscript", strip).on("*", {
+    element(e) {
+      const drop = [];
+      for (const [name] of e.attributes) if (String(name).toLowerCase().startsWith("on")) drop.push(name);
+      drop.forEach((a) => e.removeAttribute(a));
+    }
+  }).on("a", {
+    element(e) {
+      const h = e.getAttribute("href");
+      if (h && !h.startsWith("#")) e.setAttribute("href", prox(abs(h, base)));
+      e.removeAttribute("target");
+    }
+  }).on("img", {
+    element(e) {
+      const s = e.getAttribute("src");
+      if (s) e.setAttribute("src", abs(s, base));
+      e.removeAttribute("srcset");
+      e.removeAttribute("loading");
+    }
+  }).on("link", {
+    element(e) {
+      const h = e.getAttribute("href");
+      if (h) e.setAttribute("href", abs(h, base));
+    }
+  }).transform(new Response(up.body, { headers }));
+}, "onRequestGet");
+
 // api/guestbook.ts
 var MAX_NAME = 24;
 var MAX_MSG = 240;
 var PAGE = 40;
 var json = /* @__PURE__ */ __name((data, status = 200) => new Response(JSON.stringify(data), { status, headers: { "content-type": "application/json" } }), "json");
-var onRequestGet = /* @__PURE__ */ __name(async ({ env }) => {
+var onRequestGet2 = /* @__PURE__ */ __name(async ({ env }) => {
   const list = await env.GB.list({ prefix: "gb:", limit: PAGE });
   const entries = list.keys.map((k) => k.metadata).filter(Boolean);
   return json({ entries });
@@ -36,11 +105,18 @@ var onRequestPost = /* @__PURE__ */ __name(async ({ request, env }) => {
 // ../.wrangler/tmp/pages-sjmjBK/functionsRoutes-0.9084517086942594.mjs
 var routes = [
   {
-    routePath: "/api/guestbook",
+    routePath: "/api/browse",
     mountPath: "/api",
     method: "GET",
     middlewares: [],
     modules: [onRequestGet]
+  },
+  {
+    routePath: "/api/guestbook",
+    mountPath: "/api",
+    method: "GET",
+    middlewares: [],
+    modules: [onRequestGet2]
   },
   {
     routePath: "/api/guestbook",
@@ -538,7 +614,7 @@ var jsonError = /* @__PURE__ */ __name(async (request, env, _ctx, middlewareCtx)
 }, "jsonError");
 var middleware_miniflare3_json_error_default = jsonError;
 
-// ../.wrangler/tmp/bundle-TKqb5D/middleware-insertion-facade.js
+// ../.wrangler/tmp/bundle-dRk1uK/middleware-insertion-facade.js
 var __INTERNAL_WRANGLER_MIDDLEWARE__ = [
   middleware_ensure_req_body_drained_default,
   middleware_miniflare3_json_error_default
@@ -570,7 +646,7 @@ function __facade_invoke__(request, env, ctx, dispatch, finalMiddleware) {
 }
 __name(__facade_invoke__, "__facade_invoke__");
 
-// ../.wrangler/tmp/bundle-TKqb5D/middleware-loader.entry.ts
+// ../.wrangler/tmp/bundle-dRk1uK/middleware-loader.entry.ts
 var __Facade_ScheduledController__ = class ___Facade_ScheduledController__ {
   constructor(scheduledTime, cron, noRetry) {
     this.scheduledTime = scheduledTime;

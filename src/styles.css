@@ -795,6 +795,30 @@ img.status-avatar, img.ptile-avatar { object-fit: cover; border: 1px solid rgba(
 .gbook-m { font-size: 14px; line-height: 1.45; overflow-wrap: anywhere; }
 .gbook-empty { color: var(--dim); text-align: center; padding: 40px 0; letter-spacing: 0.06em; }
 
+/* —— Reader Browser —— */
+.browser { position: fixed; inset: 0; z-index: 32; display: flex; flex-direction: column;
+  background: linear-gradient(200deg, rgba(6,10,22,0.98), rgba(2,4,12,0.99)); }
+.browser-bar {
+  display: flex; align-items: center; gap: 12px;
+  padding: 14px 22px; background: rgba(10,14,26,0.92);
+  border-bottom: 1px solid rgba(255,255,255,0.1);
+}
+.browser-addr {
+  flex: 1; background: rgba(255,255,255,0.08);
+  border: 1.5px solid rgba(255,255,255,0.3); border-radius: 999px;
+  color: var(--text); font-family: inherit; font-size: 14.5px; padding: 10px 20px; outline: none;
+}
+.browser-addr:focus { border-color: #fff; }
+.browser-frame { flex: 1; border: 0; width: 100%; background: #fff; }
+.browser-loading, .browser-start, .browser-gate {
+  flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 14px; text-align: center; padding: 40px; color: var(--dim);
+}
+.browser-start-big { font-size: 30px; font-weight: 300; color: var(--text); letter-spacing: 0.04em; }
+.browser-start p, .browser-gate p { max-width: 520px; font-size: 14.5px; line-height: 1.6; }
+.browser-quick { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; margin-top: 8px; }
+.browser-loading { position: absolute; top: 80px; left: 0; right: 0; flex: none; padding: 8px; font-size: 13px; }
+
 /* —— Other OS (v86 PC) —— */
 .pcapp { position: fixed; inset: 0; z-index: 32; background: #000; display: flex; flex-direction: column; }
 .pcapp-bar {

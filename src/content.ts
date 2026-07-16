@@ -53,6 +53,7 @@ export interface XmbItem {
     | { type: "ps2" }
     | { type: "pc" }
     | { type: "guestbook" }
+    | { type: "browser" }
     | { type: "webamp" }
     | { type: "youtube" }
     | { type: "timemachine" }
@@ -208,18 +209,17 @@ export const TROPHIES: TrophyDef[] = [
   { id: "curator", tier: "bronze", name: "Curator", desc: "Toured the art gallery" },
 ];
 
+// The cross-media bar, grouped like a real console. Left→right the columns
+// tell a story: who I am (Users) → what I've done (Career/Projects/Skills) →
+// what you can watch/hear/play (Photo/Music/Video/TV/Game) → what you can
+// read & explore (News/Web) → how to reach me (Contact) → the machine
+// itself (Settings). No junk drawers: every item sits where its purpose lives.
 export const CATEGORIES: XmbCategory[] = [
   {
     id: "users",
     label: "Users",
     icon: "user",
     items: [
-      { id: "ai", title: "AI Abhishek", sub: "On-device LLM — ask about my work", icon: "chip", action: { type: "ai-chat" } },
-      { id: "guestbook", title: "Guestbook", sub: "Sign the console — notes from visitors", icon: "mail", action: { type: "guestbook" } },
-      { id: "whatsnew", title: "What's New", sub: "Your activity on this console", icon: "spark", action: { type: "whats-new" } },
-      { id: "trophies", title: "Trophy Collection", sub: "Your haul so far", icon: "trophy", action: { type: "trophies" } },
-      { id: "photo", title: "Profile Photo", sub: "Upload your own avatar", icon: "camera", action: { type: "photo" } },
-      { id: "switch", title: "Switch User", sub: "Back to profile select", icon: "users", action: { type: "switch-user" } },
       {
         id: "about-owner", title: "About Abhishek", sub: OWNER.title, icon: "id",
         action: {
@@ -231,6 +231,12 @@ export const CATEGORIES: XmbCategory[] = [
           ],
         },
       },
+      { id: "ai", title: "AI Abhishek", sub: "On-device LLM — ask about my work", icon: "chip", action: { type: "ai-chat" } },
+      { id: "guestbook", title: "Guestbook", sub: "Sign the console — notes from visitors", icon: "mail", action: { type: "guestbook" } },
+      { id: "whatsnew", title: "What's New", sub: "Your activity on this console", icon: "spark", action: { type: "whats-new" } },
+      { id: "trophies", title: "Trophy Collection", sub: "Your haul so far", icon: "trophy", action: { type: "trophies" } },
+      { id: "photo", title: "Profile Photo", sub: "Upload your own avatar", icon: "camera", action: { type: "photo" } },
+      { id: "switch", title: "Switch User", sub: "Back to profile select", icon: "users", action: { type: "switch-user" } },
     ],
   },
   {
@@ -241,7 +247,7 @@ export const CATEGORIES: XmbCategory[] = [
       id: `career-${i}`,
       title: c.title.split(" — ")[1] ?? c.title,
       sub: c.tag,
-      icon: "disc-doc",
+      icon: "briefcase",
       action: { type: "panel", heading: c.title, tag: `${c.tag} · ${c.meta}`, body: c.bullets },
     })),
   },
@@ -276,6 +282,12 @@ export const CATEGORIES: XmbCategory[] = [
     items: [], // injected: slideshow + add photos
   },
   {
+    id: "music",
+    label: "Music",
+    icon: "note",
+    items: [], // injected: radio + Spotify players + user-linked playlists
+  },
+  {
     id: "video",
     label: "Video",
     icon: "film",
@@ -285,16 +297,16 @@ export const CATEGORIES: XmbCategory[] = [
     ],
   },
   {
-    id: "game",
-    label: "Game",
-    icon: "gamepad",
-    items: [], // injected: insert disc + per-profile library
-  },
-  {
     id: "tv",
     label: "TV",
     icon: "tv",
     items: [], // injected: live channels + user-added HLS streams
+  },
+  {
+    id: "game",
+    label: "Game",
+    icon: "gamepad",
+    items: [], // injected: playables (DOOM, chess, PS2, Other OS…) + insert disc + library
   },
   {
     id: "news",
@@ -303,24 +315,26 @@ export const CATEGORIES: XmbCategory[] = [
     items: [], // injected: built-in readers + user RSS feeds
   },
   {
-    id: "music",
-    label: "Music",
-    icon: "note",
-    items: [], // injected: radio + Spotify players + user-linked playlists
+    id: "web",
+    label: "Web",
+    icon: "globe",
+    items: [
+      { id: "browser", title: "Browser", sub: "Search & read the web — reader mode", icon: "globe", action: { type: "browser" } },
+      { id: "wiki", title: "Wikipedia", sub: "Search & read, console style", icon: "book", action: { type: "wiki" } },
+      { id: "dict", title: "Dictionary", sub: "Look up any English word", icon: "book", action: { type: "dictionary" } },
+      { id: "tm", title: "Time Machine", sub: "Browse any website in 1996–today", icon: "power", action: { type: "timemachine" } },
+      { id: "map", title: "Planet Earth", sub: "Live globe — world tour, ISS, quakes & rain", icon: "globe", action: { type: "map" } },
+      { id: "weather", title: "Weather", sub: "Live conditions & forecast", icon: "cloud", action: { type: "weather" } },
+    ],
   },
   {
-    id: "network",
-    label: "Network",
-    icon: "globe",
+    id: "contact",
+    label: "Contact",
+    icon: "mail",
     items: [
       { id: "email", title: "Send Mail", sub: OWNER.email, icon: "mail", action: { type: "link", href: `mailto:${OWNER.email}` } },
       { id: "linkedin", title: "LinkedIn", sub: "abhishekd879", icon: "link", action: { type: "link", href: OWNER.linkedin } },
       { id: "phone", title: "Call", sub: OWNER.phone, icon: "phone", action: { type: "link", href: `tel:${OWNER.phone.replace(/\s/g, "")}` } },
-      { id: "weather", title: "Weather", sub: "Live conditions & forecast", icon: "cloud", action: { type: "weather" } },
-      { id: "map", title: "Planet Earth", sub: "Live map — quakes & rain radar", icon: "globe", action: { type: "map" } },
-      { id: "tm", title: "Time Machine", sub: "Browse any website in 1996–today", icon: "power", action: { type: "timemachine" } },
-      { id: "dict", title: "Dictionary", sub: "Look up any English word", icon: "disc-doc", action: { type: "dictionary" } },
-      { id: "wiki", title: "Wikipedia", sub: "Search & read, console style", icon: "book", action: { type: "wiki" } },
     ],
   },
   {

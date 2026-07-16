@@ -16,6 +16,7 @@ import GamepadTest from "./GamepadTest";
 import Ps2 from "./Ps2";
 import PcApp from "./PcApp";
 import Guestbook from "./Guestbook";
+import Browser from "./Browser";
 import Doom from "./Doom";
 import ChessApp from "./ChessApp";
 import Trivia from "./Trivia";
@@ -78,7 +79,7 @@ export default function XMB(props: {
   const [padName, setPadName] = createSignal<string | null>(null);
   const [ytQuery, setYtQuery] = createSignal(""); // AI agent → YouTube search handoff
   const [padTest, setPadTest] = createSignal(false);
-  const [app, setApp] = createSignal<null | "doom" | "chess" | "trivia" | "flash" | "cinema" | "podcasts" | "library" | "map" | "ai" | "webamp" | "youtube" | "timemachine" | "art" | "wiki" | "lichess" | "ps2" | "pc" | "guestbook">(null);
+  const [app, setApp] = createSignal<null | "doom" | "chess" | "trivia" | "flash" | "cinema" | "podcasts" | "library" | "map" | "ai" | "webamp" | "youtube" | "timemachine" | "art" | "wiki" | "lichess" | "ps2" | "pc" | "guestbook" | "browser">(null);
   let appNav: ((a: Parameters<Parameters<typeof onNav>[0]>[0]) => void) | undefined;
   const [apod, setApod] = createSignal<{ loading: boolean; data?: Apod } | null>(null);
   const [dict, setDict] = createSignal<{ result?: Definition | null; looking: boolean } | null>(null);
@@ -440,6 +441,10 @@ export default function XMB(props: {
         sfx.confirm();
         setApp("guestbook");
         break;
+      case "browser":
+        sfx.confirm();
+        setApp("browser");
+        break;
       case "gesture-toggle":
         if (gesturesOn()) {
           stopGestures();
@@ -715,6 +720,7 @@ export default function XMB(props: {
       case "ps2": case "playstation": return openApp("ps2");
       case "pc": case "otheros": case "linux": case "kolibri": return openApp("pc");
       case "guestbook": return openApp("guestbook");
+      case "browser": case "web": case "internet": return openApp("browser");
       case "doom": awardT("doomguy"); return openApp("doom");
       case "chess": return openApp("chess");
       case "lichess": return openApp("lichess");
@@ -1190,6 +1196,7 @@ export default function XMB(props: {
       <Show when={app() === "ps2"}><Ps2 onClose={() => setApp(null)} /></Show>
       <Show when={app() === "pc"}><PcApp onClose={() => setApp(null)} /></Show>
       <Show when={app() === "guestbook"}><Guestbook userName={props.profile.name} onClose={() => setApp(null)} /></Show>
+      <Show when={app() === "browser"}><Browser onClose={() => setApp(null)} /></Show>
       <Show when={app() === "lichess"}>
         <div class="fullapp">
           <iframe credentialless={true} class="fullapp-frame" src="https://lichess.org/tv/frame?theme=brown&bg=dark" allow="fullscreen" title="Lichess TV" />
