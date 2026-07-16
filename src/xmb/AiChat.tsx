@@ -18,9 +18,11 @@ import { Icon } from "./icons";
 import { setNavEnabled } from "../input";
 import * as sfx from "../audio";
 
+// Hermes is the default (listed first) — it uses tools, memory & retrieved
+// facts far more reliably than the 1B. Llama stays as the lightweight option.
 const MODELS = {
-  fast: { id: "Llama-3.2-1B-Instruct-q4f16_1-MLC", label: "Llama 3.2 · 1B", dl: "~700 MB", blurb: "quick answers, light on the GPU" },
-  agent: { id: "Hermes-3-Llama-3.2-3B-q4f16_1-MLC", label: "Hermes 3 · 3B", dl: "~1.9 GB", blurb: "smarter — tuned for tool use" },
+  agent: { id: "Hermes-3-Llama-3.2-3B-q4f16_1-MLC", label: "Hermes 3 · 3B", dl: "~1.9 GB", blurb: "recommended — smart with tools, memory & recall" },
+  fast: { id: "Llama-3.2-1B-Instruct-q4f16_1-MLC", label: "Llama 3.2 · 1B", dl: "~700 MB", blurb: "lighter & faster, for a modest GPU" },
 } as const;
 type ModelKey = keyof typeof MODELS;
 
