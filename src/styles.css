@@ -873,6 +873,13 @@ img.status-avatar, img.ptile-avatar { object-fit: cover; border: 1px solid rgba(
   color: var(--dim); font-size: 14px; letter-spacing: 0.08em; pointer-events: none;
 }
 
+.ps2-savenote {
+  position: absolute; bottom: 22px; left: 50%; transform: translateX(-50%); z-index: 6;
+  padding: 8px 18px; border-radius: 999px; font-size: 12.5px; letter-spacing: 0.06em;
+  background: rgba(6,10,20,0.85); border: 1px solid color-mix(in oklab, var(--xmb-tint) 50%, transparent);
+  color: var(--text); animation: fadeIn 0.2s ease-out;
+}
+
 /* —— Reader Browser —— */
 .browser { position: fixed; inset: 0; z-index: 32; display: flex; flex-direction: column;
   background: linear-gradient(200deg, rgba(6,10,22,0.98), rgba(2,4,12,0.99)); }

@@ -22,7 +22,9 @@ export default function Ps2(props: { onClose: () => void; profileId: string }) {
   let pending: File | null = null;
   let ready = false;
   let saveTimer: ReturnType<typeof setInterval> | null = null;
+  let onSaved: ((count: number) => void) | null = null;
   const requestSave = () => frame?.contentWindow?.postMessage({ type: "play-save", saveKey }, location.origin);
+  const [saveNote, setSaveNote] = createSignal("");
 
   const goFullscreen = () => {
     const el = container as any;
@@ -55,6 +57,13 @@ export default function Ps2(props: { onClose: () => void; profileId: string }) {
       if (e.data.type === "play-error") {
         setErr(e.data.message || "The emulator refused this disc.");
         setStage("error");
+      }
+      if (e.data.type === "play-saved") {
+        const n = e.data.count ?? 0;
+        // brief on-screen confirmation so saving is never a mystery
+        setSaveNote(n > 0 ? `Memory card saved · ${n} file${n === 1 ? "" : "s"}` : "Memory card empty — nothing to save yet");
+        setTimeout(() => setSaveNote(""), 2600);
+        onSaved?.(n); onSaved = null; // release an eject that's waiting on the flush
       }
     };
     addEventListener("message", onMsg);
@@ -91,12 +100,17 @@ export default function Ps2(props: { onClose: () => void; profileId: string }) {
 
   function eject() {
     sfx.back();
-    requestSave(); // final flush before we tear the emulator down
     if (saveTimer) clearInterval(saveTimer);
     stopBridge();
     setNavEnabled(true);
     exitFullscreen();
-    setTimeout(() => props.onClose(), 150); // give the snapshot a beat to write
+    // wait for the final snapshot to actually commit before tearing down the
+    // iframe (idbPut is async — closing too early would drop the last save)
+    let closed = false;
+    const close = () => { if (!closed) { closed = true; props.onClose(); } };
+    onSaved = () => close();
+    requestSave();
+    setTimeout(close, 3000); // fallback if the emulator never acks
   }
 
   return (
@@ -133,10 +147,12 @@ export default function Ps2(props: { onClose: () => void; profileId: string }) {
           <div class="ps2-bar">
             <span class="flash-now">▶ {disc()?.name}</span>
             <span class="flash-bar-btns">
+              <button class="ghost-btn" onClick={() => requestSave()}>▪ save card</button>
               <button class="ghost-btn" onClick={goFullscreen}>⛶ full screen</button>
               <button class="ghost-btn" onClick={eject}>⏏ eject</button>
             </span>
           </div>
+          <Show when={saveNote()}><div class="ps2-savenote">{saveNote()}</div></Show>
         </Show>
 
         <Show when={stage() !== "playing"}>

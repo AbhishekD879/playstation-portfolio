@@ -43,7 +43,9 @@
   // boots, so saves survive. Only vfs + states are persisted (the rest is
   // rebuilt by initVm).
   const DATA = "/home/web_user/.local/share/Play Data Files";
-  const PERSIST = ["/vfs", "/states"];
+  // snapshot the whole data dir (memory cards under vfs/, save states, etc.) so
+  // a save is captured wherever the emulator writes it
+  const PERSIST = [""];
   const SAVE_DB = "asp-ps2", SAVE_STORE = "cards";
   const idb = () => new Promise((res, rej) => {
     const r = indexedDB.open(SAVE_DB, 1);
@@ -65,10 +67,11 @@
     return out;
   }
   async function snapshot(key) {
-    if (!mod || !key) return;
+    if (!mod || !key) return 0;
     const files = {};
     for (const sub of PERSIST) walkFiles(DATA + sub, files);
     await idbPut(key, files);
+    return Object.keys(files).length;
   }
   async function restore(key) {
     if (!mod || !key) return;
@@ -119,8 +122,8 @@
       }
     }
     if (e.data.type === "play-save" && mod) {
-      await snapshot(e.data.saveKey);
-      tell("play-saved");
+      const count = await snapshot(e.data.saveKey);
+      tell("play-saved", { count });
     }
   });
   addEventListener("click", () => canvas.focus());
