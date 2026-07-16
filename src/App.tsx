@@ -4,10 +4,20 @@ import ProfileSelect from "./profileSelect";
 import Wave from "./xmb/Wave";
 import XMB from "./xmb/XMB";
 import GameSession from "./emulator/GameSession";
-import { loadProfiles, type Profile } from "./profiles";
+import { createProfile, loadProfiles, updateProfile, type Profile } from "./profiles";
 import type { GameRecord } from "./gamesdb";
 
 type Stage = "boot" | "profiles" | "xmb";
+
+// no forced "who's playing?" — sign in as the most recent profile,
+// creating PLAYER 1 on a first visit. The picker stays under Users → Switch User.
+function defaultProfile(): Profile {
+  const all = loadProfiles();
+  const p = all.length ? all.reduce((a, b) => (b.lastLogin > a.lastLogin ? b : a)) : createProfile("PLAYER 1", 0);
+  p.lastLogin = Date.now();
+  updateProfile(p);
+  return p;
+}
 
 export default function App() {
   // ejecting a disc restarts the console — resume straight to the XMB
@@ -23,7 +33,7 @@ export default function App() {
     <>
       <Switch>
         <Match when={stage() === "boot"}>
-          <Boot onDone={() => setStage("profiles")} />
+          <Boot onDone={() => { setProfile(defaultProfile()); setStage("xmb"); }} />
         </Match>
         <Match when={stage() === "profiles"}>
           <Wave />

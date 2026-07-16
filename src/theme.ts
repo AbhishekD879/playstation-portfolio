@@ -21,10 +21,15 @@ const [tint, setTintSig] = createSignal(stored || monthly());
 
 export { tint };
 
+// the tint drives every themed surface via :root, not just the wave
+const applyVar = (c: string) => document.documentElement.style.setProperty("--xmb-tint", c);
+applyVar(tint());
+
 export function applyTheme(color: string | null) {
   if (color) localStorage.setItem("asp.theme", color);
   else localStorage.removeItem("asp.theme");
   setTintSig(color || monthly());
+  applyVar(color || monthly());
 }
 
 export function currentThemeIndex(): number {

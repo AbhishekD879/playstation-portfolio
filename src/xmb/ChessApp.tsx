@@ -1,14 +1,11 @@
 // Chess vs Stockfish 18 (lite, single-threaded WASM — no special headers needed).
 // chess.js keeps the rules; the engine runs in a Worker speaking UCI.
-import { For, Show, createSignal, onCleanup, onMount } from "solid-js";
+import { createSignal, onCleanup, onMount } from "solid-js";
 import { Chess } from "chess.js";
 import type { NavAction } from "../input";
 import * as sfx from "../audio";
+import Board3D from "./Board3D";
 
-const GLYPH: Record<string, string> = {
-  p: "♟", n: "♞", b: "♝", r: "♜", q: "♛", k: "♚",
-  P: "♙", N: "♘", B: "♗", R: "♖", Q: "♕", K: "♔",
-};
 const LEVELS = [
   { name: "Rookie", depth: 2 },
   { name: "Club", depth: 6 },
@@ -50,10 +47,6 @@ export default function ChessApp(props: {
 
   const sq = (i: number) => "abcdefgh"[i % 8] + String(8 - Math.floor(i / 8));
   const idxOf = (square: string) => "abcdefgh".indexOf(square[0]) + (8 - +square[1]) * 8;
-  const pieceAt = (i: number) => {
-    const p = game.get(sq(i) as any);
-    return p ? GLYPH[p.color === "w" ? p.type.toUpperCase() : p.type] : "";
-  };
   // legal destinations for the picked piece — the "where can I go" dots
   const hints = () => {
     fen();
@@ -147,26 +140,14 @@ export default function ChessApp(props: {
           engine: {LEVELS[level()].name} {thinking() ? "· thinking…" : ""}
         </div>
       </div>
-      <div class="chess-board" data-fen={fen()}>
-        <For each={Array.from({ length: 64 }, (_, i) => i)}>
-          {(i) => (
-            <div
-              class="chess-sq"
-              classList={{
-                dark: (Math.floor(i / 8) + i) % 2 === 1,
-                cursor: i === cursor(),
-                picked: i === picked(),
-                hint: hints().has(i),
-              }}
-              onPointerDown={() => squareDown(i)}
-              onPointerUp={() => squareUp(i)}
-              onPointerEnter={(e) => { if (e.buttons) setCursor(i); }}
-            >
-              {pieceAt(i)}
-            </div>
-          )}
-        </For>
-      </div>
+      <Board3D
+        board={(fen(), game.board()) as any}
+        cursor={cursor()}
+        picked={picked()}
+        hints={hints()}
+        onDown={squareDown}
+        onUp={squareUp}
+      />
       <div class="chess-msg">{msg()}</div>
       <div class="panel-hint guide-hint">
         arrows move · <span class="btn-x" /> pick / drop · O — engine level · <span class="btn-o" /> quit
