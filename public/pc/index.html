@@ -13,10 +13,13 @@
 </style>
 </head>
 <body>
+<div id="boot" style="position: fixed; inset: 0; display: grid; place-items: center; color: #9fb8e0; font: 13px/1.6 monospace; letter-spacing: 0.3em; text-align: center;">
+  POWERING ON<br /><span id="bootsub" style="opacity: 0.55; letter-spacing: 0.12em">downloading the PC…</span>
+</div>
 <div id="screen_container"><div></div><canvas style="display: none"></canvas></div>
 <script src="/pc/libv86.js"></script>
 <script>
-  new V86({
+  const emulator = new V86({
     wasm_path: "/pc/v86.wasm",
     bios: { url: "/pc/seabios.bin" },
     vga_bios: { url: "/pc/vgabios.bin" },
@@ -26,6 +29,13 @@
     fda: { url: "/pc/kolibri.img" },
     boot_order: 0x321,
     autostart: true,
+  });
+  emulator.add_listener("emulator-started", () => {
+    document.getElementById("bootsub").textContent = "booting KolibriOS…";
+  });
+  // the desktop paints in graphical mode — that's when the curtain lifts
+  emulator.add_listener("screen-set-size", () => {
+    document.getElementById("boot").style.display = "none";
   });
 </script>
 </body>

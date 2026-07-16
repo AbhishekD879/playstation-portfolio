@@ -61,7 +61,7 @@ export default function MapApp(props: { onClose: () => void }) {
     onCleanup(() => { clearInterval(issId); if (tourId) clearInterval(tourId); });
     map = L.map(mapEl, { zoomControl: true }).setView([20, 20], 2.4);
     L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
-      attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> · quakes USGS · rain RainViewer',
+      attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> · quakes USGS · rain RainViewer · globe textures <a href="https://www.solarsystemscope.com/textures/">Solar System Scope</a> (CC BY 4.0)',
       maxZoom: 19,
     }).addTo(map);
     onCleanup(() => map.remove());
@@ -235,6 +235,10 @@ export default function MapApp(props: { onClose: () => void }) {
       <div class="mapapp-map" ref={mapEl} style={{ display: mode() === "2d" ? "block" : "none" }} />
       <Show when={mode() === "3d"}>
         <div class="globe-wrap"><Globe quakes={quakes()} bind={(api) => (globeApi = api)} /></div>
+        <div class="globe-zoom">
+          <button class="ghost-btn globe-zoom-btn" onClick={() => { globeApi?.zoom(1); sfx.tickH(); }}>＋</button>
+          <button class="ghost-btn globe-zoom-btn" onClick={() => { globeApi?.zoom(-1); sfx.tickH(); }}>－</button>
+        </div>
       </Show>
       <Show when={tour() && mode() === "3d"}>
         <div class="tour-card">

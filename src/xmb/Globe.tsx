@@ -13,6 +13,8 @@ export interface GlobeApi {
   spotlightQuake: () => string | null;
   /** Place/update the ISS marker (it leaves an orbit trail). */
   setIss: (lat: number, lon: number) => void;
+  /** Zoom in (+1) or out (−1) — same smooth path as the scroll wheel. */
+  zoom: (dir: 1 | -1) => void;
 }
 
 const ATMO_VERT = /* glsl */ `
@@ -53,19 +55,28 @@ export default function Globe(props: { quakes: Quake[]; bind?: (api: GlobeApi) =
     const tl = new THREE.TextureLoader();
     const globe = new THREE.Group();
 
+    // 8K NASA-derived surface (Solar System Scope, CC BY 4.0) where the GPU
+    // allows; anisotropic filtering keeps it sharp at glancing angles
+    const maxTex = renderer.capabilities.maxTextureSize;
+    const aniso = renderer.capabilities.getMaxAnisotropy();
+    const earthTex = tl.load(maxTex >= 8192 ? "/textures/earth-8k.jpg" : "/textures/earth.jpg");
+    earthTex.colorSpace = THREE.SRGBColorSpace;
+    earthTex.anisotropy = aniso;
     const earth = new THREE.Mesh(
-      new THREE.SphereGeometry(3, 96, 96),
-      new THREE.MeshStandardMaterial({ map: tl.load("/textures/earth.jpg"), roughness: 0.9, metalness: 0 }),
+      new THREE.SphereGeometry(3, 128, 128),
+      new THREE.MeshStandardMaterial({ map: earthTex, roughness: 0.9, metalness: 0 }),
     );
-    (earth.material.map as THREE.Texture).colorSpace = THREE.SRGBColorSpace;
     globe.add(earth);
 
+    const cloudTex = tl.load("/textures/clouds-2k.jpg"); // white-on-black → alpha
+    cloudTex.anisotropy = aniso;
     const clouds = new THREE.Mesh(
       new THREE.SphereGeometry(3.035, 96, 96),
       new THREE.MeshStandardMaterial({
-        map: tl.load("/textures/clouds.png"),
+        color: 0xffffff,
+        alphaMap: cloudTex,
         transparent: true,
-        opacity: 0.55,
+        opacity: 0.6,
         depthWrite: false,
       }),
     );
@@ -153,7 +164,8 @@ export default function Globe(props: { quakes: Quake[]; bind?: (api: GlobeApi) =
       const target = faceRotation(latDeg, lonDeg);
       vx = 0; vy = 0; // stop the idle drift while we travel
       gsap.to(globe.rotation, { x: target.x, y: target.y, duration: 1.8, ease: "power2.inOut" });
-      gsap.to(camera.position, { z: 5.6, y: 0.1, duration: 1.8, ease: "power2.inOut" });
+      zTarget = Math.min(zTarget, 5.6);
+      gsap.to(camera.position, { y: 0.1, duration: 1.8, ease: "power2.inOut" });
     };
     props.bind?.({
       flyTo,
@@ -170,6 +182,9 @@ export default function Globe(props: { quakes: Quake[]; bind?: (api: GlobeApi) =
         if (issTrailPts.length > 60) issTrailPts.shift();
         issTrailGeo.setFromPoints(issTrailPts);
       },
+      zoom: (dir) => {
+        zTarget = THREE.MathUtils.clamp(zTarget - dir * 1.1, Z_MIN, Z_MAX);
+      },
     });
 
     // starfield
@@ -181,27 +196,34 @@ export default function Globe(props: { quakes: Quake[]; bind?: (api: GlobeApi) =
       new THREE.PointsMaterial({ color: 0xffffff, size: 0.08, transparent: true, opacity: 0.7, depthWrite: false }),
     ));
 
+    // zoom: smooth lerp toward a target — Z_MIN hovers just over the clouds,
+    // where the 8K surface still holds up
+    const Z_MIN = 3.6, Z_MAX = 16;
+    let zTarget = 8.6;
+
     // fly in — the "proper animation"; rest facing India (77°E)
     const restY = -Math.PI / 2 - (77 * Math.PI) / 180;
     globe.rotation.y = restY;
-    gsap.to(camera.position, { z: 8.6, y: 0.2, duration: 2.4, ease: "power3.out" });
+    gsap.to(camera.position, { y: 0.2, duration: 2.4, ease: "power3.out" });
     gsap.from(globe.rotation, { y: restY - 2.4, duration: 2.4, ease: "power3.out" });
 
-    // drag to spin, wheel to zoom
+    // drag to spin (slower when zoomed in), wheel/pinch to zoom
+    const zoomFactor = () => (camera.position.z - 3.0) / 5.6; // 1 at start, →0.1 up close
     let dragging = false, lx = 0, ly = 0, vx = 0.0016, vy = 0;
     const down = (e: PointerEvent) => { dragging = true; lx = e.clientX; ly = e.clientY; };
     const move = (e: PointerEvent) => {
       if (!dragging) return;
-      vx = (e.clientX - lx) * 0.00028;
-      vy = (e.clientY - ly) * 0.00022;
-      globe.rotation.y += (e.clientX - lx) * 0.005;
-      globe.rotation.x = THREE.MathUtils.clamp(globe.rotation.x + (e.clientY - ly) * 0.004, -1.1, 1.1);
+      const f = zoomFactor();
+      vx = (e.clientX - lx) * 0.00028 * f;
+      vy = (e.clientY - ly) * 0.00022 * f;
+      globe.rotation.y += (e.clientX - lx) * 0.005 * f;
+      globe.rotation.x = THREE.MathUtils.clamp(globe.rotation.x + (e.clientY - ly) * 0.004 * f, -1.1, 1.1);
       lx = e.clientX; ly = e.clientY;
     };
     const up = () => (dragging = false);
     const wheel = (e: WheelEvent) => {
       e.preventDefault();
-      camera.position.z = THREE.MathUtils.clamp(camera.position.z + e.deltaY * 0.008, 4.6, 16);
+      zTarget = THREE.MathUtils.clamp(zTarget + e.deltaY * 0.02 * Math.max(zoomFactor(), 0.25), Z_MIN, Z_MAX);
     };
     canvas.addEventListener("pointerdown", down);
     addEventListener("pointermove", move);
@@ -219,9 +241,10 @@ export default function Globe(props: { quakes: Quake[]; bind?: (api: GlobeApi) =
       if (!dragging && !gsap.isTweening(globe.rotation)) {
         globe.rotation.y += vx;
         globe.rotation.x = THREE.MathUtils.clamp(globe.rotation.x + vy, -1.5, 1.5);
-        vx += (0.0016 - vx) * 0.02; // ease back to idle spin
+        vx += (0.0016 * zoomFactor() - vx) * 0.02; // idle spin slows up close
         vy *= 0.95;
       }
+      camera.position.z += (zTarget - camera.position.z) * 0.07; // smooth zoom
       clouds.rotation.y += dt * 0.0065; // clouds drift over the surface
       for (const b of beacons) {
         const s2 = 1 + 0.45 * Math.sin(t * 3 + b.userData.phase);

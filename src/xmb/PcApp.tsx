@@ -19,7 +19,7 @@ export default function PcApp(props: { onClose: () => void }) {
     <div class="pcapp">
       <div class="pcapp-bar">
         <div class="panel-tag">OTHER OS — x86 PC · KOLIBRIOS ON v86 · RUNS ON THIS CONSOLE</div>
-        <span class="pcapp-hint">click the screen to type & use the mouse</span>
+        <span class="pcapp-hint">click the screen for mouse & keys · try the games in the bottom row — SNAKE, PONG, DOOM-ish</span>
         <button class="ghost-btn" onClick={() => { sfx.back(); props.onClose(); }}>⏏ shut down</button>
       </div>
       <iframe ref={frame} class="pcapp-frame" src="/pc/index.html" title="Other OS" />
