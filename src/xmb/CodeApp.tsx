@@ -2,7 +2,8 @@
 // console. Everything executes in a sandboxed, time-limited Web Worker
 // (see codeRunner), so nothing can hang the UI.
 import { For, Show, createSignal, onCleanup, onMount } from "solid-js";
-import { disposeRunners, run, type Lang } from "../codeRunner";
+import { disposeRunners, formatPy, lintPy, run, type Diag, type Lang } from "../codeRunner";
+import { formatJs, lintJs } from "../codeTools";
 import { setNavEnabled } from "../input";
 import * as sfx from "../audio";
 
@@ -25,6 +26,7 @@ export default function CodeApp(props: { onClose: () => void }) {
   const [output, setOutput] = createSignal("");
   const [status, setStatus] = createSignal("");
   const [busy, setBusy] = createSignal(false);
+  const [diags, setDiags] = createSignal<Diag[]>([]);
   let editor!: HTMLTextAreaElement;
 
   onMount(() => {
@@ -34,6 +36,15 @@ export default function CodeApp(props: { onClose: () => void }) {
     onCleanup(() => { setNavEnabled(true); removeEventListener("keydown", esc); disposeRunners(); });
     setTimeout(() => editor?.focus(), 60);
   });
+
+  function jumpTo(line: number) {
+    const pos = code().split("\n").slice(0, line - 1).join("\n").length + (line > 1 ? 1 : 0);
+    editor.focus();
+    editor.setSelectionRange(pos, pos);
+    // scroll the target line into view
+    const lineH = parseInt(getComputedStyle(editor).lineHeight) || 22;
+    editor.scrollTop = Math.max(0, (line - 3) * lineH);
+  }
 
   function switchLang(l: Lang) {
     if (l === lang()) return;
@@ -45,6 +56,7 @@ export default function CodeApp(props: { onClose: () => void }) {
   async function execute() {
     if (busy()) return;
     setBusy(true);
+    setDiags([]);
     setStatus(lang() === "python" ? "starting…" : "running…");
     setOutput("");
     sfx.confirm();
@@ -52,6 +64,33 @@ export default function CodeApp(props: { onClose: () => void }) {
     setStatus(`${r.timedOut ? "timed out" : "done"} · ${Math.round(r.ms)} ms`);
     setOutput([r.output, r.error].filter(Boolean).join("\n") || "(no output)");
     setBusy(false);
+    lint(); // surface any warnings after a run
+  }
+
+  async function format() {
+    if (busy()) return;
+    setBusy(true);
+    setStatus("formatting…");
+    sfx.tickH();
+    try {
+      const out = lang() === "js" ? await formatJs(code()) : await formatPy(code(), (s) => setStatus(s));
+      if (out != null) { setCode(out); setStatus("formatted"); setDiags([]); }
+      else setStatus("couldn't format");
+    } catch (e) {
+      setStatus("format failed"); setOutput(String((e as Error).message ?? e));
+    }
+    setBusy(false);
+  }
+
+  async function lint() {
+    if (busy()) return;
+    setBusy(true);
+    setStatus("checking…");
+    const d = lang() === "js" ? await lintJs(code()).catch(() => []) : await lintPy(code(), (s) => setStatus(s));
+    setDiags(d);
+    setStatus(d.length ? `${d.length} issue${d.length === 1 ? "" : "s"}` : "no issues ✓");
+    setBusy(false);
+    if (d.length) sfx.deny(); else sfx.tickH();
   }
 
   return (
@@ -82,16 +121,32 @@ export default function CodeApp(props: { onClose: () => void }) {
         />
         <div class="codeapp-out">
           <div class="codeapp-outhead">
-            <span>OUTPUT</span>
+            <span>{diags().length ? "PROBLEMS" : "OUTPUT"}</span>
             <Show when={status()}><span class="codeapp-status">{status()}</span></Show>
           </div>
-          <pre class="codeapp-outbody">{output()}</pre>
+          <Show
+            when={diags().length}
+            fallback={<pre class="codeapp-outbody">{output()}</pre>}
+          >
+            <div class="codeapp-diags">
+              <For each={diags()}>
+                {(d) => (
+                  <button class="codeapp-diag" classList={{ err: d.severity === "error" }} onClick={() => jumpTo(d.line)}>
+                    <span class="codeapp-diag-loc">{d.line}:{d.col}</span>
+                    <span>{d.msg}</span>
+                  </button>
+                )}
+              </For>
+            </div>
+          </Show>
         </div>
       </div>
 
       <div class="codeapp-foot">
-        <button class="ps2-launch codeapp-run" disabled={busy()} onClick={execute}>{busy() ? "▪ running…" : "▶ Run"}</button>
-        <span class="codeapp-hint">Ctrl/⌘ + Enter to run · runs sandboxed, killed after 5s · Python downloads once (~10 MB)</span>
+        <button class="ps2-launch codeapp-run" disabled={busy()} onClick={execute}>{busy() ? "▪ working…" : "▶ Run"}</button>
+        <button class="ghost-btn" disabled={busy()} onClick={format}>✧ Format</button>
+        <button class="ghost-btn" disabled={busy()} onClick={lint}>✓ Check</button>
+        <span class="codeapp-hint">Ctrl/⌘+Enter run · sandboxed, killed after 5s · format & lint on-device</span>
       </div>
     </div>
   );
