@@ -11,6 +11,7 @@ import { CAREER, OWNER, PROJECTS, SKILLS } from "../content";
 import { fetchWeather, wmo, type Weather } from "../apps";
 import { webllmModel, webllmStreamFn } from "../piWebllm";
 import { loadTTS, speak, stopSpeaking, ttsSupported } from "../tts";
+import { clearChat, loadChat, saveChat, type StoredChat } from "../chatStore";
 import { Icon } from "./icons";
 import { setNavEnabled } from "../input";
 import * as sfx from "../audio";
@@ -52,7 +53,10 @@ export default function AiChat(props: {
   onFirstChat: () => void;
   onCommand: (app: string, arg?: string) => boolean;
   onClose: () => void;
+  profileId: string;
 }) {
+  const chatKey = () => `chat:${props.profileId}`;
+  let restored: StoredChat | null = null; // prior transcript + agent memory
   const [supported, setSupported] = createSignal<boolean | null>(null);
   const [ready, setReady] = createSignal(false);
   const [model, setModel] = createSignal<ModelKey | null>(null);
@@ -129,6 +133,7 @@ export default function AiChat(props: {
       engine?.unload();
     });
     (async () => {
+      restored = await loadChat(chatKey()); // prior chat, if any
       const gpu = (navigator as any).gpu;
       if (!gpu) { setSupported(false); return; }
       try {
@@ -147,7 +152,8 @@ export default function AiChat(props: {
         initProgressCallback: (p) => setProgress(p.text),
       });
       agent = new Agent({
-        initialState: { systemPrompt: SYSTEM, model: webllmModel(MODELS[key].id), tools },
+        // seed the model's memory with the prior conversation so it remembers
+        initialState: { systemPrompt: SYSTEM, model: webllmModel(MODELS[key].id), tools, messages: (restored?.messages as any) ?? [] },
         streamFn: webllmStreamFn(() => engine),
       });
       if (import.meta.env.DEV) (window as any).__agent = agent;
@@ -184,6 +190,7 @@ export default function AiChat(props: {
         if (ev.type === "agent_end") {
           setBusy(false);
           setTimeout(() => input?.focus(), 30);
+          persist(); // transcript + memory to IndexedDB
           if (voice()) {
             // speak the last non-empty assistant bubble
             const last = [...items()].reverse().find((it) => it.kind === "msg" && (it as any).role === "assistant" && (it as any).text.trim());
@@ -193,14 +200,33 @@ export default function AiChat(props: {
       });
       setReady(true);
       setProgress("");
-      setItems([{
-        kind: "msg", role: "assistant",
-        text: "Online — a pi.dev agent running on your GPU. Ask about Abhishek (I'll pull up cards), or tell me things: “open doom”, “search lofi on youtube”, “what's the weather”. Tap the mic to talk.",
-      }]);
-      setTimeout(() => input?.focus(), 60);
+      // resume the saved transcript, or greet on a fresh chat
+      if (restored?.items?.length) {
+        setItems(restored.items as ChatItem[]);
+      } else {
+        setItems([{
+          kind: "msg", role: "assistant",
+          text: "Online — a pi.dev agent running on your GPU. Ask about Abhishek (I'll pull up cards), or tell me things: “open doom”, “search lofi on youtube”, “what's the weather”. Tap the mic to talk.",
+        }]);
+      }
+      setTimeout(() => { scroll(); input?.focus(); }, 60);
     } catch (e) {
       setProgress(`Couldn't load the model — ${String(e).slice(0, 120)}`);
     }
+  }
+
+  function persist() {
+    saveChat(chatKey(), { items: items(), messages: (agent?.state.messages as unknown[]) ?? [], modelKey: model() ?? undefined });
+  }
+
+  function newChat() {
+    sfx.back();
+    restored = null;
+    clearChat(chatKey());
+    agent = null;
+    setReady(false);
+    setModel(null); // back to the brain picker; a fresh chat has no memory
+    setItems([]);
   }
 
   function send(text?: string) {
@@ -209,6 +235,7 @@ export default function AiChat(props: {
     input.value = "";
     props.onFirstChat();
     pushItem({ kind: "msg", role: "user", text: t });
+    persist(); // save the user turn immediately, in case generation is interrupted
     setBusy(true);
     agent.prompt(t).catch(() => {
       pushItem({ kind: "msg", role: "assistant", text: "…my circuits hiccuped. Try again?" });
@@ -258,6 +285,11 @@ export default function AiChat(props: {
         <Show when={ready() && ttsSupported()}>
           <button class="ghost-btn ai-iconbtn" classList={{ on: voice() }} title="speak replies aloud (on-device)" onClick={toggleVoice}>
             <span class="ai-ico"><Icon name="speaker" /></span>{voiceLoading() ? "voice…" : voice() ? "voice on" : "voice"}
+          </button>
+        </Show>
+        <Show when={ready()}>
+          <button class="ghost-btn ai-iconbtn" title="clear this chat's history & memory" onClick={newChat}>
+            <span class="ai-ico"><Icon name="plus" /></span>new chat
           </button>
         </Show>
         <button class="ghost-btn" onClick={() => { sfx.back(); props.onClose(); }}>✕ close</button>

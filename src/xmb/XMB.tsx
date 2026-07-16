@@ -1187,6 +1187,7 @@ export default function XMB(props: {
       <Show when={app() === "map"}><MapApp onClose={() => setApp(null)} /></Show>
       <Show when={app() === "ai"}>
         <AiChat
+          profileId={props.profile.id}
           onFirstChat={() => awardT("aifriend")}
           onCommand={(a, arg) => aiCommand(a, arg)}
           onClose={() => setApp((cur) => (cur === "ai" ? null : cur))}
