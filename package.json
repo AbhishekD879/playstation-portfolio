@@ -9,7 +9,6 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "@aislamov/diffusers.js": "^0.9.3",
     "@earendil-works/pi-agent-core": "^0.80.7",
     "@earendil-works/pi-ai": "^0.80.7",
     "@mediapipe/tasks-vision": "^0.10.35",
