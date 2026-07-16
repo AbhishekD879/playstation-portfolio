@@ -741,7 +741,7 @@ img.status-avatar, img.ptile-avatar { object-fit: cover; border: 1px solid rgba(
 
 /* —— Planet Earth: world tour + ISS (Life with PlayStation layer) —— */
 .tour-card {
-  position: absolute; right: 30px; top: 86px; z-index: 5;
+  position: absolute; right: 30px; top: 86px; z-index: 900; /* above Leaflet panes */
   min-width: 210px; padding: 18px 22px;
   background: color-mix(in oklab, var(--xmb-tint) 18%, rgba(6,10,20,0.82));
   border: 1px solid color-mix(in oklab, var(--xmb-tint) 50%, transparent);
@@ -753,7 +753,7 @@ img.status-avatar, img.ptile-avatar { object-fit: cover; border: 1px solid rgba(
 .tour-desc { font-size: 13px; color: var(--dim); letter-spacing: 0.08em; }
 .tour-iss { margin-top: 12px; font-size: 11.5px; color: #ffe08a; letter-spacing: 0.06em; }
 .tour-ticker {
-  position: absolute; left: 0; right: 0; bottom: 0; z-index: 5;
+  position: absolute; left: 0; right: 0; bottom: 0; z-index: 900;
   overflow: hidden; white-space: nowrap;
   padding: 10px 0; background: rgba(0,0,0,0.55);
   border-top: 1px solid rgba(255,255,255,0.12);

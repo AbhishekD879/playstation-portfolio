@@ -35,13 +35,28 @@ export default function MapApp(props: { onClose: () => void }) {
   const [tourIdx, setTourIdx] = createSignal(0);
   const [wx, setWx] = createSignal<({ temp: number; code: number } | null)[]>(CITIES.map(() => null));
   const [ticker, setTicker] = createSignal("");
+  const [sat, setSat] = createSignal(false);
   let mapEl!: HTMLDivElement;
   let map: L.Map;
   let marker: L.Marker | null = null;
   let quakeLayer: L.LayerGroup | null = null;
   let rainLayer: L.TileLayer | null = null;
+  let satLayer: L.TileLayer | null = null;
   let globeApi: GlobeApi | undefined;
-  let tourId: ReturnType<typeof setInterval> | null = null;
+  let tourTimers: ReturnType<typeof setTimeout>[] = [];
+
+  // real satellite imagery for the close-ups — this is what the 8K sphere
+  // fundamentally can't show (a global texture is ~5 km/pixel)
+  const ESRI_SAT = "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}";
+  function setSatellite(on: boolean) {
+    if (on && !satLayer) {
+      satLayer = L.tileLayer(ESRI_SAT, { maxZoom: 19, attribution: "Imagery © Esri, Maxar, Earthstar Geographics" }).addTo(map);
+    } else if (!on && satLayer) {
+      satLayer.remove();
+      satLayer = null;
+    }
+    setSat(on);
+  }
 
   onMount(() => {
     const esc = (e: KeyboardEvent) => { if (e.key === "Escape") { sfx.back(); props.onClose(); } };
@@ -58,7 +73,7 @@ export default function MapApp(props: { onClose: () => void }) {
     };
     pollIss();
     const issId = setInterval(pollIss, 5000);
-    onCleanup(() => { clearInterval(issId); if (tourId) clearInterval(tourId); });
+    onCleanup(() => { clearInterval(issId); tourTimers.forEach(clearTimeout); });
     map = L.map(mapEl, { zoomControl: true }).setView([20, 20], 2.4);
     L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
       attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> · quakes USGS · rain RainViewer · globe textures <a href="https://www.solarsystemscope.com/textures/">Solar System Scope</a> (CC BY 4.0)',
@@ -77,16 +92,39 @@ export default function MapApp(props: { onClose: () => void }) {
     sfx.confirm();
   }
 
-  // —— the world tour: drift city to city with live weather, headlines below ——
+  // —— the world tour, Google-Earth style: rotate to the city in space, then
+  // DIVE through real satellite imagery to street level, hold, pull back, next ——
+  const later = (fn: () => void, ms: number) => tourTimers.push(setTimeout(fn, ms));
+  function visit(i: number) {
+    setTourIdx(i);
+    const { lat, lon } = CITIES[i];
+    // phase 1 — space: the globe swings the city to face us
+    setMode("3d");
+    globeApi?.flyTo(lat, lon, 0x9fd0ff);
+    // phase 2 — the dive: cut to real imagery and fall from orbit to the city
+    later(() => {
+      setMode("2d");
+      setSatellite(true);
+      map.invalidateSize();
+      map.setView([lat, lon], 5, { animate: false });
+      setTimeout(() => map.flyTo([lat, lon], 13, { duration: 4.5, easeLinearity: 0.2 }), 120);
+    }, 2600);
+    // phase 3 — pull back up before we leave
+    later(() => map.flyTo([lat, lon], 6, { duration: 1.6 }), 11800);
+    // phase 4 — next city
+    later(() => visit((i + 1) % CITIES.length), 13700);
+  }
   function toggleTour() {
     if (tour()) {
       setTour(false);
-      if (tourId) { clearInterval(tourId); tourId = null; }
+      tourTimers.forEach(clearTimeout);
+      tourTimers = [];
+      setSatellite(false);
+      setMode("3d");
       sfx.back();
       return;
     }
     sfx.confirm();
-    if (mode() === "2d") setMode("3d");
     setTour(true);
     if (!wx().some(Boolean)) {
       fetch(`https://api.open-meteo.com/v1/forecast?latitude=${CITIES.map((c) => c.lat).join(",")}&longitude=${CITIES.map((c) => c.lon).join(",")}&current=temperature_2m,weather_code`)
@@ -98,10 +136,7 @@ export default function MapApp(props: { onClose: () => void }) {
         .catch(() => {});
     }
     if (!ticker()) fetchHN().then((es) => setTicker(es.map((e) => e.title).join("   •   "))).catch(() => {});
-    const visit = (i: number) => { setTourIdx(i); globeApi?.flyTo(CITIES[i].lat, CITIES[i].lon, 0x9fd0ff); };
     visit(0);
-    let i = 0;
-    tourId = setInterval(() => { i = (i + 1) % CITIES.length; visit(i); }, 9000);
   }
 
   function whereAmI() {
@@ -228,6 +263,7 @@ export default function MapApp(props: { onClose: () => void }) {
         <button class="ghost-btn" onClick={whereAmI}>⌖ where am I</button>
         <button class="ghost-btn" classList={{ on: quakesOn() }} onClick={toggleQuakes}>◉ quakes 24h</button>
         <button class="ghost-btn" classList={{ on: rainOn() }} onClick={toggleRain}>🌧 rain radar</button>
+        <button class="ghost-btn" classList={{ on: sat() }} onClick={() => { if (mode() === "3d") setMode("2d"); setSatellite(!sat()); setTimeout(() => map.invalidateSize(), 60); sfx.tickH(); }}>⬒ satellite</button>
         <button class="ghost-btn" onClick={flyToIss}>🛰 ISS</button>
         <button class="ghost-btn" classList={{ on: tour() }} onClick={toggleTour}>🌏 world tour</button>
         <button class="ghost-btn" onClick={() => { sfx.back(); props.onClose(); }}>✕ close</button>
@@ -240,7 +276,7 @@ export default function MapApp(props: { onClose: () => void }) {
           <button class="ghost-btn globe-zoom-btn" onClick={() => { globeApi?.zoom(-1); sfx.tickH(); }}>－</button>
         </div>
       </Show>
-      <Show when={tour() && mode() === "3d"}>
+      <Show when={tour()}>
         <div class="tour-card">
           <div class="tour-city">{CITIES[tourIdx()].name}</div>
           <Show when={wx()[tourIdx()]} fallback={<div class="tour-temp">…</div>}>
