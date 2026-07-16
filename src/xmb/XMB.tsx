@@ -8,6 +8,7 @@ import { THEMES, applyTheme, currentThemeIndex } from "../theme";
 import { CHANNELS, fetchDevto, fetchGuide, fetchHN, fetchRadio, fetchRss, fetchWeather, wmo, type NewsEntry, type Weather } from "../apps";
 import * as sfx from "../audio";
 import { onNav, onPadChange, rumble, rumbleEnabled, setNavEnabled, setRumble } from "../input";
+import { asrSupported, record } from "../asr";
 import { Icon } from "./icons";
 import Tv from "./Tv";
 import Guide from "./Guide";
@@ -81,6 +82,7 @@ export default function XMB(props: {
   const [statusWeather, setStatusWeather] = createSignal("");
   const [padName, setPadName] = createSignal<string | null>(null);
   const [ytQuery, setYtQuery] = createSignal(""); // AI agent → YouTube search handoff
+  const [vListening, setVListening] = createSignal(false); // XMB voice command
   const [padTest, setPadTest] = createSignal(false);
   const [app, setApp] = createSignal<null | "doom" | "chess" | "trivia" | "flash" | "cinema" | "podcasts" | "library" | "map" | "ai" | "webamp" | "youtube" | "timemachine" | "art" | "wiki" | "lichess" | "ps2" | "pc" | "guestbook" | "browser" | "visualizer" | "studio" | "code">(null);
   let appNav: ((a: Parameters<Parameters<typeof onNav>[0]>[0]) => void) | undefined;
@@ -779,9 +781,51 @@ export default function XMB(props: {
       case "trophies": setTrophiesOpen(true); return true;
       case "whatsnew": act({ id: "whatsnew", title: "", icon: "", action: { type: "whats-new" } }); return true;
       case "themes": setThemeIdx(currentThemeIndex()); setThemesOpen(true); return true;
+      case "sound": case "mute": { const m = sfx.toggleMute(); pushToast("Sound", m ? "Console muted" : "Console audio on"); return true; }
+      case "ai": case "assistant": return openApp("ai");
       default: return false;
     }
   }
+
+  // —— XMB voice command: tap the mic, speak, it opens what you asked for.
+  // Push-to-talk (Whisper, ~4s window) — NOT always-on, which would drain the
+  // battery. Keyword-routed to aiCommand, so no LLM spin-up for "open X". ——
+  const VOICE_MAP: [RegExp, string][] = [
+    [/\bdoom\b/, "doom"], [/\bchess\b/, "chess"], [/lichess/, "lichess"], [/trivia/, "trivia"],
+    [/flash/, "flash"], [/(ps2|playstation 2)/, "ps2"], [/(other os|kolibri|\bpc\b|linux)/, "pc"],
+    [/(code|playground|terminal)/, "code"], [/guest ?book/, "guestbook"], [/(browser|internet|the web)/, "browser"],
+    [/wiki/, "wiki"], [/dictionary/, "dictionary"], [/(time machine|wayback)/, "timemachine"],
+    [/(planet|globe|earth|\bmap\b)/, "map"], [/weather/, "weather"], [/visuali[sz]er/, "visualizer"],
+    [/(studio|synth|keyboard)/, "studio"], [/(radio|music)/, "radio"], [/(cinema|movie|film)/, "cinema"],
+    [/podcast/, "podcasts"], [/winamp/, "webamp"], [/(art|gallery|museum)/, "art"],
+    [/(space|astronomy|nasa|apod)/, "apod"], [/news/, "news"], [/photo/, "photos"],
+    [/troph/, "trophies"], [/theme/, "themes"], [/(assistant|\bai\b|abhishek)/, "ai"],
+  ];
+  async function voiceCmd() {
+    if (vListening()) return;
+    setVListening(true);
+    sfx.tickH();
+    pushToast("🎤 Listening…", "Say “open doom”, “weather”, or “search lofi on youtube”");
+    const rec = record();
+    setTimeout(() => rec.stop(), 4000); // short command window
+    let text = "";
+    try { text = await rec.done; } catch { setVListening(false); return; }
+    setVListening(false);
+    const t = text.toLowerCase().trim();
+    if (!t) { pushToast("🎤 Didn't catch that", "Try again — say “open chess”"); return; }
+    // "search X on youtube"
+    const yt = t.match(/(?:search|find|play|watch)\s+(.+?)\s+on\s+you\s?tube/) ?? (/you\s?tube/.test(t) ? t.match(/(?:search|find|play|watch|for)\s+(.+)/) : null);
+    if (yt?.[1]) { pushToast(`🎤 “${text}”`, "Searching YouTube"); aiCommand("youtube-search", yt[1].trim()); return; }
+    const hit = VOICE_MAP.find(([re]) => re.test(t));
+    if (hit && aiCommand(hit[1])) { pushToast(`🎤 “${text}”`, `Opening ${hit[1]}`); return; }
+    pushToast(`🎤 “${text}”`, "Say “open <app>” — e.g. doom, weather, radio, studio");
+  }
+
+  // console stats for the AI's console_status tool
+  const consoleStatus = () => {
+    const mins = Math.round((props.profile.playtime ?? 0) / 60);
+    return `${trophyCount()} trophies earned · ${games().length} game${games().length === 1 ? "" : "s"} in the library · ${mins < 60 ? mins + " min" : (mins / 60).toFixed(1) + " h"} played on this console.`;
+  };
 
   // —— navigation (keyboard + gamepad via onNav; mouse clicks & wheel reuse it) ——
   const handleNav = (action: Parameters<Parameters<typeof onNav>[0]>[0]) => {
@@ -997,6 +1041,9 @@ export default function XMB(props: {
           </Show>
         </div>
         <Show when={statusWeather()}><span class="status-weather">{statusWeather()}</span></Show>
+        <Show when={asrSupported()}>
+          <button class="status-mic" classList={{ listening: vListening() }} title="voice command (on-device)" onClick={voiceCmd}><Icon name="mic" /></button>
+        </Show>
         <Show when={padName()}><span class="status-pad" title={padName()!}>🎮</span></Show>
         <Show when={battery()}>
           <span
@@ -1210,6 +1257,7 @@ export default function XMB(props: {
       <Show when={app() === "ai"}>
         <AiChat
           profileId={props.profile.id}
+          consoleStatus={consoleStatus}
           onFirstChat={() => awardT("aifriend")}
           onCommand={(a, arg) => aiCommand(a, arg)}
           onClose={() => setApp((cur) => (cur === "ai" ? null : cur))}

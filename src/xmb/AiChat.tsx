@@ -54,6 +54,7 @@ export default function AiChat(props: {
   onCommand: (app: string, arg?: string) => boolean;
   onClose: () => void;
   profileId: string;
+  consoleStatus: () => string;
 }) {
   const chatKey = () => `chat:${props.profileId}`;
   let restored: StoredChat | null = null; // prior transcript + agent memory
@@ -118,6 +119,12 @@ export default function AiChat(props: {
         widget({ t: "weather", data });
         return { text: `It's ${data.temp}° with ${wmo(data.code)[1]} in ${data.place}.`, terminate: true };
       }),
+    T("console_status", "Console status", "Report this console's stats: trophies earned, games in the library, and time played. Use when the user asks what they've done here, their progress, or their trophies count.",
+      Type.Object({}), async () => ({ text: props.consoleStatus(), terminate: false })),
+    T("change_theme", "Change theme", "Open the console theme (colour) picker.",
+      Type.Object({}), async () => { const ok = props.onCommand("themes"); if (ok) setTimeout(() => props.onClose(), 600); return { text: ok ? "Opening theme settings." : "Couldn't open themes.", terminate: ok }; }),
+    T("toggle_sound", "Toggle sound", "Mute or unmute the console audio.",
+      Type.Object({}), async () => { props.onCommand("sound"); return { text: "Toggled console sound.", terminate: true }; }),
   ];
 
   onMount(() => {

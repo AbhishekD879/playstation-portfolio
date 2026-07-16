@@ -1173,6 +1173,14 @@ img.status-avatar, img.ptile-avatar { object-fit: cover; border: 1px solid rgba(
 }
 
 .status-pad { font-size: 14px; filter: saturate(1.2); }
+.status-mic {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 26px; height: 26px; padding: 0; border-radius: 7px; cursor: pointer;
+  background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.2); color: var(--text);
+}
+.status-mic svg { width: 15px; height: 15px; }
+.status-mic:hover { border-color: #fff; }
+.status-mic.listening { border-color: #e0483e; background: rgba(224,72,62,0.2); animation: micPulse 1.2s ease-in-out infinite; }
 
 /* ———— controller test ———— */
 .gptest { position: fixed; inset: 0; z-index: 41; background: linear-gradient(200deg, rgba(6,10,22,0.98), rgba(2,4,12,0.99)); padding: 30px min(8vw,80px); overflow-y: auto; }
