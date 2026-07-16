@@ -54,6 +54,7 @@ export interface XmbItem {
     | { type: "pc" }
     | { type: "guestbook" }
     | { type: "browser" }
+    | { type: "visualizer" }
     | { type: "webamp" }
     | { type: "youtube" }
     | { type: "timemachine" }

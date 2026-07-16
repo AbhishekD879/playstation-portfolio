@@ -10,6 +10,7 @@ import { Type } from "typebox";
 import { CAREER, OWNER, PROJECTS, SKILLS } from "../content";
 import { fetchWeather, wmo, type Weather } from "../apps";
 import { webllmModel, webllmStreamFn } from "../piWebllm";
+import { loadTTS, speak, stopSpeaking, ttsSupported } from "../tts";
 import { setNavEnabled } from "../input";
 import * as sfx from "../audio";
 
@@ -19,7 +20,7 @@ const MODELS = {
 } as const;
 type ModelKey = keyof typeof MODELS;
 
-const APPS = "doom, chess, lichess, trivia, flash, ps2, pc, guestbook, browser, youtube, cinema, podcasts, radio, spotify, winamp, library, wiki, dictionary, map, timemachine, art, apod, weather, tv, news, photos, trophies, whatsnew, themes";
+const APPS = "doom, chess, lichess, trivia, flash, ps2, pc, guestbook, browser, visualizer, youtube, cinema, podcasts, radio, spotify, winamp, library, wiki, dictionary, map, timemachine, art, apod, weather, tv, news, photos, trophies, whatsnew, themes";
 
 const SYSTEM = `You are "AI Abhishek" — a friendly assistant running fully on the visitor's device, embedded in ${OWNER.name}'s PlayStation-style portfolio console. Chat naturally about anything. Keep answers concise (2-4 sentences) unless asked for depth.
 
@@ -58,6 +59,8 @@ export default function AiChat(props: {
   const [items, setItems] = createSignal<ChatItem[]>([]);
   const [busy, setBusy] = createSignal(false);
   const [listening, setListening] = createSignal(false);
+  const [voice, setVoice] = createSignal(false);
+  const [voiceLoading, setVoiceLoading] = createSignal(false);
   let engine: MLCEngine | null = null;
   let agent: Agent | null = null;
   let rec: any = null;
@@ -121,6 +124,7 @@ export default function AiChat(props: {
       setNavEnabled(true);
       removeEventListener("keydown", esc);
       rec?.abort?.();
+      stopSpeaking();
       engine?.unload();
     });
     (async () => {
@@ -176,7 +180,15 @@ export default function AiChat(props: {
             return out;
           });
         }
-        if (ev.type === "agent_end") { setBusy(false); setTimeout(() => input?.focus(), 30); }
+        if (ev.type === "agent_end") {
+          setBusy(false);
+          setTimeout(() => input?.focus(), 30);
+          if (voice()) {
+            // speak the last non-empty assistant bubble
+            const last = [...items()].reverse().find((it) => it.kind === "msg" && (it as any).role === "assistant" && (it as any).text.trim());
+            if (last) speak((last as any).text).catch(() => {});
+          }
+        }
       });
       setReady(true);
       setProgress("");
@@ -201,6 +213,19 @@ export default function AiChat(props: {
       pushItem({ kind: "msg", role: "assistant", text: "…my circuits hiccuped. Try again?" });
       setBusy(false);
     });
+  }
+
+  // —— voice output: on-device TTS, downloaded on first enable ——
+  async function toggleVoice() {
+    if (voice()) { setVoice(false); stopSpeaking(); return; }
+    sfx.tickH();
+    if (!(window as any).__ttsReady) {
+      setVoiceLoading(true);
+      try { await loadTTS(); (window as any).__ttsReady = true; }
+      catch { setVoiceLoading(false); return; }
+      setVoiceLoading(false);
+    }
+    setVoice(true);
   }
 
   // —— voice input: hold a thought, not a keyboard ——
@@ -229,6 +254,11 @@ export default function AiChat(props: {
         <div class="panel-tag">
           AI ABHISHEK — {model() ? `${MODELS[model()!].label} · ` : ""}PI.DEV AGENT · WEBGPU, ON-DEVICE
         </div>
+        <Show when={ready() && ttsSupported()}>
+          <button class="ghost-btn" classList={{ on: voice() }} title="speak replies aloud (on-device)" onClick={toggleVoice}>
+            {voiceLoading() ? "◌ voice…" : voice() ? "🔊 voice on" : "🔈 voice"}
+          </button>
+        </Show>
         <button class="ghost-btn" onClick={() => { sfx.back(); props.onClose(); }}>✕ close</button>
       </div>
 

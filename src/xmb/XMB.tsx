@@ -17,6 +17,7 @@ import Ps2 from "./Ps2";
 import PcApp from "./PcApp";
 import Guestbook from "./Guestbook";
 import Browser from "./Browser";
+import Visualizer from "./Visualizer";
 import Doom from "./Doom";
 import ChessApp from "./ChessApp";
 import Trivia from "./Trivia";
@@ -79,7 +80,7 @@ export default function XMB(props: {
   const [padName, setPadName] = createSignal<string | null>(null);
   const [ytQuery, setYtQuery] = createSignal(""); // AI agent → YouTube search handoff
   const [padTest, setPadTest] = createSignal(false);
-  const [app, setApp] = createSignal<null | "doom" | "chess" | "trivia" | "flash" | "cinema" | "podcasts" | "library" | "map" | "ai" | "webamp" | "youtube" | "timemachine" | "art" | "wiki" | "lichess" | "ps2" | "pc" | "guestbook" | "browser">(null);
+  const [app, setApp] = createSignal<null | "doom" | "chess" | "trivia" | "flash" | "cinema" | "podcasts" | "library" | "map" | "ai" | "webamp" | "youtube" | "timemachine" | "art" | "wiki" | "lichess" | "ps2" | "pc" | "guestbook" | "browser" | "visualizer">(null);
   let appNav: ((a: Parameters<Parameters<typeof onNav>[0]>[0]) => void) | undefined;
   const [apod, setApod] = createSignal<{ loading: boolean; data?: Apod } | null>(null);
   const [dict, setDict] = createSignal<{ result?: Definition | null; looking: boolean } | null>(null);
@@ -132,6 +133,7 @@ export default function XMB(props: {
         action: { type: "radio-play" as const, url: r.url, label: r.label },
       })),
     { id: "radio", title: "Console Radio", sub: "Generative lo-fi — synthesized live", icon: "note", action: { type: "music-toggle" } },
+    { id: "visualizer", title: "Visualizer", sub: "Music visualizations — reacts to the radio & mic", icon: "spark", action: { type: "visualizer" } },
     {
       id: "sp-default", title: "lofi beats", sub: "Spotify · curated focus playlist", icon: "disc",
       action: { type: "spotify", url: "https://open.spotify.com/embed/playlist/37i9dQZF1DWWQRwui0ExPn", label: "lofi beats" },
@@ -445,6 +447,10 @@ export default function XMB(props: {
         sfx.confirm();
         setApp("browser");
         break;
+      case "visualizer":
+        sfx.confirm();
+        setApp("visualizer");
+        break;
       case "gesture-toggle":
         if (gesturesOn()) {
           stopGestures();
@@ -721,6 +727,7 @@ export default function XMB(props: {
       case "pc": case "otheros": case "linux": case "kolibri": return openApp("pc");
       case "guestbook": return openApp("guestbook");
       case "browser": case "web": case "internet": return openApp("browser");
+      case "visualizer": case "visualiser": return openApp("visualizer");
       case "doom": awardT("doomguy"); return openApp("doom");
       case "chess": return openApp("chess");
       case "lichess": return openApp("lichess");
@@ -1197,6 +1204,7 @@ export default function XMB(props: {
       <Show when={app() === "pc"}><PcApp onClose={() => setApp(null)} /></Show>
       <Show when={app() === "guestbook"}><Guestbook userName={props.profile.name} onClose={() => setApp(null)} /></Show>
       <Show when={app() === "browser"}><Browser onClose={() => setApp(null)} /></Show>
+      <Show when={app() === "visualizer"}><Visualizer onClose={() => setApp(null)} /></Show>
       <Show when={app() === "lichess"}>
         <div class="fullapp">
           <iframe credentialless={true} class="fullapp-frame" src="https://lichess.org/tv/frame?theme=brown&bg=dark" allow="fullscreen" title="Lichess TV" />

@@ -795,6 +795,17 @@ img.status-avatar, img.ptile-avatar { object-fit: cover; border: 1px solid rgba(
 .gbook-m { font-size: 14px; line-height: 1.45; overflow-wrap: anywhere; }
 .gbook-empty { color: var(--dim); text-align: center; padding: 40px 0; letter-spacing: 0.06em; }
 
+/* —— Music Visualizer —— */
+.viz { position: fixed; inset: 0; z-index: 32; display: flex; flex-direction: column; background: radial-gradient(90% 90% at 50% 45%, #0a1226 0%, #01020a 100%); }
+.viz-bar { display: flex; align-items: center; gap: 12px; padding: 14px 22px; background: rgba(6,10,20,0.6); }
+.viz-bar .ghost-btn:last-child { margin-left: auto; }
+.viz-stage { flex: 1; position: relative; }
+.viz-stage canvas { position: absolute; inset: 0; }
+.viz-hint {
+  position: absolute; left: 0; right: 0; bottom: 40px; text-align: center;
+  color: var(--dim); font-size: 14px; letter-spacing: 0.08em; pointer-events: none;
+}
+
 /* —— Reader Browser —— */
 .browser { position: fixed; inset: 0; z-index: 32; display: flex; flex-direction: column;
   background: linear-gradient(200deg, rgba(6,10,22,0.98), rgba(2,4,12,0.99)); }

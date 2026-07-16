@@ -18,6 +18,7 @@
     "chess.js": "^1.4.0",
     "gsap": "^3.15.0",
     "hls.js": "^1.6.16",
+    "kokoro-js": "^1.2.1",
     "leaflet": "^1.9.4",
     "solid-js": "^1.9.14",
     "stockfish": "^18.0.8",

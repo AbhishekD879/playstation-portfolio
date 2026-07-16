@@ -23,6 +23,20 @@ export function toggleMute(): boolean {
 }
 export const isMuted = () => muted;
 
+// —— visualizer tap: an analyser on the master bus (radio, sfx — everything) ——
+let analyser: AnalyserNode | null = null;
+export function getAnalyser(): AnalyserNode {
+  const c = ac();
+  if (!analyser) {
+    analyser = c.createAnalyser();
+    analyser.fftSize = 512;
+    analyser.smoothingTimeConstant = 0.8;
+    master!.connect(analyser); // a tap — no onward connection needed to analyze
+  }
+  return analyser;
+}
+export function audioContext(): AudioContext { return ac(); }
+
 function tone(freq: number, dur: number, opts: { type?: OscillatorType; gain?: number; at?: number; slide?: number } = {}) {
   const c = ac();
   const t = c.currentTime + (opts.at ?? 0);
