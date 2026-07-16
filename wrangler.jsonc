@@ -1,0 +1,10 @@
+{
+  // Cloudflare Pages config — `npx wrangler pages deploy` reads this.
+  // The guestbook Pages Function (functions/api/guestbook.ts) needs the KV binding.
+  "name": "abhishekstation",
+  "pages_build_output_dir": "dist",
+  "compatibility_date": "2026-07-01",
+  "kv_namespaces": [
+    { "binding": "GB", "id": "44c3b52f67cd4d398f0e1c7be98beaed" }
+  ]
+}

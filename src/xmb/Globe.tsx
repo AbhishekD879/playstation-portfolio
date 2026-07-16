@@ -11,6 +11,8 @@ export interface GlobeApi {
   flyTo: (lat: number, lon: number, color?: number) => void;
   /** Fly to the strongest quake of the day; returns its description. */
   spotlightQuake: () => string | null;
+  /** Place/update the ISS marker (it leaves an orbit trail). */
+  setIss: (lat: number, lon: number) => void;
 }
 
 const ATMO_VERT = /* glsl */ `
@@ -110,6 +112,19 @@ export default function Globe(props: { quakes: Quake[]; bind?: (api: GlobeApi) =
       beacons.push(b);
     }
 
+    // the station — a warm dot with an orbit trail, riding above the clouds
+    const issDot = new THREE.Mesh(new THREE.SphereGeometry(0.045, 10, 10), new THREE.MeshBasicMaterial({ color: 0xffe08a }));
+    const issGlow = new THREE.Mesh(
+      new THREE.SphereGeometry(0.085, 10, 10),
+      new THREE.MeshBasicMaterial({ color: 0xffe08a, transparent: true, opacity: 0.3, blending: THREE.AdditiveBlending, depthWrite: false }),
+    );
+    issDot.add(issGlow);
+    issDot.visible = false;
+    const issTrailPts: THREE.Vector3[] = [];
+    const issTrailGeo = new THREE.BufferGeometry();
+    const issTrail = new THREE.Line(issTrailGeo, new THREE.LineBasicMaterial({ color: 0xffe08a, transparent: true, opacity: 0.45 }));
+    globe.add(issDot, issTrail);
+
     // the "you are here / searched place" pin
     const pin = new THREE.Group();
     const pinDot = new THREE.Mesh(new THREE.SphereGeometry(0.05, 12, 12), new THREE.MeshBasicMaterial({ color: 0x5dff8a }));
@@ -147,6 +162,13 @@ export default function Globe(props: { quakes: Quake[]; bind?: (api: GlobeApi) =
         const big = [...props.quakes].sort((a, b) => b.mag - a.mag)[0];
         flyTo(big.lat, big.lon, big.mag >= 5 ? 0xff4a4a : 0xffb04a);
         return `M${big.mag.toFixed(1)} — ${big.place}`;
+      },
+      setIss: (lat, lon) => {
+        issDot.position.copy(latLonToVec(lat, lon, 3.22)); // orbit height, above clouds
+        issDot.visible = true;
+        issTrailPts.push(issDot.position.clone());
+        if (issTrailPts.length > 60) issTrailPts.shift();
+        issTrailGeo.setFromPoints(issTrailPts);
       },
     });
 

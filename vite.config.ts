@@ -15,6 +15,12 @@ const isolation = {
 
 export default defineConfig({
   plugins: [solid()],
-  server: { allowedHosts: true, headers: isolation },
+  server: {
+    allowedHosts: true,
+    headers: isolation,
+    // guestbook API is a Cloudflare Pages Function — run `npx wrangler pages dev dist
+    // --port 8788` alongside for local end-to-end, or the app degrades gracefully
+    proxy: { "/api": "http://localhost:8788" },
+  },
   preview: { headers: isolation },
 });

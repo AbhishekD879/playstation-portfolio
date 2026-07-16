@@ -14,6 +14,8 @@ import Guide from "./Guide";
 import Photos from "./Photos";
 import GamepadTest from "./GamepadTest";
 import Ps2 from "./Ps2";
+import PcApp from "./PcApp";
+import Guestbook from "./Guestbook";
 import Doom from "./Doom";
 import ChessApp from "./ChessApp";
 import Trivia from "./Trivia";
@@ -76,7 +78,7 @@ export default function XMB(props: {
   const [padName, setPadName] = createSignal<string | null>(null);
   const [ytQuery, setYtQuery] = createSignal(""); // AI agent → YouTube search handoff
   const [padTest, setPadTest] = createSignal(false);
-  const [app, setApp] = createSignal<null | "doom" | "chess" | "trivia" | "flash" | "cinema" | "podcasts" | "library" | "map" | "ai" | "webamp" | "youtube" | "timemachine" | "art" | "wiki" | "lichess" | "ps2">(null);
+  const [app, setApp] = createSignal<null | "doom" | "chess" | "trivia" | "flash" | "cinema" | "podcasts" | "library" | "map" | "ai" | "webamp" | "youtube" | "timemachine" | "art" | "wiki" | "lichess" | "ps2" | "pc" | "guestbook">(null);
   let appNav: ((a: Parameters<Parameters<typeof onNav>[0]>[0]) => void) | undefined;
   const [apod, setApod] = createSignal<{ loading: boolean; data?: Apod } | null>(null);
   const [dict, setDict] = createSignal<{ result?: Definition | null; looking: boolean } | null>(null);
@@ -104,6 +106,7 @@ export default function XMB(props: {
     { id: "trivia", title: "Trivia Arcade", sub: "10 questions · Open Trivia DB", icon: "question", action: { type: "trivia" } },
     { id: "flash", title: "Flash Arcade", sub: "Ruffle WASM + the Internet Archive", icon: "lightning", action: { type: "flash" } },
     { id: "ps2", title: "PlayStation 2", sub: "Experimental emulator · desktop only", icon: "disc", action: { type: "ps2" } },
+    { id: "pc", title: "Other OS", sub: "A whole x86 PC — KolibriOS, runs in the console", icon: "power", action: { type: "pc" } },
     { id: "insert", title: "Insert Disc…", sub: "Load a ROM you own — read locally, never uploaded", icon: "plus", action: { type: "insert-disc" } },
     ...games().map((g) => ({
       id: `g-${g.id}`,
@@ -429,6 +432,14 @@ export default function XMB(props: {
         sfx.confirm();
         setApp("ps2");
         break;
+      case "pc":
+        sfx.confirm();
+        setApp("pc");
+        break;
+      case "guestbook":
+        sfx.confirm();
+        setApp("guestbook");
+        break;
       case "gesture-toggle":
         if (gesturesOn()) {
           stopGestures();
@@ -702,6 +713,8 @@ export default function XMB(props: {
     switch (app) {
       case "youtube-search": setYtQuery(arg ?? ""); return openApp("youtube");
       case "ps2": case "playstation": return openApp("ps2");
+      case "pc": case "otheros": case "linux": case "kolibri": return openApp("pc");
+      case "guestbook": return openApp("guestbook");
       case "doom": awardT("doomguy"); return openApp("doom");
       case "chess": return openApp("chess");
       case "lichess": return openApp("lichess");
@@ -1175,6 +1188,8 @@ export default function XMB(props: {
         <WikiApp bind={(f) => (appNav = f)} onClose={() => setApp(null)} />
       </Show>
       <Show when={app() === "ps2"}><Ps2 onClose={() => setApp(null)} /></Show>
+      <Show when={app() === "pc"}><PcApp onClose={() => setApp(null)} /></Show>
+      <Show when={app() === "guestbook"}><Guestbook userName={props.profile.name} onClose={() => setApp(null)} /></Show>
       <Show when={app() === "lichess"}>
         <div class="fullapp">
           <iframe credentialless={true} class="fullapp-frame" src="https://lichess.org/tv/frame?theme=brown&bg=dark" allow="fullscreen" title="Lichess TV" />

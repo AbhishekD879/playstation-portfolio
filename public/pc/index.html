@@ -1,0 +1,32 @@
+<!doctype html>
+<!-- Other OS — a whole x86 PC via v86 (copy/v86, BSD-2) booting KolibriOS
+     (GPL), all self-hosted. Same-origin iframe host, like /play/. -->
+<html>
+<head>
+<meta charset="utf-8" />
+<style>
+  html, body { margin: 0; height: 100%; background: #000; overflow: hidden; display: grid; place-items: center; }
+  #screen_container { position: relative; }
+  /* text-mode layer (BIOS/DOS phase) */
+  #screen_container > div { white-space: pre; font: 14px monospace; line-height: 14px; color: #ddd; }
+  canvas { display: block; max-width: 100vw; max-height: 100vh; height: 100vh; width: auto; image-rendering: pixelated; }
+</style>
+</head>
+<body>
+<div id="screen_container"><div></div><canvas style="display: none"></canvas></div>
+<script src="/pc/libv86.js"></script>
+<script>
+  new V86({
+    wasm_path: "/pc/v86.wasm",
+    bios: { url: "/pc/seabios.bin" },
+    vga_bios: { url: "/pc/vgabios.bin" },
+    memory_size: 64 * 1024 * 1024,
+    vga_memory_size: 8 * 1024 * 1024,
+    screen_container: document.getElementById("screen_container"),
+    fda: { url: "/pc/kolibri.img" },
+    boot_order: 0x321,
+    autostart: true,
+  });
+</script>
+</body>
+</html>

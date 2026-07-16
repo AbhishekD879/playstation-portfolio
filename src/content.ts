@@ -51,6 +51,8 @@ export interface XmbItem {
     | { type: "gesture-toggle" }
     | { type: "gamepad-test" }
     | { type: "ps2" }
+    | { type: "pc" }
+    | { type: "guestbook" }
     | { type: "webamp" }
     | { type: "youtube" }
     | { type: "timemachine" }
@@ -213,6 +215,7 @@ export const CATEGORIES: XmbCategory[] = [
     icon: "user",
     items: [
       { id: "ai", title: "AI Abhishek", sub: "On-device LLM — ask about my work", icon: "chip", action: { type: "ai-chat" } },
+      { id: "guestbook", title: "Guestbook", sub: "Sign the console — notes from visitors", icon: "mail", action: { type: "guestbook" } },
       { id: "whatsnew", title: "What's New", sub: "Your activity on this console", icon: "spark", action: { type: "whats-new" } },
       { id: "trophies", title: "Trophy Collection", sub: "Your haul so far", icon: "trophy", action: { type: "trophies" } },
       { id: "photo", title: "Profile Photo", sub: "Upload your own avatar", icon: "camera", action: { type: "photo" } },
