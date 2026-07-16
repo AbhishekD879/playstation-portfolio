@@ -2,12 +2,15 @@
 // (USGS) and live rain radar (RainViewer). Geolocate + Nominatim search.
 // Plus the "Life with PlayStation" layer: live ISS overhead (wheretheiss.at)
 // and a world tour that drifts between cities with their current weather.
-import { Show, createSignal, onCleanup, onMount } from "solid-js";
+import { Show, Suspense, createSignal, lazy, onCleanup, onMount } from "solid-js";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import { fetchHN, fetchQuakes, rainTiles, wmo, type Quake } from "../apps";
-import Globe, { type GlobeApi } from "./Globe";
+import type { GlobeApi } from "./CesiumGlobe";
 import * as sfx from "../audio";
+
+// Cesium is multi-MB — only fetch it when Planet Earth actually opens
+const CesiumGlobe = lazy(() => import("./CesiumGlobe"));
 
 const CITIES = [
   { name: "Hyderabad", lat: 17.38, lon: 78.49 },
@@ -85,33 +88,23 @@ export default function MapApp(props: { onClose: () => void }) {
   function flyToIss() {
     const s = iss();
     if (!s) { setStatus("Waiting for the station to phone home…"); return; }
-    if (mode() === "2d") setMode("3d");
+    setMode("3d");
     globeApi?.flyTo(s.lat, s.lon, 0xffe08a);
     setStatus(`🛰 ISS — ${s.alt} km up, ${s.vel.toLocaleString()} km/h`);
     setTimeout(() => setStatus(""), 5000);
     sfx.confirm();
   }
 
-  // —— the world tour, Google-Earth style: rotate to the city in space, then
-  // DIVE through real satellite imagery to street level, hold, pull back, next ——
+  // —— the world tour, on the globe itself: fly in from orbit, DIVE to street
+  // level (tilted, real satellite tiles draped on the sphere), hold, pull up,
+  // next. No flat-map cut — Cesium streams sharper tiles as we descend. ——
   const later = (fn: () => void, ms: number) => tourTimers.push(setTimeout(fn, ms));
   function visit(i: number) {
     setTourIdx(i);
     const { lat, lon } = CITIES[i];
-    // phase 1 — space: the globe swings the city to face us
-    setMode("3d");
-    globeApi?.flyTo(lat, lon, 0x9fd0ff);
-    // phase 2 — the dive: cut to real imagery and fall from orbit to the city
-    later(() => {
-      setMode("2d");
-      setSatellite(true);
-      map.invalidateSize();
-      map.setView([lat, lon], 5, { animate: false });
-      setTimeout(() => map.flyTo([lat, lon], 13, { duration: 4.5, easeLinearity: 0.2 }), 120);
-    }, 2600);
-    // phase 3 — pull back up before we leave
-    later(() => map.flyTo([lat, lon], 6, { duration: 1.6 }), 11800);
-    // phase 4 — next city
+    globeApi?.flyTo(lat, lon, 0x9fd0ff);       // swing over from orbit
+    later(() => globeApi?.diveTo(lat, lon), 2400); // cinematic tilted descent
+    later(() => globeApi?.pullUp(), 11500);        // rise back to orbit
     later(() => visit((i + 1) % CITIES.length), 13700);
   }
   function toggleTour() {
@@ -119,12 +112,12 @@ export default function MapApp(props: { onClose: () => void }) {
       setTour(false);
       tourTimers.forEach(clearTimeout);
       tourTimers = [];
-      setSatellite(false);
-      setMode("3d");
+      globeApi?.pullUp();
       sfx.back();
       return;
     }
     sfx.confirm();
+    setMode("3d");
     setTour(true);
     if (!wx().some(Boolean)) {
       fetch(`https://api.open-meteo.com/v1/forecast?latitude=${CITIES.map((c) => c.lat).join(",")}&longitude=${CITIES.map((c) => c.lon).join(",")}&current=temperature_2m,weather_code`)
@@ -270,7 +263,11 @@ export default function MapApp(props: { onClose: () => void }) {
       </div>
       <div class="mapapp-map" ref={mapEl} style={{ display: mode() === "2d" ? "block" : "none" }} />
       <Show when={mode() === "3d"}>
-        <div class="globe-wrap"><Globe quakes={quakes()} bind={(api) => (globeApi = api)} /></div>
+        <div class="globe-wrap">
+          <Suspense fallback={<div class="fullapp-status">loading the globe…</div>}>
+            <CesiumGlobe quakes={quakes()} bind={(api) => (globeApi = api)} />
+          </Suspense>
+        </div>
         <div class="globe-zoom">
           <button class="ghost-btn globe-zoom-btn" onClick={() => { globeApi?.zoom(1); sfx.tickH(); }}>＋</button>
           <button class="ghost-btn globe-zoom-btn" onClick={() => { globeApi?.zoom(-1); sfx.tickH(); }}>－</button>

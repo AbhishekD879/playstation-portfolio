@@ -900,6 +900,9 @@ img.status-avatar, img.ptile-avatar { object-fit: cover; border: 1px solid rgba(
 .globe-wrap { flex: 1; position: relative; background: radial-gradient(90% 90% at 50% 45%, #0a1226 0%, #02040c 100%); }
 .globe-canvas { position: absolute; inset: 0; width: 100%; height: 100%; cursor: grab; }
 .globe-canvas:active { cursor: grabbing; }
+.cesium-host { position: absolute; inset: 0; }
+.cesium-host .cesium-viewer, .cesium-host .cesium-widget, .cesium-host .cesium-widget canvas { width: 100%; height: 100%; }
+.cesium-host .cesium-viewer-bottom { display: none; } /* hide Cesium's own credit strip */
 
 /* ———— gesture tutorial ———— */
 .gesture-tut { max-width: min(560px, 92vw); }
