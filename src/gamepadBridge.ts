@@ -5,6 +5,8 @@
 // engines read keyCode) on the game element AND document. All reads merge
 // across every connected pad (Xbox controllers register a phantom 2nd slot).
 
+import { rumble } from "./input";
+
 interface KeyDef { key: string; code: string; keyCode: number }
 const K = (key: string, code: string, keyCode: number): KeyDef => ({ key, code, keyCode });
 export type PadMap = Record<number, KeyDef>;
@@ -17,6 +19,8 @@ export interface BridgeConfig {
   /** pad button that quits the game (default 8 = Back). null = no pad quit —
    *  used when that button is needed in-game (e.g. PS2 Select). */
   quitButton?: number | null;
+  /** button indices that kick a rumble pulse on press (e.g. DOOM fire). */
+  rumbleOn?: number[];
 }
 
 const UP = K("ArrowUp", "ArrowUp", 38), DOWN = K("ArrowDown", "ArrowDown", 40);
@@ -90,6 +94,7 @@ export const DOOM_CONFIG: BridgeConfig = {
     { axis: 2, neg: LEFT, pos: RIGHT },    // RIGHT stick X → TURN left/right
   ],
   hold: [SHIFT], // always-run, like every modern console shooter
+  rumbleOn: [0, 7], // A / RT → fire kicks the controller
 };
 
 const QUIT_BTN = 8; // Back/Select → leave the game
@@ -143,7 +148,9 @@ function loop() {
 
   for (const key of Object.keys(cfg.map)) {
     const i = +key;
-    edge("b" + i, btnPressed(p, i), cfg.map[i]);
+    const pressed = btnPressed(p, i);
+    if (pressed && !down.has("b" + i) && cfg.rumbleOn?.includes(i)) rumble(0.7, 0.5, 90);
+    edge("b" + i, pressed, cfg.map[i]);
   }
   for (let j = 0; j < cfg.axes.length; j++) {
     const bind = cfg.axes[j];

@@ -1,0 +1,78 @@
+- generic [ref=e11]:
+  - generic [ref=e12]:
+    - generic [ref=e13]:
+      - generic [ref=e14]: ▲
+      - text: ELF
+      - generic [ref=e15]: 🏆 3
+    - generic "Battery 100% — charging" [ref=e16]
+    - generic [ref=e22]: 16/7 16:55
+  - generic:
+    - img
+    - img
+    - img
+    - img
+  - generic:
+    - generic [ref=e23]:
+      - img [ref=e25]
+      - generic [ref=e28]: Users
+    - generic [ref=e29]:
+      - img [ref=e31]
+      - generic [ref=e34]: Career
+    - generic [ref=e35]:
+      - img [ref=e37]
+      - generic [ref=e39]: Projects
+    - generic [ref=e40]:
+      - img [ref=e42]
+      - generic [ref=e46]: Skills
+    - generic [ref=e47]:
+      - img [ref=e49]
+      - generic [ref=e53]: Photo
+    - generic [ref=e54]:
+      - img [ref=e56]
+      - generic [ref=e60]: Music
+    - generic [ref=e61]:
+      - img [ref=e63]
+      - generic [ref=e66]: Video
+    - generic [ref=e67]:
+      - img [ref=e69]
+      - generic [ref=e72]: TV
+    - generic [ref=e73]:
+      - img [ref=e75]
+      - generic [ref=e80]: Game
+    - generic [ref=e81]:
+      - img [ref=e83]
+      - generic [ref=e85]: News
+    - generic [ref=e86]:
+      - img [ref=e88]
+      - generic [ref=e91]: Web
+    - generic [ref=e92]:
+      - img [ref=e94]
+      - generic [ref=e97]: Contact
+    - generic [ref=e98]:
+      - img [ref=e100]
+      - generic [ref=e103]: Settings
+  - generic:
+    - generic [ref=e104]:
+      - img [ref=e106]
+      - generic [ref=e109]:
+        - generic [ref=e110]: GoHighLevel
+        - generic [ref=e111]: MAY 2026 – PRESENT
+    - generic [ref=e112]:
+      - img [ref=e114]
+      - generic [ref=e118]: Phenom People
+    - generic [ref=e119]:
+      - img [ref=e121]
+      - generic [ref=e125]: Ivy Comptech
+    - generic [ref=e126]:
+      - img [ref=e128]
+      - generic [ref=e132]: Outlearn
+    - generic [ref=e133]:
+      - img [ref=e135]
+      - generic [ref=e139]: SPPU
+  - generic [ref=e140]:
+    - generic [ref=e141]:
+      - generic [ref=e142]: ←→↑↓
+      - text: navigate
+    - generic [ref=e143]: Enter — select
+    - generic [ref=e145]: Esc — back
+    - generic [ref=e147]: 🎮 supported

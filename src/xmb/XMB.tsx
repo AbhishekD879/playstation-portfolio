@@ -7,7 +7,7 @@ import { CORES, CORE_NAMES, addGame, listGames, addPhoto, listPhotos, type GameR
 import { THEMES, applyTheme, currentThemeIndex } from "../theme";
 import { CHANNELS, fetchDevto, fetchGuide, fetchHN, fetchRadio, fetchRss, fetchWeather, wmo, type NewsEntry, type Weather } from "../apps";
 import * as sfx from "../audio";
-import { onNav, onPadChange, setNavEnabled } from "../input";
+import { onNav, onPadChange, rumble, rumbleEnabled, setNavEnabled, setRumble } from "../input";
 import { Icon } from "./icons";
 import Tv from "./Tv";
 import Guide from "./Guide";
@@ -257,9 +257,10 @@ export default function XMB(props: {
     setTrophyVer((v) => v + 1);
     if (def) {
       sfx.trophy();
+      rumble(0.9, 0.7, 320); // celebratory buzz on unlock
       pushToast(`Trophy earned — ${def.name}`, def.desc, def.tier);
       if (!hadPlat && props.profile.trophies["platinum"]) {
-        setTimeout(() => { sfx.trophy(); pushToast(`PLATINUM — ${PLATINUM.name}`, PLATINUM.desc, "platinum"); }, 1400);
+        setTimeout(() => { sfx.trophy(); rumble(1, 0.9, 600); pushToast(`PLATINUM — ${PLATINUM.name}`, PLATINUM.desc, "platinum"); }, 1400);
       }
     }
   };
@@ -538,6 +539,13 @@ export default function XMB(props: {
       case "sound-toggle": {
         const muted = sfx.toggleMute();
         pushToast("Sound", muted ? "Console muted" : "Console audio on");
+        break;
+      }
+      case "rumble-toggle": {
+        const on = !rumbleEnabled();
+        setRumble(on);
+        if (on) rumble(0.8, 0.6, 200);
+        pushToast("Vibration", on ? "Controller rumble on" : "Controller rumble off");
         break;
       }
       case "clock-format": {
@@ -867,7 +875,7 @@ export default function XMB(props: {
       }
       case "confirm": {
         const it = items[selOf(cat())];
-        if (it) act(it);
+        if (it) { rumble(0.35, 0.25, 60); act(it); } // light tactile tick on select
         break;
       }
       case "options":

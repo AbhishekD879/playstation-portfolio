@@ -12,6 +12,8 @@ import { fetchWeather, wmo, type Weather } from "../apps";
 import { webllmModel, webllmStreamFn } from "../piWebllm";
 import { loadTTS, speak, stopSpeaking, ttsSupported } from "../tts";
 import { clearChat, loadChat, saveChat, type StoredChat } from "../chatStore";
+import { buildIndex, retrieve } from "../rag";
+import { asrSupported, record } from "../asr";
 import { Icon } from "./icons";
 import { setNavEnabled } from "../input";
 import * as sfx from "../audio";
@@ -26,11 +28,7 @@ const APPS = "doom, chess, lichess, trivia, flash, ps2, pc, guestbook, browser, 
 
 const SYSTEM = `You are "AI Abhishek" — a friendly assistant running fully on the visitor's device, embedded in ${OWNER.name}'s PlayStation-style portfolio console. Chat naturally about anything. Keep answers concise (2-4 sentences) unless asked for depth.
 
-You are the expert on ${OWNER.name} (${OWNER.title}, ${OWNER.location}). Use ONLY these facts about him:
-${CAREER.map((c) => `- ${c.tag}: ${c.title}. ${c.bullets.join(" ")}`).join("\n")}
-Projects: ${PROJECTS.map((p) => p.title).join(", ")}.
-Skills: ${SKILLS.map((s) => `${s.name}: ${s.items.join("/")}`).join("; ")}.
-Contact: ${OWNER.email} · ${OWNER.linkedin}.
+You are the expert on ${OWNER.name} (${OWNER.title}, ${OWNER.location}). When you answer questions about him, use ONLY the "Reference facts" provided in the conversation — never invent details. If no reference facts are given and you don't know, say so briefly. Contact: ${OWNER.email} · ${OWNER.linkedin}.
 
 When the user asks about his career, projects, skills, or how to reach him, CALL the matching show_* tool — the console renders a beautiful card. Add one short sentence of commentary, not a recital of the card's contents. When asked to open/play/launch something, call open_app. When asked to find or play a video, call search_youtube. Do NOT steer unrelated conversations back to Abhishek.
 
@@ -151,10 +149,23 @@ export default function AiChat(props: {
       engine = await CreateMLCEngine(MODELS[key].id, {
         initProgressCallback: (p) => setProgress(p.text),
       });
+      buildIndex().catch(() => {}); // warm the RAG index in the background
       agent = new Agent({
         // seed the model's memory with the prior conversation so it remembers
         initialState: { systemPrompt: SYSTEM, model: webllmModel(MODELS[key].id), tools, messages: (restored?.messages as any) ?? [] },
         streamFn: webllmStreamFn(() => engine),
+        // RAG: pull the most relevant facts for the latest question and slot
+        // them in just before it — grounds answers without bloating memory
+        transformContext: async (msgs) => {
+          const lastUser = [...msgs].reverse().find((m) => m.role === "user");
+          if (!lastUser) return msgs;
+          const q = typeof lastUser.content === "string" ? lastUser.content : lastUser.content.map((c: any) => c.text ?? "").join(" ");
+          const facts = await retrieve(q, 4);
+          if (!facts.length) return msgs;
+          const ref = { role: "user" as const, content: `Reference facts (use only if relevant to the question):\n${facts.map((f) => "• " + f).join("\n")}`, timestamp: Date.now() };
+          const idx = msgs.lastIndexOf(lastUser);
+          return [...msgs.slice(0, idx), ref, ...msgs.slice(idx)];
+        },
       });
       if (import.meta.env.DEV) (window as any).__agent = agent;
       agent.subscribe((ev) => {
@@ -256,24 +267,35 @@ export default function AiChat(props: {
     setVoice(true);
   }
 
-  // —— voice input: hold a thought, not a keyboard ——
+  // —— voice input: on-device Whisper (private); falls back to Web Speech ——
   const SR = (window as any).SpeechRecognition ?? (window as any).webkitSpeechRecognition;
+  const micAvailable = asrSupported() || !!SR;
+  let recording: { stop: () => void; done: Promise<string> } | null = null;
+
   function toggleMic() {
-    if (listening()) { rec?.stop(); return; }
-    rec = new SR();
-    rec.lang = navigator.language || "en-US";
-    rec.interimResults = true;
-    rec.onresult = (e: any) => {
-      input.value = Array.from(e.results as any[]).map((r: any) => r[0].transcript).join("");
-    };
-    rec.onend = () => {
-      setListening(false);
-      if (input.value.trim()) send(); // speak → it just sends
-    };
-    rec.onerror = () => setListening(false);
-    setListening(true);
+    // tap once to record, tap again to stop → transcribe → send
+    if (listening()) {
+      if (recording) { recording.stop(); recording = null; }
+      else rec?.stop();
+      return;
+    }
     sfx.tickH();
-    rec.start();
+    if (asrSupported()) {
+      setListening(true);
+      recording = record();
+      recording.done
+        .then((text) => { setListening(false); if (text.trim()) { input.value = text; send(); } })
+        .catch(() => { setListening(false); });
+    } else if (SR) {
+      rec = new SR();
+      rec.lang = navigator.language || "en-US";
+      rec.interimResults = true;
+      rec.onresult = (e: any) => { input.value = Array.from(e.results as any[]).map((r: any) => r[0].transcript).join(""); };
+      rec.onend = () => { setListening(false); if (input.value.trim()) send(); };
+      rec.onerror = () => setListening(false);
+      setListening(true);
+      rec.start();
+    }
   }
 
   return (
@@ -347,7 +369,7 @@ export default function AiChat(props: {
                 <input
                   ref={input}
                   class="ai-input"
-                  placeholder={busy() ? "thinking…" : listening() ? "listening…" : "Ask, or say: open doom · search lofi on youtube · show his skills"}
+                  placeholder={busy() ? "thinking…" : listening() ? "listening… tap mic to stop" : "Ask, or say: open doom · search lofi on youtube · show his skills"}
                   disabled={busy()}
                   onKeyDown={(e) => {
                     e.stopPropagation();
@@ -355,11 +377,11 @@ export default function AiChat(props: {
                     if (e.key === "Escape") { sfx.back(); props.onClose(); }
                   }}
                 />
-                <Show when={SR}>
+                <Show when={micAvailable}>
                   <button
                     class="ai-mic"
                     classList={{ listening: listening() }}
-                    title={listening() ? "stop listening" : "speak"}
+                    title={listening() ? "tap to stop & transcribe" : "speak (on-device)"}
                     onClick={toggleMic}
                   ><span class="ai-ico"><Icon name="mic" /></span></button>
                 </Show>

@@ -63,6 +63,17 @@ function primaryPad(): Gamepad | null {
 }
 const firstPad = primaryPad; // connection tracker uses the same source of truth
 
+// —— haptics: DualShock-style rumble on the primary pad (Chrome/Edge; a no-op
+// where vibrationActuator is absent, so callers never need to guard) ——
+let rumbleOn = localStorage.getItem("asp.rumble") !== "0";
+export const rumbleEnabled = () => rumbleOn;
+export function setRumble(on: boolean) { rumbleOn = on; localStorage.setItem("asp.rumble", on ? "1" : "0"); }
+export function rumble(strong = 0.6, weak = 0.4, duration = 120) {
+  if (!rumbleOn) return;
+  const act = (primaryPad() as any)?.vibrationActuator;
+  act?.playEffect?.("dual-rumble", { duration, strongMagnitude: strong, weakMagnitude: weak }).catch?.(() => {});
+}
+
 // Connection state is POLL-based, not event-based: browsers (esp. Xbox pads on
 // macOS) fire spurious `gamepaddisconnected` for phantom/duplicate slots the
 // instant a pad connects. We ignore those events and instead trust the poll,

@@ -65,6 +65,7 @@ export interface XmbItem {
     | { type: "sound-toggle" }
     | { type: "clock-format" }
     | { type: "saver-cycle" }
+    | { type: "rumble-toggle" }
     | { type: "sysinfo" }
     | { type: "switch-user" }
     | { type: "trophies" }
@@ -347,6 +348,7 @@ export const CATEGORIES: XmbCategory[] = [
       { id: "sound", title: "Sound Settings", sub: "Toggle console audio", icon: "speaker", action: { type: "sound-toggle" } },
       { id: "datetime", title: "Date and Time Settings", sub: "12-hour / 24-hour clock", icon: "info", action: { type: "clock-format" } },
       { id: "powersave", title: "Power Save Settings", sub: "Screen saver — start time", icon: "power", action: { type: "saver-cycle" } },
+      { id: "rumble", title: "Vibration", sub: "Controller rumble on / off", icon: "gamepad", action: { type: "rumble-toggle" } },
       { id: "gesture", title: "Camera Navigation", sub: "Beta — wave at the webcam to browse", icon: "camera", action: { type: "gesture-toggle" } },
       { id: "padtest", title: "Controller Test", sub: "Live diagnostic — is your gamepad seen?", icon: "gamepad", action: { type: "gamepad-test" } },
       { id: "sysinfo", title: "System Information", sub: "Hardware, display & battery", icon: "info", action: { type: "sysinfo" } },
