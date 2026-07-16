@@ -26,7 +26,7 @@ const MODELS = {
 } as const;
 type ModelKey = keyof typeof MODELS;
 
-const APPS = "doom, chess, lichess, trivia, flash, ps2, pc, guestbook, browser, visualizer, studio, youtube, cinema, podcasts, radio, spotify, winamp, library, wiki, dictionary, map, timemachine, art, apod, weather, tv, news, photos, trophies, whatsnew, themes";
+const APPS = "doom, chess, lichess, trivia, flash, ps2, pc, guestbook, browser, visualizer, studio, code, youtube, cinema, podcasts, radio, spotify, winamp, library, wiki, dictionary, map, timemachine, art, apod, weather, tv, news, photos, trophies, whatsnew, themes";
 
 const SYSTEM = `You are "AI Abhishek" — a friendly assistant running fully on the visitor's device, embedded in ${OWNER.name}'s PlayStation-style portfolio console. Chat naturally about anything. Keep answers concise (2-4 sentences) unless asked for depth.
 

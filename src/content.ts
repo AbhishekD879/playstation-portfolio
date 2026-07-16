@@ -53,6 +53,7 @@ export interface XmbItem {
     | { type: "ps2" }
     | { type: "pc" }
     | { type: "guestbook" }
+    | { type: "code" }
     | { type: "browser" }
     | { type: "visualizer" }
     | { type: "studio" }
