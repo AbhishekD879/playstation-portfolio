@@ -26,7 +26,6 @@ export default function GameShelf(props: {
   onPlay: (g: GameRecord) => void;
   onInsert: () => void;        // bring your own — copy into the console
   onLink?: () => void;         // bring your own — link from disk (Chromium)
-  onAddSource: () => void;     // add a catalog manifest URL
   onChanged: () => void;       // library mutated (download/remove/relink)
   onClose: () => void;
   bind: (nav: (a: NavAction) => void) => void;
@@ -153,7 +152,6 @@ export default function GameShelf(props: {
         <div class="gameshelf-actions">
           <button class="ghost-btn" onClick={props.onInsert}>＋ Bring your own</button>
           <Show when={fsAccessSupported() && props.onLink}><button class="ghost-btn" onClick={props.onLink}>🔗 Link from disk</button></Show>
-          <button class="ghost-btn" onClick={props.onAddSource}>⧉ Add source</button>
           {props.extra?.()}
           <button class="ps-act" onClick={() => { sfx.back(); props.onClose(); }}><span class="btn-o" /> back</button>
         </div>
@@ -164,7 +162,7 @@ export default function GameShelf(props: {
           when={rows().length}
           fallback={
             <div class="guide-loading">
-              Nothing here yet. “Bring your own” to add a game you have, or “Add source” to point the console at a catalog you control (a GitHub repo works great).
+              Nothing here yet. “Bring your own” to add a game you have, or add a download catalog you control in Settings → Game Sources (a GitHub repo works great).
               <Show when={errs().length}><div class="gameshelf-errs">Sources with trouble: {errs().join(" · ")}</div></Show>
             </div>
           }

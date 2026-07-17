@@ -598,6 +598,9 @@ export default function XMB(props: {
         setLabsIdx(0);
         setLabsOpen(true);
         break;
+      case "game-source":
+        openInput("gamesrc");
+        break;
       case "sound-settings":
         sfx.confirm();
         setSoundIdx(0);
@@ -1512,7 +1515,6 @@ export default function XMB(props: {
           onPlay={playRecord}
           onInsert={() => { insertPrefer = "ps2"; fileInput.click(); }}
           onLink={() => onLink("ps2")}
-          onAddSource={() => openInput("gamesrc")}
           onChanged={refreshGames}
           onClose={() => setApp(null)}
           extra={() => <button class="ghost-btn" onClick={() => { sfx.confirm(); setPs2Boot(null); setPs2Join(true); setApp("ps2"); }}>🎮 Join 2-player</button>}
@@ -1528,7 +1530,6 @@ export default function XMB(props: {
           onPlay={playRecord}
           onInsert={() => { insertPrefer = "psp"; fileInput.click(); }}
           onLink={() => onLink("psp")}
-          onAddSource={() => openInput("gamesrc")}
           onChanged={refreshGames}
           onClose={() => setApp(null)}
         />
@@ -1543,7 +1544,6 @@ export default function XMB(props: {
           onPlay={playRecord}
           onInsert={() => fileInput.click()}
           onLink={onLink}
-          onAddSource={() => openInput("gamesrc")}
           onChanged={refreshGames}
           onClose={() => setApp(null)}
         />
