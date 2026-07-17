@@ -5,7 +5,7 @@ import { CATEGORIES, TROPHIES, type XmbItem } from "../content";
 import { AVATARS, PLATINUM, award, resizePhoto, updateProfile, type Profile } from "../profiles";
 import { CORES, PS2_EXTS, PSP_ONLY_EXTS, addGame, listGames, addPhoto, listPhotos, fsAccessSupported, type GameRecord, type PhotoRecord } from "../gamesdb";
 import { BG_MODES, THEMES, applyCustomHsl, applyTheme, bgMode, currentThemeIndex, loadCustomHsl, setBgMode } from "../theme";
-import { LAB_FLAT, LAB_GROUPS, labEnabled, toggleLab } from "../labs";
+import { LAB_GROUPS, labEnabled, toggleLab } from "../labs";
 import { CHANNELS, fetchDevto, fetchGuide, fetchHN, fetchRadio, fetchRss, fetchWeather, wmo, type NewsEntry, type Weather } from "../apps";
 import * as sfx from "../audio";
 import { onCcNav, onNav, onPadChange, onSystemButton, primaryPad, rumble, rumbleEnabled, setCcActive, setNavEnabled, setRumble } from "../input";
@@ -77,7 +77,21 @@ export default function XMB(props: {
   const [searchQuery, setSearchQuery] = createSignal("");
   const [searchSel, setSearchSel] = createSignal(0);
   let searchInput: HTMLInputElement | undefined;
-  // keep the focused Labs row in view while the pad scrolls the list
+  const [labsQuery, setLabsQuery] = createSignal("");
+  let labsInput: HTMLInputElement | undefined;
+  // Labs filter: matching a group name keeps all its flags; otherwise match each
+  // flag's title/description. Empty groups drop out.
+  const labsGroupsView = () => {
+    const q = labsQuery().toLowerCase().trim();
+    if (!q) return LAB_GROUPS;
+    return LAB_GROUPS
+      .map((g) => ({ group: g.group, icon: g.icon, items: g.group.toLowerCase().includes(q) ? g.items : g.items.filter((f) => f.title.toLowerCase().includes(q) || f.desc.toLowerCase().includes(q)) }))
+      .filter((g) => g.items.length);
+  };
+  const labsView = () => labsGroupsView().flatMap((g) => g.items);
+  // keep the focused Labs row in view while the pad scrolls the list; reset the
+  // cursor whenever the filter changes
+  createEffect(() => { labsQuery(); setLabsIdx(0); });
   createEffect(() => { labsIdx(); labsOpen() && document.querySelector(".labs-row.active")?.scrollIntoView({ block: "nearest" }); });
   // keep the focused search result in view; reset selection when the query changes
   createEffect(() => { searchQuery(); setSearchSel(0); });
@@ -662,7 +676,9 @@ export default function XMB(props: {
       case "labs":
         sfx.confirm();
         setLabsIdx(0);
+        setLabsQuery("");
         setLabsOpen(true);
+        setTimeout(() => labsInput?.focus(), 40);
         break;
       case "sound-settings":
         sfx.confirm();
@@ -1169,10 +1185,11 @@ export default function XMB(props: {
       return;
     }
     if (labsOpen()) {
-      const n = LAB_FLAT.length;
+      const view = labsView();
+      const n = Math.max(1, view.length);
       if (action === "up") { setLabsIdx((labsIdx() + n - 1) % n); sfx.tickV(); }
       if (action === "down") { setLabsIdx((labsIdx() + 1) % n); sfx.tickV(); }
-      if (action === "confirm") { toggleLab(LAB_FLAT[labsIdx()].id); setLabsTick(labsTick() + 1); sfx.confirm(); }
+      if (action === "confirm") { const f = view[labsIdx()]; if (f) { toggleLab(f.id); setLabsTick(labsTick() + 1); sfx.confirm(); } }
       if (action === "back") { sfx.back(); setLabsOpen(false); }
       return;
     }
@@ -1965,19 +1982,37 @@ export default function XMB(props: {
         <div class="modal labs-modal">
           <div class="panel-tag">LABS — FEATURE FLAGS</div>
           <div class="labs-note">Every feature and app ships on. Flip anything off to declutter the console — turn it back on any time. {(labsTick(), null)}</div>
+          <div class="labs-search">
+            <span class="labs-search-ico"><Icon name="search" /></span>
+            <input
+              ref={labsInput}
+              class="labs-search-input"
+              placeholder="Filter features & apps…"
+              value={labsQuery()}
+              onInput={(e) => setLabsQuery(e.currentTarget.value)}
+              onKeyDown={(e) => {
+                e.stopPropagation();
+                const view = labsView();
+                if (e.key === "ArrowDown") { e.preventDefault(); setLabsIdx(Math.min(Math.max(0, view.length - 1), labsIdx() + 1)); }
+                else if (e.key === "ArrowUp") { e.preventDefault(); setLabsIdx(Math.max(0, labsIdx() - 1)); }
+                else if (e.key === "Enter") { const f = view[labsIdx()]; if (f) { toggleLab(f.id); setLabsTick(labsTick() + 1); sfx.confirm(); } }
+                else if (e.key === "Escape") { sfx.back(); setLabsOpen(false); }
+              }}
+            />
+          </div>
           <div class="labs-list">
-            <For each={LAB_GROUPS}>
+            <For each={labsGroupsView()}>
               {(g) => (
                 <div class="labs-group">
                   <div class="labs-group-head"><span class="labs-group-ico"><Icon name={g.icon} /></span>{g.group}</div>
                   <For each={g.items}>
                     {(f) => {
-                      const my = LAB_FLAT.indexOf(f);
+                      const my = () => labsView().indexOf(f);
                       return (
                         <button
                           class="labs-row"
-                          classList={{ active: labsIdx() === my }}
-                          onClick={() => { setLabsIdx(my); toggleLab(f.id); setLabsTick(labsTick() + 1); sfx.confirm(); }}
+                          classList={{ active: labsIdx() === my() }}
+                          onClick={() => { setLabsIdx(my()); toggleLab(f.id); setLabsTick(labsTick() + 1); sfx.confirm(); }}
                         >
                           <span class="labs-info">
                             <span class="labs-title">{f.title}</span>
@@ -1991,8 +2026,9 @@ export default function XMB(props: {
                 </div>
               )}
             </For>
+            <Show when={!labsView().length}><div class="search-empty">No features match “{labsQuery()}”</div></Show>
           </div>
-          <div class="modal-hint">↑↓ browse · <span class="btn-x" /> toggle · <span class="btn-o" /> done</div>
+          <div class="modal-hint">type to filter · ↑↓ browse · <span class="btn-x" /> toggle · <span class="btn-o" /> done</div>
         </div>
       </Show>
 
