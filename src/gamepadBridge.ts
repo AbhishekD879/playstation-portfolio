@@ -100,6 +100,32 @@ export const EJS_CONFIG: BridgeConfig = {
   ],
 };
 
+// ——— PlayStation Portable (EmulatorJS PPSSPP) — proper PlayStation layout ———
+// Same engine as retro, but PSP wants position-correct face buttons and a real
+// analog nub. EmulatorJS's DEFAULT keyboard bindings map its retropad to keys:
+// z=B(Cross) x=A(Circle) a=Y(Square) s=X(Triangle) · q/e=L/R · enter=Start
+// v=Select · arrows=d-pad · left analog nub = f/h (X), t/g (Y). We feed the
+// Xbox pad into exactly those.
+export const PSP_CONFIG: BridgeConfig = {
+  quitButton: null, // Select is a real in-game button; quit via the eject button
+  map: {
+    12: UP, 13: DOWN, 14: LEFT, 15: RIGHT, // d-pad → arrows (separate from the nub)
+    0: K("z", "KeyZ", 90),   // A (bottom) → Cross
+    1: K("x", "KeyX", 88),   // B (right)  → Circle
+    2: K("a", "KeyA", 65),   // X (left)   → Square
+    3: K("s", "KeyS", 83),   // Y (top)    → Triangle
+    4: K("q", "KeyQ", 81),   // LB → L
+    5: K("e", "KeyE", 69),   // RB → R
+    8: K("v", "KeyV", 86),   // Back → Select
+    9: ENTER,                // Start
+  },
+  axes: [
+    // Xbox left stick → PSP analog nub (EJS LEFT_STICK_X/Y keyboard bindings)
+    { axis: 0, neg: K("f", "KeyF", 70), pos: K("h", "KeyH", 72) },
+    { axis: 1, neg: K("t", "KeyT", 84), pos: K("g", "KeyG", 71) },
+  ],
+};
+
 // ——— DOOM: real Xbox-FPS scheme (twin-stick, always-run) ———
 // The js-dos shareware bundle ships a WASD-ified DEFAULT.CFG (scancodes:
 // W/S move, A/D strafe, ←/→ turn, Ctrl fire, Space use, RIGHT-shift run) —

@@ -5,7 +5,7 @@ import { Show, createSignal, onCleanup, onMount } from "solid-js";
 import gsap from "gsap";
 import { bumpPlays, isLinked, resolveGameFile, type GameRecord } from "../gamesdb";
 import { setNavEnabled } from "../input";
-import { EJS_CONFIG, startBridge, stopBridge } from "../gamepadBridge";
+import { EJS_CONFIG, PSP_CONFIG, startBridge, stopBridge } from "../gamepadBridge";
 
 declare global {
   interface Window {
@@ -79,7 +79,7 @@ export default function GameSession(props: { game: GameRecord; profileId: string
     // bridge straight onto it with EJS's default bindings.
     const findEjs = setInterval(() => {
       const el = document.querySelector(".ejs_parent");
-      if (el) { clearInterval(findEjs); startBridge(el, () => {}, EJS_CONFIG); }
+      if (el) { clearInterval(findEjs); startBridge(el, () => {}, props.game.core === "psp" ? PSP_CONFIG : EJS_CONFIG); }
     }, 500);
 
     onCleanup(() => { clearTimeout(timer); clearInterval(findEjs); stopBridge(); });
