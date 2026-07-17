@@ -190,11 +190,14 @@ img.status-avatar, img.ptile-avatar { object-fit: cover; border: 1px solid rgba(
 /* ———— info panel ———— */
 .panel-backdrop {
   position: absolute; inset: 0;
-  background: rgba(0, 2, 10, 0.35);
+  background: rgba(0, 2, 10, 0.55);
+  -webkit-backdrop-filter: blur(3px); backdrop-filter: blur(3px);
   animation: fadeIn 0.25s ease-out;
+  z-index: 60; /* above every app overlay (apps ≤45, screensaver 50) */
 }
 .panel {
   position: absolute; top: 0; right: 0; bottom: 0;
+  z-index: 61; /* above app overlays + its own backdrop */
   width: min(560px, 92vw);
   display: flex; flex-direction: column;
   background: linear-gradient(200deg, rgba(10, 16, 30, 0.92), rgba(4, 8, 18, 0.96));
@@ -291,6 +294,7 @@ img.status-avatar, img.ptile-avatar { object-fit: cover; border: 1px solid rgba(
 .modal {
   position: absolute; top: 50%; left: 50%;
   transform: translate(-50%, -50%);
+  z-index: 61; /* above app overlays + its own backdrop */
   display: grid; gap: 14px; justify-items: center;
   background: linear-gradient(200deg, rgba(10, 16, 30, 0.96), rgba(4, 8, 18, 0.98));
   border: 1px solid rgba(255,255,255,0.14);
@@ -1369,8 +1373,16 @@ img.status-avatar, img.ptile-avatar { object-fit: cover; border: 1px solid rgba(
 .ps-act:active { transform: scale(0.97); }
 .ps-act:disabled { opacity: 0.35; cursor: default; }
 
-/* ── Game Library shelf ── */
-.gamelib-sub { font-size: 12.5px; color: var(--dim); letter-spacing: 0.02em; margin-top: 4px; max-width: 900px; }
+/* ── Game shelf (PS2 / retro home) ── */
+.gamelib-sub { font-size: 12.5px; color: var(--dim); letter-spacing: 0.02em; margin-top: 6px; max-width: 900px; }
+.gameshelf .guide-head { align-items: flex-start; gap: 24px; }
+.gameshelf-actions {
+  display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+  justify-content: flex-end; flex-shrink: 0;
+}
+/* a hairline divider before the back action so it reads as separate */
+.gameshelf-actions .ps-act { margin-left: 6px; padding-left: 16px; border-left: 1px solid rgba(255,255,255,0.14); }
+.gameshelf-errs { margin-top: 12px; font-size: 12px; color: rgba(255,200,140,0.75); }
 .session-grant-hint { font-size: 12.5px; color: var(--dim); letter-spacing: 0.03em; max-width: 460px; text-align: center; margin-top: 4px; }
 
 /* ── System Manual — the console's own documentation ── */
