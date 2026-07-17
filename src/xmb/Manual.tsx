@@ -183,9 +183,12 @@ const CHAPTERS: Chapter[] = [
         <p>16 presets plus a fully custom colour (hue / saturation / lightness sliders). The default "Classic"
           rotates monthly like PS3 wallpaper. One tint variable drives the wave, buttons, glows, scrollbars —
           even these diagrams.</p>
-        <h2>Labs</h2>
-        <p>Settings → Labs lists every optional app with an on/off switch. Off = gone from the crossbar; a category
-          with nothing left disappears entirely. State is one localStorage key; everything ships enabled.</p>
+        <h2>Labs — feature flags</h2>
+        <p>Settings → Labs is the console's switchboard: grouped toggles for every <em>system feature</em> (Control
+          Center, on-screen keyboard, voice commands, screen saver, phone controller, DualSense, living background,
+          launch effects) and every <em>app</em>. Flip a feature off and it's disabled everywhere; flip an app off and
+          it leaves the crossbar (a category with nothing left disappears). State is one localStorage key; everything
+          ships enabled.</p>
       </>
     ),
   },

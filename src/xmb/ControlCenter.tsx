@@ -11,6 +11,7 @@ import { dsBattery, dsConnect, dsDisconnect, dsName, dsSupported, dsSyncLightbar
 import { setRumbleHook } from "../input";
 import { dsRumble } from "../dualsense";
 import { tint } from "../theme";
+import { labEnabled } from "../labs";
 import * as sfx from "../audio";
 import type { NavAction } from "../input";
 
@@ -39,6 +40,7 @@ export default function ControlCenter(props: {
     { id: "home", icon: "⌂", label: "Home", show: () => props.appOpen, act: () => { sfx.back(); props.onHome(); props.onClose(); } },
     {
       id: "phone", icon: "📱", label: "Phone Controller",
+      show: () => labEnabled("phonepad"),
       sub: () => (phoneOn() ? "connected" : phoneRoom() ? `room ${phoneRoom()}` : "scan to connect"),
       act: () => { sfx.confirm(); if (!phoneRoom()) startPhonePad(); setQr(!qr()); },
     },
@@ -56,7 +58,7 @@ export default function ControlCenter(props: {
     { id: "theme", icon: "◐", label: "Theme", act: () => { props.onClose(); props.onTheme(); } },
     {
       id: "ds", icon: "🎮", label: "DualSense",
-      show: () => dsSupported(),
+      show: () => dsSupported() && labEnabled("dualsense"),
       sub: () => (dsName() ? `${dsName()}${dsBattery() != null ? ` · ${dsBattery()}%` : ""} — lightbar synced` : "connect via USB/BT"),
       act: async () => { if (dsName()) { dsDisconnect(); sfx.back(); } else { (await dsConnect()) ? sfx.confirm() : sfx.deny(); } bump(); },
     },

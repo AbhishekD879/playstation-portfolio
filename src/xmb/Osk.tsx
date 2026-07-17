@@ -7,6 +7,7 @@
 // bows out the moment real keyboard typing is detected.
 import { For, Show, createSignal, onCleanup, onMount } from "solid-js";
 import { primaryPad, setOskBlock } from "../input";
+import { labEnabled } from "../labs";
 import * as sfx from "../audio";
 
 type Field = HTMLInputElement | HTMLTextAreaElement;
@@ -154,7 +155,7 @@ export default function Osk() {
         // ◯ stays free to cancel modals; sticks are ignored (drift ≠ intent).
         const summon = [0, 12, 13, 14, 15].some((i) => edge(i));
         [1, 2, 3].forEach(edge); // keep edge state fresh for the other buttons
-        if (summon && eligible(document.activeElement)) open(document.activeElement as Field);
+        if (summon && labEnabled("osk") && eligible(document.activeElement)) open(document.activeElement as Field);
         return;
       }
 

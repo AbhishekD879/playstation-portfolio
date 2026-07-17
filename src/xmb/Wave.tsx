@@ -7,6 +7,7 @@ import { createEffect, onCleanup, onMount } from "solid-js";
 import * as THREE from "three";
 import { bgMode, tint } from "../theme";
 import { getAnalyser } from "../audio";
+import { labEnabled } from "../labs";
 
 const WAVE_VERT = /* glsl */ `
   uniform float uTime;
@@ -126,6 +127,13 @@ export default function Wave() {
     let last = performance.now();
     const render = (now: number) => {
       if (disposed) return;
+      requestAnimationFrame(render); // keep polling so a Labs toggle re-animates live
+      // Labs "Living Background" off → fade the wave/sparkles out, leaving the
+      // calm static gradient backdrop (the .wave-bg CSS) behind.
+      const live = labEnabled("livingbg");
+      const want = live ? "1" : "0";
+      if (canvas.style.opacity !== want) { canvas.style.transition = "opacity 0.5s ease"; canvas.style.opacity = want; }
+      if (!live) return;
       const dt = Math.min((now - last) / 1000, 0.05);
       last = now;
       if (analyser && freq) {
@@ -148,7 +156,6 @@ export default function Wave() {
       }
       p.needsUpdate = true;
       renderer.render(scene, camera);
-      requestAnimationFrame(render);
     };
     requestAnimationFrame(render);
 

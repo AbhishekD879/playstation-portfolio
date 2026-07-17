@@ -5,7 +5,7 @@ import { CATEGORIES, TROPHIES, type XmbItem } from "../content";
 import { AVATARS, PLATINUM, award, resizePhoto, updateProfile, type Profile } from "../profiles";
 import { CORES, PS2_EXTS, PSP_ONLY_EXTS, addGame, listGames, addPhoto, listPhotos, fsAccessSupported, type GameRecord, type PhotoRecord } from "../gamesdb";
 import { BG_MODES, THEMES, applyCustomHsl, applyTheme, bgMode, currentThemeIndex, loadCustomHsl, setBgMode } from "../theme";
-import { LAB_APPS, labEnabled, toggleLab } from "../labs";
+import { LAB_FLAT, LAB_GROUPS, labEnabled, toggleLab } from "../labs";
 import { CHANNELS, fetchDevto, fetchGuide, fetchHN, fetchRadio, fetchRss, fetchWeather, wmo, type NewsEntry, type Weather } from "../apps";
 import * as sfx from "../audio";
 import { onCcNav, onNav, onPadChange, onSystemButton, primaryPad, rumble, rumbleEnabled, setCcActive, setNavEnabled, setRumble } from "../input";
@@ -311,7 +311,7 @@ export default function XMB(props: {
   // Capture phase so games underneath never see it; text fields keep their `.
   onMount(() => {
     const key = (e: KeyboardEvent) => {
-      if (e.key !== "`" || !e.isTrusted) return;
+      if (e.key !== "`" || !e.isTrusted || !labEnabled("cc")) return;
       const t = (e.target as HTMLElement)?.tagName;
       if (t === "INPUT" || t === "TEXTAREA") return;
       e.stopPropagation(); e.preventDefault();
@@ -326,7 +326,7 @@ export default function XMB(props: {
   // keyword path — no LLM, no model pick, no chat). Hold N on the keyboard or
   // R2 on a controller from the home screen; release to run the command.
   onMount(() => {
-    const active = () => app() === null && !ccOpen() && !saver();
+    const active = () => app() === null && !ccOpen() && !saver() && labEnabled("voice");
     const kd = (e: KeyboardEvent) => {
       if (e.key.toLowerCase() !== "n" || !e.isTrusted || e.repeat) return;
       const t = (e.target as HTMLElement)?.tagName;
@@ -1114,10 +1114,10 @@ export default function XMB(props: {
       return;
     }
     if (labsOpen()) {
-      const n = LAB_APPS.length;
+      const n = LAB_FLAT.length;
       if (action === "up") { setLabsIdx((labsIdx() + n - 1) % n); sfx.tickV(); }
       if (action === "down") { setLabsIdx((labsIdx() + 1) % n); sfx.tickV(); }
-      if (action === "confirm") { toggleLab(LAB_APPS[labsIdx()].id); setLabsTick(labsTick() + 1); sfx.confirm(); }
+      if (action === "confirm") { toggleLab(LAB_FLAT[labsIdx()].id); setLabsTick(labsTick() + 1); sfx.confirm(); }
       if (action === "back") { sfx.back(); setLabsOpen(false); }
       return;
     }
@@ -1210,7 +1210,7 @@ export default function XMB(props: {
   onNav(handleNav);
   // the PS/Guide button (pad index 16) toggles the Control Center from
   // anywhere — even mid-game while a bridge claims the pad
-  onSystemButton(() => { sfx.tickH(); setCcOpen(!ccOpen()); });
+  onSystemButton(() => { if (!labEnabled("cc")) return; sfx.tickH(); setCcOpen(!ccOpen()); });
   // while CC is open it owns the pad exclusively (works even mid-game), and the
   // game bridge underneath is paused so it doesn't also react to CC navigation
   createEffect(() => { setCcActive(ccOpen()); setBridgePaused(ccOpen()); });
@@ -1219,7 +1219,7 @@ export default function XMB(props: {
   let prevApp: string | null = null;
   createEffect(() => {
     const a = app();
-    if (a && a !== prevApp) {
+    if (a && a !== prevApp && labEnabled("juice")) {
       rumble(0.5, 0.35, 90);
       setShaking(true);
       setTimeout(() => setShaking(false), 300);
@@ -1245,7 +1245,7 @@ export default function XMB(props: {
   addEventListener("keydown", poke);
   const saverId = setInterval(() => {
     const busy = tv() || guideOpen() || spotify() || news() || inputMode() || viewerOpen() || app() || yt() || apod() || dict();
-    if (!busy && saverMins() > 0 && Date.now() - lastActive > saverMins() * 60_000) setSaver(true);
+    if (!busy && labEnabled("saver") && saverMins() > 0 && Date.now() - lastActive > saverMins() * 60_000) setSaver(true);
   }, 5000);
   onCleanup(() => {
     if (gesturesOn()) stopGestures();
@@ -1323,10 +1323,12 @@ export default function XMB(props: {
           </Show>
         </div>
         <Show when={statusWeather()}><span class="status-weather">{statusWeather()}</span></Show>
-        <Show when={asrSupported()}>
+        <Show when={asrSupported() && labEnabled("voice")}>
           <button class="status-mic" classList={{ listening: vListening() }} title="Voice command — click, or hold N / R2 (on-device, no model)" onClick={voiceCmd}><Icon name="mic" /></button>
         </Show>
-        <button class="status-mic status-cc" title="Control Center — phone controller, DualSense, volume, theme (` or PS button)" onClick={() => { sfx.tickH(); setCcOpen(!ccOpen()); }}><Icon name="sliders" /></button>
+        <Show when={labEnabled("cc")}>
+          <button class="status-mic status-cc" title="Control Center — phone controller, DualSense, volume, theme (` or PS button)" onClick={() => { sfx.tickH(); setCcOpen(!ccOpen()); }}><Icon name="sliders" /></button>
+        </Show>
         <Show when={padName()}><span class="status-pad" title={padName()!}><Icon name="gamepad" /></span></Show>
         <Show when={battery()}>
           <span
@@ -1857,20 +1859,32 @@ export default function XMB(props: {
       <Show when={labsOpen()}>
         <div class="panel-backdrop" onClick={() => setLabsOpen(false)} />
         <div class="modal labs-modal">
-          <div class="panel-tag">LABS — YOUR CONSOLE, YOUR APPS</div>
-          <div class="labs-note">Everything ships on. Switch an app off and it disappears from the crossbar — flip it back any time. {(labsTick(), null)}</div>
+          <div class="panel-tag">LABS — FEATURE FLAGS</div>
+          <div class="labs-note">Every feature and app ships on. Flip anything off to declutter the console — turn it back on any time. {(labsTick(), null)}</div>
           <div class="labs-list">
-            <For each={LAB_APPS}>
-              {(a, i) => (
-                <button
-                  class="labs-row"
-                  classList={{ active: labsIdx() === i() }}
-                  onClick={() => { setLabsIdx(i()); toggleLab(a.id); setLabsTick(labsTick() + 1); sfx.confirm(); }}
-                >
-                  <span class="labs-cat">{a.cat}</span>
-                  <span class="labs-title">{a.title}</span>
-                  <span class="labs-state" classList={{ off: (labsTick(), !labEnabled(a.id)) }}>{(labsTick(), labEnabled(a.id)) ? "ON" : "OFF"}</span>
-                </button>
+            <For each={LAB_GROUPS}>
+              {(g) => (
+                <div class="labs-group">
+                  <div class="labs-group-head"><span class="labs-group-ico"><Icon name={g.icon} /></span>{g.group}</div>
+                  <For each={g.items}>
+                    {(f) => {
+                      const my = LAB_FLAT.indexOf(f);
+                      return (
+                        <button
+                          class="labs-row"
+                          classList={{ active: labsIdx() === my }}
+                          onClick={() => { setLabsIdx(my); toggleLab(f.id); setLabsTick(labsTick() + 1); sfx.confirm(); }}
+                        >
+                          <span class="labs-info">
+                            <span class="labs-title">{f.title}</span>
+                            <Show when={f.desc}><span class="labs-desc">{f.desc}</span></Show>
+                          </span>
+                          <span class="labs-switch" classList={{ on: (labsTick(), labEnabled(f.id)) }}><span class="labs-knob" /></span>
+                        </button>
+                      );
+                    }}
+                  </For>
+                </div>
               )}
             </For>
           </div>

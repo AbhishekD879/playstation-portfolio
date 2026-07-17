@@ -366,7 +366,7 @@ export const CATEGORIES: XmbCategory[] = [
     items: [
       { id: "theme", title: "Theme Settings", sub: "Presets & fully custom colours", icon: "spark", action: { type: "themes" } },
       { id: "sound", title: "Sound Settings", sub: "Volume, navigation sounds & mute", icon: "speaker", action: { type: "sound-settings" } },
-      { id: "labs", title: "Labs", sub: "Declutter — choose which apps live on this console", icon: "spark", action: { type: "labs" } },
+      { id: "labs", title: "Labs", sub: "Feature flags — toggle every system feature & app", icon: "spark", action: { type: "labs" } },
       { id: "datetime", title: "Date and Time Settings", sub: "12-hour / 24-hour clock", icon: "info", action: { type: "clock-format" } },
       { id: "powersave", title: "Power Save Settings", sub: "Screen saver — start time", icon: "power", action: { type: "saver-cycle" } },
       { id: "rumble", title: "Vibration", sub: "Controller rumble on / off", icon: "gamepad", action: { type: "rumble-toggle" } },
