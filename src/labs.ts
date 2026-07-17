@@ -29,9 +29,16 @@ const FEATURE_GROUPS: FlagGroup[] = [
     group: "Visuals & Feel", icon: "spark", items: [
       { id: "livingbg", title: "Living Background", desc: "Animated, audio-reactive XMB wave (else a calm static backdrop)" },
       { id: "juice", title: "Launch Effects", desc: "Impact shake + haptic pulse when an app opens" },
+      { id: "gpujuice", title: "Particle Bursts (WebGPU)", desc: "Compute-shader particle storms on app launch & trophies" },
+      { id: "livephoto", title: "Live Photos (3D)", desc: "On-device AI depth turns gallery photos into parallax 3D" },
+      { id: "vibe", title: "Vibe Search (Planet Earth)", desc: "Type a feeling — on-device embeddings fly the globe there" },
+      { id: "crt", title: "CRT Console (experimental)", desc: "The ENTIRE console on a curved phosphor tube — needs Chrome's HTML-in-Canvas trial; restarts the console" },
     ],
   },
 ];
+
+/** Flags that ship OFF and are opted INTO via Labs (experimental tier). */
+const DEFAULT_OFF = new Set(["crt"]);
 
 // —— apps (each id matches the XmbItem id it hides on the crossbar) ——
 const APPS: { id: string; title: string; cat: string }[] = [
@@ -48,6 +55,7 @@ const APPS: { id: string; title: string; cat: string }[] = [
   { id: "yt", title: "YouTube", cat: "Video" },
   { id: "ia-video", title: "Archive Cinema", cat: "Video" },
   { id: "doom", title: "DOOM", cat: "Games" },
+  { id: "doomrtx", title: "DOOM RTX (path-traced)", cat: "Games" },
   { id: "chess", title: "Chess vs Stockfish", cat: "Games" },
   { id: "trivia", title: "Trivia Arcade", cat: "Games" },
   { id: "flash", title: "Flash Arcade", cat: "Games" },
@@ -83,15 +91,17 @@ const KEY = "asp.labs.off";
 const load = (): Set<string> => {
   try { return new Set(JSON.parse(localStorage.getItem(KEY) ?? "[]")); } catch { return new Set(); }
 };
-const [disabled, setDisabled] = createSignal<Set<string>>(load());
+// one toggled-set: holds "off" overrides for default-on flags AND "on"
+// overrides for default-off (experimental) flags
+const [toggled, setToggled] = createSignal<Set<string>>(load());
 
-/** Is this flag on? Everything defaults on. */
-export const labEnabled = (id: string) => !disabled().has(id);
-export const labsOffCount = () => disabled().size;
+/** Is this flag on? Default-on unless toggled; DEFAULT_OFF flags invert. */
+export const labEnabled = (id: string) => DEFAULT_OFF.has(id) ? toggled().has(id) : !toggled().has(id);
+export const labsOffCount = () => [...toggled()].filter((id) => !DEFAULT_OFF.has(id)).length;
 export const isFeature = (id: string) => FEATURE_IDS.has(id);
 export function toggleLab(id: string) {
-  const s = new Set(disabled());
+  const s = new Set(toggled());
   s.has(id) ? s.delete(id) : s.add(id);
-  setDisabled(s);
+  setToggled(s);
   localStorage.setItem(KEY, JSON.stringify([...s]));
 }
