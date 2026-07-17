@@ -8,7 +8,7 @@ import { BG_MODES, THEMES, applyCustomHsl, applyTheme, bgMode, currentThemeIndex
 import { LAB_APPS, labEnabled, toggleLab } from "../labs";
 import { CHANNELS, fetchDevto, fetchGuide, fetchHN, fetchRadio, fetchRss, fetchWeather, wmo, type NewsEntry, type Weather } from "../apps";
 import * as sfx from "../audio";
-import { onCcNav, onNav, onPadChange, onSystemButton, rumble, rumbleEnabled, setCcActive, setNavEnabled, setRumble } from "../input";
+import { onCcNav, onNav, onPadChange, onSystemButton, primaryPad, rumble, rumbleEnabled, setCcActive, setNavEnabled, setRumble } from "../input";
 import { setBridgePaused } from "../gamepadBridge";
 import ControlCenter from "./ControlCenter";
 import { asrSupported, record } from "../asr";
@@ -322,20 +322,31 @@ export default function XMB(props: {
     onCleanup(() => document.removeEventListener("keydown", key, true));
   });
 
-  // N — quick-summon the AI copilot from the home screen (then hold N / R2
-  // inside it to push-to-talk). Ignored while typing, in an app, or in a modal.
+  // Push-to-talk for the HEADER voice-command mic (the lightweight Whisper →
+  // keyword path — no LLM, no model pick, no chat). Hold N on the keyboard or
+  // R2 on a controller from the home screen; release to run the command.
   onMount(() => {
-    const key = (e: KeyboardEvent) => {
+    const active = () => app() === null && !ccOpen() && !saver();
+    const kd = (e: KeyboardEvent) => {
       if (e.key.toLowerCase() !== "n" || !e.isTrusted || e.repeat) return;
       const t = (e.target as HTMLElement)?.tagName;
-      if (t === "INPUT" || t === "TEXTAREA") return;
-      if (app() !== null || ccOpen() || saver()) return;
+      if (t === "INPUT" || t === "TEXTAREA" || !active()) return;
       e.preventDefault();
-      sfx.confirm();
-      setApp("ai");
+      startVoice();
     };
-    addEventListener("keydown", key);
-    onCleanup(() => removeEventListener("keydown", key));
+    const ku = (e: KeyboardEvent) => { if (e.key.toLowerCase() === "n" && vListening()) stopVoice(); };
+    addEventListener("keydown", kd);
+    addEventListener("keyup", ku);
+    let raf = 0, r2Prev = false;
+    const poll = () => {
+      raf = requestAnimationFrame(poll);
+      const on = !!primaryPad()?.buttons[7]?.pressed; // R2
+      if (on && !r2Prev && active()) startVoice();
+      else if (!on && r2Prev && vListening()) stopVoice();
+      r2Prev = on;
+    };
+    raf = requestAnimationFrame(poll);
+    onCleanup(() => { removeEventListener("keydown", kd); removeEventListener("keyup", ku); cancelAnimationFrame(raf); });
   });
 
   const markSeen = (id: string) => {
@@ -938,16 +949,22 @@ export default function XMB(props: {
     [/(space|astronomy|nasa|apod)/, "apod"], [/news/, "news"], [/photo/, "photos"],
     [/troph/, "trophies"], [/theme/, "themes"], [/(assistant|\bai\b|abhishek)/, "ai"],
   ];
-  async function voiceCmd() {
+  // The header mic is push-to-talk: start on press, run on release. No LLM,
+  // no model pick — just Whisper → keyword route. Mouse click toggles it (with
+  // a safety auto-stop); holding N or R2 on the home screen does the same.
+  let voiceRec: { stop: () => void; done: Promise<string> } | null = null;
+  let voiceSafety: any = 0;
+  function startVoice() {
     if (vListening()) return;
     setVListening(true);
     sfx.tickH();
     pushToast("🎤 Listening…", "Say “open doom”, “weather”, or “search lofi on youtube”");
-    const rec = record();
-    setTimeout(() => rec.stop(), 4000); // short command window
-    let text = "";
-    try { text = await rec.done; } catch { setVListening(false); return; }
-    setVListening(false);
+    voiceRec = record();
+    voiceRec.done.then(processVoice).catch(() => { setVListening(false); voiceRec = null; });
+  }
+  function stopVoice() { if (voiceRec) voiceRec.stop(); } // resolves .done → processVoice
+  function processVoice(text: string) {
+    setVListening(false); voiceRec = null;
     const t = text.toLowerCase().trim();
     if (!t) { pushToast("🎤 Didn't catch that", "Try again — say “open chess”"); return; }
     // "search X on youtube"
@@ -956,6 +973,12 @@ export default function XMB(props: {
     const hit = VOICE_MAP.find(([re]) => re.test(t));
     if (hit && aiCommand(hit[1])) { pushToast(`🎤 “${text}”`, `Opening ${hit[1]}`); return; }
     pushToast(`🎤 “${text}”`, "Say “open <app>” — e.g. doom, weather, radio, studio");
+  }
+  function voiceCmd() { // header-mic click: tap to start, tap again (or ~6s) to run
+    if (vListening()) { stopVoice(); return; }
+    startVoice();
+    clearTimeout(voiceSafety);
+    voiceSafety = setTimeout(() => { if (vListening()) stopVoice(); }, 6000);
   }
 
   // console stats for the AI's console_status tool
@@ -1301,7 +1324,7 @@ export default function XMB(props: {
         </div>
         <Show when={statusWeather()}><span class="status-weather">{statusWeather()}</span></Show>
         <Show when={asrSupported()}>
-          <button class="status-mic" classList={{ listening: vListening() }} title="voice command (on-device)" onClick={voiceCmd}><Icon name="mic" /></button>
+          <button class="status-mic" classList={{ listening: vListening() }} title="Voice command — click, or hold N / R2 (on-device, no model)" onClick={voiceCmd}><Icon name="mic" /></button>
         </Show>
         <button class="status-mic status-cc" title="Control Center — phone controller, DualSense, volume, theme (` or PS button)" onClick={() => { sfx.tickH(); setCcOpen(!ccOpen()); }}><Icon name="sliders" /></button>
         <Show when={padName()}><span class="status-pad" title={padName()!}><Icon name="gamepad" /></span></Show>
