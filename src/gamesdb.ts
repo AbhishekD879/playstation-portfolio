@@ -29,6 +29,9 @@ export const fsAccessSupported = () => "showOpenFilePicker" in window;
 
 // PS2 disc extensions (bin deliberately stays Mega Drive — ambiguous ext)
 export const PS2_EXTS = ["iso", "cso", "chd", "isz"];
+// PSP: .pbp/.prx are PSP-only; .iso/.cso are shared with PS2 and disambiguated
+// by which home you're in (see classify() in XMB).
+export const PSP_ONLY_EXTS = ["pbp", "prx"];
 
 /** Resolve a record to a playable File/Blob. Throws Error with .cause set to
  *  "permission" (user must grant disk access — needs a user gesture) or
@@ -57,6 +60,7 @@ export async function resolveGameFile(g: GameRecord, opts?: { request?: boolean 
 // —— box art: libretro-thumbnails (keyless, CORS *) ——————————————————————
 const THUMB_REPO: Record<string, string> = {
   ps2: "Sony_-_PlayStation_2",
+  psp: "Sony_-_PlayStation_Portable",
   gba: "Nintendo_-_Game_Boy_Advance",
   gb: "Nintendo_-_Game_Boy",
   nes: "Nintendo_-_Nintendo_Entertainment_System",
@@ -194,4 +198,5 @@ export const CORES: Record<string, string> = {
 export const CORE_NAMES: Record<string, string> = {
   gba: "Game Boy Advance", gb: "Game Boy / Color", nes: "NES",
   snes: "Super Nintendo", segaMD: "Mega Drive", n64: "Nintendo 64", nds: "Nintendo DS",
+  psp: "PlayStation Portable",
 };

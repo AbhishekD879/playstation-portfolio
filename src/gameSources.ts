@@ -9,7 +9,7 @@
 import { createSignal } from "solid-js";
 import { CORES, PS2_EXTS, addGame, getGame, type GameRecord } from "./gamesdb";
 
-export type GameSystem = "ps2" | "gba" | "gb" | "nes" | "snes" | "segaMD" | "n64" | "nds";
+export type GameSystem = "ps2" | "psp" | "gba" | "gb" | "nes" | "snes" | "segaMD" | "n64" | "nds";
 
 export interface CatalogGame {
   id: string;         // stable per (source,url)
@@ -54,12 +54,15 @@ export function toggleSource(url: string) { persist(sources().map((s) => (s.url 
 const systemOf = (raw: string, name: string): GameSystem | null => {
   const s = String(raw || "").toLowerCase();
   if (["ps2", "playstation2", "playstation 2"].includes(s)) return "ps2";
+  if (["psp", "playstationportable", "playstation portable"].includes(s)) return "psp";
   if (s in CORES) return CORES[s] as GameSystem; // "gba","snes",…
   if (["gb", "gbc", "nes", "snes", "segamd", "genesis", "n64", "nds"].includes(s)) {
     return (s === "gbc" ? "gb" : s === "genesis" || s === "segamd" ? "segaMD" : s) as GameSystem;
   }
-  // fall back to the download URL's extension
+  // fall back to the download URL's extension. .iso/.cso are shared with PS2,
+  // so an untyped one defaults to PS2 — set "system":"psp" in the manifest for PSP.
   const ext = name.split(".").pop()?.toLowerCase() ?? "";
+  if (["pbp", "prx"].includes(ext)) return "psp";
   if (PS2_EXTS.includes(ext)) return "ps2";
   return (CORES[ext] as GameSystem) ?? null;
 };
@@ -99,7 +102,7 @@ async function opfsGames(): Promise<FileSystemDirectoryHandle> {
 }
 
 const extOf = (name: string, system: GameSystem) =>
-  name.includes(".") ? name.split(".").pop()! : system === "ps2" ? "iso" : system;
+  name.includes(".") ? name.split(".").pop()! : system === "ps2" || system === "psp" ? "iso" : system;
 
 /** Stream a catalog game into OPFS and add it to the library as a persisted
  *  link record. onProgress(fraction|-1) — -1 when total size is unknown. */

@@ -15,6 +15,7 @@ declare global {
     EJS_gameName?: string;
     EJS_pathtodata?: string;
     EJS_language?: string;
+    EJS_threads?: boolean;
     EJS_startOnLoaded?: boolean;
     EJS_backgroundColor?: string;
     EJS_emulator?: { pauseMainLoop?: () => void };
@@ -49,6 +50,9 @@ export default function GameSession(props: { game: GameRecord; profileId: string
     const blobUrl = URL.createObjectURL(file);
     window.EJS_player = "#ejs-mount";
     window.EJS_core = props.game.core;
+    // PSP (PPSSPP) needs SharedArrayBuffer threads — we ship COOP/COEP so the
+    // top document is cross-origin isolated. Harmless/unused for lighter cores.
+    window.EJS_threads = props.game.core === "psp";
     window.EJS_gameUrl = blobUrl;
     window.EJS_gameName = props.game.name.replace(/\.[^.]+$/, "");
     window.EJS_pathtodata = `https://cdn.emulatorjs.org/${EJS_VERSION}/data/`;

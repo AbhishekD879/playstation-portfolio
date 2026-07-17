@@ -3,7 +3,7 @@
 import { For, Show, createEffect, createMemo, createSignal, onCleanup, onMount } from "solid-js";
 import { CATEGORIES, TROPHIES, type XmbItem } from "../content";
 import { AVATARS, PLATINUM, award, resizePhoto, updateProfile, type Profile } from "../profiles";
-import { CORES, PS2_EXTS, addGame, listGames, addPhoto, listPhotos, fsAccessSupported, type GameRecord, type PhotoRecord } from "../gamesdb";
+import { CORES, PS2_EXTS, PSP_ONLY_EXTS, addGame, listGames, addPhoto, listPhotos, fsAccessSupported, type GameRecord, type PhotoRecord } from "../gamesdb";
 import { addSource } from "../gameSources";
 import { THEMES, applyCustomHsl, applyTheme, currentThemeIndex, loadCustomHsl } from "../theme";
 import { LAB_APPS, labEnabled, toggleLab } from "../labs";
@@ -100,7 +100,7 @@ export default function XMB(props: {
   const [ytQuery, setYtQuery] = createSignal(""); // AI agent → YouTube search handoff
   const [vListening, setVListening] = createSignal(false); // XMB voice command
   const [padTest, setPadTest] = createSignal(false);
-  const [app, setApp] = createSignal<null | "doom" | "chess" | "trivia" | "flash" | "cinema" | "podcasts" | "library" | "map" | "ai" | "webamp" | "youtube" | "timemachine" | "art" | "wiki" | "lichess" | "ps2" | "pc" | "guestbook" | "browser" | "visualizer" | "studio" | "code" | "manual" | "ps2home" | "retrohome">(null);
+  const [app, setApp] = createSignal<null | "doom" | "chess" | "trivia" | "flash" | "cinema" | "podcasts" | "library" | "map" | "ai" | "webamp" | "youtube" | "timemachine" | "art" | "wiki" | "lichess" | "ps2" | "pc" | "guestbook" | "browser" | "visualizer" | "studio" | "code" | "manual" | "ps2home" | "psphome" | "retrohome">(null);
   const [ps2Boot, setPs2Boot] = createSignal<GameRecord | null>(null);
   const [ps2Join, setPs2Join] = createSignal(false);
 
@@ -134,13 +134,15 @@ export default function XMB(props: {
   // built-in games, then the two "consoles" — each opens its own home with a
   // browsable library (your games + a downloadable catalog) inside it
   const ps2Count = () => games().filter((g) => g.sys === "ps2").length;
-  const retroCount = () => games().filter((g) => g.sys !== "ps2").length;
+  const pspCount = () => games().filter((g) => g.core === "psp").length;
+  const retroCount = () => games().filter((g) => g.sys !== "ps2" && g.core !== "psp").length;
   const gameItems = createMemo<XmbItem[]>(() => [
     { id: "doom", title: "DOOM", sub: "Built-in game · the 1993 shareware, playable now", icon: "skull", action: { type: "doom" } },
     { id: "chess", title: "Chess vs Stockfish", sub: "Built-in game · the real engine, on this device", icon: "knight", action: { type: "chess" } },
     { id: "trivia", title: "Trivia Arcade", sub: "Built-in game · 10 questions, endless rounds", icon: "question", action: { type: "trivia" } },
     { id: "flash", title: "Flash Arcade", sub: "Built-in arcade · classic Flash games, streamed", icon: "lightning", action: { type: "flash" } },
     { id: "ps2", title: "PlayStation 2", sub: `Library, downloads & 2-player online${ps2Count() ? ` · ${ps2Count()} in your shelf` : ""}`, icon: "disc", action: { type: "ps2-home" } },
+    { id: "psp", title: "PlayStation Portable", sub: `PSP library & downloads — experimental (PPSSPP)${pspCount() ? ` · ${pspCount()} in your shelf` : ""}`, icon: "disc", action: { type: "psp-home" } },
     { id: "retro", title: "Retro Games", sub: `NES · SNES · GBA · N64 & more — library + downloads${retroCount() ? ` · ${retroCount()} in your shelf` : ""}`, icon: "gamepad", action: { type: "retro-home" } },
     { id: "lichesstv", title: "Lichess TV", sub: "Spectate · live grandmaster games", icon: "knight", action: { type: "lichess-tv" } },
   ]);
@@ -327,6 +329,10 @@ export default function XMB(props: {
       case "ps2-home":
         sfx.confirm();
         setApp("ps2home");
+        break;
+      case "psp-home":
+        sfx.confirm();
+        setApp("psphome");
         break;
       case "retro-home":
         sfx.confirm();
@@ -665,28 +671,36 @@ export default function XMB(props: {
     }
   }
 
-  // classify any ROM/disc by extension → {sys:"ps2"} or a retro core
-  function classify(name: string): { sys?: "ps2"; core: string } | null {
+  // classify any ROM/disc by extension → {sys:"ps2"} / PSP / a retro core.
+  // .iso/.cso are shared by PS2 and PSP, so the home you're adding from decides
+  // (prefer): PS2 home → ps2, PSP home → psp.
+  function classify(name: string, prefer?: "ps2" | "psp"): { sys?: "ps2"; core: string } | null {
     const ext = name.split(".").pop()?.toLowerCase() ?? "";
-    if (PS2_EXTS.includes(ext)) return { sys: "ps2", core: "ps2" };
+    if (PSP_ONLY_EXTS.includes(ext)) return { core: "psp" };
+    if (["iso", "cso"].includes(ext)) return prefer === "psp" ? { core: "psp" } : { sys: "ps2", core: "ps2" };
+    if (PS2_EXTS.includes(ext)) return { sys: "ps2", core: "ps2" }; // chd/isz — PS2 only
     const core = CORES[ext];
     return core ? { core } : null;
   }
 
+  // which system a "bring your own" file should be tagged as, set by the home
+  // that opened the picker (consumed by onDisc, which the file input calls)
+  let insertPrefer: "ps2" | "psp" | undefined;
+
   // "Link Games from Disk…" — Chromium File System Access. Stores only handles;
-  // the games stream from the user's own drive, PS2 ISOs included (zero-copy).
-  async function onLink() {
+  // the games stream from the user's own drive, PS2/PSP ISOs included (zero-copy).
+  async function onLink(prefer?: "ps2" | "psp") {
     if (!fsAccessSupported()) { sfx.deny(); pushToast("Not supported", "Linking needs Chrome or Edge — use Insert Cartridge to copy instead"); return; }
     let handles: FileSystemFileHandle[];
     try {
       handles = await (window as any).showOpenFilePicker({
         multiple: true,
-        types: [{ description: "Game discs & ROMs", accept: { "application/octet-stream": [".iso", ".cso", ".chd", ".isz", ".gba", ".gb", ".gbc", ".nes", ".fds", ".sfc", ".smc", ".md", ".gen", ".n64", ".z64", ".v64", ".nds"] } }],
+        types: [{ description: "Game discs & ROMs", accept: { "application/octet-stream": [".iso", ".cso", ".chd", ".isz", ".pbp", ".gba", ".gb", ".gbc", ".nes", ".fds", ".sfc", ".smc", ".md", ".gen", ".n64", ".z64", ".v64", ".nds"] } }],
       });
     } catch { return; } // picker dismissed
     let added = 0, skipped = 0;
     for (const h of handles) {
-      const cls = classify(h.name);
+      const cls = classify(h.name, prefer);
       if (!cls) { skipped++; continue; }
       const f = await h.getFile();
       await addGame({
@@ -704,7 +718,8 @@ export default function XMB(props: {
   }
 
   async function onDisc(file: File) {
-    const cls = classify(file.name);
+    const cls = classify(file.name, insertPrefer);
+    insertPrefer = undefined; // consume the one-shot home context
     if (!cls) {
       sfx.deny();
       pushToast("Unreadable disc", `.${file.name.split(".").pop()} isn't a supported format`);
@@ -967,7 +982,7 @@ export default function XMB(props: {
     if (padTest()) { if (action === "back") setPadTest(false); return; }
     if (app()) {
       // bound apps route their own nav; the rest are keyboard-driven owner apps
-      if (["chess", "trivia", "flash", "cinema", "podcasts", "library", "youtube", "art", "wiki", "ps2home", "retrohome"].includes(app()!)) appNav?.(action);
+      if (["chess", "trivia", "flash", "cinema", "podcasts", "library", "youtube", "art", "wiki", "ps2home", "psphome", "retrohome"].includes(app()!)) appNav?.(action);
       else if (app() === "lichess" && action === "back") { sfx.back(); setApp(null); }
       else if (src === "pad" || src === "gesture") {
         // owner apps (map/globe, lichess…) listen to the KEYBOARD — turn pad
@@ -1495,12 +1510,27 @@ export default function XMB(props: {
           owned={games()}
           title="PLAYSTATION 2 — YOUR LIBRARY & DOWNLOADS"
           onPlay={playRecord}
-          onInsert={() => fileInput.click()}
-          onLink={onLink}
+          onInsert={() => { insertPrefer = "ps2"; fileInput.click(); }}
+          onLink={() => onLink("ps2")}
           onAddSource={() => openInput("gamesrc")}
           onChanged={refreshGames}
           onClose={() => setApp(null)}
           extra={() => <button class="ghost-btn" onClick={() => { sfx.confirm(); setPs2Boot(null); setPs2Join(true); setApp("ps2"); }}>🎮 Join 2-player</button>}
+        />
+      </Show>
+      <Show when={app() === "psphome"}>
+        <GameShelf
+          bind={(f) => (appNav = f)}
+          profileId={props.profile.id}
+          systems={["psp"]}
+          owned={games()}
+          title="PLAYSTATION PORTABLE — YOUR LIBRARY & DOWNLOADS"
+          onPlay={playRecord}
+          onInsert={() => { insertPrefer = "psp"; fileInput.click(); }}
+          onLink={() => onLink("psp")}
+          onAddSource={() => openInput("gamesrc")}
+          onChanged={refreshGames}
+          onClose={() => setApp(null)}
         />
       </Show>
       <Show when={app() === "retrohome"}>
@@ -1829,7 +1859,7 @@ export default function XMB(props: {
         type="file"
         ref={fileInput}
         hidden
-        accept=".iso,.cso,.chd,.isz,.gba,.gb,.gbc,.nes,.fds,.sfc,.smc,.md,.gen,.bin,.n64,.z64,.v64,.nds"
+        accept=".iso,.cso,.chd,.isz,.pbp,.gba,.gb,.gbc,.nes,.fds,.sfc,.smc,.md,.gen,.bin,.n64,.z64,.v64,.nds"
         onChange={(e) => {
           const f = e.currentTarget.files?.[0];
           e.currentTarget.value = "";

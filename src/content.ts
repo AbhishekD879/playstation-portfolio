@@ -19,6 +19,7 @@ export interface XmbItem {
     | { type: "link"; href: string }
     | { type: "insert-disc" }
     | { type: "ps2-home" }
+    | { type: "psp-home" }
     | { type: "retro-home" }
     | { type: "play-game"; gameId: string }
     | { type: "music-toggle" }
