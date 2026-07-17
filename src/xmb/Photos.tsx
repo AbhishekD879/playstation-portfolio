@@ -4,6 +4,7 @@ import { Show, createEffect, createSignal, onCleanup, onMount } from "solid-js";
 import type { PhotoRecord } from "../gamesdb";
 import type { NavAction } from "../input";
 import * as sfx from "../audio";
+import DepthPhoto from "./DepthPhoto";
 
 export default function Photos(props: {
   photos: PhotoRecord[];
@@ -38,7 +39,7 @@ export default function Photos(props: {
     <div class="photos" onClick={() => move(1)}>
       {/* keyed so the ken-burns animation restarts per slide */}
       <Show when={urls[idx()]} keyed>
-        {(u) => <img class="photos-img" src={u} alt="" />}
+        {(u) => <DepthPhoto class="photos-img" src={u} alt="" />}
       </Show>
       <div class="photos-chrome">
         <span>{idx() + 1} / {n()}{paused() ? " · paused" : ""}</span>

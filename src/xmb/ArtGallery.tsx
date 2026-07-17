@@ -5,6 +5,7 @@ import { searchArt, type Artwork } from "../apps";
 import type { NavAction } from "../input";
 import * as sfx from "../audio";
 import TileGrid, { COLS } from "./TileGrid";
+import DepthPhoto from "./DepthPhoto";
 
 export default function ArtGallery(props: { onClose: () => void; bind: (nav: (a: NavAction) => void) => void }) {
   const [works, setWorks] = createSignal<Artwork[] | null>(null);
@@ -57,7 +58,7 @@ export default function ArtGallery(props: { onClose: () => void; bind: (nav: (a:
         fallback={
           <div class="photos" onClick={() => move(1)}>
             <Show when={works()?.[sel()]} keyed>
-              {(w) => <img class="photos-img" src={w.img} alt={w.title} />}
+              {(w) => <DepthPhoto class="photos-img" src={w.img} alt={w.title} />}
             </Show>
             <div class="photos-chrome">
               <span>{works()![sel()].title} — {works()![sel()].artist}</span>

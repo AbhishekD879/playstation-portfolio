@@ -1010,6 +1010,18 @@ img.status-avatar, img.ptile-avatar { object-fit: cover; border: 1px solid rgba(
 }
 
 /* ———— APOD ———— */
+/* live photos — the depth-parallax layer fades in over the still */
+.depth-canvas { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; transition: opacity 0.7s ease; pointer-events: none; }
+.depth-canvas.live { opacity: 1; }
+.depth-badge {
+  position: absolute; top: 18px; right: 18px; z-index: 2; pointer-events: none;
+  padding: 5px 12px; border-radius: 999px; font-size: 11px; letter-spacing: 0.14em;
+  color: rgba(255,255,255,0.85); background: rgba(6,10,20,0.5);
+  border: 1px solid color-mix(in oklab, var(--xmb-tint) 40%, rgba(255,255,255,0.15));
+  -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px);
+  animation: fadeIn 0.5s ease-out;
+}
+
 .apod { position: fixed; inset: 0; z-index: 32; background: #000; cursor: pointer; }
 .apod-img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; }
 .apod-caption {

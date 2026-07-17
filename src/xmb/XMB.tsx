@@ -12,6 +12,7 @@ import { onCcNav, onNav, onPadChange, onSystemButton, primaryPad, rumble, rumble
 import { setBridgePaused } from "../gamepadBridge";
 import { hasWebGPU } from "../gpu";
 import { fluidLaunchSplash, fluidNavPulse } from "./FluidBg";
+import DepthPhoto from "./DepthPhoto";
 import ControlCenter from "./ControlCenter";
 import { asrSupported, record } from "../asr";
 import { registerActions } from "../consoleBus";
@@ -1751,7 +1752,7 @@ export default function XMB(props: {
               when={apod()!.data!.media_type === "image"}
               fallback={<iframe credentialless={true} class="fullapp-frame" src={apod()!.data!.url} allow="fullscreen" title="APOD" />}
             >
-              <img class="apod-img" src={apod()!.data!.hdurl ?? apod()!.data!.url} alt="" />
+              <DepthPhoto class="apod-img" src={apod()!.data!.hdurl ?? apod()!.data!.url} alt="" />
             </Show>
             <div class="apod-caption">
               <div class="apod-title">{apod()!.data!.title} <span class="apod-date">{apod()!.data!.date}</span></div>
