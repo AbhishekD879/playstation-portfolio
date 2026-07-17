@@ -12,6 +12,7 @@ export interface FlagGroup { group: string; icon: string; items: Flag[] }
 const FEATURE_GROUPS: FlagGroup[] = [
   {
     group: "Interface", icon: "sliders", items: [
+      { id: "search", title: "Search", desc: "Find & launch any app or section — the ⌕ button or the / key" },
       { id: "cc", title: "Control Center", desc: "Quick overlay — PS button or ` — for phone pad, DualSense, volume & theme" },
       { id: "osk", title: "On-Screen Keyboard", desc: "Pops up for text fields when you're on a controller" },
       { id: "voice", title: "Voice Commands", desc: "The header mic — click, or hold N / R2, and say “open doom”" },

@@ -17,6 +17,7 @@ export const ICONS: Record<string, () => JSX.Element> = {
   globe: () => S(<><circle cx="24" cy="24" r="16" /><path d="M8 24h32M24 8c5 4.5 7 10 7 16s-2 11.5-7 16c-5-4.5-7-10-7-16s2-11.5 7-16Z" /></>),
   gear: () => S(<><circle cx="24" cy="24" r="6" /><path d="M24 6v6M24 36v6M6 24h6M36 24h6M11 11l4.2 4.2M32.8 32.8 37 37M37 11l-4.2 4.2M15.2 32.8 11 37" /></>),
   sliders: () => S(<><path d="M8 16h24M8 32h20" /><circle cx="36" cy="16" r="4" fill="currentColor" /><circle cx="32" cy="32" r="4" fill="currentColor" /></>),
+  search: () => S(<><circle cx="21" cy="21" r="12" /><path d="M30 30l10 10" /></>),
   trophy: () => S(<><path d="M16 9h16v9a8 8 0 0 1-16 0V9Z" /><path d="M16 12H9c0 6 3 9 7 9M32 12h7c0 6-3 9-7 9M24 26v6M17 39h14M20 32h8l1 7H19l1-7Z" /></>),
   disc: () => S(<><circle cx="24" cy="24" r="16" /><circle cx="24" cy="24" r="4" /><path d="M24 8a16 16 0 0 1 16 16" opacity="0.4" /></>),
   "disc-doc": () => S(<><path d="M12 8h17l7 7v25H12V8Z" /><path d="M29 8v7h7M18 22h12M18 28h12M18 34h8" /></>),

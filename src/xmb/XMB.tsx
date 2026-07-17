@@ -73,8 +73,15 @@ export default function XMB(props: {
   const [soundOpen, setSoundOpen] = createSignal(false);
   const [soundIdx, setSoundIdx] = createSignal(0);
   const [sndTick, setSndTick] = createSignal(0); // re-render pulse for volume/pack/mute
+  const [searchOpen, setSearchOpen] = createSignal(false);
+  const [searchQuery, setSearchQuery] = createSignal("");
+  const [searchSel, setSearchSel] = createSignal(0);
+  let searchInput: HTMLInputElement | undefined;
   // keep the focused Labs row in view while the pad scrolls the list
   createEffect(() => { labsIdx(); labsOpen() && document.querySelector(".labs-row.active")?.scrollIntoView({ block: "nearest" }); });
+  // keep the focused search result in view; reset selection when the query changes
+  createEffect(() => { searchQuery(); setSearchSel(0); });
+  createEffect(() => { searchSel(); searchOpen() && document.querySelector(".search-result.active")?.scrollIntoView({ block: "nearest" }); });
   const [links, setLinks] = createSignal<{ url: string; label: string }[]>(
     JSON.parse(localStorage.getItem("asp.spotify") ?? "[]"),
   );
@@ -320,6 +327,19 @@ export default function XMB(props: {
     };
     document.addEventListener("keydown", key, true);
     onCleanup(() => document.removeEventListener("keydown", key, true));
+  });
+
+  // "/" opens global search (when not typing / in an app or overlay)
+  onMount(() => {
+    const key = (e: KeyboardEvent) => {
+      if (e.key !== "/" || !e.isTrusted) return;
+      const t = (e.target as HTMLElement)?.tagName;
+      if (t === "INPUT" || t === "TEXTAREA" || app() || ccOpen() || saver() || searchOpen()) return;
+      e.preventDefault();
+      openSearch();
+    };
+    addEventListener("keydown", key);
+    onCleanup(() => removeEventListener("keydown", key));
   });
 
   // Push-to-talk for the HEADER voice-command mic (the lightweight Whisper →
@@ -1024,10 +1044,45 @@ export default function XMB(props: {
     { id: "console.status", description: "Report the visitor's stats: trophies, game library size, playtime.", run: () => consoleStatus() },
   ]);
 
+  // —— global search: find & launch any app or section on the console ——
+  interface SearchHit { item: XmbItem; ci: number; ii: number; cat: string }
+  const searchIndex = (): SearchHit[] =>
+    CATEGORIES.flatMap((c, ci) => itemsOf(ci).map((item, ii) => ({ item, ci, ii, cat: c.label })));
+  const searchResults = (): SearchHit[] => {
+    const q = searchQuery().toLowerCase().trim();
+    const all = searchIndex();
+    if (!q) return all.slice(0, 40);
+    const score = (h: SearchHit) => {
+      const t = h.item.title.toLowerCase(), s = (h.item.sub ?? "").toLowerCase();
+      if (t.startsWith(q)) return 4;
+      if (t.includes(q)) return 3;
+      if (s.includes(q)) return 2;
+      if (h.cat.toLowerCase().includes(q)) return 1;
+      return 0;
+    };
+    return all.map((h) => ({ h, s: score(h) })).filter((x) => x.s > 0)
+      .sort((a, b) => b.s - a.s).slice(0, 40).map((x) => x.h);
+  };
+  const openSearch = () => { if (!labEnabled("search")) return; sfx.confirm(); setSearchQuery(""); setSearchSel(0); setSearchOpen(true); setTimeout(() => searchInput?.focus(), 40); };
+  const launchSearch = (h: SearchHit) => {
+    setSearchOpen(false);
+    setCat(h.ci);
+    setSels({ ...sels(), [CATEGORIES[h.ci].id]: h.ii });
+    act(h.item);
+  };
+
   // —— navigation (keyboard + gamepad via onNav; mouse clicks & wheel reuse it) ——
   const handleNav = (action: Parameters<Parameters<typeof onNav>[0]>[0], src?: import("../input").NavSource) => {
     lastActive = Date.now();
     if (saver()) { setSaver(false); return; }
+    if (searchOpen()) { // pad drives the search list (keyboard uses the input's own keys)
+      const rs = searchResults();
+      if (action === "up") { setSearchSel(Math.max(0, searchSel() - 1)); sfx.tickV(); }
+      else if (action === "down") { setSearchSel(Math.min(Math.max(0, rs.length - 1), searchSel() + 1)); sfx.tickV(); }
+      else if (action === "confirm") { const h = rs[searchSel()]; if (h) launchSearch(h); }
+      else if (action === "back") { sfx.back(); setSearchOpen(false); }
+      return;
+    }
     if (ccOpen()) { ccNav?.(action); return; } // Control Center owns the pad while open
     if (padTest()) { if (action === "back") setPadTest(false); return; }
     if (app()) {
@@ -1323,6 +1378,9 @@ export default function XMB(props: {
           </Show>
         </div>
         <Show when={statusWeather()}><span class="status-weather">{statusWeather()}</span></Show>
+        <Show when={labEnabled("search")}>
+          <button class="status-mic status-search" title="Search — find & launch anything ( / )" onClick={openSearch}><Icon name="search" /></button>
+        </Show>
         <Show when={asrSupported() && labEnabled("voice")}>
           <button class="status-mic" classList={{ listening: vListening() }} title="Voice command — click, or hold N / R2 (on-device, no model)" onClick={voiceCmd}><Icon name="mic" /></button>
         </Show>
@@ -1853,6 +1911,52 @@ export default function XMB(props: {
             </div>
           </Show>
           <div class="modal-hint">←→ preview · {themeIdx() === THEMES.length ? "↑↓ pick a slider · " : ""}ENTER / Esc — done</div>
+        </div>
+      </Show>
+
+      <Show when={searchOpen()}>
+        <div class="panel-backdrop" onClick={() => setSearchOpen(false)} />
+        <div class="search-overlay">
+          <div class="search-bar">
+            <span class="search-ico"><Icon name="search" /></span>
+            <input
+              ref={searchInput}
+              class="search-input"
+              placeholder="Search apps & sections…"
+              value={searchQuery()}
+              onInput={(e) => setSearchQuery(e.currentTarget.value)}
+              onKeyDown={(e) => {
+                e.stopPropagation();
+                const rs = searchResults();
+                if (e.key === "ArrowDown") { e.preventDefault(); setSearchSel(Math.min(Math.max(0, rs.length - 1), searchSel() + 1)); }
+                else if (e.key === "ArrowUp") { e.preventDefault(); setSearchSel(Math.max(0, searchSel() - 1)); }
+                else if (e.key === "Enter") { const h = rs[searchSel()]; if (h) launchSearch(h); }
+                else if (e.key === "Escape") { sfx.back(); setSearchOpen(false); }
+              }}
+            />
+            <span class="search-count">{searchResults().length}</span>
+          </div>
+          <div class="search-results">
+            <For each={searchResults()}>
+              {(h, i) => (
+                <button
+                  class="search-result"
+                  classList={{ active: searchSel() === i() }}
+                  onMouseEnter={() => setSearchSel(i())}
+                  onClick={() => launchSearch(h)}
+                >
+                  <span class="search-result-ico"><Icon name={h.item.icon} /></span>
+                  <span class="search-result-info">
+                    <span class="search-result-title">{h.item.title}</span>
+                    <Show when={h.item.sub}><span class="search-result-sub">{h.item.sub}</span></Show>
+                  </span>
+                  <span class="search-result-cat">{h.cat}</span>
+                </button>
+              )}
+            </For>
+            <Show when={!searchResults().length}><div class="search-empty">No matches for “{searchQuery()}”</div></Show>
+          </div>
+          <div class="modal-hint">type to filter · ↑↓ move · <span class="btn-x" /> open · <span class="btn-o" /> close</div>
         </div>
       </Show>
 
