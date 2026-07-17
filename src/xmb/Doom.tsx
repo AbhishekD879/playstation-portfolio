@@ -2,7 +2,8 @@
 // The js-dos runtime loads from its CDN; the bundle is the official shareware WAD.
 import { createSignal, onCleanup, onMount } from "solid-js";
 import { setNavEnabled } from "../input";
-import { startBridge, stopBridge, DOOM_CONFIG } from "../gamepadBridge";
+import { startBridge, stopBridge, touchKey, DOOM_CONFIG } from "../gamepadBridge";
+import TouchPad from "./TouchPad";
 
 const JSDOS = "https://v8.js-dos.com/latest/";
 const BUNDLE = "https://v8.js-dos.com/bundles/doom.jsdos";
@@ -55,6 +56,20 @@ export default function Doom(props: { onClose: () => void }) {
       <div class="doom-controls">
         🎮 L-stick move · R-stick turn · RT/A fire · X/B open · LB/RB strafe · always-run · Start menu · Back quit
       </div>
+      {/* touch pad: ↑↓ move (W/S), ←→ turn — exactly the pad bridge's keys */}
+      <TouchPad
+        dpad={(dir, on) => touchKey(on, DOOM_CONFIG.map[{ up: 12, down: 13, left: 14, right: 15 }[dir]])}
+        face={[
+          { label: "FIRE", cls: "gp-big", press: (on) => touchKey(on, DOOM_CONFIG.map[7]) },
+          { label: "USE", cls: "gp-mid", press: (on) => touchKey(on, DOOM_CONFIG.map[2]) },
+        ]}
+        pills={[
+          { label: "MENU", press: (on) => touchKey(on, DOOM_CONFIG.map[9]) },
+          { label: "OK", press: (on) => touchKey(on, DOOM_CONFIG.map[3]) },
+        ]}
+        shoulderL={[{ label: "⇠ STRAFE", press: (on) => touchKey(on, DOOM_CONFIG.map[4]) }]}
+        shoulderR={[{ label: "STRAFE ⇢", press: (on) => touchKey(on, DOOM_CONFIG.map[5]) }]}
+      />
       <button class="session-eject" onClick={props.onClose}>⏏ QUIT DOOM</button>
     </div>
   );

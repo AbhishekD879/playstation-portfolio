@@ -5,7 +5,9 @@
 import { Show, createSignal, onCleanup, onMount } from "solid-js";
 import * as sfx from "../audio";
 import { setNavEnabled } from "../input";
-import { startBridge, stopBridge, PS2_CONFIG } from "../gamepadBridge";
+import { startBridge, stopBridge, touchKey, PS2_CONFIG } from "../gamepadBridge";
+import TouchPad, { type TB } from "./TouchPad";
+import { Icon } from "./icons";
 import { startHost, startJoiner, type HostHandle, type JoinerHandle } from "../ps2mp/webrtc";
 import { captureLocalInput, makeInjector, type PadState } from "../ps2mp/input";
 import { bumpPlays, resolveGameFile, type GameRecord } from "../gamesdb";
@@ -15,6 +17,7 @@ type Stage = "insert" | "reading" | "playing" | "error";
 export default function Ps2(props: { onClose: () => void; profileId: string; initialGame?: GameRecord; initialJoin?: boolean }) {
   const isDesktop = matchMedia("(pointer: fine)").matches && innerWidth >= 900 && typeof WebAssembly === "object";
   const isolated = (globalThis as any).crossOriginIsolated === true;
+  const canEmulate = isDesktop && isolated;
   const saveKey = `ps2:${props.profileId}`; // one memory card per profile
   const [stage, setStage] = createSignal<Stage>("insert");
   const [linkBlock, setLinkBlock] = createSignal<"permission" | "missing" | null>(null);
@@ -51,6 +54,26 @@ export default function Ps2(props: { onClose: () => void; profileId: string; ini
     const A = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"; // no ambiguous 0/O/1/I
     return Array.from({ length: 4 }, () => A[Math.floor(Math.random() * A.length)]).join("");
   };
+
+  // —— on-screen touch pad (local play: bridge keys · joiner: window keys) ——
+  const [analog, setAnalog] = createSignal(false); // d-pad drives d-pad or left stick
+  const DPAD = { up: PS2_CONFIG.map[12], down: PS2_CONFIG.map[13], left: PS2_CONFIG.map[14], right: PS2_CONFIG.map[15] };
+  const STICK = { up: PS2_CONFIG.axes[1].neg, down: PS2_CONFIG.axes[1].pos, left: PS2_CONFIG.axes[0].neg, right: PS2_CONFIG.axes[0].pos };
+  const toggleAnalog = () => { // release both key sets so nothing sticks across the flip
+    [DPAD, STICK].forEach((s) => Object.values(s).forEach((d) => touchKey(false, d)));
+    setAnalog(!analog());
+  };
+  const psFace = (press: (i: number, on: boolean) => void): TB[] => [
+    { label: <Icon name="triangle" />, cls: "gp-n", press: (on) => press(3, on) },
+    { label: <Icon name="square" />, cls: "gp-w", press: (on) => press(2, on) },
+    { label: <Icon name="circle" />, cls: "gp-e", press: (on) => press(1, on) },
+    { label: <Icon name="cross" />, cls: "gp-s", press: (on) => press(0, on) },
+  ];
+  // joiner: synthesize the keys captureLocalInput() already listens for
+  const joinKey = (on: boolean, code: string) =>
+    window.dispatchEvent(new KeyboardEvent(on ? "keydown" : "keyup", { code, bubbles: true, cancelable: true }));
+  const JOIN_DPAD = { up: "ArrowUp", down: "ArrowDown", left: "ArrowLeft", right: "ArrowRight" };
+  const JOIN_FACE: Record<number, string> = { 0: "KeyZ", 1: "KeyX", 2: "KeyA", 3: "KeyS" };
 
   function hostGame() {
     const canvas = frame.contentDocument?.getElementById("outputCanvas") as HTMLCanvasElement | null;
@@ -216,7 +239,7 @@ export default function Ps2(props: { onClose: () => void; profileId: string; ini
   return (
     <div class="ps2" ref={container}>
       <Show
-        when={isDesktop && isolated}
+        when={canEmulate || mpRole() === "joiner" || joinStage() !== ""}
         fallback={
           <>
             <div class="ps2-head">
@@ -227,15 +250,20 @@ export default function Ps2(props: { onClose: () => void; profileId: string; ini
               <div class="ps2-big">{isDesktop ? "This host can't run the PS2 core." : "PS2 emulation needs a desktop."}</div>
               <p>{isDesktop
                 ? "The emulator needs cross-origin isolation headers, which this deployment isn't sending. Try the local/dev build, or Chrome/Edge."
-                : "Emulating the PlayStation 2 is enormously demanding — it needs a desktop with a real GPU and keyboard. Everything else here works on mobile."}</p>
+                : "Emulating the PlayStation 2 is enormously demanding — it needs a desktop with a real GPU and keyboard. But you CAN play here as player 2 of a 2-player game hosted on a desktop."}</p>
+              <Show when={!isDesktop}>
+                <button class="ps2-launch" onClick={() => { sfx.tickH(); setJoinStage("code"); setJoinInput(""); }}>🎮 &nbsp;JOIN A 2-PLAYER GAME</button>
+                <p class="ps2-warn">The host's game streams to this screen — an on-screen pad appears for your input.</p>
+              </Show>
             </div>
           </>
         }
       >
         {/* emulator iframe exists from the start so the wasm warms up while
             the user picks a disc; it's invisible until playing. A JOINER runs
-            no emulator — they only watch the host's stream — so skip it then. */}
-        <Show when={mpRole() !== "joiner"}>
+            no emulator — they only watch the host's stream — so skip it then
+            (and never load the wasm on a host that can't emulate anyway). */}
+        <Show when={mpRole() !== "joiner" && canEmulate}>
           <iframe
             ref={frame}
             class="ps2-frame"
@@ -263,6 +291,26 @@ export default function Ps2(props: { onClose: () => void; profileId: string; ini
                 <button class="ghost-btn" onClick={leaveJoin}>⏏ leave</button>
               </span>
             </div>
+            {/* touch pad → the same keys captureLocalInput reads from a keyboard.
+                ponytail: no touch analog — the keyboard vocabulary has none */}
+            <Show when={joinStage() === "live"}>
+              <TouchPad
+                dpad={(dir, on) => joinKey(on, JOIN_DPAD[dir])}
+                face={psFace((i, on) => joinKey(on, JOIN_FACE[i]))}
+                pills={[
+                  { label: "SELECT", press: (on) => joinKey(on, "Backspace") },
+                  { label: "START", press: (on) => joinKey(on, "Enter") },
+                ]}
+                shoulderL={[
+                  { label: "L1", press: (on) => joinKey(on, "KeyQ") },
+                  { label: "L2", press: (on) => joinKey(on, "KeyE") },
+                ]}
+                shoulderR={[
+                  { label: "R2", press: (on) => joinKey(on, "KeyR") },
+                  { label: "R1", press: (on) => joinKey(on, "KeyW") },
+                ]}
+              />
+            </Show>
           </div>
         </Show>
 
@@ -289,6 +337,25 @@ export default function Ps2(props: { onClose: () => void; profileId: string; ini
             </div>
           </Show>
           <Show when={saveNote()}><div class="ps2-savenote">{saveNote()}</div></Show>
+          {/* touch pad → bridge keys into the emulator iframe. ANALOG flips the
+              d-pad between digital d-pad and left-stick keys (like a DualShock) */}
+          <TouchPad
+            dpad={(dir, on) => touchKey(on, (analog() ? STICK : DPAD)[dir])}
+            face={psFace((i, on) => touchKey(on, PS2_CONFIG.map[i]))}
+            pills={[
+              { label: "SELECT", press: (on) => touchKey(on, PS2_CONFIG.map[8]) },
+              { label: "START", press: (on) => touchKey(on, PS2_CONFIG.map[9]) },
+              { label: <>{analog() ? "● ANALOG" : "○ ANALOG"}</>, press: (on) => { if (on) toggleAnalog(); } },
+            ]}
+            shoulderL={[
+              { label: "L1", press: (on) => touchKey(on, PS2_CONFIG.map[4]) },
+              { label: "L2", press: (on) => touchKey(on, PS2_CONFIG.map[6]) },
+            ]}
+            shoulderR={[
+              { label: "R2", press: (on) => touchKey(on, PS2_CONFIG.map[7]) },
+              { label: "R1", press: (on) => touchKey(on, PS2_CONFIG.map[5]) },
+            ]}
+          />
         </Show>
 
         <Show when={stage() !== "playing" && mpRole() !== "joiner"}>

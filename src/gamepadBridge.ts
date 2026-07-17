@@ -7,7 +7,7 @@
 
 import { claimPad, rumble } from "./input";
 
-interface KeyDef { key: string; code: string; keyCode: number; loc?: number }
+export interface KeyDef { key: string; code: string; keyCode: number; loc?: number }
 const K = (key: string, code: string, keyCode: number, loc?: number): KeyDef => ({ key, code, keyCode, loc });
 export type PadMap = Record<number, KeyDef>;
 // analog stick → keys: axis index, key when pushed negative / positive
@@ -181,6 +181,9 @@ function fire(type: "keydown" | "keyup", d: KeyDef) {
     t.dispatchEvent(ev);
   }
 }
+
+// on-screen touch buttons ride the same dispatch path (and targets) as the pad
+export const touchKey = (on: boolean, d: KeyDef) => fire(on ? "keydown" : "keyup", d);
 
 const btnPressed = (p: Gamepad, i: number) => !!p.buttons[i]?.pressed;
 const axisVal = (p: Gamepad, i: number) => p.axes[i] ?? 0;
