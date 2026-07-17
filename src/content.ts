@@ -18,8 +18,8 @@ export interface XmbItem {
     | { type: "panel"; heading: string; tag?: string; body: string[] }
     | { type: "link"; href: string }
     | { type: "insert-disc" }
-    | { type: "link-games" }
-    | { type: "game-library" }
+    | { type: "ps2-home" }
+    | { type: "retro-home" }
     | { type: "play-game"; gameId: string }
     | { type: "music-toggle" }
     | { type: "radio-guide" }

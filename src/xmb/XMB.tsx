@@ -3,7 +3,8 @@
 import { For, Show, createEffect, createMemo, createSignal, onCleanup, onMount } from "solid-js";
 import { CATEGORIES, TROPHIES, type XmbItem } from "../content";
 import { AVATARS, PLATINUM, award, resizePhoto, updateProfile, type Profile } from "../profiles";
-import { CORES, CORE_NAMES, PS2_EXTS, addGame, listGames, addPhoto, listPhotos, fsAccessSupported, isLinked, type GameRecord, type PhotoRecord } from "../gamesdb";
+import { CORES, PS2_EXTS, addGame, listGames, addPhoto, listPhotos, fsAccessSupported, type GameRecord, type PhotoRecord } from "../gamesdb";
+import { addSource } from "../gameSources";
 import { THEMES, applyCustomHsl, applyTheme, currentThemeIndex, loadCustomHsl } from "../theme";
 import { LAB_APPS, labEnabled, toggleLab } from "../labs";
 import { CHANNELS, fetchDevto, fetchGuide, fetchHN, fetchRadio, fetchRss, fetchWeather, wmo, type NewsEntry, type Weather } from "../apps";
@@ -24,7 +25,7 @@ import Visualizer from "./Visualizer";
 import Studio from "./Studio";
 import CodeApp from "./CodeApp";
 import Manual from "./Manual";
-import GameLibrary from "./GameLibrary";
+import GameShelf from "./GameShelf";
 import Doom from "./Doom";
 import ChessApp from "./ChessApp";
 import Trivia from "./Trivia";
@@ -60,7 +61,8 @@ export default function XMB(props: {
   const [games, setGames] = createSignal<GameRecord[]>([]);
   const [clock, setClock] = createSignal("");
   const [spotify, setSpotify] = createSignal<{ url: string; label: string } | null>(null);
-  const [inputMode, setInputMode] = createSignal<null | "spotify" | "tv" | "rss" | "yt">(null);
+  const [inputMode, setInputMode] = createSignal<null | "spotify" | "tv" | "rss" | "yt" | "gamesrc">(null);
+  const openInput = (m: "gamesrc") => { setInputMode(m); setTimeout(() => { setNavEnabled(false); linkInput.focus(); }, 50); };
   const [themesOpen, setThemesOpen] = createSignal(false);
   const [themeIdx, setThemeIdx] = createSignal(0);
   const [themeRow, setThemeRow] = createSignal(0); // 0 = swatches · 1-3 = custom H/S/L sliders
@@ -98,13 +100,15 @@ export default function XMB(props: {
   const [ytQuery, setYtQuery] = createSignal(""); // AI agent → YouTube search handoff
   const [vListening, setVListening] = createSignal(false); // XMB voice command
   const [padTest, setPadTest] = createSignal(false);
-  const [app, setApp] = createSignal<null | "doom" | "chess" | "trivia" | "flash" | "cinema" | "podcasts" | "library" | "map" | "ai" | "webamp" | "youtube" | "timemachine" | "art" | "wiki" | "lichess" | "ps2" | "pc" | "guestbook" | "browser" | "visualizer" | "studio" | "code" | "manual" | "gamelib">(null);
+  const [app, setApp] = createSignal<null | "doom" | "chess" | "trivia" | "flash" | "cinema" | "podcasts" | "library" | "map" | "ai" | "webamp" | "youtube" | "timemachine" | "art" | "wiki" | "lichess" | "ps2" | "pc" | "guestbook" | "browser" | "visualizer" | "studio" | "code" | "manual" | "ps2home" | "retrohome">(null);
   const [ps2Boot, setPs2Boot] = createSignal<GameRecord | null>(null);
+  const [ps2Join, setPs2Join] = createSignal(false);
 
   // route a library record to the right engine: PS2 discs boot the Play! app
   // (auto-loading the disc), everything else goes to the EmulatorJS session
   function playRecord(g: GameRecord) {
-    if (g.sys === "ps2") { setPs2Boot(g); setApp("ps2"); }
+    awardT("disc");
+    if (g.sys === "ps2") { setPs2Boot(g); setPs2Join(false); setApp("ps2"); }
     else props.onPlay(g);
   }
   let appNav: ((a: Parameters<Parameters<typeof onNav>[0]>[0]) => void) | undefined;
@@ -127,26 +131,21 @@ export default function XMB(props: {
   let linkInput!: HTMLInputElement;
   const [avatarVer, setAvatarVer] = createSignal(0);
 
-  // ordered like a console shelf: play-now games → the two consoles-within-
-  // the-console (each named for WHAT it plays) → spectate → your game library
+  // built-in games, then the two "consoles" — each opens its own home with a
+  // browsable library (your games + a downloadable catalog) inside it
+  const ps2Count = () => games().filter((g) => g.sys === "ps2").length;
+  const retroCount = () => games().filter((g) => g.sys !== "ps2").length;
   const gameItems = createMemo<XmbItem[]>(() => [
     { id: "doom", title: "DOOM", sub: "Built-in game · the 1993 shareware, playable now", icon: "skull", action: { type: "doom" } },
     { id: "chess", title: "Chess vs Stockfish", sub: "Built-in game · the real engine, on this device", icon: "knight", action: { type: "chess" } },
     { id: "trivia", title: "Trivia Arcade", sub: "Built-in game · 10 questions, endless rounds", icon: "question", action: { type: "trivia" } },
     { id: "flash", title: "Flash Arcade", sub: "Built-in arcade · classic Flash games, streamed", icon: "lightning", action: { type: "flash" } },
-    { id: "ps2", title: "PlayStation 2", sub: "Console emulator · boot YOUR .iso disc · 2-player online", icon: "disc", action: { type: "ps2" } },
-    ...(games().length ? [{ id: "gamelib", title: "Game Library", sub: `Your shelf · ${games().length} game${games().length === 1 ? "" : "s"} · cover art, PS2 & retro`, icon: "cube", action: { type: "game-library" as const } }] : []),
-    ...(fsAccessSupported() ? [{ id: "link", title: "Link Games from Disk…", sub: "Keep ISOs/ROMs on YOUR drive — pick once, play forever (Chrome/Edge)", icon: "folder", action: { type: "link-games" as const } }] : []),
-    { id: "insert", title: "Insert Cartridge…", sub: "Copy a ROM you own into the console — PS2 · NES · SNES · GBA · N64 & more", icon: "plus", action: { type: "insert-disc" } },
+    { id: "ps2", title: "PlayStation 2", sub: `Library, downloads & 2-player online${ps2Count() ? ` · ${ps2Count()} in your shelf` : ""}`, icon: "disc", action: { type: "ps2-home" } },
+    { id: "retro", title: "Retro Games", sub: `NES · SNES · GBA · N64 & more — library + downloads${retroCount() ? ` · ${retroCount()} in your shelf` : ""}`, icon: "gamepad", action: { type: "retro-home" } },
     { id: "lichesstv", title: "Lichess TV", sub: "Spectate · live grandmaster games", icon: "knight", action: { type: "lichess-tv" } },
-    ...games().map((g) => ({
-      id: `g-${g.id}`,
-      title: g.name.replace(/\.[^.]+$/, ""),
-      sub: `${isLinked(g) ? "Linked" : "Installed"} · ${g.sys === "ps2" ? "PlayStation 2" : CORE_NAMES[g.core] ?? g.core} · ${g.size >= 1073741824 ? (g.size / 1073741824).toFixed(1) + " GB" : (g.size / 1048576).toFixed(1) + " MB"} · played ${g.plays ?? 0}×`,
-      icon: "disc",
-      action: { type: "play-game" as const, gameId: g.id },
-    })),
   ]);
+
+  const RETRO_SYSTEMS = ["gba", "gb", "nes", "snes", "segaMD", "n64", "nds"] as const;
 
   const musicItems = createMemo<XmbItem[]>(() => [
     { id: "radio-guide", title: "Radio Stations", sub: "Search ~3,000 live stations worldwide", icon: "globe", action: { type: "radio-guide" } },
@@ -325,23 +324,18 @@ export default function XMB(props: {
         awardT("network");
         window.open(a.href, a.href.startsWith("http") ? "_blank" : "_self");
         break;
+      case "ps2-home":
+        sfx.confirm();
+        setApp("ps2home");
+        break;
+      case "retro-home":
+        sfx.confirm();
+        setApp("retrohome");
+        break;
       case "insert-disc":
         sfx.confirm();
         fileInput.click();
         break;
-      case "link-games":
-        onLink();
-        break;
-      case "game-library":
-        sfx.confirm();
-        setApp("gamelib");
-        break;
-      case "play-game": {
-        sfx.confirm();
-        const g = games().find((x) => x.id === a.gameId);
-        if (g) { awardT("disc"); playRecord(g); }
-        break;
-      }
       case "music-toggle": {
         const on = sfx.radioToggle();
         setRadioOn(on);
@@ -698,7 +692,7 @@ export default function XMB(props: {
       await addGame({
         id: Math.random().toString(36).slice(2, 10), profileId: props.profile.id,
         name: h.name, core: cls.core, sys: cls.sys, size: f.size,
-        addedAt: Date.now(), plays: 0, kind: "link", handle: h,
+        addedAt: Date.now(), plays: 0, kind: "link", handle: h, origin: "disk",
       });
       added++;
     }
@@ -742,6 +736,7 @@ export default function XMB(props: {
     tv: { title: "Add a TV channel", ph: "https://…/master.m3u8", hint: "Any HLS live stream URL · ENTER to tune in" },
     rss: { title: "Add an RSS feed", ph: "https://example.com/feed.xml", hint: "RSS or Atom URL · ENTER to add" },
     yt: { title: "Play a YouTube video", ph: "https://youtube.com/watch?v=…", hint: "Any YouTube link · plays right here" },
+    gamesrc: { title: "Add a game source", ph: "https://raw.githubusercontent.com/you/games/main/catalog.json", hint: "A catalog manifest URL you control — a GitHub repo's raw JSON is ideal (CORS-open)" },
   };
 
   function submitLink() {
@@ -788,6 +783,14 @@ export default function XMB(props: {
       closeInput();
       sfx.confirm();
       pushToast("Feed added", `${label} → News`);
+    } else if (mode === "gamesrc") {
+      if (!/^https?:\/\/.+/.test(raw) && !raw.startsWith("/")) { sfx.deny(); pushToast("Not a URL", "Paste a full http(s) manifest URL"); return; }
+      let label = "My games";
+      try { label = new URL(raw, location.origin).hostname.replace(/^www\./, "") || label; } catch { /* keep default */ }
+      addSource(label, raw);
+      closeInput();
+      sfx.confirm();
+      pushToast("Game source added", `${label} → open a console to browse it`);
     }
   }
 
@@ -964,7 +967,7 @@ export default function XMB(props: {
     if (padTest()) { if (action === "back") setPadTest(false); return; }
     if (app()) {
       // bound apps route their own nav; the rest are keyboard-driven owner apps
-      if (["chess", "trivia", "flash", "cinema", "podcasts", "library", "youtube", "art", "wiki", "gamelib"].includes(app()!)) appNav?.(action);
+      if (["chess", "trivia", "flash", "cinema", "podcasts", "library", "youtube", "art", "wiki", "ps2home", "retrohome"].includes(app()!)) appNav?.(action);
       else if (app() === "lichess" && action === "back") { sfx.back(); setApp(null); }
       else if (src === "pad" || src === "gesture") {
         // owner apps (map/globe, lichess…) listen to the KEYBOARD — turn pad
@@ -1373,7 +1376,7 @@ export default function XMB(props: {
       <Show when={inputMode()}>
         <div class="panel-backdrop" />
         <div class="modal">
-          <div class="panel-tag">{inputMode() === "spotify" ? "CONNECT SPOTIFY" : inputMode() === "tv" ? "LIVE TV" : "NEWS"}</div>
+          <div class="panel-tag">{inputMode() === "spotify" ? "CONNECT SPOTIFY" : inputMode() === "tv" ? "LIVE TV" : inputMode() === "gamesrc" ? "GAME SOURCE" : inputMode() === "yt" ? "YOUTUBE" : "NEWS"}</div>
           <div class="modal-title">{INPUT_COPY[inputMode()!].title}</div>
           <input
             ref={linkInput}
@@ -1476,7 +1479,7 @@ export default function XMB(props: {
       <Show when={app() === "wiki"}>
         <WikiApp bind={(f) => (appNav = f)} onClose={() => setApp(null)} />
       </Show>
-      <Show when={app() === "ps2"}><Ps2 profileId={props.profile.id} initialGame={ps2Boot() ?? undefined} onClose={() => { setPs2Boot(null); setApp(null); }} /></Show>
+      <Show when={app() === "ps2"}><Ps2 profileId={props.profile.id} initialGame={ps2Boot() ?? undefined} initialJoin={ps2Join()} onClose={() => { setPs2Boot(null); setPs2Join(false); setApp(games().some((g) => g.sys === "ps2") ? "ps2home" : null); }} /></Show>
       <Show when={app() === "pc"}><PcApp onClose={() => setApp(null)} /></Show>
       <Show when={app() === "guestbook"}><Guestbook userName={props.profile.name} onClose={() => setApp(null)} /></Show>
       <Show when={app() === "browser"}><Browser onClose={() => setApp(null)} /></Show>
@@ -1484,11 +1487,33 @@ export default function XMB(props: {
       <Show when={app() === "studio"}><Studio onClose={() => setApp(null)} /></Show>
       <Show when={app() === "code"}><CodeApp onClose={() => setApp(null)} /></Show>
       <Show when={app() === "manual"}><Manual onClose={() => setApp(null)} /></Show>
-      <Show when={app() === "gamelib"}>
-        <GameLibrary
+      <Show when={app() === "ps2home"}>
+        <GameShelf
           bind={(f) => (appNav = f)}
-          games={games()}
-          onPlay={(g) => { awardT("disc"); playRecord(g); }}
+          profileId={props.profile.id}
+          systems={["ps2"]}
+          owned={games()}
+          title="PLAYSTATION 2 — YOUR LIBRARY & DOWNLOADS"
+          onPlay={playRecord}
+          onInsert={() => fileInput.click()}
+          onLink={onLink}
+          onAddSource={() => openInput("gamesrc")}
+          onChanged={refreshGames}
+          onClose={() => setApp(null)}
+          extra={() => <button class="ghost-btn" onClick={() => { sfx.confirm(); setPs2Boot(null); setPs2Join(true); setApp("ps2"); }}>🎮 Join 2-player</button>}
+        />
+      </Show>
+      <Show when={app() === "retrohome"}>
+        <GameShelf
+          bind={(f) => (appNav = f)}
+          profileId={props.profile.id}
+          systems={[...RETRO_SYSTEMS]}
+          owned={games()}
+          title="RETRO GAMES — YOUR LIBRARY & DOWNLOADS"
+          onPlay={playRecord}
+          onInsert={() => fileInput.click()}
+          onLink={onLink}
+          onAddSource={() => openInput("gamesrc")}
           onChanged={refreshGames}
           onClose={() => setApp(null)}
         />

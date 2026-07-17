@@ -1,0 +1,5 @@
+{
+  "name": "Homebrew (built-in)",
+  "note": "Freely-distributable homebrew & public-domain games. Add your own source (a GitHub repo's raw catalog.json is ideal) to bring your own library.",
+  "games": []
+}

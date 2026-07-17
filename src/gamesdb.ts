@@ -19,6 +19,7 @@ export interface GameRecord {
   handle?: FileSystemFileHandle;    // "link" entries only
   sys?: "ps2";                      // PlayStation 2 discs boot Play!, not EmulatorJS
   cover?: string;                   // cached box-art URL once one resolves
+  origin?: "disk" | "download";     // link source: your drive vs downloaded to OPFS
 }
 
 export const isLinked = (g: GameRecord) => g.kind === "link";

@@ -12,7 +12,7 @@ import { bumpPlays, resolveGameFile, type GameRecord } from "../gamesdb";
 
 type Stage = "insert" | "reading" | "playing" | "error";
 
-export default function Ps2(props: { onClose: () => void; profileId: string; initialGame?: GameRecord }) {
+export default function Ps2(props: { onClose: () => void; profileId: string; initialGame?: GameRecord; initialJoin?: boolean }) {
   const isDesktop = matchMedia("(pointer: fine)").matches && innerWidth >= 900 && typeof WebAssembly === "object";
   const isolated = (globalThis as any).crossOriginIsolated === true;
   const saveKey = `ps2:${props.profileId}`; // one memory card per profile
@@ -113,6 +113,7 @@ export default function Ps2(props: { onClose: () => void; profileId: string; ini
   };
 
   onMount(() => {
+    if (props.initialJoin) setJoinStage("code"); // opened straight into "join a game"
     const esc = (e: KeyboardEvent) => { if (e.key === "Escape" && stage() !== "playing") props.onClose(); };
     addEventListener("keydown", esc);
     const onMsg = (e: MessageEvent) => {
