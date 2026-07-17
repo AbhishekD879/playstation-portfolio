@@ -18,8 +18,8 @@ const CHUNKS: string[] = [
   "Planet Earth app: a real CesiumJS globe with satellite imagery — world tour (cinematic city dives), live ISS tracking, earthquakes, rain radar, place search. The Code Playground runs sandboxed JavaScript and Python with formatting and linting. The PS2 emulator plays real ISO games with memory-card saves. The Studio is a playable synth + drum machine with MIDI support.",
 ];
 
-let extractor: any = null;
-let loadingExtractor: Promise<any> | null = null;
+import { acquireModel } from "./models";
+
 let index: Float32Array[] | null = null;
 let building: Promise<void> | null = null;
 let corpus: string[] = []; // CHUNKS + live console capabilities, frozen at build
@@ -30,19 +30,17 @@ export const cosine = (a: Float32Array, b: Float32Array) => {
   return d; // vectors are L2-normalized → dot product is cosine similarity
 };
 
-function ensureExtractor(): Promise<any> {
-  if (!loadingExtractor) {
-    loadingExtractor = (async () => {
-      const { pipeline } = await import("@huggingface/transformers");
-      const device = typeof (navigator as any).gpu !== "undefined" ? "webgpu" : "wasm";
-      extractor = await pipeline("feature-extraction", "Xenova/all-MiniLM-L6-v2", { device } as any);
-      return extractor;
-    })().catch((e) => { loadingExtractor = null; throw e; });
-  }
-  return loadingExtractor;
-}
+// the extractor lives in the model manager — lazily loaded, idle-disposed;
+// the embedded index (a few hundred KB of floats) is cheap and stays
+const getExtractor = () =>
+  acquireModel("minilm", "MiniLM embeddings", 35, async () => {
+    const { pipeline } = await import("@huggingface/transformers");
+    const device = typeof (navigator as any).gpu !== "undefined" ? "webgpu" : "wasm";
+    return pipeline("feature-extraction", "Xenova/all-MiniLM-L6-v2", { device } as any);
+  });
 
 async function embed(texts: string[]): Promise<Float32Array[]> {
+  const extractor = await getExtractor();
   const out = await extractor(texts, { pooling: "mean", normalize: true });
   // tensor → one Float32Array per input row
   const [rows, dim] = out.dims as [number, number];
@@ -52,7 +50,6 @@ async function embed(texts: string[]): Promise<Float32Array[]> {
 
 /** Shared sentence embedder (MiniLM) — also used by Planet Earth's vibe search. */
 export async function embedTexts(texts: string[]): Promise<Float32Array[]> {
-  await ensureExtractor();
   return embed(texts);
 }
 
@@ -60,7 +57,6 @@ export async function embedTexts(texts: string[]): Promise<Float32Array[]> {
 export function buildIndex(): Promise<void> {
   if (!building) {
     building = (async () => {
-      await ensureExtractor();
       corpus = [...CHUNKS, ...capabilityChunks()]; // include the control-bus manifest
       index = await embed(corpus);
     })().catch((e) => { building = null; throw e; });

@@ -11,6 +11,7 @@ import * as sfx from "../audio";
 import { onCcNav, onNav, onPadChange, onSystemButton, primaryPad, rumble, rumbleEnabled, setCcActive, setNavEnabled, setRumble } from "../input";
 import { setBridgePaused } from "../gamepadBridge";
 import { hasWebGPU } from "../gpu";
+import { MODEL_BUDGET_MB, residentModels } from "../models";
 import { fluidLaunchSplash, fluidNavPulse } from "./FluidBg";
 import DepthPhoto from "./DepthPhoto";
 import ControlCenter from "./ControlCenter";
@@ -761,6 +762,9 @@ export default function XMB(props: {
             `Graphics: ${gpu}`,
             `Display: ${screen.width} × ${screen.height} @ ${devicePixelRatio}× · ${crossOriginIsolated ? "cross-origin isolated (PS2 core available)" : "not isolated"}`,
             b ? `Battery: ${Math.round(b.level * 100)}%${b.charging ? " — charging" : ""}` : "Battery: not reported by this browser",
+            `On-device AI: ${residentModels().length
+              ? residentModels().map((m) => `${m.label} (${m.sizeMB} MB, idle ${m.idleS}s)`).join(" · ")
+              : "no models in memory right now"} — budget ${MODEL_BUDGET_MB} MB for this device; idle models free themselves after 3 min, downloads stay cached on disk.`,
             "Storage: profiles, trophies, themes & your game library live only in this browser.",
           ],
         });
@@ -1681,6 +1685,7 @@ export default function XMB(props: {
         <Photos
           photos={photos()}
           bind={(f) => (viewerNav = f)}
+          onEnhanced={refreshPhotos}
           onClose={() => setViewerOpen(false)}
         />
       </Show>

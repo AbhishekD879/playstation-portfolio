@@ -2,22 +2,18 @@
 // the mic, resamples to the 16 kHz mono Float32 Whisper wants, and transcribes
 // locally. Nothing is sent anywhere (unlike the Web Speech API, which streams
 // audio to the browser vendor's servers). Lazy: model downloads on first use.
-let asrPromise: Promise<any> | null = null;
+import { acquireModel } from "./models";
 
 export function asrSupported(): boolean {
   return !!navigator.mediaDevices?.getUserMedia;
 }
 
-function loadASR(): Promise<any> {
-  if (!asrPromise) {
-    asrPromise = (async () => {
-      const { pipeline } = await import("@huggingface/transformers");
-      const device = typeof (navigator as any).gpu !== "undefined" ? "webgpu" : "wasm";
-      return pipeline("automatic-speech-recognition", "onnx-community/whisper-base.en", { device } as any);
-    })().catch((e) => { asrPromise = null; throw e; });
-  }
-  return asrPromise;
-}
+const loadASR = () =>
+  acquireModel<any>("whisper", "Whisper (voice commands)", 90, async () => {
+    const { pipeline } = await import("@huggingface/transformers");
+    const device = typeof (navigator as any).gpu !== "undefined" ? "webgpu" : "wasm";
+    return pipeline("automatic-speech-recognition", "onnx-community/whisper-base.en", { device } as any);
+  });
 
 /** Records until stop() is called, then resolves with the transcript. */
 export function record(): { stop: () => void; done: Promise<string> } {
