@@ -40,6 +40,7 @@ export interface XmbItem {
     | { type: "weather" }
     | { type: "photo" }
     | { type: "doom" }
+    | { type: "doom-rtx" }
     | { type: "chess" }
     | { type: "trivia" }
     | { type: "flash" }

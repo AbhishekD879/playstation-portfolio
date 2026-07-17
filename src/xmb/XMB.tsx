@@ -31,6 +31,7 @@ import CodeApp from "./CodeApp";
 import Manual from "./Manual";
 import GameShelf from "./GameShelf";
 import Doom from "./Doom";
+import DoomRtx from "./DoomRtx";
 import ChessApp from "./ChessApp";
 import Trivia from "./Trivia";
 import Flash from "./Flash";
@@ -124,7 +125,7 @@ export default function XMB(props: {
   const [ytQuery, setYtQuery] = createSignal(""); // AI agent → YouTube search handoff
   const [vListening, setVListening] = createSignal(false); // XMB voice command
   const [padTest, setPadTest] = createSignal(false);
-  const [app, setApp] = createSignal<null | "doom" | "chess" | "trivia" | "flash" | "cinema" | "podcasts" | "library" | "map" | "ai" | "webamp" | "youtube" | "timemachine" | "art" | "wiki" | "lichess" | "ps2" | "pc" | "guestbook" | "browser" | "visualizer" | "studio" | "code" | "manual" | "ps2home" | "psphome" | "retrohome">(null);
+  const [app, setApp] = createSignal<null | "doom" | "doomrtx" | "chess" | "trivia" | "flash" | "cinema" | "podcasts" | "library" | "map" | "ai" | "webamp" | "youtube" | "timemachine" | "art" | "wiki" | "lichess" | "ps2" | "pc" | "guestbook" | "browser" | "visualizer" | "studio" | "code" | "manual" | "ps2home" | "psphome" | "retrohome">(null);
   const [ps2Boot, setPs2Boot] = createSignal<GameRecord | null>(null);
   const [ps2Join, setPs2Join] = createSignal(false);
   const [ccOpen, setCcOpen] = createSignal(false);
@@ -165,6 +166,7 @@ export default function XMB(props: {
   const retroCount = () => games().filter((g) => g.sys !== "ps2" && g.core !== "psp").length;
   const gameItems = createMemo<XmbItem[]>(() => [
     { id: "doom", title: "DOOM", sub: "Built-in game · the 1993 shareware, playable now", icon: "skull", action: { type: "doom" } },
+    ...(hasWebGPU() ? [{ id: "doomrtx", title: "DOOM RTX", sub: "E1M1 path-traced in real time — WebGPU ray tracing", icon: "lightning", action: { type: "doom-rtx" as const } }] : []),
     { id: "chess", title: "Chess vs Stockfish", sub: "Built-in game · the real engine, on this device", icon: "knight", action: { type: "chess" } },
     { id: "trivia", title: "Trivia Arcade", sub: "Built-in game · 10 questions, endless rounds", icon: "question", action: { type: "trivia" } },
     { id: "flash", title: "Flash Arcade", sub: "Built-in arcade · classic Flash games, streamed", icon: "lightning", action: { type: "flash" } },
@@ -476,6 +478,10 @@ export default function XMB(props: {
         sfx.confirm();
         awardT("doomguy");
         setApp("doom");
+        break;
+      case "doom-rtx":
+        sfx.confirm();
+        setApp("doomrtx");
         break;
       case "chess":
         sfx.confirm();
@@ -1616,6 +1622,7 @@ export default function XMB(props: {
 
       {/* ———— the wild apps ———— */}
       <Show when={app() === "doom"}><Doom onClose={() => setApp(null)} /></Show>
+      <Show when={app() === "doomrtx"}><DoomRtx onClose={() => setApp(null)} /></Show>
       <Show when={app() === "chess"}>
         <ChessApp bind={(f) => (appNav = f)} onWin={() => awardT("tactician")} onClose={() => setApp(null)} />
       </Show>
