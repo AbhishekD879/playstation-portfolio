@@ -54,6 +54,7 @@ const APPS: { id: string; title: string; cat: string }[] = [
   { id: "radio", title: "Console Radio (lo-fi synth)", cat: "Music" },
   { id: "visualizer", title: "Visualizer", cat: "Music" },
   { id: "studio", title: "Studio — synth & drum machine", cat: "Music" },
+  { id: "strudel", title: "Live Code (Strudel)", cat: "Music" },
   { id: "sp-default", title: "Spotify — lofi beats playlist", cat: "Music" },
   { id: "yt", title: "YouTube", cat: "Video" },
   { id: "ia-video", title: "Archive Cinema", cat: "Video" },

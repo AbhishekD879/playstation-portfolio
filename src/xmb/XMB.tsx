@@ -128,7 +128,7 @@ export default function XMB(props: {
   const [ytQuery, setYtQuery] = createSignal(""); // AI agent → YouTube search handoff
   const [vListening, setVListening] = createSignal(false); // XMB voice command
   const [padTest, setPadTest] = createSignal(false);
-  const [app, setApp] = createSignal<null | "doom" | "doomrtx" | "chess" | "trivia" | "flash" | "cinema" | "podcasts" | "library" | "map" | "ai" | "webamp" | "youtube" | "timemachine" | "art" | "wiki" | "lichess" | "ps2" | "pc" | "guestbook" | "browser" | "visualizer" | "studio" | "code" | "manual" | "ps2home" | "ps1home" | "psphome" | "retrohome" | "scummvm" | "karaoke">(null);
+  const [app, setApp] = createSignal<null | "doom" | "doomrtx" | "chess" | "trivia" | "flash" | "cinema" | "podcasts" | "library" | "map" | "ai" | "webamp" | "youtube" | "timemachine" | "art" | "wiki" | "lichess" | "ps2" | "pc" | "guestbook" | "browser" | "visualizer" | "studio" | "code" | "manual" | "ps2home" | "ps1home" | "psphome" | "retrohome" | "scummvm" | "karaoke" | "strudel">(null);
   const [ps2Boot, setPs2Boot] = createSignal<GameRecord | null>(null);
   const [ps2Join, setPs2Join] = createSignal(false);
   const [ccOpen, setCcOpen] = createSignal(false);
@@ -201,6 +201,7 @@ export default function XMB(props: {
     { id: "radio", title: "Console Radio", sub: "Generative lo-fi — synthesized live", icon: "note", action: { type: "music-toggle" } },
     { id: "visualizer", title: "Visualizer", sub: "Music visualizations — reacts to the radio & mic", icon: "wave", action: { type: "visualizer" } },
     { id: "studio", title: "Studio", sub: "Playable synth, drum machine & MIDI — synthesized live", icon: "note", action: { type: "studio" } },
+    { id: "strudel", title: "Live Code", sub: "Strudel — algorithmic beats typed live (TidalCycles)", icon: "pen", action: { type: "strudel" } },
     {
       id: "sp-default", title: "lofi beats", sub: "Spotify · curated focus playlist", icon: "disc",
       action: { type: "spotify", url: "https://open.spotify.com/embed/playlist/37i9dQZF1DWWQRwui0ExPn", label: "lofi beats" },
@@ -566,6 +567,10 @@ export default function XMB(props: {
       case "karaoke":
         sfx.confirm();
         setApp("karaoke");
+        break;
+      case "strudel":
+        sfx.confirm();
+        setApp("strudel");
         break;
       case "dictionary":
         sfx.confirm();
@@ -1817,6 +1822,14 @@ export default function XMB(props: {
       </Show>
       <Show when={app() === "karaoke"}>
         <Karaoke bind={(f) => (appNav = f)} onClose={() => setApp(null)} />
+      </Show>
+      <Show when={app() === "strudel"}>
+        {/* Strudel (TidalCycles for the web) with a lo-fi starter pattern baked
+            into the hash — edit anything, ctrl+enter re-evaluates live */}
+        <div class="fullapp">
+          <iframe credentialless={true} class="fullapp-frame" src="https://strudel.cc/#Ly8gQWJoaXNoZWtTdGF0aW9uIOKAlCBsaXZlLWNvZGVkIGxvLWZpLiBFZGl0IGFueXRoaW5nLCBjdHJsK2VudGVyIHRvIHVwZGF0ZS4Kc2V0Y3BzKDAuNSkKc3RhY2soCiAgcygiYmQgfiBbfiBiZF0gfiwgfiBzZCB+IHNkLCBoaCo4IikuYmFuaygiUm9sYW5kVFI5MDkiKS5nYWluKDAuOCksCiAgbm90ZSgiPGMyIGViMiBnMiBmMj4iKS5zKCJzYXd0b290aCIpLmxwZig2MDApLnJlbGVhc2UoMC4yKSwKICBuKCIwIDMgNyA8MTAgMTI+Iikuc2NhbGUoIkM6bWlub3IiKS5zKCJwaWFubyIpLnJvb20oMC40KS5zbG93KDIpCik=" allow="autoplay; microphone; midi" title="Strudel — live coding" />
+          <button class="session-eject" onClick={() => { sfx.back(); setApp(null); }}>⏏ CLOSE</button>
+        </div>
       </Show>
       <Show when={app() === "scummvm"}>
         {/* ScummVM compiled to WebAssembly (chkuendig's hosted build). Bring

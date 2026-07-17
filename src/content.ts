@@ -44,6 +44,7 @@ export interface XmbItem {
     | { type: "ps1-home" }
     | { type: "scummvm" }
     | { type: "karaoke" }
+    | { type: "strudel" }
     | { type: "chess" }
     | { type: "trivia" }
     | { type: "flash" }
