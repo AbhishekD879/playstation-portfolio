@@ -7,8 +7,8 @@
 
 import { claimPad, rumble } from "./input";
 
-interface KeyDef { key: string; code: string; keyCode: number }
-const K = (key: string, code: string, keyCode: number): KeyDef => ({ key, code, keyCode });
+interface KeyDef { key: string; code: string; keyCode: number; loc?: number }
+const K = (key: string, code: string, keyCode: number, loc?: number): KeyDef => ({ key, code, keyCode, loc });
 export type PadMap = Record<number, KeyDef>;
 // analog stick → keys: axis index, key when pushed negative / positive
 interface AxisBind { axis: number; neg: KeyDef; pos: KeyDef; dead?: number }
@@ -101,8 +101,9 @@ export const EJS_CONFIG: BridgeConfig = {
 };
 
 // ——— DOOM: real Xbox-FPS scheme (twin-stick, always-run) ———
-// Left stick = move + strafe · Right stick X = turn · RT/A = fire · X = use ·
-// B = use · Y = weapon · LB/RB = strafe · Start = menu · Back = quit.
+// The js-dos shareware bundle ships a WASD-ified DEFAULT.CFG (scancodes:
+// W/S move, A/D strafe, ←/→ turn, Ctrl fire, Space use, RIGHT-shift run) —
+// the bridge must speak THOSE keys, not vanilla-DOOM arrows.
 export const DOOM_CONFIG: BridgeConfig = {
   map: {
     7: CTRL,                 // RT → FIRE
@@ -110,16 +111,18 @@ export const DOOM_CONFIG: BridgeConfig = {
     2: SPACE,                // X  → USE / open door
     1: SPACE,                // B  → USE
     3: ENTER,                // Y  → weapon change / menu select
-    4: COMMA, 5: PERIOD,     // LB/RB → strafe L/R
+    4: K("a", "KeyA", 65),   // LB → strafe left
+    5: K("d", "KeyD", 68),   // RB → strafe right
     9: ESC,                  // Start → DOOM menu
-    12: UP, 13: DOWN, 14: LEFT, 15: RIGHT, // d-pad → menu navigation
+    12: K("w", "KeyW", 87), 13: K("s", "KeyS", 83), // d-pad ↑↓ → move
+    14: LEFT, 15: RIGHT,                             // d-pad ←→ → turn (menus too)
   },
   axes: [
-    { axis: 1, neg: UP, pos: DOWN },       // LEFT stick Y → move forward/back
-    { axis: 0, neg: COMMA, pos: PERIOD },  // LEFT stick X → strafe left/right
-    { axis: 2, neg: LEFT, pos: RIGHT },    // RIGHT stick X → TURN left/right
+    { axis: 1, neg: K("w", "KeyW", 87), pos: K("s", "KeyS", 83) }, // L-stick Y → move
+    { axis: 0, neg: K("a", "KeyA", 65), pos: K("d", "KeyD", 68) }, // L-stick X → strafe
+    { axis: 2, neg: LEFT, pos: RIGHT },                             // R-stick X → turn
   ],
-  hold: [SHIFT], // always-run, like every modern console shooter
+  hold: [K("Shift", "ShiftRight", 16, 2)], // always-run — the cfg binds RIGHT shift
   rumbleOn: [0, 7], // A / RT → fire kicks the controller
 };
 
@@ -145,7 +148,8 @@ function primaryPad(pads: Gamepad[]): Gamepad | null {
 
 function fire(type: "keydown" | "keyup", d: KeyDef) {
   for (const t of targets) {
-    const ev = new KeyboardEvent(type, { key: d.key, code: d.code, bubbles: true, cancelable: true, composed: true });
+    // location matters: js-dos distinguishes left/right modifiers by it
+    const ev = new KeyboardEvent(type, { key: d.key, code: d.code, location: d.loc ?? 0, bubbles: true, cancelable: true, composed: true });
     Object.defineProperty(ev, "keyCode", { get: () => d.keyCode }); // init dict ignores keyCode
     Object.defineProperty(ev, "which", { get: () => d.keyCode });
     t.dispatchEvent(ev);
