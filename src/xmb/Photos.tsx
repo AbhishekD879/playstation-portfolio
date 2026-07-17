@@ -74,10 +74,10 @@ export default function Photos(props: {
         <span>
           <button class="ghost-btn photos-enhance" disabled={enhancing() === "working"}
             onClick={(e) => { e.stopPropagation(); enhance(); }}>
-            {enhancing() === "working" ? "✨ enhancing… (on-device AI)"
-              : enhancing() === "done" ? "✨ saved to your gallery"
-              : enhancing() === "failed" ? "✨ couldn't enhance this one"
-              : "✨ enhance ×2"}
+            {enhancing() === "working" ? "◈ enhancing… (on-device AI)"
+              : enhancing() === "done" ? "◈ saved to your gallery"
+              : enhancing() === "failed" ? "◈ couldn't enhance this one"
+              : "◈ enhance ×2"}
           </button>
           {" "}←→ browse · <span class="btn-x" /> pause · <span class="btn-o" /> back
         </span>

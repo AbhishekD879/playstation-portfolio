@@ -12,6 +12,7 @@ import { onCcNav, onNav, onPadChange, onSystemButton, primaryPad, rumble, rumble
 import { setBridgePaused } from "../gamepadBridge";
 import { hasWebGPU } from "../gpu";
 import { MODEL_BUDGET_MB, residentModels } from "../models";
+import { startPresence, visitorCount } from "../p2p";
 import { fluidLaunchSplash, fluidNavPulse } from "./FluidBg";
 import DepthPhoto from "./DepthPhoto";
 import ControlCenter from "./ControlCenter";
@@ -267,7 +268,12 @@ export default function XMB(props: {
 
   const refreshGames = () => listGames(props.profile.id).then(setGames);
   const refreshPhotos = () => listPhotos(props.profile.id).then(setPhotos);
-  onMount(() => { refreshGames(); refreshPhotos(); });
+  onMount(() => {
+    refreshGames();
+    refreshPhotos();
+    // presence joins a P2P lobby — deferred so boot stays snappy
+    if (labEnabled("presence")) setTimeout(() => { if (labEnabled("presence")) void startPresence(); }, 6000);
+  });
 
   // —— radio playback: persists while you browse, PS3-music style ——
   function playStation(c: { url: string; label: string }) {
@@ -1506,6 +1512,9 @@ export default function XMB(props: {
         </Show>
         <Show when={labEnabled("cc")}>
           <button class="status-mic status-cc" title="Control Center — phone controller, DualSense, volume, theme (` or PS button)" onClick={() => { sfx.tickH(); setCcOpen(!ccOpen()); }}><Icon name="sliders" /></button>
+        </Show>
+        <Show when={visitorCount() > 0}>
+          <span class="status-online" title="Other visitors browsing this console right now (serverless P2P)">◉ {visitorCount() + 1} on console</span>
         </Show>
         <Show when={padName()}><span class="status-pad" title={padName()!}><Icon name="gamepad" /></span></Show>
         <Show when={battery()}>

@@ -9,6 +9,7 @@ import { Show, createSignal, onCleanup, onMount } from "solid-js";
 import { audioContext, masterBus } from "../audio";
 import * as sfx from "../audio";
 import type { NavAction } from "../input";
+import { Icon } from "./icons";
 
 export default function Karaoke(props: { onClose: () => void; bind: (nav: (a: NavAction) => void) => void }) {
   const [name, setName] = createSignal("");
@@ -120,10 +121,10 @@ export default function Karaoke(props: { onClose: () => void; bind: (nav: (a: Na
           when={name()}
           fallback={
             <div class="karaoke-empty">
-              <div class="karaoke-mic">🎤</div>
+              <div class="karaoke-mic"><Icon name="mic" /></div>
               <div class="ps2-big">Drop in a song you own</div>
               <p class="karaoke-note">Studio vocals sit center-stage in the stereo mix — the console cancels them live and leaves the band playing. Works best on stereo studio recordings.</p>
-              <button class="ps2-launch" onClick={() => fileInput.click()}>♪ &nbsp;PICK A SONG</button>
+              <button class="ps2-launch" onClick={() => fileInput.click()}>▶ &nbsp;PICK A SONG</button>
             </div>
           }
         >
@@ -134,10 +135,10 @@ export default function Karaoke(props: { onClose: () => void; bind: (nav: (a: Na
               <div class="karaoke-seek-fill" style={{ width: `${dur() ? (pos() / dur()) * 100 : 0}%` }} />
             </div>
             <div class="karaoke-controls">
-              <button class="ghost-btn" onClick={() => seek(-10)}>⏪ 10s</button>
-              <button class="ghost-btn karaoke-play" onClick={toggle}>{playing() ? "⏸ pause" : "▶ sing"}</button>
-              <button class="ghost-btn" onClick={() => seek(10)}>10s ⏩</button>
-              <button class="ghost-btn" onClick={() => fileInput.click()}>♪ change song</button>
+              <button class="ghost-btn" onClick={() => seek(-10)}>⏴⏴ 10s</button>
+              <button class="ghost-btn karaoke-play" onClick={toggle}>{playing() ? "❚❚ pause" : "▶ sing"}</button>
+              <button class="ghost-btn" onClick={() => seek(10)}>10s ⏵⏵</button>
+              <button class="ghost-btn" onClick={() => fileInput.click()}>⏏ change song</button>
             </div>
             <div class="karaoke-mix">
               <span class="karaoke-mix-label">FULL SONG</span>

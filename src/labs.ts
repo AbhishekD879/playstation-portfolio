@@ -18,6 +18,7 @@ const FEATURE_GROUPS: FlagGroup[] = [
       { id: "osk", title: "On-Screen Keyboard", desc: "Pops up for text fields when you're on a controller" },
       { id: "voice", title: "Voice Commands", desc: "The header mic — click, or hold N / R2, and say “open doom”" },
       { id: "saver", title: "Screen Saver", desc: "Idle clock screen after a few minutes of no input" },
+      { id: "presence", title: "Visitor Presence", desc: "A quiet count of who else is on the console right now — serverless P2P, nothing shared but a hello" },
     ],
   },
   {
@@ -121,6 +122,10 @@ const FEATURE_GUIDES: Record<string, LabGuide> = {
     steps: ["Leave the console alone for a few minutes", "Any key, click or button wakes it", "Change the start delay under Settings › Power Save Settings"],
     go: "saver", goLabel: "PREVIEW IT NOW",
   },
+  presence: {
+    what: "Serverless P2P presence (Trystero over Nostr relays): a soft ◉ count in the header when other visitors are browsing the console at the same time. No server, no tracking — browsers just wave at each other.",
+    steps: ["Open the console in a second browser or another device", "Watch the header: “◉ 2 on console”", "Chess gains a 🌐 vs visitor mode — two visitors can play each other live"],
+  },
   phonepad: {
     what: "Your phone becomes the controller — scan a QR, get a touch gamepad driving this screen.",
     steps: ["Open the Control Center (` or PS button)", "Scan the QR with your phone camera", "Navigate the crossbar from the couch"],
@@ -170,7 +175,27 @@ const APP_GUIDES: Record<string, LabGuide> = Object.fromEntries(
     go: "app:" + a.id, goLabel: "LAUNCH IT",
   } satisfies LabGuide]),
 );
-// richer words for the headliner
+// richer words for the headliners
+APP_GUIDES.ps1 = {
+  what: "The original PlayStation, emulated on-device (pcsx_rearmed). Bring your own disc images — the built-in HLE BIOS boots most titles with no BIOS file at all.",
+  steps: ["Game › PlayStation", "Insert or link a .chd or .pbp disc you own (single-file formats work best)", "Box art appears automatically; press ✕ to boot"],
+  go: "app:ps1", goLabel: "OPEN THE SHELF",
+};
+APP_GUIDES.scummvm = {
+  what: "ScummVM compiled to WebAssembly — the classic point-&-click engine. Freeware and demo adventures are playable immediately; add games you own too.",
+  steps: ["Game › Point & Click", "Give the wasm ~20 seconds to warm up", "Pick “Beneath a Steel Sky” — it's legally freeware — and Start"],
+  go: "app:scummvm", goLabel: "OPEN THE LAUNCHER",
+};
+APP_GUIDES.karaoke = {
+  what: "Sing it yourself: studio vocals sit dead-center in a stereo mix, so the console cancels them live (L−R) while a low-pass keeps the bass. No models, no uploads — instant.",
+  steps: ["Music › Karaoke", "Pick a song file you own", "Slide between FULL SONG and VOCALS CUT (↑↓ on a pad) and sing"],
+  go: "app:karaoke", goLabel: "PICK A SONG",
+};
+APP_GUIDES.strudel = {
+  what: "Strudel — TidalCycles live coding in the browser. The console opens it with a lo-fi starter pattern; change a number mid-play and hear it shift.",
+  steps: ["Music › Live Code", "Press ▶ play", "Edit anything — ctrl+enter re-evaluates while the beat keeps running"],
+  go: "app:strudel", goLabel: "START THE JAM",
+};
 APP_GUIDES.doomrtx = {
   what: "The 1993 E1M1 rebuilt as triangles and lit by real-time path tracing — physically correct light bouncing in WebGPU compute.",
   steps: ["Game › DOOM RTX", "Click the canvas, press ▶, then WASD + mouse to wander", "The corner panel shows FPS and rays/second — that's live ray tracing"],
