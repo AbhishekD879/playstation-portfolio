@@ -1,15 +1,80 @@
-// Per-profile game library persisted in IndexedDB — the ROM blob itself is
-// stored, so a visitor's discs survive reloads. Nothing ever leaves the browser.
+// Per-profile game library persisted in IndexedDB. Two kinds of entry:
+//  · "copy" — the ROM blob itself is stored (works in every browser)
+//  · "link" — only a FileSystemFileHandle is stored (Chromium's File System
+//    Access API); the game streams straight from the user's disk, zero-copy.
+//    IndexedDB structured-clones handles natively, so links survive reloads;
+//    Chrome 122+ can persist the read permission across visits too.
+// Nothing ever leaves the browser either way.
 
 export interface GameRecord {
   id: string;
   profileId: string;
   name: string;
-  core: string;
+  core: string;          // EmulatorJS core, or "ps2" via sys
   size: number;
   addedAt: number;
   plays: number;
-  blob: Blob;
+  blob?: Blob;                      // "copy" entries only
+  kind?: "copy" | "link";           // undefined (older records) = copy
+  handle?: FileSystemFileHandle;    // "link" entries only
+  sys?: "ps2";                      // PlayStation 2 discs boot Play!, not EmulatorJS
+  cover?: string;                   // cached box-art URL once one resolves
+}
+
+export const isLinked = (g: GameRecord) => g.kind === "link";
+
+/** Chromium-only: real on-disk file pickers + storable handles. */
+export const fsAccessSupported = () => "showOpenFilePicker" in window;
+
+// PS2 disc extensions (bin deliberately stays Mega Drive — ambiguous ext)
+export const PS2_EXTS = ["iso", "cso", "chd", "isz"];
+
+/** Resolve a record to a playable File/Blob. Throws Error with .cause set to
+ *  "permission" (user must grant disk access — needs a user gesture) or
+ *  "missing" (file moved/deleted — re-link it). */
+export async function resolveGameFile(g: GameRecord, opts?: { request?: boolean }): Promise<Blob> {
+  if (!isLinked(g)) {
+    if (g.blob) return g.blob;
+    throw Object.assign(new Error("no data"), { cause: "missing" });
+  }
+  const h = g.handle!;
+  try {
+    let perm = (await (h as any).queryPermission?.({ mode: "read" })) ?? "granted";
+    if (perm !== "granted" && opts?.request !== false) {
+      perm = (await (h as any).requestPermission?.({ mode: "read" })) ?? "granted";
+    }
+    if (perm !== "granted") throw Object.assign(new Error("permission"), { cause: "permission" });
+    return await h.getFile();
+  } catch (e: any) {
+    if (e?.cause === "permission") throw e;
+    if (e?.name === "NotAllowedError" || e?.name === "SecurityError")
+      throw Object.assign(new Error("permission"), { cause: "permission" });
+    throw Object.assign(new Error("missing"), { cause: "missing" });
+  }
+}
+
+// —— box art: libretro-thumbnails (keyless, CORS *) ——————————————————————
+const THUMB_REPO: Record<string, string> = {
+  ps2: "Sony_-_PlayStation_2",
+  gba: "Nintendo_-_Game_Boy_Advance",
+  gb: "Nintendo_-_Game_Boy",
+  nes: "Nintendo_-_Nintendo_Entertainment_System",
+  snes: "Nintendo_-_Super_Nintendo_Entertainment_System",
+  segaMD: "Sega_-_Mega_Drive_-_Genesis",
+  n64: "Nintendo_-_Nintendo_64",
+  nds: "Nintendo_-_Nintendo_DS",
+};
+
+/** Best-effort box-art URLs, most-specific first. Try each until one loads. */
+export function coverCandidates(g: GameRecord): string[] {
+  const repo = THUMB_REPO[g.sys ?? g.core];
+  if (!repo) return [];
+  const base = `https://raw.githubusercontent.com/libretro-thumbnails/${repo}/master/Named_Boxarts/`;
+  const stem = g.name.replace(/\.[^.]+$/, "").trim();
+  const clean = stem.replace(/\s*[([].*$/, "").trim(); // drop "(USA) (Rev 1)…" tails
+  const names = [...new Set([stem, `${clean} (USA)`, `${clean} (Europe)`, `${clean} (Japan)`, clean])];
+  // thumbnails replace &*/:`<>?\|" with _
+  return names.map((n) => base + encodeURIComponent(n.replace(/[&*/:`<>?\\|"]/g, "_")) + ".png");
 }
 
 const DB = "asp-games";
@@ -92,6 +157,18 @@ export async function getGame(id: string): Promise<GameRecord | undefined> {
 export async function bumpPlays(id: string): Promise<void> {
   const g = await getGame(id);
   if (g) { g.plays = (g.plays ?? 0) + 1; await addGame(g); }
+}
+
+/** Remember the first box-art URL that actually loaded. */
+export async function saveCover(id: string, url: string): Promise<void> {
+  const g = await getGame(id);
+  if (g && g.cover !== url) { g.cover = url; await addGame(g); }
+}
+
+/** Swap a linked record's handle (re-link after the file moved). */
+export async function relinkGame(id: string, handle: FileSystemFileHandle, size: number): Promise<void> {
+  const g = await getGame(id);
+  if (g) { g.handle = handle; g.kind = "link"; g.size = size; await addGame(g); }
 }
 
 export async function removeGame(id: string): Promise<void> {

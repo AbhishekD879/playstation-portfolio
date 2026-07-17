@@ -3,7 +3,7 @@
 import { For, Show, createEffect, createMemo, createSignal, onCleanup, onMount } from "solid-js";
 import { CATEGORIES, TROPHIES, type XmbItem } from "../content";
 import { AVATARS, PLATINUM, award, resizePhoto, updateProfile, type Profile } from "../profiles";
-import { CORES, CORE_NAMES, addGame, listGames, addPhoto, listPhotos, type GameRecord, type PhotoRecord } from "../gamesdb";
+import { CORES, CORE_NAMES, PS2_EXTS, addGame, listGames, addPhoto, listPhotos, fsAccessSupported, isLinked, type GameRecord, type PhotoRecord } from "../gamesdb";
 import { THEMES, applyCustomHsl, applyTheme, currentThemeIndex, loadCustomHsl } from "../theme";
 import { LAB_APPS, labEnabled, toggleLab } from "../labs";
 import { CHANNELS, fetchDevto, fetchGuide, fetchHN, fetchRadio, fetchRss, fetchWeather, wmo, type NewsEntry, type Weather } from "../apps";
@@ -24,6 +24,7 @@ import Visualizer from "./Visualizer";
 import Studio from "./Studio";
 import CodeApp from "./CodeApp";
 import Manual from "./Manual";
+import GameLibrary from "./GameLibrary";
 import Doom from "./Doom";
 import ChessApp from "./ChessApp";
 import Trivia from "./Trivia";
@@ -97,7 +98,15 @@ export default function XMB(props: {
   const [ytQuery, setYtQuery] = createSignal(""); // AI agent → YouTube search handoff
   const [vListening, setVListening] = createSignal(false); // XMB voice command
   const [padTest, setPadTest] = createSignal(false);
-  const [app, setApp] = createSignal<null | "doom" | "chess" | "trivia" | "flash" | "cinema" | "podcasts" | "library" | "map" | "ai" | "webamp" | "youtube" | "timemachine" | "art" | "wiki" | "lichess" | "ps2" | "pc" | "guestbook" | "browser" | "visualizer" | "studio" | "code" | "manual">(null);
+  const [app, setApp] = createSignal<null | "doom" | "chess" | "trivia" | "flash" | "cinema" | "podcasts" | "library" | "map" | "ai" | "webamp" | "youtube" | "timemachine" | "art" | "wiki" | "lichess" | "ps2" | "pc" | "guestbook" | "browser" | "visualizer" | "studio" | "code" | "manual" | "gamelib">(null);
+  const [ps2Boot, setPs2Boot] = createSignal<GameRecord | null>(null);
+
+  // route a library record to the right engine: PS2 discs boot the Play! app
+  // (auto-loading the disc), everything else goes to the EmulatorJS session
+  function playRecord(g: GameRecord) {
+    if (g.sys === "ps2") { setPs2Boot(g); setApp("ps2"); }
+    else props.onPlay(g);
+  }
   let appNav: ((a: Parameters<Parameters<typeof onNav>[0]>[0]) => void) | undefined;
   const [apod, setApod] = createSignal<{ loading: boolean; data?: Apod } | null>(null);
   const [dict, setDict] = createSignal<{ result?: Definition | null; looking: boolean } | null>(null);
@@ -126,12 +135,14 @@ export default function XMB(props: {
     { id: "trivia", title: "Trivia Arcade", sub: "Built-in game · 10 questions, endless rounds", icon: "question", action: { type: "trivia" } },
     { id: "flash", title: "Flash Arcade", sub: "Built-in arcade · classic Flash games, streamed", icon: "lightning", action: { type: "flash" } },
     { id: "ps2", title: "PlayStation 2", sub: "Console emulator · boot YOUR .iso disc · 2-player online", icon: "disc", action: { type: "ps2" } },
-    { id: "insert", title: "Retro Console — Insert Cartridge…", sub: "NES · SNES · GBA · N64 & more — a ROM you own, read locally", icon: "plus", action: { type: "insert-disc" } },
+    ...(games().length ? [{ id: "gamelib", title: "Game Library", sub: `Your shelf · ${games().length} game${games().length === 1 ? "" : "s"} · cover art, PS2 & retro`, icon: "cube", action: { type: "game-library" as const } }] : []),
+    ...(fsAccessSupported() ? [{ id: "link", title: "Link Games from Disk…", sub: "Keep ISOs/ROMs on YOUR drive — pick once, play forever (Chrome/Edge)", icon: "folder", action: { type: "link-games" as const } }] : []),
+    { id: "insert", title: "Insert Cartridge…", sub: "Copy a ROM you own into the console — PS2 · NES · SNES · GBA · N64 & more", icon: "plus", action: { type: "insert-disc" } },
     { id: "lichesstv", title: "Lichess TV", sub: "Spectate · live grandmaster games", icon: "knight", action: { type: "lichess-tv" } },
     ...games().map((g) => ({
       id: `g-${g.id}`,
       title: g.name.replace(/\.[^.]+$/, ""),
-      sub: `Your library · ${CORE_NAMES[g.core] ?? g.core} · ${(g.size / 1048576).toFixed(1)} MB · played ${g.plays ?? 0}×`,
+      sub: `${isLinked(g) ? "Linked" : "Installed"} · ${g.sys === "ps2" ? "PlayStation 2" : CORE_NAMES[g.core] ?? g.core} · ${g.size >= 1073741824 ? (g.size / 1073741824).toFixed(1) + " GB" : (g.size / 1048576).toFixed(1) + " MB"} · played ${g.plays ?? 0}×`,
       icon: "disc",
       action: { type: "play-game" as const, gameId: g.id },
     })),
@@ -318,10 +329,17 @@ export default function XMB(props: {
         sfx.confirm();
         fileInput.click();
         break;
+      case "link-games":
+        onLink();
+        break;
+      case "game-library":
+        sfx.confirm();
+        setApp("gamelib");
+        break;
       case "play-game": {
         sfx.confirm();
         const g = games().find((x) => x.id === a.gameId);
-        if (g) { awardT("disc"); props.onPlay(g); }
+        if (g) { awardT("disc"); playRecord(g); }
         break;
       }
       case "music-toggle": {
@@ -653,22 +671,61 @@ export default function XMB(props: {
     }
   }
 
-  async function onDisc(file: File) {
-    const ext = file.name.split(".").pop()?.toLowerCase() ?? "";
+  // classify any ROM/disc by extension → {sys:"ps2"} or a retro core
+  function classify(name: string): { sys?: "ps2"; core: string } | null {
+    const ext = name.split(".").pop()?.toLowerCase() ?? "";
+    if (PS2_EXTS.includes(ext)) return { sys: "ps2", core: "ps2" };
     const core = CORES[ext];
-    if (!core) {
+    return core ? { core } : null;
+  }
+
+  // "Link Games from Disk…" — Chromium File System Access. Stores only handles;
+  // the games stream from the user's own drive, PS2 ISOs included (zero-copy).
+  async function onLink() {
+    if (!fsAccessSupported()) { sfx.deny(); pushToast("Not supported", "Linking needs Chrome or Edge — use Insert Cartridge to copy instead"); return; }
+    let handles: FileSystemFileHandle[];
+    try {
+      handles = await (window as any).showOpenFilePicker({
+        multiple: true,
+        types: [{ description: "Game discs & ROMs", accept: { "application/octet-stream": [".iso", ".cso", ".chd", ".isz", ".gba", ".gb", ".gbc", ".nes", ".fds", ".sfc", ".smc", ".md", ".gen", ".n64", ".z64", ".v64", ".nds"] } }],
+      });
+    } catch { return; } // picker dismissed
+    let added = 0, skipped = 0;
+    for (const h of handles) {
+      const cls = classify(h.name);
+      if (!cls) { skipped++; continue; }
+      const f = await h.getFile();
+      await addGame({
+        id: Math.random().toString(36).slice(2, 10), profileId: props.profile.id,
+        name: h.name, core: cls.core, sys: cls.sys, size: f.size,
+        addedAt: Date.now(), plays: 0, kind: "link", handle: h,
+      });
+      added++;
+    }
+    await refreshGames();
+    sfx.confirm();
+    pushToast(added ? "Games linked" : "Nothing added", added ? `${added} game${added === 1 ? "" : "s"} on your shelf${skipped ? ` · ${skipped} skipped` : ""}` : "Unsupported file types");
+    if (added && games().length >= 3) awardT("collector");
+    if (added) awardT("disc");
+  }
+
+  async function onDisc(file: File) {
+    const cls = classify(file.name);
+    if (!cls) {
       sfx.deny();
-      pushToast("Unreadable disc", `.${ext} isn't a supported format`);
+      pushToast("Unreadable disc", `.${file.name.split(".").pop()} isn't a supported format`);
       return;
     }
     const rec: GameRecord = {
       id: Math.random().toString(36).slice(2, 10),
       profileId: props.profile.id,
       name: file.name,
-      core,
+      core: cls.core,
+      sys: cls.sys,
       size: file.size,
       addedAt: Date.now(),
       plays: 0,
+      kind: "copy",
       blob: file,
     };
     await addGame(rec);
@@ -676,7 +733,7 @@ export default function XMB(props: {
     pushToast("Disc added", `${file.name} → your game library`);
     if (games().length >= 3) awardT("collector");
     awardT("disc");
-    props.onPlay(rec);
+    playRecord(rec);
   }
 
   // —— link input (spotify / tv / rss share one modal) ——
@@ -907,7 +964,7 @@ export default function XMB(props: {
     if (padTest()) { if (action === "back") setPadTest(false); return; }
     if (app()) {
       // bound apps route their own nav; the rest are keyboard-driven owner apps
-      if (["chess", "trivia", "flash", "cinema", "podcasts", "library", "youtube", "art", "wiki"].includes(app()!)) appNav?.(action);
+      if (["chess", "trivia", "flash", "cinema", "podcasts", "library", "youtube", "art", "wiki", "gamelib"].includes(app()!)) appNav?.(action);
       else if (app() === "lichess" && action === "back") { sfx.back(); setApp(null); }
       else if (src === "pad" || src === "gesture") {
         // owner apps (map/globe, lichess…) listen to the KEYBOARD — turn pad
@@ -1419,7 +1476,7 @@ export default function XMB(props: {
       <Show when={app() === "wiki"}>
         <WikiApp bind={(f) => (appNav = f)} onClose={() => setApp(null)} />
       </Show>
-      <Show when={app() === "ps2"}><Ps2 profileId={props.profile.id} onClose={() => setApp(null)} /></Show>
+      <Show when={app() === "ps2"}><Ps2 profileId={props.profile.id} initialGame={ps2Boot() ?? undefined} onClose={() => { setPs2Boot(null); setApp(null); }} /></Show>
       <Show when={app() === "pc"}><PcApp onClose={() => setApp(null)} /></Show>
       <Show when={app() === "guestbook"}><Guestbook userName={props.profile.name} onClose={() => setApp(null)} /></Show>
       <Show when={app() === "browser"}><Browser onClose={() => setApp(null)} /></Show>
@@ -1427,6 +1484,15 @@ export default function XMB(props: {
       <Show when={app() === "studio"}><Studio onClose={() => setApp(null)} /></Show>
       <Show when={app() === "code"}><CodeApp onClose={() => setApp(null)} /></Show>
       <Show when={app() === "manual"}><Manual onClose={() => setApp(null)} /></Show>
+      <Show when={app() === "gamelib"}>
+        <GameLibrary
+          bind={(f) => (appNav = f)}
+          games={games()}
+          onPlay={(g) => { awardT("disc"); playRecord(g); }}
+          onChanged={refreshGames}
+          onClose={() => setApp(null)}
+        />
+      </Show>
       <Show when={app() === "lichess"}>
         <div class="fullapp">
           <iframe credentialless={true} class="fullapp-frame" src="https://lichess.org/tv/frame?theme=brown&bg=dark" allow="fullscreen" title="Lichess TV" />
@@ -1738,7 +1804,7 @@ export default function XMB(props: {
         type="file"
         ref={fileInput}
         hidden
-        accept=".gba,.gb,.gbc,.nes,.fds,.sfc,.smc,.md,.gen,.bin,.n64,.z64,.v64,.nds"
+        accept=".iso,.cso,.chd,.isz,.gba,.gb,.gbc,.nes,.fds,.sfc,.smc,.md,.gen,.bin,.n64,.z64,.v64,.nds"
         onChange={(e) => {
           const f = e.currentTarget.files?.[0];
           e.currentTarget.value = "";

@@ -1369,6 +1369,10 @@ img.status-avatar, img.ptile-avatar { object-fit: cover; border: 1px solid rgba(
 .ps-act:active { transform: scale(0.97); }
 .ps-act:disabled { opacity: 0.35; cursor: default; }
 
+/* ── Game Library shelf ── */
+.gamelib-sub { font-size: 12.5px; color: var(--dim); letter-spacing: 0.02em; margin-top: 4px; max-width: 900px; }
+.session-grant-hint { font-size: 12.5px; color: var(--dim); letter-spacing: 0.03em; max-width: 460px; text-align: center; margin-top: 4px; }
+
 /* ── System Manual — the console's own documentation ── */
 .manual { position: fixed; inset: 0; z-index: 32; display: flex; flex-direction: column; }
 .manual-head { display: flex; align-items: center; justify-content: space-between; }

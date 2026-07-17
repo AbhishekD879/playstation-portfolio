@@ -8,14 +8,16 @@ import { setNavEnabled } from "../input";
 import { startBridge, stopBridge, PS2_CONFIG } from "../gamepadBridge";
 import { startHost, startJoiner, type HostHandle, type JoinerHandle } from "../ps2mp/webrtc";
 import { captureLocalInput, makeInjector, type PadState } from "../ps2mp/input";
+import { bumpPlays, resolveGameFile, type GameRecord } from "../gamesdb";
 
 type Stage = "insert" | "reading" | "playing" | "error";
 
-export default function Ps2(props: { onClose: () => void; profileId: string }) {
+export default function Ps2(props: { onClose: () => void; profileId: string; initialGame?: GameRecord }) {
   const isDesktop = matchMedia("(pointer: fine)").matches && innerWidth >= 900 && typeof WebAssembly === "object";
   const isolated = (globalThis as any).crossOriginIsolated === true;
   const saveKey = `ps2:${props.profileId}`; // one memory card per profile
   const [stage, setStage] = createSignal<Stage>("insert");
+  const [linkBlock, setLinkBlock] = createSignal<"permission" | "missing" | null>(null);
   const [disc, setDisc] = createSignal<File | null>(null);
   const [err, setErr] = createSignal("");
   let frame!: HTMLIFrameElement;
@@ -118,6 +120,7 @@ export default function Ps2(props: { onClose: () => void; profileId: string }) {
       if (e.data.type === "play-ready") {
         ready = true;
         if (pending) bootNow(pending);
+        else if (props.initialGame) bootRecord(props.initialGame, true); // auto-boot the library pick
       }
       if (e.data.type === "play-booted") {
         setStage("playing");
@@ -175,6 +178,23 @@ export default function Ps2(props: { onClose: () => void; profileId: string }) {
     pending = f;
     if (ready) bootNow(f);
     // if not ready yet, play-ready handler boots it
+  }
+
+  // boot a library record: stream its file (zero-copy for a multi-GB ISO —
+  // handle.getFile() is disk-backed) and insert it. On a lapsed permission,
+  // show the grant button; the file keeps its name so Play! detects the format.
+  async function bootRecord(g: GameRecord, request: boolean) {
+    let raw: Blob;
+    try {
+      raw = await resolveGameFile(g, { request });
+    } catch (e: any) {
+      setLinkBlock(e?.cause === "permission" ? "permission" : "missing");
+      return;
+    }
+    setLinkBlock(null);
+    bumpPlays(g.id);
+    const file = raw instanceof File ? raw : new File([raw], g.name, { type: raw.type });
+    insert(file);
   }
 
   function eject() {
@@ -277,7 +297,22 @@ export default function Ps2(props: { onClose: () => void; profileId: string }) {
               <button class="ps-act" onClick={() => { sfx.back(); props.onClose(); }}><span class="btn-o" /> back</button>
             </div>
 
-            <Show when={stage() === "insert" && joinStage() !== "code"}>
+            {/* library pick that needs a fresh disk grant (or moved file) */}
+            <Show when={stage() === "insert" && joinStage() !== "code" && linkBlock()}>
+              <div class="ps2-gate">
+                <div class="ps2-disc-art"><div class="ps2-disc-hole" /></div>
+                <div class="ps2-big">{linkBlock() === "permission" ? "This disc lives on your drive" : "That disc has moved"}</div>
+                <p>{props.initialGame?.name}</p>
+                <Show when={linkBlock() === "permission"} fallback={
+                  <p class="ps2-warn">Open the Game Library and press R on it to re-link the file, then boot again.</p>
+                }>
+                  <button class="ps2-launch" onClick={() => bootRecord(props.initialGame!, true)}>▶ &nbsp;GRANT DISK ACCESS & PLAY</button>
+                  <p class="ps2-warn">Linked discs stream straight from your drive — the multi-GB ISO is never copied.</p>
+                </Show>
+              </div>
+            </Show>
+
+            <Show when={stage() === "insert" && joinStage() !== "code" && !linkBlock()}>
               <div class="ps2-gate">
                 <div class="ps2-disc-art"><div class="ps2-disc-hole" /></div>
                 <div class="ps2-big">Insert a PlayStation 2 disc</div>
