@@ -129,6 +129,16 @@ export async function addPhoto(rec: PhotoRecord): Promise<void> {
   });
 }
 
+export async function removePhoto(id: string): Promise<void> {
+  const db = await open();
+  return new Promise((res, rej) => {
+    const tx = db.transaction(PHOTOS, "readwrite");
+    tx.objectStore(PHOTOS).delete(id);
+    tx.oncomplete = () => res();
+    tx.onerror = () => rej(tx.error);
+  });
+}
+
 export async function listPhotos(profileId: string): Promise<PhotoRecord[]> {
   const db = await open();
   return new Promise((res, rej) => {

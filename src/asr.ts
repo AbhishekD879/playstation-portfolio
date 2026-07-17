@@ -12,7 +12,7 @@ const loadASR = () =>
   acquireModel<any>("whisper", "Whisper (voice commands)", 90, async () => {
     const { pipeline } = await import("@huggingface/transformers");
     const device = typeof (navigator as any).gpu !== "undefined" ? "webgpu" : "wasm";
-    return pipeline("automatic-speech-recognition", "onnx-community/whisper-base.en", { device } as any);
+    return pipeline("automatic-speech-recognition", "onnx-community/whisper-base.en", { device, session_options: { logSeverityLevel: 3 } } as any);
   });
 
 /** Records until stop() is called, then resolves with the transcript. */

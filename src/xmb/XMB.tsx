@@ -1699,7 +1699,7 @@ export default function XMB(props: {
         <Photos
           photos={photos()}
           bind={(f) => (viewerNav = f)}
-          onEnhanced={refreshPhotos}
+          onChanged={refreshPhotos}
           onClose={() => setViewerOpen(false)}
         />
       </Show>

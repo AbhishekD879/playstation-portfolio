@@ -21,6 +21,7 @@ const loadModel = () =>
     // q8 keeps the wasm path tolerable; webgpu takes the default dtype
     const opts: any = {
       device,
+      session_options: { logSeverityLevel: 3 }, // ORT's node-assignment warnings are noise
       progress_callback: (p: any) => {
         // track the big file's descent; ignore config/tokenizer chatter
         if (p?.status === "progress" && typeof p.progress === "number" && String(p.file ?? "").includes("onnx")) {

@@ -7,6 +7,7 @@ import type { NavAction } from "../input";
 import * as sfx from "../audio";
 import Board3D from "./Board3D";
 import { joinChess, type ChessLink } from "../p2p";
+import { labEnabled } from "../labs";
 
 const LEVELS = [
   { name: "Rookie", depth: 2 },
@@ -203,9 +204,11 @@ export default function ChessApp(props: {
     <div class="chess">
       <div class="chess-head">
         <div class="panel-tag">{mode() === "p2p" ? "CHESS — LIVE VS A VISITOR · P2P" : "CHESS — STOCKFISH 18 · WASM, ON THIS DEVICE"}</div>
-        <div class="chess-level" onClick={toggleP2p} title="Play another live visitor — serverless WebRTC">
-          opponent: {mode() === "engine" ? "machine — tap for a visitor" : mode() === "wait" ? "searching…" : "◉ live visitor"}
-        </div>
+        <Show when={labEnabled("presence")}>
+          <div class="chess-level" onClick={toggleP2p} title="Play another live visitor — serverless WebRTC">
+            opponent: {mode() === "engine" ? "machine — tap for a visitor" : mode() === "wait" ? "searching…" : "◉ live visitor"}
+          </div>
+        </Show>
         <Show when={mode() === "engine"}>
           <div class="chess-level" onClick={() => setLevel((level() + 1) % LEVELS.length)}>
             engine: {LEVELS[level()].name} {thinking() ? "· thinking…" : ""}

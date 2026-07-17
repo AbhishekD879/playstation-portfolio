@@ -18,7 +18,7 @@ const FEATURE_GROUPS: FlagGroup[] = [
       { id: "osk", title: "On-Screen Keyboard", desc: "Pops up for text fields when you're on a controller" },
       { id: "voice", title: "Voice Commands", desc: "The header mic — click, or hold N / R2, and say “open doom”" },
       { id: "saver", title: "Screen Saver", desc: "Idle clock screen after a few minutes of no input" },
-      { id: "presence", title: "Visitor Presence", desc: "A quiet count of who else is on the console right now — serverless P2P, nothing shared but a hello" },
+      { id: "presence", title: "Visitor Presence & P2P Play", desc: "See who else is on the console + play them at Chess — serverless P2P, nothing shared but moves" },
     ],
   },
   {
@@ -33,6 +33,7 @@ const FEATURE_GROUPS: FlagGroup[] = [
       { id: "juice", title: "Launch Effects", desc: "Impact shake + haptic pulse when an app opens" },
       { id: "gpujuice", title: "Particle Bursts (WebGPU)", desc: "Compute-shader particle storms on app launch & trophies" },
       { id: "livephoto", title: "Live Photos (3D)", desc: "On-device AI depth turns gallery photos into parallax 3D" },
+      { id: "enhance", title: "Photo Enhance (AI ×2)", desc: "On-device super-resolution — upscale any gallery photo, tile by tile" },
       { id: "vibe", title: "Vibe Search (Planet Earth)", desc: "Type a feeling — on-device embeddings fly the globe there" },
       // only browsers with the HTML-in-Canvas trial even see this switch
       ...(hasHtmlInCanvas() ? [{ id: "crt", title: "CRT Console (experimental)", desc: "The ENTIRE console on a curved phosphor tube — restarts the console" }] : []),
@@ -123,8 +124,13 @@ const FEATURE_GUIDES: Record<string, LabGuide> = {
     go: "saver", goLabel: "PREVIEW IT NOW",
   },
   presence: {
-    what: "Serverless P2P presence (Trystero over Nostr relays): a soft ◉ count in the header when other visitors are browsing the console at the same time. No server, no tracking — browsers just wave at each other.",
-    steps: ["Open the console in a second browser or another device", "Watch the header: “◉ 2 on console”", "Chess gains a 🌐 vs visitor mode — two visitors can play each other live"],
+    what: "Serverless P2P (Trystero over Nostr relays): a soft ◉ count in the header when other visitors are browsing, and Chess can pair two visitors for a live game. No server, no tracking — browsers just wave at each other.",
+    steps: ["Open the console in a second browser or another device", "Watch the header: “◉ 2 on console”", "In Chess, tap the opponent pill — two consoles pair up and play"],
+  },
+  enhance: {
+    what: "On-device ×2 super-resolution (Swin2SR). The photo is upscaled tile by tile with a live progress strip — nothing leaves the browser; the result is saved as a new photo.",
+    steps: ["Photo › Slideshow", "Tap ◈ enhance ×2 on any photo you added", "Watch the strip — the enhanced copy lands in your gallery"],
+    go: "photo-cat", goLabel: "GO TO PHOTOS",
   },
   phonepad: {
     what: "Your phone becomes the controller — scan a QR, get a touch gamepad driving this screen.",

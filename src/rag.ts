@@ -36,7 +36,7 @@ const getExtractor = () =>
   acquireModel("minilm", "MiniLM embeddings", 35, async () => {
     const { pipeline } = await import("@huggingface/transformers");
     const device = typeof (navigator as any).gpu !== "undefined" ? "webgpu" : "wasm";
-    return pipeline("feature-extraction", "Xenova/all-MiniLM-L6-v2", { device } as any);
+    return pipeline("feature-extraction", "Xenova/all-MiniLM-L6-v2", { device, session_options: { logSeverityLevel: 3 } } as any);
   });
 
 async function embed(texts: string[]): Promise<Float32Array[]> {
