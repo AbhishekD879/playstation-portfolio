@@ -163,6 +163,15 @@ img.status-avatar, img.ptile-avatar { object-fit: cover; border: 1px solid rgba(
 .item.above { opacity: 0.35; }
 .item.selected { opacity: 1; }
 .item.offscreen { opacity: 0; pointer-events: none; }
+/* sub-section header — a labelled divider above the first item of a group */
+.item-group-head {
+  position: absolute; top: -21px; left: 62px; display: flex; align-items: center; gap: 9px;
+  font-size: 10.5px; font-weight: 500; letter-spacing: 0.24em; text-transform: uppercase;
+  color: color-mix(in oklab, var(--xmb-tint) 62%, #fff); white-space: nowrap; pointer-events: none;
+  text-shadow: 0 1px 4px rgba(0,0,0,0.55);
+}
+.item-group-head::before { content: ""; width: 16px; height: 1px; background: currentColor; opacity: 0.6; }
+.item.selected .item-group-head { left: 80px; }
 .item-icon {
   width: 44px; height: 44px; flex: 0 0 auto;
   color: #fff; opacity: 0.9;

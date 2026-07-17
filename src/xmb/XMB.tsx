@@ -161,36 +161,36 @@ export default function XMB(props: {
   const pspCount = () => games().filter((g) => g.core === "psp").length;
   const retroCount = () => games().filter((g) => g.sys !== "ps2" && g.core !== "psp").length;
   const gameItems = createMemo<XmbItem[]>(() => [
-    { id: "doom", title: "DOOM", sub: "Built-in game · the 1993 shareware, playable now", icon: "skull", action: { type: "doom" } },
-    { id: "chess", title: "Chess vs Stockfish", sub: "Built-in game · the real engine, on this device", icon: "knight", action: { type: "chess" } },
-    { id: "trivia", title: "Trivia Arcade", sub: "Built-in game · 10 questions, endless rounds", icon: "question", action: { type: "trivia" } },
-    { id: "flash", title: "Flash Arcade", sub: "Built-in arcade · classic Flash games, streamed", icon: "lightning", action: { type: "flash" } },
-    { id: "ps2", title: "PlayStation 2", sub: `Library, downloads & 2-player online${ps2Count() ? ` · ${ps2Count()} in your shelf` : ""}`, icon: "disc", action: { type: "ps2-home" } },
-    { id: "psp", title: "PlayStation Portable", sub: `PSP library & downloads — experimental (PPSSPP)${pspCount() ? ` · ${pspCount()} in your shelf` : ""}`, icon: "disc", action: { type: "psp-home" } },
-    { id: "retro", title: "Retro Games", sub: `NES · SNES · GBA · N64 & more — library + downloads${retroCount() ? ` · ${retroCount()} in your shelf` : ""}`, icon: "gamepad", action: { type: "retro-home" } },
-    { id: "lichesstv", title: "Lichess TV", sub: "Spectate · live grandmaster games", icon: "knight", action: { type: "lichess-tv" } },
+    { id: "doom", title: "DOOM", sub: "Built-in game · the 1993 shareware, playable now", icon: "skull", group: "Arcade & Classics", action: { type: "doom" } },
+    { id: "chess", title: "Chess vs Stockfish", sub: "Built-in game · the real engine, on this device", icon: "knight", group: "Arcade & Classics", action: { type: "chess" } },
+    { id: "trivia", title: "Trivia Arcade", sub: "Built-in game · 10 questions, endless rounds", icon: "question", group: "Arcade & Classics", action: { type: "trivia" } },
+    { id: "flash", title: "Flash Arcade", sub: "Built-in arcade · classic Flash games, streamed", icon: "lightning", group: "Arcade & Classics", action: { type: "flash" } },
+    { id: "ps2", title: "PlayStation 2", sub: `Library, downloads & 2-player online${ps2Count() ? ` · ${ps2Count()} in your shelf` : ""}`, icon: "disc", group: "Emulators", action: { type: "ps2-home" } },
+    { id: "psp", title: "PlayStation Portable", sub: `PSP library & downloads — experimental (PPSSPP)${pspCount() ? ` · ${pspCount()} in your shelf` : ""}`, icon: "disc", group: "Emulators", action: { type: "psp-home" } },
+    { id: "retro", title: "Retro Games", sub: `NES · SNES · GBA · N64 & more — library + downloads${retroCount() ? ` · ${retroCount()} in your shelf` : ""}`, icon: "gamepad", group: "Emulators", action: { type: "retro-home" } },
+    { id: "lichesstv", title: "Lichess TV", sub: "Spectate · live grandmaster games", icon: "knight", group: "Watch Live", action: { type: "lichess-tv" } },
   ]);
 
   const RETRO_SYSTEMS = ["gba", "gb", "nes", "snes", "segaMD", "n64", "nds"] as const;
 
   const musicItems = createMemo<XmbItem[]>(() => [
-    { id: "radio-guide", title: "Radio Stations", sub: "Search ~3,000 live stations worldwide", icon: "globe", action: { type: "radio-guide" } },
-    { id: "podcasts", title: "Podcasts", sub: "Search any show — plays in the background", icon: "mic", action: { type: "podcasts" } },
-    { id: "winamp", title: "Winamp", sub: "The 1997 legend, resurrected in JS", icon: "lightning", action: { type: "webamp" } },
+    { id: "radio-guide", title: "Radio Stations", sub: "Search ~3,000 live stations worldwide", icon: "globe", group: "Stations & Radio", action: { type: "radio-guide" } },
+    { id: "podcasts", title: "Podcasts", sub: "Search any show — plays in the background", icon: "mic", group: "Stations & Radio", action: { type: "podcasts" } },
+    { id: "winamp", title: "Winamp", sub: "The 1997 legend, resurrected in JS", icon: "lightning", group: "Stations & Radio", action: { type: "webamp" } },
     ...(station()
-      ? [{ id: "radio-stop", title: `■ Stop — ${station()!.label}`, sub: "Now playing", icon: "speaker", action: { type: "radio-play" as const, url: "", label: "" } }]
+      ? [{ id: "radio-stop", title: `■ Stop — ${station()!.label}`, sub: "Now playing", icon: "speaker", group: "Stations & Radio", action: { type: "radio-play" as const, url: "", label: "" } }]
       : []),
     ...recentStations()
       .filter((r) => r.label !== station()?.label)
       .map((r, i) => ({
-        id: `rh-${i}`, title: r.label, sub: "Recently played station", icon: "note",
+        id: `rh-${i}`, title: r.label, sub: "Recently played station", icon: "note", group: "Stations & Radio",
         action: { type: "radio-play" as const, url: r.url, label: r.label },
       })),
-    { id: "radio", title: "Console Radio", sub: "Generative lo-fi — synthesized live", icon: "note", action: { type: "music-toggle" } },
-    { id: "visualizer", title: "Visualizer", sub: "Music visualizations — reacts to the radio & mic", icon: "wave", action: { type: "visualizer" } },
-    { id: "studio", title: "Studio", sub: "Playable synth, drum machine & MIDI — synthesized live", icon: "note", action: { type: "studio" } },
+    { id: "radio", title: "Console Radio", sub: "Generative lo-fi — synthesized live", icon: "note", group: "Stations & Radio", action: { type: "music-toggle" } },
+    { id: "visualizer", title: "Visualizer", sub: "Music visualizations — reacts to the radio & mic", icon: "wave", group: "Make Sound", action: { type: "visualizer" } },
+    { id: "studio", title: "Studio", sub: "Playable synth, drum machine & MIDI — synthesized live", icon: "note", group: "Make Sound", action: { type: "studio" } },
     {
-      id: "sp-default", title: "lofi beats", sub: "Spotify · curated focus playlist", icon: "disc",
+      id: "sp-default", title: "lofi beats", sub: "Spotify · curated focus playlist", icon: "disc", group: "Spotify",
       action: { type: "spotify", url: "https://open.spotify.com/embed/playlist/37i9dQZF1DWWQRwui0ExPn", label: "lofi beats" },
     },
     ...links().map((l, i) => ({
@@ -198,9 +198,10 @@ export default function XMB(props: {
       title: l.label,
       sub: "Spotify · your link",
       icon: "disc",
+      group: "Spotify",
       action: { type: "spotify" as const, url: l.url, label: l.label },
     })),
-    { id: "sp-link", title: "Connect Spotify…", sub: "Paste any playlist, album or track link", icon: "plus", action: { type: "spotify-link" } },
+    { id: "sp-link", title: "Connect Spotify…", sub: "Paste any playlist, album or track link", icon: "plus", group: "Spotify", action: { type: "spotify-link" } },
   ]);
 
   const tvItems = createMemo<XmbItem[]>(() => [
@@ -1363,6 +1364,18 @@ export default function XMB(props: {
   // clearance above the category label (d=0 at 118) and below the hint bar
   const itemY = (d: number) => (d < 0 ? -92 + d * 52 : d === 0 ? 118 : 118 + 92 + (d - 1) * 80);
 
+  // sub-section headers: a labelled gap opens above the first item of each run
+  // that shares a `group`. Nav is untouched — headers are pure layout.
+  const colItems = createMemo<XmbItem[]>(() => itemsOf(cat()));
+  const HGAP = 30; // px a header opens above its group's first item
+  const headerAt = (items: XmbItem[], i: number) => { const g = items[i]?.group; return !!g && g !== items[i - 1]?.group; };
+  const headerOffset = (items: XmbItem[], i: number, sel: number) => {
+    let n = 0;
+    if (i > sel) { for (let k = sel + 1; k <= i; k++) if (headerAt(items, k)) n++; }
+    else if (i < sel) { for (let k = i + 1; k <= sel; k++) if (headerAt(items, k)) n--; }
+    return n * HGAP;
+  };
+
   const trophyCount = () => {
     trophyVer();
     return Object.keys(props.profile.trophies).length;
@@ -1450,19 +1463,23 @@ export default function XMB(props: {
 
       {/* item column for the active category */}
       <div class="item-col">
-        <For each={itemsOf(cat())}>
+        <For each={colItems()}>
           {(item, i) => {
             const d = () => i() - selOf(cat());
+            const y = () => itemY(d()) + headerOffset(colItems(), i(), selOf(cat()));
             return (
               <div
                 class="item"
                 classList={{ selected: d() === 0, above: d() < 0, offscreen: d() > 4 || d() < -3 }}
-                style={{ transform: `translateY(${itemY(d())}px)` }}
+                style={{ transform: `translateY(${y()}px)` }}
                 onClick={() => {
                   if (d() === 0) act(item);
                   else { setSels({ ...sels(), [CATEGORIES[cat()].id]: i() }); sfx.tickV(); }
                 }}
               >
+                <Show when={headerAt(colItems(), i())}>
+                  <div class="item-group-head">{item.group}</div>
+                </Show>
                 <div class="item-icon"><Icon name={item.icon} /></div>
                 <div class="item-text">
                   <div class="item-title">{item.title}</div>
