@@ -126,7 +126,7 @@ export default function XMB(props: {
   const [ytQuery, setYtQuery] = createSignal(""); // AI agent → YouTube search handoff
   const [vListening, setVListening] = createSignal(false); // XMB voice command
   const [padTest, setPadTest] = createSignal(false);
-  const [app, setApp] = createSignal<null | "doom" | "doomrtx" | "chess" | "trivia" | "flash" | "cinema" | "podcasts" | "library" | "map" | "ai" | "webamp" | "youtube" | "timemachine" | "art" | "wiki" | "lichess" | "ps2" | "pc" | "guestbook" | "browser" | "visualizer" | "studio" | "code" | "manual" | "ps2home" | "ps1home" | "psphome" | "retrohome">(null);
+  const [app, setApp] = createSignal<null | "doom" | "doomrtx" | "chess" | "trivia" | "flash" | "cinema" | "podcasts" | "library" | "map" | "ai" | "webamp" | "youtube" | "timemachine" | "art" | "wiki" | "lichess" | "ps2" | "pc" | "guestbook" | "browser" | "visualizer" | "studio" | "code" | "manual" | "ps2home" | "ps1home" | "psphome" | "retrohome" | "scummvm">(null);
   const [ps2Boot, setPs2Boot] = createSignal<GameRecord | null>(null);
   const [ps2Join, setPs2Join] = createSignal(false);
   const [ccOpen, setCcOpen] = createSignal(false);
@@ -176,6 +176,7 @@ export default function XMB(props: {
     { id: "ps1", title: "PlayStation", sub: `The original — .chd/.pbp discs, no BIOS needed${psxCount() ? ` · ${psxCount()} in your shelf` : ""}`, icon: "disc", action: { type: "ps1-home" } },
     { id: "psp", title: "PlayStation Portable", sub: `PSP library & downloads — experimental (PPSSPP)${pspCount() ? ` · ${pspCount()} in your shelf` : ""}`, icon: "disc", action: { type: "psp-home" } },
     { id: "retro", title: "Retro Games", sub: `NES · SNES · GBA · N64 & more — library + downloads${retroCount() ? ` · ${retroCount()} in your shelf` : ""}`, icon: "gamepad", action: { type: "retro-home" } },
+    { id: "scummvm", title: "Point & Click", sub: "ScummVM in wasm — classic adventures, free ones included", icon: "folder-open", action: { type: "scummvm" } },
     { id: "lichesstv", title: "Lichess TV", sub: "Spectate · live grandmaster games", icon: "knight", action: { type: "lichess-tv" } },
   ]);
 
@@ -554,6 +555,10 @@ export default function XMB(props: {
       case "lichess-tv":
         sfx.confirm();
         setApp("lichess");
+        break;
+      case "scummvm":
+        sfx.confirm();
+        setApp("scummvm");
         break;
       case "dictionary":
         sfx.confirm();
@@ -1798,6 +1803,15 @@ export default function XMB(props: {
           onChanged={refreshGames}
           onClose={() => setApp(null)}
         />
+      </Show>
+      <Show when={app() === "scummvm"}>
+        {/* ScummVM compiled to WebAssembly (chkuendig's hosted build). Bring
+            your own classic adventures via its cloud-storage hookups — and
+            Beneath a Steel Sky is legally freeware, playable right away. */}
+        <div class="fullapp">
+          <iframe credentialless={true} class="fullapp-frame" src="https://scummvm.kuendig.io/" allow="fullscreen; autoplay" title="ScummVM — point & click classics" />
+          <button class="session-eject" onClick={() => { sfx.back(); setApp(null); }}>⏏ CLOSE</button>
+        </div>
       </Show>
       <Show when={app() === "lichess"}>
         <div class="fullapp">

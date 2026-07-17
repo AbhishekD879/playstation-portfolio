@@ -42,6 +42,7 @@ export interface XmbItem {
     | { type: "doom" }
     | { type: "doom-rtx" }
     | { type: "ps1-home" }
+    | { type: "scummvm" }
     | { type: "chess" }
     | { type: "trivia" }
     | { type: "flash" }

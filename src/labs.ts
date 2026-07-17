@@ -64,6 +64,7 @@ const APPS: { id: string; title: string; cat: string }[] = [
   { id: "ps2", title: "PlayStation 2 emulator", cat: "Games" },
   { id: "ps1", title: "PlayStation 1 (PSX)", cat: "Games" },
   { id: "insert", title: "Retro Console (cartridge loader)", cat: "Games" },
+  { id: "scummvm", title: "Point & Click (ScummVM)", cat: "Games" },
   { id: "lichesstv", title: "Lichess TV", cat: "Games" },
   { id: "code", title: "Code Playground", cat: "Extras" },
   { id: "pc", title: "Other OS — x86 PC", cat: "Extras" },
