@@ -41,6 +41,7 @@ export interface XmbItem {
     | { type: "photo" }
     | { type: "doom" }
     | { type: "doom-rtx" }
+    | { type: "ps1-home" }
     | { type: "chess" }
     | { type: "trivia" }
     | { type: "flash" }

@@ -62,6 +62,7 @@ const APPS: { id: string; title: string; cat: string }[] = [
   { id: "trivia", title: "Trivia Arcade", cat: "Games" },
   { id: "flash", title: "Flash Arcade", cat: "Games" },
   { id: "ps2", title: "PlayStation 2 emulator", cat: "Games" },
+  { id: "ps1", title: "PlayStation 1 (PSX)", cat: "Games" },
   { id: "insert", title: "Retro Console (cartridge loader)", cat: "Games" },
   { id: "lichesstv", title: "Lichess TV", cat: "Games" },
   { id: "code", title: "Code Playground", cat: "Extras" },

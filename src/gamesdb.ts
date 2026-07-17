@@ -22,7 +22,7 @@ export interface GameRecord {
   origin?: "disk" | "download";     // link source: your drive vs downloaded to OPFS
 }
 
-export type GameSystem = "ps2" | "psp" | "gba" | "gb" | "nes" | "snes" | "segaMD" | "n64" | "nds";
+export type GameSystem = "ps2" | "psp" | "psx" | "gba" | "gb" | "nes" | "snes" | "segaMD" | "n64" | "nds";
 
 export const isLinked = (g: GameRecord) => g.kind === "link";
 
@@ -34,6 +34,10 @@ export const PS2_EXTS = ["iso", "cso", "chd", "isz"];
 // PSP: .pbp/.prx are PSP-only; .iso/.cso are shared with PS2 and disambiguated
 // by which home you're in (see classify() in XMB).
 export const PSP_ONLY_EXTS = ["pbp", "prx"];
+// PS1: unambiguous disc formats. .chd/.pbp are shared (PS2/PSP) and resolve by
+// home context; single-file .chd or .pbp are the formats that actually work —
+// multi-file .cue/.ccd sets can't follow their companion tracks through a blob URL.
+export const PSX_ONLY_EXTS = ["cue", "ccd", "toc", "cbn", "m3u", "mdf"];
 
 /** Resolve a record to a playable File/Blob. Throws Error with .cause set to
  *  "permission" (user must grant disk access — needs a user gesture) or
@@ -63,6 +67,7 @@ export async function resolveGameFile(g: GameRecord, opts?: { request?: boolean 
 const THUMB_REPO: Record<string, string> = {
   ps2: "Sony_-_PlayStation_2",
   psp: "Sony_-_PlayStation_Portable",
+  psx: "Sony_-_PlayStation",
   gba: "Nintendo_-_Game_Boy_Advance",
   gb: "Nintendo_-_Game_Boy",
   nes: "Nintendo_-_Nintendo_Entertainment_System",
@@ -200,5 +205,5 @@ export const CORES: Record<string, string> = {
 export const CORE_NAMES: Record<string, string> = {
   gba: "Game Boy Advance", gb: "Game Boy / Color", nes: "NES",
   snes: "Super Nintendo", segaMD: "Mega Drive", n64: "Nintendo 64", nds: "Nintendo DS",
-  psp: "PlayStation Portable",
+  psp: "PlayStation Portable", psx: "PlayStation",
 };
