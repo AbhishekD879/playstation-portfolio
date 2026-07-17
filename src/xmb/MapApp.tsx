@@ -8,6 +8,8 @@ import "leaflet/dist/leaflet.css";
 import { fetchHN, fetchQuakes, rainTiles, wmo, type Quake } from "../apps";
 import type { GlobeApi } from "./CesiumGlobe";
 import * as sfx from "../audio";
+import { labEnabled } from "../labs";
+import { vibeSearch } from "../vibes";
 
 // Cesium is multi-MB — only fetch it when Planet Earth actually opens
 const CesiumGlobe = lazy(() => import("./CesiumGlobe"));
@@ -39,6 +41,7 @@ export default function MapApp(props: { onClose: () => void; initialAction?: "to
   const [wx, setWx] = createSignal<({ temp: number; code: number } | null)[]>(CITIES.map(() => null));
   const [ticker, setTicker] = createSignal("");
   const [sat, setSat] = createSignal(false);
+  const [vibeMode, setVibeMode] = createSignal(false);
   let mapEl!: HTMLDivElement;
   let map: L.Map;
   let marker: L.Marker | null = null;
@@ -199,6 +202,24 @@ export default function MapApp(props: { onClose: () => void; initialAction?: "to
     }
   }
 
+  // —— vibe search: a feeling → on-device embeddings → the globe flies there ——
+  async function vibe(q: string) {
+    if (!q.trim()) return;
+    setStatus("✨ reading the vibe… (the first one loads a tiny on-device model)");
+    try {
+      const hits = await vibeSearch(q);
+      const top = hits[0];
+      setMode("3d");
+      globeApi?.flyTo(top.place.lat, top.place.lon, 0xd9a6ff);
+      const also = hits.slice(1).map((h) => h.place.name.split(",")[0].split(" — ")[0]).join(" · ");
+      setStatus(`✨ ${top.place.name} · ${Math.round(top.score * 100)}% match — also: ${also}`);
+      setTimeout(() => setStatus(""), 9000);
+      sfx.confirm();
+    } catch {
+      setStatus("Vibe search unavailable — the embedding model failed to load.");
+    }
+  }
+
   async function toggleQuakes() {
     if (mode() === "3d") {
       // on the globe the beacons are always lit — this spotlights the big one
@@ -264,12 +285,16 @@ export default function MapApp(props: { onClose: () => void; initialAction?: "to
         <button class="ghost-btn" classList={{ on: mode() === "3d" }} onClick={() => { setMode(mode() === "3d" ? "2d" : "3d"); sfx.tickH(); }}>
           {mode() === "3d" ? "🗺 flat map" : "🌐 3D globe"}
         </button>
+        <Show when={labEnabled("vibe")}>
+          <button class="ghost-btn" classList={{ on: vibeMode() }} title="Vibe search — type a feeling, fly there"
+            onClick={() => { setVibeMode(!vibeMode()); sfx.tickH(); }}>✨ vibe</button>
+        </Show>
         <input
           class="mapapp-search"
-          placeholder="Search a place… (ENTER)"
+          placeholder={vibeMode() ? "✨ somewhere cold and lonely… (ENTER)" : "Search a place… (ENTER)"}
           onKeyDown={(e) => {
             e.stopPropagation();
-            if (e.key === "Enter") search(e.currentTarget.value);
+            if (e.key === "Enter") vibeMode() ? vibe(e.currentTarget.value) : search(e.currentTarget.value);
             if (e.key === "Escape") { sfx.back(); props.onClose(); }
           }}
         />

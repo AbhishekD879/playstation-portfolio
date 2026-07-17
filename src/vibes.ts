@@ -1,0 +1,157 @@
+// Vibe search — type a feeling, the globe flies there. A curated atlas of
+// places with evocative descriptions, embedded on-device with the same MiniLM
+// that powers the AI copilot's retrieval (src/rag.ts). Query → cosine match →
+// top places. No servers; the first search embeds the atlas once (~a second
+// on WebGPU) and keeps it for the session.
+import { cosine, embedTexts } from "./rag";
+
+export interface VibePlace { name: string; lat: number; lon: number; desc: string }
+
+export const PLACES: VibePlace[] = [
+  { name: "Svalbard, Norway", lat: 78.22, lon: 15.65, desc: "Frozen arctic solitude — polar night, glaciers, more polar bears than people, the end of the world in blue ice" },
+  { name: "Reykjavík, Iceland", lat: 64.15, lon: -21.94, desc: "Northern lights, black lava fields, hot springs steaming in freezing air, cozy wool-sweater cafés" },
+  { name: "Tromsø, Norway", lat: 69.65, lon: 18.96, desc: "Aurora borealis dancing over snowy fjords, husky sleds, midnight sun in summer, polar night in winter" },
+  { name: "Faroe Islands", lat: 62.0, lon: -6.79, desc: "Windswept green cliffs falling into a cold grey sea, fog, turf-roofed houses, beautiful loneliness" },
+  { name: "Ittoqqortoormiit, Greenland", lat: 70.48, lon: -21.96, desc: "One of the remotest towns on Earth — colorful houses lost in white infinity, silence and ice" },
+  { name: "Siberia — Oymyakon, Russia", lat: 63.46, lon: 142.79, desc: "The coldest inhabited place on Earth, -60° winters, frozen eyelashes, brutal desolate beauty" },
+  { name: "Patagonia — Torres del Paine, Chile", lat: -50.94, lon: -73.41, desc: "Jagged granite towers, turquoise lakes, glaciers calving, wild wind at the bottom of the world" },
+  { name: "Antarctica — McMurdo Sound", lat: -77.84, lon: 166.69, desc: "The last true wilderness — endless white, emperor penguins, science outposts, absolute isolation" },
+  { name: "Tokyo — Shinjuku, Japan", lat: 35.69, lon: 139.7, desc: "Neon canyons, rain-slick streets glowing pink and cyan, cyberpunk energy, vending machines at 3am" },
+  { name: "Akihabara, Tokyo", lat: 35.7, lon: 139.77, desc: "Electric town — anime, arcades, retro game shops stacked ten floors high, chiptune joy" },
+  { name: "Kyoto, Japan", lat: 35.01, lon: 135.77, desc: "Zen gardens, vermilion torii gates, cherry blossoms drifting over temple stones, ancient calm" },
+  { name: "Hong Kong — Kowloon", lat: 22.32, lon: 114.17, desc: "Dense neon high-rises, night markets, steam from noodle stalls under a wall of lights" },
+  { name: "Seoul — Gangnam, South Korea", lat: 37.5, lon: 127.04, desc: "K-pop glow, PC bangs, futuristic malls, fried chicken and soju at midnight" },
+  { name: "Chongqing, China", lat: 29.56, lon: 106.55, desc: "Cyberpunk megacity in the mist — stacked highways, monorails through buildings, hotpot fire" },
+  { name: "Shibuya Crossing, Tokyo", lat: 35.66, lon: 139.7, desc: "A thousand people crossing at once under giant screens — organized chaos, city electricity" },
+  { name: "Paris, France", lat: 48.85, lon: 2.35, desc: "Romantic boulevards, café terraces, the Eiffel Tower sparkling at night, art and longing" },
+  { name: "Venice, Italy", lat: 45.44, lon: 12.32, desc: "Sinking palaces, gondolas in green canals, masked carnivals, melancholic romantic decay" },
+  { name: "Santorini, Greece", lat: 36.39, lon: 25.46, desc: "White houses and blue domes over a volcanic caldera, honeymoon sunsets, Aegean sparkle" },
+  { name: "Prague, Czechia", lat: 50.09, lon: 14.42, desc: "Gothic spires, astronomical clock, cobbled lanes in fog, fairy-tale bohemia and dark beer" },
+  { name: "Vienna, Austria", lat: 48.21, lon: 16.37, desc: "Imperial ballrooms, Klimt gold, coffee houses with newspapers on wooden racks, waltz elegance" },
+  { name: "Lisbon, Portugal", lat: 38.72, lon: -9.14, desc: "Yellow trams climbing tiled hills, fado songs of saudade, Atlantic light, wistful charm" },
+  { name: "Rome, Italy", lat: 41.9, lon: 12.5, desc: "Ancient ruins layered under living streets, espresso standing up, la dolce vita, eternal city" },
+  { name: "Istanbul, Türkiye", lat: 41.01, lon: 28.98, desc: "Where continents meet — minarets at sunset, grand bazaars, ferries on the Bosphorus, call to prayer" },
+  { name: "Marrakech, Morocco", lat: 31.63, lon: -7.99, desc: "Labyrinth souks, spice pyramids, snake charmers in Jemaa el-Fnaa, rose-pink walls at dusk" },
+  { name: "Cairo — Giza, Egypt", lat: 29.98, lon: 31.13, desc: "The pyramids rising from desert haze, pharaohs and hieroglyphs, four thousand years staring back" },
+  { name: "Petra, Jordan", lat: 30.33, lon: 35.44, desc: "A rose-red city carved into canyon walls, discovered by candlelight, Indiana Jones wonder" },
+  { name: "Jerusalem, Israel", lat: 31.78, lon: 35.22, desc: "Ancient stone alleys sacred to three faiths, layered millennia, pilgrims and prayers" },
+  { name: "Sahara — Merzouga, Morocco", lat: 31.08, lon: -4.01, desc: "Golden dune ocean, camel caravans, star-flooded desert nights, vast silence" },
+  { name: "Wadi Rum, Jordan", lat: 29.53, lon: 35.42, desc: "Mars on Earth — red sandstone monoliths, Bedouin camps, filming ground of alien worlds" },
+  { name: "Atacama Desert, Chile", lat: -23.86, lon: -68.2, desc: "The driest place on Earth — salt flats, geysers, the clearest night sky for stargazing" },
+  { name: "Uyuni Salt Flats, Bolivia", lat: -20.13, lon: -67.49, desc: "A mirror the size of a country — sky and ground merge into surreal white infinity" },
+  { name: "Death Valley, USA", lat: 36.51, lon: -117.08, desc: "Hottest place on Earth, sailing stones, badwater basin below sea level, brutal beauty" },
+  { name: "Monument Valley, USA", lat: 36.98, lon: -110.11, desc: "Red mesas of every western ever filmed — cowboy country, endless highway, Forrest Gump road" },
+  { name: "Grand Canyon, USA", lat: 36.11, lon: -112.11, desc: "A mile-deep gash of geologic time, layered red rock, condors riding thermals, humbling scale" },
+  { name: "Yellowstone, USA", lat: 44.6, lon: -110.5, desc: "Geysers, rainbow hot springs, bison herds, a supervolcano sleeping under wonderland" },
+  { name: "Yosemite, USA", lat: 37.87, lon: -119.54, desc: "Granite cathedrals, waterfalls in spring thunder, climbers on El Capitan, Ansel Adams light" },
+  { name: "Banff, Canada", lat: 51.18, lon: -115.57, desc: "Turquoise alpine lakes, snowy peaks, pine forests, postcard mountain perfection" },
+  { name: "Queenstown, New Zealand", lat: -45.03, lon: 168.66, desc: "Adventure capital — bungee jumps, jet boats, Lord of the Rings landscapes in every direction" },
+  { name: "Milford Sound, New Zealand", lat: -44.67, lon: 167.93, desc: "Misty fjord walls, waterfalls from the clouds, dolphins in dark water, middle-earth majesty" },
+  { name: "Bora Bora, French Polynesia", lat: -16.5, lon: -151.74, desc: "Overwater bungalows on a lagoon of impossible turquoise, honeymoon paradise, tropical bliss" },
+  { name: "Maldives — Malé atolls", lat: 3.2, lon: 73.22, desc: "Rings of coral sand in endless blue, bioluminescent beaches, barefoot luxury, vanishing islands" },
+  { name: "Bali — Ubud, Indonesia", lat: -8.51, lon: 115.26, desc: "Emerald rice terraces, temple offerings, monkeys in sacred forests, yoga and incense" },
+  { name: "Phuket, Thailand", lat: 7.89, lon: 98.4, desc: "Limestone karsts in jade water, long-tail boats, beach bars, tropical holiday ease" },
+  { name: "Hawaii — Big Island", lat: 19.6, lon: -155.5, desc: "Lava meeting the ocean in steam, black sand beaches, aloha spirit, volcano goddess Pele" },
+  { name: "Rio de Janeiro, Brazil", lat: -22.91, lon: -43.17, desc: "Christ the Redeemer over samba beaches, carnival drums, football on Copacabana, joyful chaos" },
+  { name: "Buenos Aires, Argentina", lat: -34.6, lon: -58.38, desc: "Tango in candlelit milongas, steak and Malbec, faded European grandeur, passionate melancholy" },
+  { name: "Havana, Cuba", lat: 23.11, lon: -82.37, desc: "1950s Chevys, crumbling pastel mansions, salsa spilling from doorways, time-capsule soul" },
+  { name: "Mexico City, Mexico", lat: 19.43, lon: -99.13, desc: "Aztec ruins under baroque cathedrals, tacos al pastor at midnight, Frida's blue house, Day of the Dead" },
+  { name: "Machu Picchu, Peru", lat: -13.16, lon: -72.55, desc: "A lost Inca citadel in cloud forest, llamas on ancient terraces, sunrise through Andean mist" },
+  { name: "Galápagos Islands, Ecuador", lat: -0.74, lon: -90.32, desc: "Darwin's living laboratory — giant tortoises, blue-footed boobies, fearless wildlife" },
+  { name: "Amazon — Manaus, Brazil", lat: -3.12, lon: -60.02, desc: "The green lung — river dolphins, canopy chorus, lightning storms over infinite jungle" },
+  { name: "Serengeti, Tanzania", lat: -2.33, lon: 34.83, desc: "The great migration thundering across golden savanna, lions at dawn, safari dust and drama" },
+  { name: "Sossusvlei, Namibia", lat: -24.73, lon: 15.34, desc: "Apricot mega-dunes, dead camelthorn trees on white clay, the oldest desert, stark surrealism" },
+  { name: "Victoria Falls, Zambia/Zimbabwe", lat: -17.92, lon: 25.86, desc: "The smoke that thunders — a mile-wide curtain of falling water, rainbows in permanent mist" },
+  { name: "Cape Town, South Africa", lat: -33.92, lon: 18.42, desc: "Table Mountain's cloth of cloud, penguins on beaches, winelands, two oceans meeting" },
+  { name: "Zanzibar, Tanzania", lat: -6.16, lon: 39.19, desc: "Spice island — dhows at sunset, Stone Town alleys, white sand and warm turquoise water" },
+  { name: "Mount Everest — Khumbu, Nepal", lat: 27.99, lon: 86.93, desc: "The roof of the world — prayer flags in thin air, sherpa villages, the ultimate ascent" },
+  { name: "Pokhara, Nepal", lat: 28.21, lon: 83.96, desc: "Lakeside serenity under Annapurna, paragliders at dawn, trekking teahouses, mountain peace" },
+  { name: "Bhutan — Paro Taktsang", lat: 27.49, lon: 89.36, desc: "Tiger's Nest monastery clinging to a cliff, gross national happiness, unspoiled Himalayan kingdom" },
+  { name: "Varanasi, India", lat: 25.32, lon: 83.01, desc: "Ganges ghats at dawn, cremation fires, chanting pilgrims, the oldest living city, raw spirituality" },
+  { name: "Jaipur, India", lat: 26.91, lon: 75.79, desc: "The pink city — palaces of mirrors, elephant festivals, bazaars of bangles and silk" },
+  { name: "Taj Mahal — Agra, India", lat: 27.17, lon: 78.04, desc: "A marble teardrop of eternal love glowing at sunrise, symmetry and heartbreak" },
+  { name: "Kerala backwaters, India", lat: 9.5, lon: 76.34, desc: "Houseboats drifting through palm-lined canals, spice gardens, monsoon green, gentle slowness" },
+  { name: "Goa, India", lat: 15.3, lon: 74.12, desc: "Beach shacks and trance parties, Portuguese churches, scooters through palm groves, susegad ease" },
+  { name: "Hyderabad, India", lat: 17.38, lon: 78.49, desc: "City of pearls and biryani — Charminar bazaars, Golconda fort, tech towers rising from history" },
+  { name: "Mumbai, India", lat: 19.08, lon: 72.88, desc: "Bollywood dreams and local trains, monsoon on Marine Drive, street food, maximum city energy" },
+  { name: "Singapore", lat: 1.35, lon: 103.82, desc: "Supertrees glowing at night, hawker centers, a garden city of glass and order, futuristic green" },
+  { name: "Dubai, UAE", lat: 25.2, lon: 55.27, desc: "The tallest tower on Earth, desert turned sci-fi skyline, gold souks, excess as art form" },
+  { name: "Angkor Wat, Cambodia", lat: 13.41, lon: 103.87, desc: "Temple mountains strangled by jungle figs, bas-relief epics, sunrise over lotus towers" },
+  { name: "Ha Long Bay, Vietnam", lat: 20.91, lon: 107.18, desc: "Two thousand limestone islets in emerald water, junk boats, dragon legends in the mist" },
+  { name: "Kathmandu, Nepal", lat: 27.72, lon: 85.32, desc: "Stupas with painted eyes, butter lamps, mountain incense, backpacker alleys of Thamel" },
+  { name: "Great Barrier Reef, Australia", lat: -18.29, lon: 147.7, desc: "The largest living structure — coral cities, manta rays, clownfish, an underwater universe" },
+  { name: "Uluru, Australia", lat: -25.34, lon: 131.04, desc: "A sacred red monolith glowing at sunset in the outback's dead center, dreamtime silence" },
+  { name: "Sydney, Australia", lat: -33.87, lon: 151.21, desc: "Opera House sails on a sparkling harbour, surf at Bondi, easygoing sunshine city" },
+  { name: "Kruger Park, South Africa", lat: -23.99, lon: 31.55, desc: "Big five safari — leopards in trees, elephant herds at waterholes, bush sunsets" },
+  { name: "Transylvania — Bran, Romania", lat: 45.52, lon: 25.37, desc: "Dracula's castle on a misty crag, gothic spires, wolf-haunted forests, spooky folklore" },
+  { name: "Chernobyl — Pripyat, Ukraine", lat: 51.4, lon: 30.06, desc: "An abandoned city frozen in 1986 — rusting ferris wheel, nature reclaiming apocalypse, haunting" },
+  { name: "Salem, USA", lat: 42.52, lon: -70.9, desc: "Witch trials, haunted houses, autumn leaves and pumpkins, spooky New England October" },
+  { name: "New Orleans, USA", lat: 29.95, lon: -90.07, desc: "Jazz funerals, voodoo shops, beignets at midnight, wrought-iron balconies, gothic revelry" },
+  { name: "Las Vegas, USA", lat: 36.17, lon: -115.14, desc: "A neon fever dream in the desert — casinos, Elvis weddings, fountains, glorious excess" },
+  { name: "New York City, USA", lat: 40.71, lon: -74.0, desc: "Skyscraper canyons, yellow cabs, Broadway lights, the city that never sleeps, ambition itself" },
+  { name: "San Francisco, USA", lat: 37.77, lon: -122.42, desc: "Fog rolling under the Golden Gate, cable cars, startup garages, painted Victorian ladies" },
+  { name: "Seattle, USA", lat: 47.61, lon: -122.33, desc: "Rainy coffee city — grunge history, the Space Needle in drizzle, cozy bookshop weather" },
+  { name: "Portland, USA", lat: 45.52, lon: -122.68, desc: "Food trucks, craft beer, weird and proud, forest trails inside the city, indie mellow" },
+  { name: "Nashville, USA", lat: 36.16, lon: -86.78, desc: "Honky-tonk neon, country guitars on every corner, hot chicken, music city heartbreak" },
+  { name: "London, UK", lat: 51.5, lon: -0.12, desc: "Red buses in the rain, ancient pubs, palaces and punk, museums of the whole world" },
+  { name: "Edinburgh, Scotland", lat: 55.95, lon: -3.19, desc: "A castle on a crag, closes and ghost tours, whisky in firelit pubs, literary fog" },
+  { name: "Scottish Highlands — Glencoe", lat: 56.68, lon: -5.1, desc: "Brooding glens, lochs of black glass, bagpipe echoes, moody romantic wilderness" },
+  { name: "Amsterdam, Netherlands", lat: 52.37, lon: 4.9, desc: "Canal houses leaning together, bicycles everywhere, Van Gogh sunflowers, easy charm" },
+  { name: "Berlin, Germany", lat: 52.52, lon: 13.4, desc: "Techno bunkers, street art on the Wall, currywurst at 4am, history and hedonism collide" },
+  { name: "Munich — Bavaria, Germany", lat: 48.14, lon: 11.58, desc: "Oktoberfest steins, lederhosen, alpine foothills, fairy-tale Neuschwanstein nearby" },
+  { name: "Swiss Alps — Zermatt", lat: 46.02, lon: 7.75, desc: "The Matterhorn's perfect pyramid, car-free village, skiing under glaciers, alpine precision" },
+  { name: "Interlaken, Switzerland", lat: 46.69, lon: 7.86, desc: "Paragliding between two lakes, Jungfrau snows, cowbells and chocolate-box meadows" },
+  { name: "Amalfi Coast, Italy", lat: 40.63, lon: 14.6, desc: "Cliffside lemon groves, pastel villages stacked over blue sea, vespa rides, la dolce vita" },
+  { name: "Barcelona, Spain", lat: 41.39, lon: 2.17, desc: "Gaudí's melting cathedral, tapas at midnight, beach and mountains, Mediterranean creativity" },
+  { name: "Seville, Spain", lat: 37.39, lon: -5.99, desc: "Flamenco heels on old stone, orange blossoms, bullring drama, Andalusian heat and passion" },
+  { name: "Ibiza, Spain", lat: 38.91, lon: 1.43, desc: "Sunset beach clubs, superstar DJs, all-night dancing, hedonist island of electronic music" },
+  { name: "Mykonos, Greece", lat: 37.45, lon: 25.33, desc: "Windmills and white lanes, glamorous beach parties, Aegean glitter, summer freedom" },
+  { name: "Dubrovnik, Croatia", lat: 42.65, lon: 18.09, desc: "Marble streets inside medieval walls, King's Landing views, Adriatic sparkle" },
+  { name: "Cappadocia, Türkiye", lat: 38.64, lon: 34.83, desc: "A hundred hot-air balloons at dawn over fairy chimneys, cave hotels, dreamlike geology" },
+  { name: "Pamukkale, Türkiye", lat: 37.92, lon: 29.12, desc: "Frozen white travertine terraces of thermal water, Roman ruins above cotton-castle pools" },
+  { name: "Zhangjiajie, China", lat: 29.32, lon: 110.43, desc: "The floating mountains of Avatar — sandstone pillars in mist, glass bridges over the void" },
+  { name: "Guilin — Yangshuo, China", lat: 24.78, lon: 110.5, desc: "Karst peaks over the Li River like an ink-wash painting, cormorant fishermen, bamboo rafts" },
+  { name: "Great Wall — Mutianyu, China", lat: 40.43, lon: 116.57, desc: "The dragon's spine over green ridges to the horizon, watchtowers at dawn, ancient enormity" },
+  { name: "Kanazawa, Japan", lat: 36.56, lon: 136.66, desc: "Samurai districts and gold leaf, quiet gardens in snow, geisha teahouses, understated elegance" },
+  { name: "Osaka — Dōtonbori, Japan", lat: 34.67, lon: 135.5, desc: "Giant neon crab signs, takoyaki stalls, comedians and street food, Japan's kitchen at full volume" },
+  { name: "Sapporo, Japan", lat: 43.06, lon: 141.35, desc: "Snow festival ice palaces, miso ramen in blizzards, powder skiing, northern comfort" },
+  { name: "Lofoten Islands, Norway", lat: 68.15, lon: 13.61, desc: "Red fishing cabins under arctic peaks, midnight-sun surfing, cod racks, raw Nordic drama" },
+  { name: "Lake Bled, Slovenia", lat: 46.36, lon: 14.09, desc: "A church on an island in a glacial lake, a castle on the cliff, cream cake, storybook romance" },
+  { name: "Plitvice Lakes, Croatia", lat: 44.88, lon: 15.62, desc: "Sixteen terraced lakes spilling into each other over travertine falls, impossible teal water" },
+  { name: "Azores — São Miguel, Portugal", lat: 37.78, lon: -25.5, desc: "Volcanic crater lakes, hydrangea hedges, whales offshore, Europe's lost green islands" },
+  { name: "Madeira, Portugal", lat: 32.76, lon: -16.96, desc: "Levada walks through cloud forest, cliffs into the Atlantic, eternal spring, garden island" },
+  { name: "Easter Island, Chile", lat: -27.13, lon: -109.35, desc: "Moai statues staring across the loneliest inhabited island, unsolved mysteries in the Pacific" },
+  { name: "Socotra, Yemen", lat: 12.51, lon: 53.92, desc: "Dragon-blood trees like alien umbrellas — the most otherworldly island on Earth" },
+  { name: "Kamchatka, Russia", lat: 53.02, lon: 158.65, desc: "A peninsula of smoking volcanoes, brown bears fishing salmon, helicopters into the wild" },
+  { name: "Mongolia — Gobi steppe", lat: 43.5, lon: 104.0, desc: "Ger camps under infinite sky, wild horses, eagle hunters, nomad silence and open space" },
+  { name: "Trans-Siberian — Lake Baikal", lat: 53.56, lon: 108.16, desc: "The deepest lake on Earth frozen into turquoise glass, train journeys measured in days" },
+  { name: "Samarkand, Uzbekistan", lat: 39.63, lon: 66.97, desc: "Turquoise-domed madrasahs on the Silk Road, mosaic constellations, caravan history" },
+  { name: "Lalibela, Ethiopia", lat: 12.03, lon: 39.04, desc: "Churches carved down into red rock, white-robed pilgrims, ancient Christianity in the highlands" },
+  { name: "Timbuktu, Mali", lat: 16.77, lon: -3.01, desc: "The mythical edge of the map — mud mosques, desert manuscripts, the definition of far away" },
+  { name: "Antigua, Guatemala", lat: 14.56, lon: -90.73, desc: "Cobblestones under three volcanoes, colonial ruins, coffee farms, colorful semana santa carpets" },
+  { name: "Cartagena, Colombia", lat: 10.39, lon: -75.51, desc: "Bougainvillea balconies, salsa in plazas, Caribbean walls of a pirate-era port, magic realism" },
+  { name: "Banaue rice terraces, Philippines", lat: 16.93, lon: 121.06, desc: "Two-thousand-year-old green staircases to the sky, carved by hand into mountains" },
+  { name: "Palawan — El Nido, Philippines", lat: 11.18, lon: 119.4, desc: "Hidden lagoons behind limestone walls, island-hopping bangkas, water like glowing glass" },
+  { name: "Jeju Island, South Korea", lat: 33.39, lon: 126.55, desc: "Volcanic craters, haenyeo diving grandmothers, tangerine groves, honeymoon waterfalls" },
+  { name: "Tasmania — Cradle Mountain", lat: -41.68, lon: 145.95, desc: "Ancient rainforest, wombats at dusk, mirror lakes, the quiet end of Australia" },
+  { name: "Fiordland — Doubtful Sound, NZ", lat: -45.42, lon: 167.16, desc: "The sound of silence — dark fjords, rain rainforest, no roads in, absolute stillness" },
+];
+
+let index: Float32Array[] | null = null;
+let building: Promise<void> | null = null;
+
+export interface VibeHit { place: VibePlace; score: number }
+
+/** Match a feeling to places. First call embeds the atlas (once per session). */
+export async function vibeSearch(q: string, k = 3): Promise<VibeHit[]> {
+  if (!building) {
+    building = (async () => {
+      index = await embedTexts(PLACES.map((p) => `${p.name} — ${p.desc}`));
+    })().catch((e) => { building = null; throw e; });
+  }
+  await building;
+  const [qv] = await embedTexts([q]);
+  return PLACES.map((place, i) => ({ place, score: cosine(qv, index![i]) }))
+    .sort((a, b) => b.score - a.score)
+    .slice(0, k);
+}

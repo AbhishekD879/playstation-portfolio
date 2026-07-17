@@ -19,15 +19,28 @@ const CHUNKS: string[] = [
 ];
 
 let extractor: any = null;
+let loadingExtractor: Promise<any> | null = null;
 let index: Float32Array[] | null = null;
 let building: Promise<void> | null = null;
 let corpus: string[] = []; // CHUNKS + live console capabilities, frozen at build
 
-const cosine = (a: Float32Array, b: Float32Array) => {
+export const cosine = (a: Float32Array, b: Float32Array) => {
   let d = 0;
   for (let i = 0; i < a.length; i++) d += a[i] * b[i];
   return d; // vectors are L2-normalized → dot product is cosine similarity
 };
+
+function ensureExtractor(): Promise<any> {
+  if (!loadingExtractor) {
+    loadingExtractor = (async () => {
+      const { pipeline } = await import("@huggingface/transformers");
+      const device = typeof (navigator as any).gpu !== "undefined" ? "webgpu" : "wasm";
+      extractor = await pipeline("feature-extraction", "Xenova/all-MiniLM-L6-v2", { device } as any);
+      return extractor;
+    })().catch((e) => { loadingExtractor = null; throw e; });
+  }
+  return loadingExtractor;
+}
 
 async function embed(texts: string[]): Promise<Float32Array[]> {
   const out = await extractor(texts, { pooling: "mean", normalize: true });
@@ -37,13 +50,17 @@ async function embed(texts: string[]): Promise<Float32Array[]> {
   return Array.from({ length: rows }, (_, r) => data.slice(r * dim, (r + 1) * dim));
 }
 
+/** Shared sentence embedder (MiniLM) — also used by Planet Earth's vibe search. */
+export async function embedTexts(texts: string[]): Promise<Float32Array[]> {
+  await ensureExtractor();
+  return embed(texts);
+}
+
 /** Load the model and embed the knowledge base. Safe to call repeatedly. */
 export function buildIndex(): Promise<void> {
   if (!building) {
     building = (async () => {
-      const { pipeline } = await import("@huggingface/transformers");
-      const device = typeof (navigator as any).gpu !== "undefined" ? "webgpu" : "wasm";
-      extractor = await pipeline("feature-extraction", "Xenova/all-MiniLM-L6-v2", { device } as any);
+      await ensureExtractor();
       corpus = [...CHUNKS, ...capabilityChunks()]; // include the control-bus manifest
       index = await embed(corpus);
     })().catch((e) => { building = null; throw e; });
