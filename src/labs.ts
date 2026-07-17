@@ -50,6 +50,7 @@ const APPS: { id: string; title: string; cat: string }[] = [
   { id: "radio-guide", title: "Radio Stations", cat: "Music" },
   { id: "podcasts", title: "Podcasts", cat: "Music" },
   { id: "winamp", title: "Winamp", cat: "Music" },
+  { id: "karaoke", title: "Karaoke (vocal cut)", cat: "Music" },
   { id: "radio", title: "Console Radio (lo-fi synth)", cat: "Music" },
   { id: "visualizer", title: "Visualizer", cat: "Music" },
   { id: "studio", title: "Studio — synth & drum machine", cat: "Music" },

@@ -32,6 +32,7 @@ import Manual from "./Manual";
 import GameShelf from "./GameShelf";
 import Doom from "./Doom";
 import DoomRtx from "./DoomRtx";
+import Karaoke from "./Karaoke";
 import ChessApp from "./ChessApp";
 import Trivia from "./Trivia";
 import Flash from "./Flash";
@@ -126,7 +127,7 @@ export default function XMB(props: {
   const [ytQuery, setYtQuery] = createSignal(""); // AI agent → YouTube search handoff
   const [vListening, setVListening] = createSignal(false); // XMB voice command
   const [padTest, setPadTest] = createSignal(false);
-  const [app, setApp] = createSignal<null | "doom" | "doomrtx" | "chess" | "trivia" | "flash" | "cinema" | "podcasts" | "library" | "map" | "ai" | "webamp" | "youtube" | "timemachine" | "art" | "wiki" | "lichess" | "ps2" | "pc" | "guestbook" | "browser" | "visualizer" | "studio" | "code" | "manual" | "ps2home" | "ps1home" | "psphome" | "retrohome" | "scummvm">(null);
+  const [app, setApp] = createSignal<null | "doom" | "doomrtx" | "chess" | "trivia" | "flash" | "cinema" | "podcasts" | "library" | "map" | "ai" | "webamp" | "youtube" | "timemachine" | "art" | "wiki" | "lichess" | "ps2" | "pc" | "guestbook" | "browser" | "visualizer" | "studio" | "code" | "manual" | "ps2home" | "ps1home" | "psphome" | "retrohome" | "scummvm" | "karaoke">(null);
   const [ps2Boot, setPs2Boot] = createSignal<GameRecord | null>(null);
   const [ps2Join, setPs2Join] = createSignal(false);
   const [ccOpen, setCcOpen] = createSignal(false);
@@ -186,6 +187,7 @@ export default function XMB(props: {
     { id: "radio-guide", title: "Radio Stations", sub: "Search ~3,000 live stations worldwide", icon: "globe", action: { type: "radio-guide" } },
     { id: "podcasts", title: "Podcasts", sub: "Search any show — plays in the background", icon: "mic", action: { type: "podcasts" } },
     { id: "winamp", title: "Winamp", sub: "The 1997 legend, resurrected in JS", icon: "lightning", action: { type: "webamp" } },
+    { id: "karaoke", title: "Karaoke", sub: "Any song you own — vocals cancelled live, you sing", icon: "mic", action: { type: "karaoke" } },
     ...(station()
       ? [{ id: "radio-stop", title: `■ Stop — ${station()!.label}`, sub: "Now playing", icon: "speaker", action: { type: "radio-play" as const, url: "", label: "" } }]
       : []),
@@ -559,6 +561,10 @@ export default function XMB(props: {
       case "scummvm":
         sfx.confirm();
         setApp("scummvm");
+        break;
+      case "karaoke":
+        sfx.confirm();
+        setApp("karaoke");
         break;
       case "dictionary":
         sfx.confirm();
@@ -1163,7 +1169,7 @@ export default function XMB(props: {
     if (padTest()) { if (action === "back") setPadTest(false); return; }
     if (app()) {
       // bound apps route their own nav; the rest are keyboard-driven owner apps
-      if (["chess", "trivia", "flash", "cinema", "podcasts", "library", "youtube", "art", "wiki", "ps2home", "ps1home", "psphome", "retrohome"].includes(app()!)) appNav?.(action);
+      if (["chess", "trivia", "flash", "cinema", "podcasts", "library", "youtube", "art", "wiki", "ps2home", "ps1home", "psphome", "retrohome", "karaoke"].includes(app()!)) appNav?.(action);
       else if (app() === "lichess" && action === "back") { sfx.back(); setApp(null); }
       else if (src === "pad" || src === "gesture") {
         // owner apps (map/globe, lichess…) listen to the KEYBOARD — turn pad
@@ -1803,6 +1809,9 @@ export default function XMB(props: {
           onChanged={refreshGames}
           onClose={() => setApp(null)}
         />
+      </Show>
+      <Show when={app() === "karaoke"}>
+        <Karaoke bind={(f) => (appNav = f)} onClose={() => setApp(null)} />
       </Show>
       <Show when={app() === "scummvm"}>
         {/* ScummVM compiled to WebAssembly (chkuendig's hosted build). Bring
