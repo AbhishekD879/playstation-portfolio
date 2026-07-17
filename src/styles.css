@@ -1210,6 +1210,8 @@ img.status-avatar, img.ptile-avatar { object-fit: cover; border: 1px solid rgba(
 .status-mic svg { width: 15px; height: 15px; }
 .status-mic:hover { border-color: #fff; }
 .status-mic.listening { border-color: #e0483e; background: rgba(224,72,62,0.2); animation: micPulse 1.2s ease-in-out infinite; }
+.status-cc { border-color: color-mix(in srgb, var(--xmb-tint, #4da3ff) 60%, transparent); background: color-mix(in srgb, var(--xmb-tint, #4da3ff) 14%, transparent); }
+.status-cc:hover { border-color: var(--xmb-tint, #4da3ff); background: color-mix(in srgb, var(--xmb-tint, #4da3ff) 26%, transparent); }
 
 /* ———— controller test ———— */
 .gptest { position: fixed; inset: 0; z-index: 41; background: linear-gradient(200deg, rgba(6,10,22,0.98), rgba(2,4,12,0.99)); padding: 30px min(8vw,80px); overflow-y: auto; }

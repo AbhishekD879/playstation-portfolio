@@ -1269,6 +1269,7 @@ export default function XMB(props: {
         <Show when={asrSupported()}>
           <button class="status-mic" classList={{ listening: vListening() }} title="voice command (on-device)" onClick={voiceCmd}><Icon name="mic" /></button>
         </Show>
+        <button class="status-mic status-cc" title="Control Center — phone controller, DualSense, volume, theme (` or PS button)" onClick={() => { sfx.tickH(); setCcOpen(!ccOpen()); }}><Icon name="sliders" /></button>
         <Show when={padName()}><span class="status-pad" title={padName()!}>🎮</span></Show>
         <Show when={battery()}>
           <span
