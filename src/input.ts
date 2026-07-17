@@ -33,6 +33,42 @@ function pollSystemButton() {
   sysBtnPrev = on;
 }
 
+// —— Control Center owns the pad EXCLUSIVELY while open (works from anywhere,
+// even mid-game): its nav callback gets every direction/confirm/back and the
+// normal nav/synth/game-synth paths below are bypassed. ——
+let ccActive = false;
+let ccCb: ((a: NavAction) => void) | null = null;
+export function setCcActive(on: boolean) { ccActive = on; }
+export function onCcNav(cb: (a: NavAction) => void) { ccCb = cb; }
+
+// —— Options/Menu button (9, or Back/View 8): a single tap is the "options"
+// action; a DOUBLE tap opens the Control Center from anywhere. This is the
+// reliable shortcut for pads whose Guide button (16) the browser never reports
+// (most Xbox pads on macOS/Chrome). ——
+let optPrev = false;
+let optLastTap = -Infinity;
+let optTimer: ReturnType<typeof setTimeout> | 0 = 0;
+const DOUBLE_TAP_MS = 320;
+function pollOptions(now: number) {
+  const p = primaryPad();
+  const on = !!(p?.buttons[9]?.pressed || p?.buttons[8]?.pressed);
+  if (on && !optPrev) {
+    if (now - optLastTap < DOUBLE_TAP_MS) {
+      if (optTimer) { clearTimeout(optTimer); optTimer = 0; } // cancel the pending single
+      optLastTap = -Infinity;
+      sysBtnCb?.(); // ← open Control Center
+    } else {
+      optLastTap = now;
+      if (optTimer) clearTimeout(optTimer);
+      optTimer = setTimeout(() => {
+        optTimer = 0;
+        if (enabled && handler && !oskBlock) handler("options", "pad"); // single tap only
+      }, DOUBLE_TAP_MS);
+    }
+  }
+  optPrev = on;
+}
+
 const KEYMAP: Record<string, NavAction> = {
   ArrowLeft: "left", a: "left",
   ArrowRight: "right", d: "right",
@@ -152,7 +188,7 @@ function pollPad(now: number) {
   // up closing the keyboard AND the app behind it.
   const navMode = enabled && !!handler && !oskBlock;
   const synthMode = !enabled && padClaims === 0 && !oskBlock;
-  const live = navMode || synthMode;
+  const live = ccActive || navMode || synthMode;
   const tag = document.activeElement?.tagName;
   const typing = tag === "INPUT" || tag === "TEXTAREA";
   const SYNTH_KEY: Partial<Record<NavAction, string>> = {
@@ -160,6 +196,7 @@ function pollPad(now: number) {
     confirm: "Enter", back: "Escape",
   };
   const fire = (k: NavAction) => {
+    if (ccActive) { ccCb?.(k); return; } // Control Center owns the pad while open
     if (typing) { // a focused text field: ◯ steps OUT of the field, nothing else leaks
       if (k === "back") (document.activeElement as HTMLElement)?.blur?.();
       return;
@@ -180,7 +217,8 @@ function pollPad(now: number) {
   // some pads report the d-pad as a "hat" on axis 9 rather than buttons 12-15
   const hat = p.axes[9] !== undefined && p.axes[9] >= -1.01 && p.axes[9] <= 1.01 ? p.axes[9] : 2;
   const hatDir = (lo: number, hi: number) => hat >= lo && hat <= hi;
-  const dir: Record<NavAction, boolean> = {
+  // options (button 9/8) is handled in pollOptions — single tap vs double tap
+  const dir: Partial<Record<NavAction, boolean>> = {
     // d-pad button OR left stick OR hat-axis (up≈-1, right≈-0.43, down≈0.14, left≈0.71)
     left: b(14) || ax < -0.5 || hatDir(0.55, 0.95),
     right: b(15) || ax > 0.5 || hatDir(-0.65, -0.25),
@@ -188,10 +226,9 @@ function pollPad(now: number) {
     down: b(13) || ay > 0.5 || hatDir(-0.05, 0.35),
     confirm: b(0), // "A"/cross is index 0 across virtually all layouts
     back: b(1),    // "B"/circle
-    options: b(9) || b(8),
   };
   for (const k of Object.keys(dir) as NavAction[]) {
-    const on = dir[k];
+    const on = !!dir[k];
     const isDir = k === "left" || k === "right" || k === "up" || k === "down";
     if (on && !padPrev[k]) {
       if (live) fire(k);
@@ -222,6 +259,7 @@ function tickRepeats(now: number) {
 function loop(now: number) {
   trackPad();        // connection detection runs always (even when nav is disabled)
   pollSystemButton(); // PS/Guide button is system-level — always watched
+  pollOptions(now);  // double-tap Options opens the Control Center from anywhere
   tickRepeats(now);
   pollPad(now);
   requestAnimationFrame(loop);

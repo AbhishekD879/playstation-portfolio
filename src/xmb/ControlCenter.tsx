@@ -44,7 +44,7 @@ export default function ControlCenter(props: {
     },
     {
       id: "vol", icon: "♪", label: "Volume",
-      sub: () => (tick(), `${Math.round(sfx.getVolume() * 100)}% — ←→`),
+      sub: () => (tick(), `${Math.round(sfx.getVolume() * 100)}%  ↑↓`),
       act: () => {},
       adjust: (d: number) => { sfx.setVolume(sfx.getVolume() + d * 0.05); sfx.tickH(); bump(); },
     },
@@ -63,12 +63,17 @@ export default function ControlCenter(props: {
   ].filter((t) => t.show?.() ?? true);
 
   const move = (d: number) => { const n = tiles().length; if (!n) return; setSel((sel() + d + n) % n); sfx.tickH(); };
+  // Clean, unambiguous wiring: ←→ (d-pad or left stick) browse tiles; ↕ adjusts
+  // the focused tile's value (volume louder/softer); ✕ selects; ◯ closes.
   const nav = (a: NavAction) => {
-    if (a === "left") { const t = tiles()[sel()]; if (qr()) return; t?.adjust ? t.adjust(-1) : move(-1); }
-    else if (a === "right") { const t = tiles()[sel()]; if (qr()) return; t?.adjust ? t.adjust(1) : move(1); }
-    else if (a === "up" || a === "down") { if (!qr()) move(a === "up" ? -1 : 1); }
-    else if (a === "confirm") { if (qr()) setQr(false); else tiles()[sel()]?.act(); }
-    else if (a === "back") { if (qr()) setQr(false); else { sfx.back(); props.onClose(); } }
+    if (qr()) { if (a === "confirm" || a === "back") setQr(false); return; }
+    const t = tiles()[sel()];
+    if (a === "left") move(-1);
+    else if (a === "right") move(1);
+    else if (a === "up") t?.adjust?.(1);
+    else if (a === "down") t?.adjust?.(-1);
+    else if (a === "confirm") t?.act();
+    else if (a === "back") { sfx.back(); props.onClose(); }
   };
   props.bind(nav);
 
@@ -122,10 +127,11 @@ export default function ControlCenter(props: {
           </For>
         </div>
         <div class="cc-legend">
-          <span>←→ choose</span>
+          <span>←→ browse</span>
+          <span>↑↓ adjust</span>
           <span><span class="btn-x" /> select</span>
           <span><span class="btn-o" /> close</span>
-          <span class="cc-legend-dim">PS button / ` opens this anywhere</span>
+          <span class="cc-legend-dim">double-tap OPTIONS · ` · PS button — opens anywhere</span>
         </div>
       </div>
     </Show>

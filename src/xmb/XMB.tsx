@@ -8,7 +8,8 @@ import { THEMES, applyCustomHsl, applyTheme, currentThemeIndex, loadCustomHsl } 
 import { LAB_APPS, labEnabled, toggleLab } from "../labs";
 import { CHANNELS, fetchDevto, fetchGuide, fetchHN, fetchRadio, fetchRss, fetchWeather, wmo, type NewsEntry, type Weather } from "../apps";
 import * as sfx from "../audio";
-import { onNav, onPadChange, onSystemButton, rumble, rumbleEnabled, setNavEnabled, setRumble } from "../input";
+import { onCcNav, onNav, onPadChange, onSystemButton, rumble, rumbleEnabled, setCcActive, setNavEnabled, setRumble } from "../input";
+import { setBridgePaused } from "../gamepadBridge";
 import ControlCenter from "./ControlCenter";
 import { asrSupported, record } from "../asr";
 import { registerActions } from "../consoleBus";
@@ -1169,6 +1170,9 @@ export default function XMB(props: {
   // the PS/Guide button (pad index 16) toggles the Control Center from
   // anywhere — even mid-game while a bridge claims the pad
   onSystemButton(() => { sfx.tickH(); setCcOpen(!ccOpen()); });
+  // while CC is open it owns the pad exclusively (works even mid-game), and the
+  // game bridge underneath is paused so it doesn't also react to CC navigation
+  createEffect(() => { setCcActive(ccOpen()); setBridgePaused(ccOpen()); });
 
   // mouse wheel scrolls the item list
   let wheelAcc = 0;
@@ -1270,7 +1274,7 @@ export default function XMB(props: {
           <button class="status-mic" classList={{ listening: vListening() }} title="voice command (on-device)" onClick={voiceCmd}><Icon name="mic" /></button>
         </Show>
         <button class="status-mic status-cc" title="Control Center — phone controller, DualSense, volume, theme (` or PS button)" onClick={() => { sfx.tickH(); setCcOpen(!ccOpen()); }}><Icon name="sliders" /></button>
-        <Show when={padName()}><span class="status-pad" title={padName()!}>🎮</span></Show>
+        <Show when={padName()}><span class="status-pad" title={padName()!}><Icon name="gamepad" /></span></Show>
         <Show when={battery()}>
           <span
             class="status-batt"
@@ -1522,7 +1526,7 @@ export default function XMB(props: {
         onClose={() => setCcOpen(false)}
         onHome={() => { setPs2Boot(null); setPs2Join(false); setApp(null); }}
         onTheme={() => { setThemeIdx(currentThemeIndex()); setThemeRow(0); setCustomHsl(loadCustomHsl()); setThemesOpen(true); }}
-        bind={(f) => (ccNav = f)}
+        bind={(f) => { ccNav = f; onCcNav(f); }}
       />
       <Show when={app() === "ps2home"}>
         <GameShelf

@@ -191,8 +191,26 @@ function edge(id: string, on: boolean, key: KeyDef) {
   else if (!on && down.has(id)) { down.delete(id); fire("keyup", key); }
 }
 
+// paused while the Control Center is open — the pad drives the overlay, not the
+// game underneath. Transient (button/axis) keys are released on the pause edge
+// so nothing stays stuck; hold keys (e.g. DOOM always-run) persist.
+let paused = false;
+function releaseTransient() {
+  for (const key of Object.keys(cfg.map)) if (down.has("b" + key)) { down.delete("b" + key); fire("keyup", cfg.map[+key]); }
+  for (let j = 0; j < cfg.axes.length; j++) {
+    if (down.has(`a${j}-`)) { down.delete(`a${j}-`); fire("keyup", cfg.axes[j].neg); }
+    if (down.has(`a${j}+`)) { down.delete(`a${j}+`); fire("keyup", cfg.axes[j].pos); }
+  }
+}
+export function setBridgePaused(on: boolean) {
+  if (on === paused) return;
+  paused = on;
+  if (on) releaseTransient(); // let go of whatever was held the moment CC opens
+}
+
 function loop() {
   raf = requestAnimationFrame(loop);
+  if (paused) return;
   const p = primaryPad(allPads());
   if (!p) return;
   const qb = cfg.quitButton === undefined ? QUIT_BTN : cfg.quitButton;
