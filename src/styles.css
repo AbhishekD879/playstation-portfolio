@@ -1222,8 +1222,13 @@ img.status-avatar, img.ptile-avatar { object-fit: cover; border: 1px solid rgba(
   }
   .tpad-btn:active { background: rgba(255,255,255,0.28); }
   .tpad-btn .btn-x, .tpad-btn .btn-o { width: 26px; height: 26px; }
-  .hint-bar { display: none; } /* replaced by the touchpad */
+  /* on the bare crossbar, touch is native (swipe + tap) — hide the d-pad */
+  .touchpad.tpad-hide { display: none; }
+  .hint-bar { display: none; } /* replaced by the touchpad / touch hint */
   .gesture-box { bottom: auto; top: 70px; } /* keep the cam PiP clear of the pad */
+  /* a little more room to tap on small screens */
+  .item { gap: 16px; }
+  .item-title { max-width: 62vw; }
 }
 
 /* portrait / small screens: reflow the landscape XMB so nothing overlaps */

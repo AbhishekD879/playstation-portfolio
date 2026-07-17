@@ -1402,6 +1402,22 @@ export default function XMB(props: {
   // clearance above the category label (d=0 at 118) and below the hint bar
   const itemY = (d: number) => (d < 0 ? -92 + d * 52 : d === 0 ? 118 : 118 + 92 + (d - 1) * 80);
 
+  // is any app / modal / overlay open? (crossbar is "home" when this is false)
+  const overlayOpen = () => !!(app() || panel() || tv() || guideOpen() || spotify() || news() || inputMode() || viewerOpen() || yt() || apod() || dict() || ccOpen() || searchOpen() || labsOpen() || soundOpen() || themesOpen() || trophiesOpen() || padTest() || saver());
+  // touch: on the bare crossbar, a swipe navigates natively (horizontal =
+  // categories, vertical = items) and a tap opens — no virtual d-pad needed.
+  // Inside an app/modal the swipe is off (that surface handles its own touch).
+  let swipeStart: { x: number; y: number } | null = null;
+  const onTouchStart = (e: TouchEvent) => { swipeStart = overlayOpen() ? null : { x: e.touches[0].clientX, y: e.touches[0].clientY }; };
+  const onTouchEnd = (e: TouchEvent) => {
+    if (!swipeStart) return;
+    const t = e.changedTouches[0], dx = t.clientX - swipeStart.x, dy = t.clientY - swipeStart.y;
+    swipeStart = null;
+    if (Math.max(Math.abs(dx), Math.abs(dy)) < 40) return; // a tap — let the item's onClick open it
+    if (Math.abs(dx) > Math.abs(dy)) handleNav(dx < 0 ? "right" : "left");
+    else handleNav(dy < 0 ? "down" : "up");
+  };
+
   const trophyCount = () => {
     trophyVer();
     return Object.keys(props.profile.trophies).length;
@@ -1413,7 +1429,7 @@ export default function XMB(props: {
   };
 
   return (
-    <div class="xmb" classList={{ shaking: shaking() }} onWheel={onWheel}>
+    <div class="xmb" classList={{ shaking: shaking() }} onWheel={onWheel} onTouchStart={onTouchStart} onTouchEnd={onTouchEnd}>
       {/* status bar */}
       <div class="status">
         <div class="status-user">
@@ -1493,9 +1509,11 @@ export default function XMB(props: {
           {(row, i) => {
             const d = () => i() - selOf(cat());
             const onClick = () => {
-              if (d() !== 0) { setSels({ ...sels(), [CATEGORIES[cat()].id]: i() }); sfx.tickV(); }
-              else if (row.kind === "folder") { toggleGroup(cat(), row.group); sfx.confirm(); }
-              else act(row.item);
+              // one tap = select + activate (open the item / toggle the folder) —
+              // natural for touch and mouse alike
+              setSels({ ...sels(), [CATEGORIES[cat()].id]: i() });
+              if (row.kind === "folder") { toggleGroup(cat(), row.group); sfx.confirm(); }
+              else { sfx.confirm(); act(row.item); }
             };
             return (
               <div
@@ -2144,7 +2162,7 @@ export default function XMB(props: {
 
       {/* on-screen controller — shown on touch devices; drives the exact same
           nav as the keyboard/gamepad so every app just works */}
-      <div class="touchpad">
+      <div class="touchpad" classList={{ "tpad-hide": !overlayOpen() }}>
         <div class="tpad-dpad">
           {(["up", "left", "right", "down"] as const).map((dir) => (
             <button
