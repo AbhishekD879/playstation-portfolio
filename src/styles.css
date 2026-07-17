@@ -163,15 +163,18 @@ img.status-avatar, img.ptile-avatar { object-fit: cover; border: 1px solid rgba(
 .item.above { opacity: 0.35; }
 .item.selected { opacity: 1; }
 .item.offscreen { opacity: 0; pointer-events: none; }
-/* sub-section header — a labelled divider above the first item of a group */
-.item-group-head {
-  position: absolute; top: -21px; left: 62px; display: flex; align-items: center; gap: 9px;
-  font-size: 10.5px; font-weight: 500; letter-spacing: 0.24em; text-transform: uppercase;
-  color: color-mix(in oklab, var(--xmb-tint) 62%, #fff); white-space: nowrap; pointer-events: none;
-  text-shadow: 0 1px 4px rgba(0,0,0,0.55);
+/* nested folders (PSP-style) — a folder row you open to reveal its items */
+.item.folder .item-icon { color: color-mix(in oklab, var(--xmb-tint) 60%, #fff); }
+.folder-chevron {
+  margin-left: auto; padding-left: 14px; font-size: 15px; line-height: 1;
+  color: color-mix(in oklab, var(--xmb-tint) 62%, #fff); opacity: 0.85;
 }
-.item-group-head::before { content: ""; width: 16px; height: 1px; background: currentColor; opacity: 0.6; }
-.item.selected .item-group-head { left: 80px; }
+/* items nested inside an open folder are indented + a touch smaller */
+.item.child { padding-left: 48px; }
+.item.child .item-icon { width: 34px; height: 34px; opacity: 0.75; }
+.item.child.selected .item-icon { width: 46px; height: 46px; }
+.item.child .item-title { font-size: 15px; }
+.item.child.selected .item-title { font-size: 19px; }
 .item-icon {
   width: 44px; height: 44px; flex: 0 0 auto;
   color: #fff; opacity: 0.9;

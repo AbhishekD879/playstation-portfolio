@@ -11,6 +11,7 @@ export const ICONS: Record<string, () => JSX.Element> = {
   id: () => S(<><rect x="7" y="12" width="34" height="24" rx="3" /><circle cx="17" cy="22" r="4" /><path d="M12 32c1.5-3.5 3-5 5-5s3.5 1.5 5 5M27 19h9M27 25h9M27 31h6" /></>),
   briefcase: () => S(<><rect x="8" y="16" width="32" height="22" rx="3" /><path d="M18 16v-4a3 3 0 0 1 3-3h6a3 3 0 0 1 3 3v4M8 26h32" /></>),
   folder: () => S(<><path d="M7 13a3 3 0 0 1 3-3h9l4 5h15a3 3 0 0 1 3 3v18a3 3 0 0 1-3 3H10a3 3 0 0 1-3-3V13Z" /></>),
+  "folder-open": () => S(<><path d="M7 14a3 3 0 0 1 3-3h8l4 5h15a3 3 0 0 1 3 3v3H7V14Z" /><path d="M5 22h38l-5 16a3 3 0 0 1-3 2H11a3 3 0 0 1-3-2L5 22Z" /></>),
   chip: () => S(<><rect x="14" y="14" width="20" height="20" rx="2" /><path d="M20 14V7M28 14V7M20 41v-7M28 41v-7M14 20H7M14 28H7M41 20h-7M41 28h-7" /><rect x="20" y="20" width="8" height="8" /></>),
   gamepad: () => S(<><path d="M14 16h20c6 0 9 5 9 11 0 5-2 9-6 9-3 0-5-2-7-5H18c-2 3-4 5-7 5-4 0-6-4-6-9 0-6 3-11 9-11Z" /><path d="M16 23v6M13 26h6" /><circle cx="33" cy="24" r="1.6" fill="currentColor" /><circle cx="37" cy="28" r="1.6" fill="currentColor" /></>),
   note: () => S(<><path d="M18 36V12l18-4v24" /><circle cx="13" cy="36" r="5" /><circle cx="31" cy="32" r="5" /></>),

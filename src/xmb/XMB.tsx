@@ -246,7 +246,37 @@ export default function XMB(props: {
     : CATEGORIES[ci].id === "photo" ? photoItems()
     : CATEGORIES[ci].items).filter((i) => labEnabled(i.id));
 
-  const selOf = (ci: number) => Math.min(sels()[CATEGORIES[ci].id] ?? 0, Math.max(0, itemsOf(ci).length - 1));
+  // —— nested folders (PSP-style): items that share a `group` collapse into an
+  // expandable folder; open one and its items nest underneath. A category with
+  // no groups stays a plain flat list. Navigation walks the *visible* rows. ——
+  type Row = { kind: "folder"; group: string; count: number; open: boolean } | { kind: "item"; item: XmbItem; child: boolean };
+  const ekey = (ci: number, group: string) => `${CATEGORIES[ci].id}::${group}`;
+  const [expanded, setExpanded] = createSignal<Set<string>>(new Set());
+  const rowsOf = (ci: number): Row[] => {
+    const items = itemsOf(ci);
+    if (!items.some((it) => it.group)) return items.map((item) => ({ kind: "item" as const, item, child: false }));
+    const rows: Row[] = [];
+    for (let i = 0; i < items.length;) {
+      const g = items[i].group ?? "";
+      let j = i; while (j < items.length && (items[j].group ?? "") === g) j++;
+      const run = items.slice(i, j);
+      if (!g) run.forEach((item) => rows.push({ kind: "item", item, child: false }));
+      else {
+        const open = expanded().has(ekey(ci, g));
+        rows.push({ kind: "folder", group: g, count: run.length, open });
+        if (open) run.forEach((item) => rows.push({ kind: "item", item, child: true }));
+      }
+      i = j;
+    }
+    return rows;
+  };
+  const colRows = createMemo<Row[]>(() => rowsOf(cat()));
+  const toggleGroup = (ci: number, group: string) => {
+    const s = new Set(expanded()); const k = ekey(ci, group);
+    s.has(k) ? s.delete(k) : s.add(k);
+    setExpanded(s);
+  };
+  const selOf = (ci: number) => Math.min(sels()[CATEGORIES[ci].id] ?? 0, Math.max(0, rowsOf(ci).length - 1));
 
   // a category with every app switched off in Labs simply leaves the crossbar;
   // cat() stays a raw CATEGORIES index, only rendering + nav use visible slots
@@ -1084,7 +1114,10 @@ export default function XMB(props: {
   const launchSearch = (h: SearchHit) => {
     setSearchOpen(false);
     setCat(h.ci);
-    setSels({ ...sels(), [CATEGORIES[h.ci].id]: h.ii });
+    // reveal the result: open its folder (if any) and select its row
+    if (h.item.group) setExpanded(new Set(expanded()).add(ekey(h.ci, h.item.group)));
+    const ri = rowsOf(h.ci).findIndex((r) => r.kind === "item" && r.item.id === h.item.id);
+    if (ri >= 0) setSels({ ...sels(), [CATEGORIES[h.ci].id]: ri });
     act(h.item);
   };
 
@@ -1246,7 +1279,7 @@ export default function XMB(props: {
       if (action === "back" || action === "confirm") { sfx.back(); setPanel(null); }
       return;
     }
-    const items = itemsOf(cat());
+    const rows = colRows();
     switch (action) {
       case "left": {
         const vs = visCats(), p = vs.indexOf(cat());
@@ -1254,6 +1287,9 @@ export default function XMB(props: {
         break;
       }
       case "right": {
+        // → opens a focused folder (or moves right a category if it's not one)
+        const row = rows[selOf(cat())];
+        if (row?.kind === "folder" && !row.open) { toggleGroup(cat(), row.group); sfx.confirm(); break; }
         const vs = visCats(), p = vs.indexOf(cat());
         if (p >= 0 && p < vs.length - 1) { setCat(vs[p + 1]); sfx.tickH(); }
         break;
@@ -1265,12 +1301,14 @@ export default function XMB(props: {
       }
       case "down": {
         const s = selOf(cat());
-        if (s < items.length - 1) { setSels({ ...sels(), [CATEGORIES[cat()].id]: s + 1 }); sfx.tickV(); }
+        if (s < rows.length - 1) { setSels({ ...sels(), [CATEGORIES[cat()].id]: s + 1 }); sfx.tickV(); }
         break;
       }
       case "confirm": {
-        const it = items[selOf(cat())];
-        if (it) { rumble(0.35, 0.25, 60); act(it); } // light tactile tick on select
+        const row = rows[selOf(cat())];
+        if (!row) break;
+        if (row.kind === "folder") { toggleGroup(cat(), row.group); sfx.confirm(); }
+        else { rumble(0.35, 0.25, 60); act(row.item); } // light tactile tick on select
         break;
       }
       case "options":
@@ -1364,18 +1402,6 @@ export default function XMB(props: {
   // clearance above the category label (d=0 at 118) and below the hint bar
   const itemY = (d: number) => (d < 0 ? -92 + d * 52 : d === 0 ? 118 : 118 + 92 + (d - 1) * 80);
 
-  // sub-section headers: a labelled gap opens above the first item of each run
-  // that shares a `group`. Nav is untouched — headers are pure layout.
-  const colItems = createMemo<XmbItem[]>(() => itemsOf(cat()));
-  const HGAP = 30; // px a header opens above its group's first item
-  const headerAt = (items: XmbItem[], i: number) => { const g = items[i]?.group; return !!g && g !== items[i - 1]?.group; };
-  const headerOffset = (items: XmbItem[], i: number, sel: number) => {
-    let n = 0;
-    if (i > sel) { for (let k = sel + 1; k <= i; k++) if (headerAt(items, k)) n++; }
-    else if (i < sel) { for (let k = i + 1; k <= sel; k++) if (headerAt(items, k)) n--; }
-    return n * HGAP;
-  };
-
   const trophyCount = () => {
     trophyVer();
     return Object.keys(props.profile.trophies).length;
@@ -1461,32 +1487,48 @@ export default function XMB(props: {
         </For>
       </div>
 
-      {/* item column for the active category */}
+      {/* item column for the active category — nested folders + items */}
       <div class="item-col">
-        <For each={colItems()}>
-          {(item, i) => {
+        <For each={colRows()}>
+          {(row, i) => {
             const d = () => i() - selOf(cat());
-            const y = () => itemY(d()) + headerOffset(colItems(), i(), selOf(cat()));
+            const onClick = () => {
+              if (d() !== 0) { setSels({ ...sels(), [CATEGORIES[cat()].id]: i() }); sfx.tickV(); }
+              else if (row.kind === "folder") { toggleGroup(cat(), row.group); sfx.confirm(); }
+              else act(row.item);
+            };
             return (
               <div
                 class="item"
-                classList={{ selected: d() === 0, above: d() < 0, offscreen: d() > 4 || d() < -3 }}
-                style={{ transform: `translateY(${y()}px)` }}
-                onClick={() => {
-                  if (d() === 0) act(item);
-                  else { setSels({ ...sels(), [CATEGORIES[cat()].id]: i() }); sfx.tickV(); }
+                classList={{
+                  selected: d() === 0, above: d() < 0, offscreen: d() > 4 || d() < -3,
+                  folder: row.kind === "folder", open: row.kind === "folder" && row.open, child: row.kind === "item" && row.child,
                 }}
+                style={{ transform: `translateY(${itemY(d())}px)` }}
+                onClick={onClick}
               >
-                <Show when={headerAt(colItems(), i())}>
-                  <div class="item-group-head">{item.group}</div>
-                </Show>
-                <div class="item-icon"><Icon name={item.icon} /></div>
-                <div class="item-text">
-                  <div class="item-title">{item.title}</div>
-                  <Show when={d() === 0 && item.sub}>
-                    <div class="item-sub">{item.sub}</div>
-                  </Show>
-                </div>
+                {row.kind === "folder" ? (
+                  <>
+                    <div class="item-icon"><Icon name={row.open ? "folder-open" : "folder"} /></div>
+                    <div class="item-text">
+                      <div class="item-title">{row.group}</div>
+                      <Show when={d() === 0}>
+                        <div class="item-sub">{row.count} item{row.count === 1 ? "" : "s"} · {row.open ? "◯ or ✕ to close" : "✕ or → to open"}</div>
+                      </Show>
+                    </div>
+                    <span class="folder-chevron">{row.open ? "▾" : "▸"}</span>
+                  </>
+                ) : (
+                  <>
+                    <div class="item-icon"><Icon name={row.item.icon} /></div>
+                    <div class="item-text">
+                      <div class="item-title">{row.item.title}</div>
+                      <Show when={d() === 0 && row.item.sub}>
+                        <div class="item-sub">{row.item.sub}</div>
+                      </Show>
+                    </div>
+                  </>
+                )}
               </div>
             );
           }}
