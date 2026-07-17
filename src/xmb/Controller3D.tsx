@@ -111,8 +111,9 @@ export default function Controller3D(props: { model: PadModel; onActive?: (label
     //    triggers on most models; every button on the material-fused DualSense).
     const hot = new Map<string, THREE.Mesh>();
     const hotBase = new Map<string, THREE.Vector3>();
-    type Part = { mesh: THREE.Mesh; rest: THREE.Quaternion; mats: any[]; kind?: Spot["kind"] };
+    type Part = { mesh: THREE.Mesh; restQuat: THREE.Quaternion; restPos: THREE.Vector3; pressVec: THREE.Vector3; mats: any[]; kind: "stick" | "button" };
     const parts = new Map<string, Part>();
+    let dpad: { mesh: THREE.Mesh; rest: THREE.Quaternion } | null = null; // the shared d-pad disc
     const AXIS_X = new THREE.Vector3(1, 0, 0), AXIS_Y = new THREE.Vector3(0, 1, 0);
     const sizeFor = (s: Spot) =>
       s.kind === "stickL" || s.kind === "stickR" ? 0.16
@@ -175,7 +176,7 @@ export default function Controller3D(props: { model: PadModel; onActive?: (label
         const cloneMats = (mesh: THREE.Mesh) => {
           const hit = cloned.get(mesh); if (hit) return hit;
           const src = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
-          const arr = src.map((m: any) => { const c = m.clone(); if (!c.emissive) c.emissive = new THREE.Color(0); return c; });
+          const arr = src.map((m: any) => { const c = m.clone(); if (!c.emissive) c.emissive = new THREE.Color(0); c.userData.__base = c.color ? c.color.clone() : null; return c; });
           (mesh as any).material = Array.isArray(mesh.material) ? arr : arr[0];
           cloned.set(mesh, arr); return arr;
         };
@@ -184,24 +185,38 @@ export default function Controller3D(props: { model: PadModel; onActive?: (label
         // Everything else (d-pad disc, guide, menu, bumpers, triggers) is fused
         // or ambiguous, so it keeps a calibrated hotspot. Match in the SCREEN
         // (XY) plane — LAYOUT z is a hotspot front-offset, not the mesh depth.
-        // Rig the two analog STICKS to their real mesh (physical tilt with the
-        // analog). Every button keeps a calibrated hotspot — clear, reliable,
-        // and unaffected by this model's occluded/fused button geometry.
+        // Rig everything the model separates into its own mesh:
+        //  · sticks → physically TILT with the analog
+        //  · face buttons + guide → press IN + glow
+        //  · d-pad → the shared disc TILTS toward the pressed direction
+        // Truly fused controls (bumpers/triggers/menu on these shells) keep a
+        // calibrated hotspot. Match in the screen (XY) plane.
+        const nearest = (px: number, py: number, exclude: Set<THREE.Mesh>) =>
+          infos.filter((mi) => mi.size < 0.95 && !exclude.has(mi.mesh))
+            .map((mi) => ({ mi, d: Math.hypot(mi.c.x - px, mi.c.y - py) }))
+            .sort((a, b) => a.d - b.d)[0];
         const used = new Set<THREE.Mesh>();
+        // local-space delta that shifts a mesh ~0.13 world-units "into" the face
+        // (world -Z at load), robust to any parent transform
+        const pressVecFor = (mesh: THREE.Mesh) => {
+          const parent = mesh.parent!;
+          const wp = mesh.getWorldPosition(new THREE.Vector3());
+          return parent.worldToLocal(wp.clone().add(new THREE.Vector3(0, 0, -0.07))).sub(mesh.position);
+        };
         for (const s of LAYOUT[props.model]) {
           const isStick = s.kind === "stickL" || s.kind === "stickR";
-          if (!isStick) { makeHotspot(s); continue; }
-          const near = infos
-            .filter((mi) => mi.size < 0.95 && !used.has(mi.mesh))
-            .map((mi) => ({ mi, d: Math.hypot(mi.c.x - s.p[0], mi.c.y - s.p[1]) }))
-            .sort((a, b) => a.d - b.d)[0];
-          if (near && near.d < 0.4) {
-            used.add(near.mi.mesh);
-            parts.set(s.id, { mesh: near.mi.mesh, rest: near.mi.mesh.quaternion.clone(), mats: cloneMats(near.mi.mesh), kind: s.kind });
-          } else {
-            makeHotspot(s); // no separable stick mesh (e.g. fused DualSense) → hotspot
-          }
+          const isFace = /^(cross|circle|square|triangle)$/.test(s.id);
+          const isGuide = s.id === "ps";
+          if (/^(up|down|left|right)$/.test(s.id)) continue; // d-pad handled below as one disc
+          if (!isStick && !isFace && !isGuide) { makeHotspot(s); continue; }
+          const hit = nearest(s.p[0], s.p[1], used);
+          if (!hit || hit.d > (isStick ? 0.4 : 0.22)) { makeHotspot(s); continue; }
+          used.add(hit.mi.mesh);
+          parts.set(s.id, { mesh: hit.mi.mesh, restQuat: hit.mi.mesh.quaternion.clone(), restPos: hit.mi.mesh.position.clone(), pressVec: isStick ? new THREE.Vector3() : pressVecFor(hit.mi.mesh), mats: cloneMats(hit.mi.mesh), kind: isStick ? "stick" : "button" });
         }
+        const dHit = nearest(-0.29, -0.11, used);
+        if (dHit && dHit.d < 0.35) { used.add(dHit.mi.mesh); dpad = { mesh: dHit.mi.mesh, rest: dHit.mi.mesh.quaternion.clone() }; }
+        else for (const id of ["up", "down", "left", "right"]) { const sp = LAYOUT[props.model].find((x) => x.id === id); if (sp) makeHotspot(sp); }
         if (import.meta.env.DEV) {
           const sz = box.getSize(new THREE.Vector3());
           (window as any).__ctlbox = { model: props.model, x: +sz.x.toFixed(2), y: +sz.y.toFixed(2), z: +sz.z.toFixed(2) };
@@ -259,18 +274,23 @@ export default function Controller3D(props: { model: PadModel; onActive?: (label
         if (pressed) pressedNow.add(s.id);
         return pressed ? 1 : 0;
       };
+      const dLit: Record<string, number> = { up: 0, down: 0, left: 0, right: 0 };
       for (const s of LAYOUT[props.model]) {
         const lit = litOf(s);
         if (lit > 0.5 && !activeLabel) activeLabel = LABELS[props.model][s.id] ?? s.id;
+        if (s.id in dLit) dLit[s.id] = lit;
         const part = parts.get(s.id);
         if (part) {
-          // REAL geometry: glow the actual mesh; physically tilt the actual stick
-          for (const m of part.mats) { m.emissive.set(tintNow); m.emissiveIntensity = lit * 2.2; }
-          if (s.kind === "stickL" || s.kind === "stickR") {
+          // REAL geometry: glow + colour-pulse the mesh; tilt the stick / press the button in
+          const tc = new THREE.Color(tintNow);
+          for (const m of part.mats) { m.emissive.copy(tc); m.emissiveIntensity = lit * 2.6; if (part.kind === "button" && m.userData.__base) m.color.copy(m.userData.__base).lerp(tc, lit * 0.7); }
+          if (part.kind === "stick") {
             const [axx, axy] = stickAxes(s.kind);
-            part.mesh.quaternion.copy(part.rest);
+            part.mesh.quaternion.copy(part.restQuat);
             part.mesh.rotateOnWorldAxis(AXIS_Y, -axx * 0.7);
             part.mesh.rotateOnWorldAxis(AXIS_X, axy * 0.7);
+          } else {
+            part.mesh.position.copy(part.restPos).addScaledVector(part.pressVec, lit);
           }
         } else {
           const m = hot.get(s.id); if (!m) continue; // fallback hotspot
@@ -278,6 +298,12 @@ export default function Controller3D(props: { model: PadModel; onActive?: (label
           (m.material as THREE.MeshBasicMaterial).opacity = (CAL ? 0.4 : 0.16) + lit * 0.75;
           m.scale.setScalar(1 + lit * 0.9);
         }
+      }
+      // d-pad: the whole disc tilts toward whichever direction is held
+      if (dpad) {
+        dpad.mesh.quaternion.copy(dpad.rest);
+        dpad.mesh.rotateOnWorldAxis(AXIS_X, (dLit.up - dLit.down) * 0.3);
+        dpad.mesh.rotateOnWorldAxis(AXIS_Y, (dLit.right - dLit.left) * 0.3);
       }
 
       // press-edge feedback: tick + rumble + a rim-light flash

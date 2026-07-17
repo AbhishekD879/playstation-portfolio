@@ -99,6 +99,7 @@ export default function XMB(props: {
   const [padName, setPadName] = createSignal<string | null>(null);
   const [ytQuery, setYtQuery] = createSignal(""); // AI agent → YouTube search handoff
   const [vListening, setVListening] = createSignal(false); // XMB voice command
+  const [aiAsk, setAiAsk] = createSignal<string | undefined>(undefined); // spoken question → LLM answers + speaks
   const [padTest, setPadTest] = createSignal(false);
   const [app, setApp] = createSignal<null | "doom" | "chess" | "trivia" | "flash" | "cinema" | "podcasts" | "library" | "map" | "ai" | "webamp" | "youtube" | "timemachine" | "art" | "wiki" | "lichess" | "ps2" | "pc" | "guestbook" | "browser" | "visualizer" | "studio" | "code" | "manual" | "ps2home" | "psphome" | "retrohome">(null);
   const [ps2Boot, setPs2Boot] = createSignal<GameRecord | null>(null);
@@ -972,7 +973,12 @@ export default function XMB(props: {
     if (yt?.[1]) { pushToast(`🎤 “${text}”`, "Searching YouTube"); aiCommand("youtube-search", yt[1].trim()); return; }
     const hit = VOICE_MAP.find(([re]) => re.test(t));
     if (hit && aiCommand(hit[1])) { pushToast(`🎤 “${text}”`, `Opening ${hit[1]}`); return; }
-    pushToast(`🎤 “${text}”`, "Say “open <app>” — e.g. doom, weather, radio, studio");
+    // not a command → it's a question. Hand it to the on-device copilot, which
+    // answers in the chat AND reads the answer aloud (Kokoro). If no model is
+    // installed yet, the copilot opens to its picker to prompt one.
+    pushToast(`🎤 “${text}”`, "Asking the assistant…");
+    setAiAsk(text);
+    setApp("ai");
   }
   function voiceCmd() { // header-mic click: tap to start, tap again (or ~6s) to run
     if (vListening()) { stopVoice(); return; }
@@ -1543,9 +1549,10 @@ export default function XMB(props: {
         <AiChat
           profileId={props.profile.id}
           consoleStatus={consoleStatus}
+          initialAsk={aiAsk()}
           onFirstChat={() => awardT("aifriend")}
           onCommand={(a, arg) => aiCommand(a, arg)}
-          onClose={() => setApp((cur) => (cur === "ai" ? null : cur))}
+          onClose={() => { setAiAsk(undefined); setApp((cur) => (cur === "ai" ? null : cur)); }}
         />
       </Show>
       <Show when={app() === "webamp"}>

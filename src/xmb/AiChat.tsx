@@ -56,6 +56,7 @@ export default function AiChat(props: {
   onClose: () => void;
   profileId: string;
   consoleStatus: () => string;
+  initialAsk?: string; // a question spoken via the header mic — auto-answered + spoken aloud
 }) {
   const chatKey = () => `chat:${props.profileId}`;
   let restored: StoredChat | null = null; // prior transcript + agent memory
@@ -179,7 +180,12 @@ export default function AiChat(props: {
       const gpu = (navigator as any).gpu;
       if (!gpu) { setSupported(false); return; }
       try {
-        setSupported(!!(await gpu.requestAdapter()));
+        const ok = !!(await gpu.requestAdapter());
+        setSupported(ok);
+        // voice question + a model already chosen before → skip the picker and
+        // boot straight into it, so speaking a question "just works". No prior
+        // model → the picker shows, prompting the user to install one.
+        if (ok && props.initialAsk && restored?.modelKey) boot(restored.modelKey as ModelKey);
       } catch {
         setSupported(false);
       }
@@ -277,6 +283,12 @@ Examples — these MUST become console_control calls (flat JSON, no nesting):
         }]);
       }
       setTimeout(() => scroll(), 60);
+      // a question spoken via the header mic: turn on Kokoro voice, then ask it —
+      // the answer streams as text AND is read aloud (see agent_end → speak).
+      if (props.initialAsk) {
+        const q = props.initialAsk;
+        (async () => { try { if (!voice()) await toggleVoice(); } catch { /* text-only */ } send(q); })();
+      }
     } catch (e) {
       setProgress(`Couldn't load the model — ${String(e).slice(0, 120)}`);
     }
