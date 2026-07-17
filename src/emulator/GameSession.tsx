@@ -5,6 +5,7 @@ import { Show, createSignal, onCleanup, onMount } from "solid-js";
 import gsap from "gsap";
 import { bumpPlays, type GameRecord } from "../gamesdb";
 import { setNavEnabled } from "../input";
+import { EJS_CONFIG, startBridge, stopBridge } from "../gamepadBridge";
 
 declare global {
   interface Window {
@@ -51,7 +52,16 @@ export default function GameSession(props: { game: GameRecord; profileId: string
       setReading(false);
     }, 2000);
 
-    onCleanup(() => clearTimeout(timer));
+    // Controller support: EmulatorJS listens for KEYBOARD input on its own
+    // .ejs_parent element (and its native gamepad handler chokes on phantom
+    // duplicate pads), so once that element exists, run the pad→keyboard
+    // bridge straight onto it with EJS's default bindings.
+    const findEjs = setInterval(() => {
+      const el = document.querySelector(".ejs_parent");
+      if (el) { clearInterval(findEjs); startBridge(el, () => {}, EJS_CONFIG); }
+    }, 500);
+
+    onCleanup(() => { clearTimeout(timer); clearInterval(findEjs); stopBridge(); });
   });
 
   function eject() {

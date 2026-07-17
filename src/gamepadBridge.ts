@@ -74,6 +74,32 @@ export const PS2_CONFIG: BridgeConfig = {
   ],
 };
 
+// ——— EmulatorJS (retro cartridges): speak its DEFAULT keyboard bindings ———
+// EJS matches inputs on e.keyCode (its keyLookup turns the default strings
+// into keyCodes), so the keyCode field below is what actually lands. Its own
+// gamepad handler is bypassed on purpose: it keys on "id_index" pairs that
+// break whenever a phantom duplicate pad shifts the indices.
+export const EJS_CONFIG: BridgeConfig = {
+  quitButton: null, // Select/Back is a real console button in-game (GBA menus!)
+  map: {
+    12: UP, 13: DOWN, 14: LEFT, 15: RIGHT,
+    0: K("x", "KeyX", 88),   // A → EJS "x" (B button on Nintendo-style cores)
+    1: K("z", "KeyZ", 90),   // B → EJS "z"
+    2: K("s", "KeyS", 83),   // X → EJS "s"
+    3: K("a", "KeyA", 65),   // Y → EJS "a"
+    4: K("q", "KeyQ", 81),   // LB → L
+    5: K("e", "KeyE", 69),   // RB → R
+    6: K("Tab", "Tab", 9),   // LT → L2
+    7: K("r", "KeyR", 82),   // RT → R2
+    8: K("v", "KeyV", 86),   // Back → Select
+    9: ENTER,                // Start
+  },
+  axes: [
+    { axis: 0, neg: LEFT, pos: RIGHT }, // left stick doubles the d-pad
+    { axis: 1, neg: UP, pos: DOWN },
+  ],
+};
+
 // ——— DOOM: real Xbox-FPS scheme (twin-stick, always-run) ———
 // Left stick = move + strafe · Right stick X = turn · RT/A = fire · X = use ·
 // B = use · Y = weapon · LB/RB = strafe · Start = menu · Back = quit.
@@ -165,7 +191,12 @@ export function startBridge(target: EventTarget | null, quit: () => void, config
   onQuit = quit;
   cfg = config;
   if (!targets.length) claimPad(true); // the game owns the pad — no app-key synthesis
-  targets = target ? [target, document] : [document];
+  // ONE dispatch per event, on the deepest target — it bubbles to document and
+  // window anyway. The old [target, document] pair delivered every key TWICE to
+  // window-level engines (js-dos!): menus toggled open-and-shut, actions
+  // self-cancelled. (PS2 never noticed: its canvas lives in an iframe, so the
+  // parent-document copy reached nobody.)
+  targets = target ? [target] : [document];
   down.clear();
   cancelAnimationFrame(raf);
   raf = requestAnimationFrame(loop);
