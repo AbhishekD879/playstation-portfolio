@@ -246,35 +246,35 @@ export default function XMB(props: {
     : CATEGORIES[ci].id === "photo" ? photoItems()
     : CATEGORIES[ci].items).filter((i) => labEnabled(i.id));
 
-  // —— nested folders (PSP-style): items that share a `group` collapse into an
-  // expandable folder; open one and its items nest underneath. A category with
-  // no groups stays a plain flat list. Navigation walks the *visible* rows. ——
-  type Row = { kind: "folder"; group: string; count: number; open: boolean } | { kind: "item"; item: XmbItem; child: boolean };
-  const ekey = (ci: number, group: string) => `${CATEGORIES[ci].id}::${group}`;
-  const [expanded, setExpanded] = createSignal<Set<string>>(new Set());
+  // —— XMB folders: authentic drill-in. A category's column shows its groups as
+  // folders (plus any ungrouped items); press → (or ✕) on a folder to ENTER it
+  // — its items become the column — and ← / ◯ to go back. Ungrouped categories
+  // are a plain flat list. (Per the PS3/PSP XMB: items expand into columns; →
+  // enters, ← / ◯ backs out — no accordion, no chevrons/counts clutter.) ——
+  type Row = { kind: "folder"; group: string; count: number } | { kind: "item"; item: XmbItem };
+  const [drill, setDrill] = createSignal<Record<string, string | null>>({});
+  const drillOf = (ci: number) => drill()[CATEGORIES[ci].id] ?? null;
   const rowsOf = (ci: number): Row[] => {
     const items = itemsOf(ci);
-    if (!items.some((it) => it.group)) return items.map((item) => ({ kind: "item" as const, item, child: false }));
+    const cur = drillOf(ci);
+    if (cur) return items.filter((it) => (it.group ?? "") === cur).map((item) => ({ kind: "item" as const, item }));
+    if (!items.some((it) => it.group)) return items.map((item) => ({ kind: "item" as const, item }));
     const rows: Row[] = [];
-    for (let i = 0; i < items.length;) {
-      const g = items[i].group ?? "";
-      let j = i; while (j < items.length && (items[j].group ?? "") === g) j++;
-      const run = items.slice(i, j);
-      if (!g) run.forEach((item) => rows.push({ kind: "item", item, child: false }));
-      else {
-        const open = expanded().has(ekey(ci, g));
-        rows.push({ kind: "folder", group: g, count: run.length, open });
-        if (open) run.forEach((item) => rows.push({ kind: "item", item, child: true }));
-      }
-      i = j;
+    const seen = new Set<string>();
+    for (const it of items) {
+      const g = it.group ?? "";
+      if (!g) { rows.push({ kind: "item", item: it }); continue; }
+      if (!seen.has(g)) { seen.add(g); rows.push({ kind: "folder", group: g, count: items.filter((x) => (x.group ?? "") === g).length }); }
     }
     return rows;
   };
   const colRows = createMemo<Row[]>(() => rowsOf(cat()));
-  const toggleGroup = (ci: number, group: string) => {
-    const s = new Set(expanded()); const k = ekey(ci, group);
-    s.has(k) ? s.delete(k) : s.add(k);
-    setExpanded(s);
+  const enterFolder = (ci: number, group: string) => { setDrill({ ...drill(), [CATEGORIES[ci].id]: group }); setSels({ ...sels(), [CATEGORIES[ci].id]: 0 }); sfx.confirm(); };
+  const exitFolder = (ci: number) => {
+    const cur = drillOf(ci);
+    setDrill({ ...drill(), [CATEGORIES[ci].id]: null });
+    sfx.back();
+    if (cur) { const idx = rowsOf(ci).findIndex((r) => r.kind === "folder" && r.group === cur); if (idx >= 0) setSels({ ...sels(), [CATEGORIES[ci].id]: idx }); }
   };
   const selOf = (ci: number) => Math.min(sels()[CATEGORIES[ci].id] ?? 0, Math.max(0, rowsOf(ci).length - 1));
 
@@ -1114,8 +1114,8 @@ export default function XMB(props: {
   const launchSearch = (h: SearchHit) => {
     setSearchOpen(false);
     setCat(h.ci);
-    // reveal the result: open its folder (if any) and select its row
-    if (h.item.group) setExpanded(new Set(expanded()).add(ekey(h.ci, h.item.group)));
+    // reveal the result: drill into its folder (if any) and select its row
+    setDrill({ ...drill(), [CATEGORIES[h.ci].id]: h.item.group ?? null });
     const ri = rowsOf(h.ci).findIndex((r) => r.kind === "item" && r.item.id === h.item.id);
     if (ri >= 0) setSels({ ...sels(), [CATEGORIES[h.ci].id]: ri });
     act(h.item);
@@ -1282,14 +1282,14 @@ export default function XMB(props: {
     const rows = colRows();
     switch (action) {
       case "left": {
+        if (drillOf(cat())) { exitFolder(cat()); break; } // ← backs out of a folder first
         const vs = visCats(), p = vs.indexOf(cat());
         if (p > 0) { setCat(vs[p - 1]); sfx.tickH(); }
         break;
       }
       case "right": {
-        // → opens a focused folder (or moves right a category if it's not one)
         const row = rows[selOf(cat())];
-        if (row?.kind === "folder" && !row.open) { toggleGroup(cat(), row.group); sfx.confirm(); break; }
+        if (row?.kind === "folder") { enterFolder(cat(), row.group); break; } // → drills into a folder
         const vs = visCats(), p = vs.indexOf(cat());
         if (p >= 0 && p < vs.length - 1) { setCat(vs[p + 1]); sfx.tickH(); }
         break;
@@ -1307,7 +1307,7 @@ export default function XMB(props: {
       case "confirm": {
         const row = rows[selOf(cat())];
         if (!row) break;
-        if (row.kind === "folder") { toggleGroup(cat(), row.group); sfx.confirm(); }
+        if (row.kind === "folder") enterFolder(cat(), row.group);
         else { rumble(0.35, 0.25, 60); act(row.item); } // light tactile tick on select
         break;
       }
@@ -1315,6 +1315,7 @@ export default function XMB(props: {
         setTrophiesOpen(true);
         break;
       case "back":
+        if (drillOf(cat())) exitFolder(cat()); // ◯ backs out of a folder
         break;
     }
   };
@@ -1503,47 +1504,45 @@ export default function XMB(props: {
         </For>
       </div>
 
-      {/* item column for the active category — nested folders + items */}
+      {/* breadcrumb — shown while drilled inside a folder (◯/← to go back) */}
+      <Show when={drillOf(cat())}>
+        <button class="drill-crumb" onClick={() => exitFolder(cat())}>
+          <span class="btn-o" /> {CATEGORIES[cat()].label} <span class="drill-sep">›</span> {drillOf(cat())}
+        </button>
+      </Show>
+
+      {/* item column for the active category — folders drill into their items */}
       <div class="item-col">
         <For each={colRows()}>
           {(row, i) => {
             const d = () => i() - selOf(cat());
             const onClick = () => {
-              // one tap = select + activate (open the item / toggle the folder) —
-              // natural for touch and mouse alike
               setSels({ ...sels(), [CATEGORIES[cat()].id]: i() });
-              if (row.kind === "folder") { toggleGroup(cat(), row.group); sfx.confirm(); }
+              if (row.kind === "folder") enterFolder(cat(), row.group);
               else { sfx.confirm(); act(row.item); }
             };
             return (
               <div
                 class="item"
-                classList={{
-                  selected: d() === 0, above: d() < 0, offscreen: d() > 4 || d() < -3,
-                  folder: row.kind === "folder", open: row.kind === "folder" && row.open, child: row.kind === "item" && row.child,
-                }}
+                classList={{ selected: d() === 0, above: d() < 0, offscreen: d() > 4 || d() < -3, folder: row.kind === "folder" }}
                 style={{ transform: `translateY(${itemY(d())}px)` }}
                 onClick={onClick}
               >
                 {row.kind === "folder" ? (
                   <>
-                    <div class="item-icon"><Icon name={row.open ? "folder-open" : "folder"} /></div>
+                    <div class="item-icon"><Icon name="folder" /></div>
                     <div class="item-text">
                       <div class="item-title">{row.group}</div>
-                      <Show when={d() === 0}>
-                        <div class="item-sub">{row.count} item{row.count === 1 ? "" : "s"} · {row.open ? "◯ or ✕ to close" : "✕ or → to open"}</div>
-                      </Show>
+                      <Show when={d() === 0}><div class="item-sub">{row.count} item{row.count === 1 ? "" : "s"}</div></Show>
                     </div>
-                    <span class="folder-chevron">{row.open ? "▾" : "▸"}</span>
+                    <span class="folder-arrow">›</span>
                   </>
                 ) : (
                   <>
                     <div class="item-icon"><Icon name={row.item.icon} /></div>
                     <div class="item-text">
                       <div class="item-title">{row.item.title}</div>
-                      <Show when={d() === 0 && row.item.sub}>
-                        <div class="item-sub">{row.item.sub}</div>
-                      </Show>
+                      <Show when={d() === 0 && row.item.sub}><div class="item-sub">{row.item.sub}</div></Show>
                     </div>
                   </>
                 )}

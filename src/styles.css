@@ -163,18 +163,22 @@ img.status-avatar, img.ptile-avatar { object-fit: cover; border: 1px solid rgba(
 .item.above { opacity: 0.35; }
 .item.selected { opacity: 1; }
 .item.offscreen { opacity: 0; pointer-events: none; }
-/* nested folders (PSP-style) — a folder row you open to reveal its items */
-.item.folder .item-icon { color: color-mix(in oklab, var(--xmb-tint) 60%, #fff); }
-.folder-chevron {
-  margin-left: auto; padding-left: 14px; font-size: 15px; line-height: 1;
-  color: color-mix(in oklab, var(--xmb-tint) 62%, #fff); opacity: 0.85;
+/* XMB folders — a folder row you drill into with → (items become the column) */
+.item.folder .item-icon { color: color-mix(in oklab, var(--xmb-tint) 62%, #fff); }
+.folder-arrow { margin-left: auto; padding-left: 14px; font-size: 24px; line-height: 1; color: color-mix(in oklab, var(--xmb-tint) 60%, #fff); opacity: 0.55; }
+.item.selected .folder-arrow { opacity: 1; }
+/* breadcrumb shown while drilled inside a folder (◯ / ← to go back) */
+.drill-crumb {
+  position: absolute; top: 92px; left: max(6vw, 38px); z-index: 4;
+  display: inline-flex; align-items: center; gap: 9px;
+  padding: 7px 15px; border-radius: 999px; cursor: pointer; font-family: inherit;
+  font-size: 12px; letter-spacing: 0.12em; text-transform: uppercase; color: rgba(255,255,255,0.75);
+  background: rgba(6,10,20,0.45); border: 1px solid color-mix(in oklab, var(--xmb-tint) 32%, rgba(255,255,255,0.12));
+  -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px);
+  animation: fadeIn 0.2s ease-out;
 }
-/* items nested inside an open folder are indented + a touch smaller */
-.item.child { padding-left: 48px; }
-.item.child .item-icon { width: 34px; height: 34px; opacity: 0.75; }
-.item.child.selected .item-icon { width: 46px; height: 46px; }
-.item.child .item-title { font-size: 15px; }
-.item.child.selected .item-title { font-size: 19px; }
+.drill-crumb .btn-o { width: 15px; height: 15px; }
+.drill-sep { color: color-mix(in oklab, var(--xmb-tint) 55%, #fff); padding: 0 2px; }
 .item-icon {
   width: 44px; height: 44px; flex: 0 0 auto;
   color: #fff; opacity: 0.9;
@@ -1187,7 +1191,11 @@ img.status-avatar, img.ptile-avatar { object-fit: cover; border: 1px solid rgba(
    overlays so it drives in-app nav too; corners kept clear of the center. */
 .touchpad { display: none; }
 @media (pointer: coarse), (max-width: 820px) {
-  .touchpad {
+  /* The nav d-pad is retired on touch — the crossbar is swipe+tap and every app
+     is used natively (tap + scroll). It only returns for a game that has no
+     touch controls of its own (PS2 / DOOM), gated in the markup. */
+  .touchpad { display: none; }
+  .touchpad.tpad-game {
     display: block; position: fixed; inset: 0; z-index: 40;
     pointer-events: none; /* only the buttons catch touches */
   }
