@@ -1,0 +1,18 @@
+{
+  // Standalone Worker for PS2 multiplayer: WebRTC signaling (a Durable Object
+  // per room) + a /turn endpoint that mints Cloudflare TURN credentials.
+  // The Pages app (abhishekstation) talks to this over wss:// and https://.
+  // Deploy: `npx wrangler deploy` from this directory.
+  "name": "abhishekstation-mp",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-07-01",
+  "observability": { "enabled": true },
+  "durable_objects": {
+    "bindings": [{ "name": "SIGNAL_ROOM", "class_name": "SignalRoom" }]
+  },
+  // sqlite-backed class so it runs on the free Workers plan (we keep no state,
+  // but the free tier requires the sqlite backend).
+  "migrations": [
+    { "tag": "v1", "new_sqlite_classes": ["SignalRoom"] }
+  ]
+}

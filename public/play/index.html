@@ -43,6 +43,51 @@
   // boots, so saves survive. Only vfs + states are persisted (the rest is
   // rebuilt by initVm).
   const DATA = "/home/web_user/.local/share/Play Data Files";
+
+  // —— multiplayer: controller port 2 (player 2) ————————————————————————
+  // Play!'s web build only wires pad 0 (see upstream ui_js/Main.cpp). But its
+  // InputBindingManager auto-loads bindings for ALL pads from this profile at
+  // initVm time, and Main.cpp only OVERRIDES pad 0 afterwards — so a profile
+  // that binds pad2 survives and gives us a real 2nd controller with NO wasm
+  // rebuild. Injected input reaches the emulator as synthetic KeyboardEvents on
+  // #outputCanvas (same path the gamepad bridge already uses for pad 0). We pick
+  // plain-ASCII keyIds: pad 0 uses enum keyIds (>=0xFF80) so there is zero
+  // collision, and unrecognized codes map to code[0] in the emscripten provider.
+  // __p2codes is the single source of truth the host-side injector reads.
+  const P2 = {
+    start: 33, select: 34, dpad_up: 35, dpad_down: 36, dpad_left: 37, dpad_right: 38,
+    cross: 39, circle: 40, square: 41, triangle: 42,
+    l1: 43, r1: 44, l2: 45, r2: 46, l3: 47, r3: 48,
+    analog_left_x: [49, 50], analog_left_y: [51, 52],
+    analog_right_x: [53, 54], analog_right_y: [55, 56],
+  };
+  window.__p2codes = P2;
+  const EMSC_PROVIDER = 1164792675; // 'EmSc' as a uint32 (multichar constant)
+  function writeInputProfile() {
+    const pref = (name, type, value) => `\t<Preference Name="${name}" Type="${type}" Value="${value}" />`;
+    const lines = ["<Config>"];
+    const target = (base, keyId) => {
+      lines.push(pref(base + ".providerId", "integer", EMSC_PROVIDER));
+      lines.push(pref(base + ".deviceId", "string", "0:0:0:0:0:0"));
+      lines.push(pref(base + ".keyId", "integer", keyId));
+      lines.push(pref(base + ".keyType", "integer", 0)); // KEYTYPE::BUTTON
+    };
+    for (const [btn, key] of Object.entries(P2)) {
+      const b = `input.pad2.${btn}`;
+      if (Array.isArray(key)) { // simulated axis: bindingtype 2, two key targets
+        lines.push(pref(b + ".bindingtype", "integer", 2));
+        target(b + ".bindingtarget1", key[0]);
+        target(b + ".bindingtarget2", key[1]);
+      } else { // simple button: bindingtype 1
+        lines.push(pref(b + ".bindingtype", "integer", 1));
+        target(b + ".bindingtarget1", key);
+      }
+    }
+    lines.push("</Config>", "");
+    const xml = lines.join("\r\n");
+    mod.FS.mkdirTree(DATA + "/inputprofiles");
+    mod.FS.writeFile(DATA + "/inputprofiles/default.xml", xml);
+  }
   // snapshot the whole data dir (memory cards under vfs/, save states, etc.) so
   // a save is captured wherever the emulator writes it
   const PERSIST = [""];
@@ -93,6 +138,9 @@
     window.__mod = m; // debug/stats handle (same-origin parent can read fps)
     mod.discImageDevice = new DiscImageDevice(mod);
     mod.FS.mkdir("/work");
+    // Write the pad2 input profile BEFORE initVm — the binding manager loads it
+    // during initVm, so it must already exist in the FS at this point.
+    try { writeInputProfile(); } catch (e) { console.warn("[mp] input profile write failed", e); }
     // initVm creates the VM + WebGL context (#outputCanvas) + input + sound.
     // Without this ccall nothing boots — bootElf/bootDiscImage assume the VM exists.
     mod.ccall("initVm", "", [], []);

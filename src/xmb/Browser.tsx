@@ -66,7 +66,7 @@ export default function Browser(props: { onClose: () => void }) {
           }}
         />
         <button class="ghost-btn" onClick={() => go()}>go</button>
-        <button class="ghost-btn" onClick={() => { sfx.back(); props.onClose(); }}>✕ close</button>
+        <button class="ps-act" onClick={() => { sfx.back(); props.onClose(); }}><span class="btn-o" /> back</button>
       </div>
 
       <Show

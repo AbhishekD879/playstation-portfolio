@@ -102,7 +102,7 @@ export default function CodeApp(props: { onClose: () => void }) {
             {(l) => <button class="ghost-btn" classList={{ on: lang() === l }} onClick={() => switchLang(l)}>{l === "js" ? "JavaScript" : "Python"}</button>}
           </For>
         </div>
-        <button class="ghost-btn" onClick={() => { sfx.back(); props.onClose(); }}>✕ close</button>
+        <button class="ps-act" onClick={() => { sfx.back(); props.onClose(); }}><span class="btn-o" /> back</button>
       </div>
 
       <div class="codeapp-body">
@@ -142,11 +142,12 @@ export default function CodeApp(props: { onClose: () => void }) {
         </div>
       </div>
 
-      <div class="codeapp-foot">
-        <button class="ps2-launch codeapp-run" disabled={busy()} onClick={execute}>{busy() ? "▪ working…" : "▶ Run"}</button>
-        <button class="ghost-btn" disabled={busy()} onClick={format}>✧ Format</button>
-        <button class="ghost-btn" disabled={busy()} onClick={lint}>✓ Check</button>
-        <span class="codeapp-hint">Ctrl/⌘+Enter run · sandboxed, killed after 5s · format & lint on-device</span>
+      <div class="ps-legend">
+        <button class="ps-act" disabled={busy()} onClick={execute}><span class="btn-x" /> {busy() ? "working…" : "run"}</button>
+        <button class="ps-act" disabled={busy()} onClick={format}><span class="btn-s" /> format</button>
+        <button class="ps-act" disabled={busy()} onClick={lint}><span class="btn-t" /> check</button>
+        <button class="ps-act" onClick={() => { sfx.back(); props.onClose(); }}><span class="btn-o" /> back</button>
+        <span class="codeapp-hint" style={{ "margin-left": "auto" }}>⌘/Ctrl+Enter run · sandboxed · 5s limit</span>
       </div>
     </div>
   );

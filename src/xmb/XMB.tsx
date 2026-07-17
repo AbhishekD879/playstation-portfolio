@@ -1,10 +1,11 @@
 // The cross-media bar. Horizontal categories, vertical items, info panels,
 // trophies, disc drive. Navigation: arrows/WASD + Enter/Esc, or a gamepad.
-import { For, Show, createMemo, createSignal, onCleanup, onMount } from "solid-js";
+import { For, Show, createEffect, createMemo, createSignal, onCleanup, onMount } from "solid-js";
 import { CATEGORIES, TROPHIES, type XmbItem } from "../content";
 import { AVATARS, PLATINUM, award, resizePhoto, updateProfile, type Profile } from "../profiles";
 import { CORES, CORE_NAMES, addGame, listGames, addPhoto, listPhotos, type GameRecord, type PhotoRecord } from "../gamesdb";
-import { THEMES, applyTheme, currentThemeIndex } from "../theme";
+import { THEMES, applyCustomHsl, applyTheme, currentThemeIndex, loadCustomHsl } from "../theme";
+import { LAB_APPS, labEnabled, toggleLab } from "../labs";
 import { CHANNELS, fetchDevto, fetchGuide, fetchHN, fetchRadio, fetchRss, fetchWeather, wmo, type NewsEntry, type Weather } from "../apps";
 import * as sfx from "../audio";
 import { onNav, onPadChange, rumble, rumbleEnabled, setNavEnabled, setRumble } from "../input";
@@ -22,6 +23,7 @@ import Browser from "./Browser";
 import Visualizer from "./Visualizer";
 import Studio from "./Studio";
 import CodeApp from "./CodeApp";
+import Manual from "./Manual";
 import Doom from "./Doom";
 import ChessApp from "./ChessApp";
 import Trivia from "./Trivia";
@@ -60,6 +62,16 @@ export default function XMB(props: {
   const [inputMode, setInputMode] = createSignal<null | "spotify" | "tv" | "rss" | "yt">(null);
   const [themesOpen, setThemesOpen] = createSignal(false);
   const [themeIdx, setThemeIdx] = createSignal(0);
+  const [themeRow, setThemeRow] = createSignal(0); // 0 = swatches · 1-3 = custom H/S/L sliders
+  const [customHsl, setCustomHsl] = createSignal(loadCustomHsl());
+  const [labsOpen, setLabsOpen] = createSignal(false);
+  const [labsIdx, setLabsIdx] = createSignal(0);
+  const [labsTick, setLabsTick] = createSignal(0); // re-render pulse for toggle states
+  const [soundOpen, setSoundOpen] = createSignal(false);
+  const [soundIdx, setSoundIdx] = createSignal(0);
+  const [sndTick, setSndTick] = createSignal(0); // re-render pulse for volume/pack/mute
+  // keep the focused Labs row in view while the pad scrolls the list
+  createEffect(() => { labsIdx(); labsOpen() && document.querySelector(".labs-row.active")?.scrollIntoView({ block: "nearest" }); });
   const [links, setLinks] = createSignal<{ url: string; label: string }[]>(
     JSON.parse(localStorage.getItem("asp.spotify") ?? "[]"),
   );
@@ -85,7 +97,7 @@ export default function XMB(props: {
   const [ytQuery, setYtQuery] = createSignal(""); // AI agent → YouTube search handoff
   const [vListening, setVListening] = createSignal(false); // XMB voice command
   const [padTest, setPadTest] = createSignal(false);
-  const [app, setApp] = createSignal<null | "doom" | "chess" | "trivia" | "flash" | "cinema" | "podcasts" | "library" | "map" | "ai" | "webamp" | "youtube" | "timemachine" | "art" | "wiki" | "lichess" | "ps2" | "pc" | "guestbook" | "browser" | "visualizer" | "studio" | "code">(null);
+  const [app, setApp] = createSignal<null | "doom" | "chess" | "trivia" | "flash" | "cinema" | "podcasts" | "library" | "map" | "ai" | "webamp" | "youtube" | "timemachine" | "art" | "wiki" | "lichess" | "ps2" | "pc" | "guestbook" | "browser" | "visualizer" | "studio" | "code" | "manual">(null);
   let appNav: ((a: Parameters<Parameters<typeof onNav>[0]>[0]) => void) | undefined;
   const [apod, setApod] = createSignal<{ loading: boolean; data?: Apod } | null>(null);
   const [dict, setDict] = createSignal<{ result?: Definition | null; looking: boolean } | null>(null);
@@ -106,20 +118,20 @@ export default function XMB(props: {
   let linkInput!: HTMLInputElement;
   const [avatarVer, setAvatarVer] = createSignal(0);
 
+  // ordered like a console shelf: play-now games → the two consoles-within-
+  // the-console (each named for WHAT it plays) → spectate → your game library
   const gameItems = createMemo<XmbItem[]>(() => [
-    { id: "doom", title: "DOOM", sub: "1993 shareware · DOS in your browser (WASM)", icon: "skull", action: { type: "doom" } },
-    { id: "chess", title: "Chess vs Stockfish", sub: "The real engine, running on this device", icon: "knight", action: { type: "chess" } },
-    { id: "lichesstv", title: "Lichess TV", sub: "Watch live grandmaster games", icon: "knight", action: { type: "lichess-tv" } },
-    { id: "trivia", title: "Trivia Arcade", sub: "10 questions · Open Trivia DB", icon: "question", action: { type: "trivia" } },
-    { id: "flash", title: "Flash Arcade", sub: "Ruffle WASM + the Internet Archive", icon: "lightning", action: { type: "flash" } },
-    { id: "ps2", title: "PlayStation 2", sub: "Experimental emulator · desktop only", icon: "disc", action: { type: "ps2" } },
-    { id: "pc", title: "Other OS", sub: "A whole x86 PC — KolibriOS, runs in the console", icon: "monitor", action: { type: "pc" } },
-    { id: "code", title: "Code Playground", sub: "Run JavaScript & Python — sandboxed, on this console", icon: "chip", action: { type: "code" } },
-    { id: "insert", title: "Insert Disc…", sub: "Load a ROM you own — read locally, never uploaded", icon: "plus", action: { type: "insert-disc" } },
+    { id: "doom", title: "DOOM", sub: "Built-in game · the 1993 shareware, playable now", icon: "skull", action: { type: "doom" } },
+    { id: "chess", title: "Chess vs Stockfish", sub: "Built-in game · the real engine, on this device", icon: "knight", action: { type: "chess" } },
+    { id: "trivia", title: "Trivia Arcade", sub: "Built-in game · 10 questions, endless rounds", icon: "question", action: { type: "trivia" } },
+    { id: "flash", title: "Flash Arcade", sub: "Built-in arcade · classic Flash games, streamed", icon: "lightning", action: { type: "flash" } },
+    { id: "ps2", title: "PlayStation 2", sub: "Console emulator · boot YOUR .iso disc · 2-player online", icon: "disc", action: { type: "ps2" } },
+    { id: "insert", title: "Retro Console — Insert Cartridge…", sub: "NES · SNES · GBA · N64 & more — a ROM you own, read locally", icon: "plus", action: { type: "insert-disc" } },
+    { id: "lichesstv", title: "Lichess TV", sub: "Spectate · live grandmaster games", icon: "knight", action: { type: "lichess-tv" } },
     ...games().map((g) => ({
       id: `g-${g.id}`,
       title: g.name.replace(/\.[^.]+$/, ""),
-      sub: `${CORE_NAMES[g.core] ?? g.core} · ${(g.size / 1048576).toFixed(1)} MB · played ${g.plays ?? 0}×`,
+      sub: `Your library · ${CORE_NAMES[g.core] ?? g.core} · ${(g.size / 1048576).toFixed(1)} MB · played ${g.plays ?? 0}×`,
       icon: "disc",
       action: { type: "play-game" as const, gameId: g.id },
     })),
@@ -188,15 +200,21 @@ export default function XMB(props: {
     { id: "apod", title: "Astronomy Photo of the Day", sub: "Live from NASA", icon: "spark", action: { type: "apod" } },
   ]);
 
+  // one gate for every category: Labs-disabled apps simply don't exist here
   const itemsOf = (ci: number): XmbItem[] =>
-    CATEGORIES[ci].id === "game" ? gameItems()
+    (CATEGORIES[ci].id === "game" ? gameItems()
     : CATEGORIES[ci].id === "music" ? musicItems()
     : CATEGORIES[ci].id === "tv" ? tvItems()
     : CATEGORIES[ci].id === "news" ? newsItems()
     : CATEGORIES[ci].id === "photo" ? photoItems()
-    : CATEGORIES[ci].items;
+    : CATEGORIES[ci].items).filter((i) => labEnabled(i.id));
 
   const selOf = (ci: number) => Math.min(sels()[CATEGORIES[ci].id] ?? 0, Math.max(0, itemsOf(ci).length - 1));
+
+  // a category with every app switched off in Labs simply leaves the crossbar;
+  // cat() stays a raw CATEGORIES index, only rendering + nav use visible slots
+  const visCats = createMemo(() => CATEGORIES.map((_, i) => i).filter((i) => itemsOf(i).length > 0));
+  const visPos = (i: number) => Math.max(0, visCats().indexOf(i));
 
   const refreshGames = () => listGames(props.profile.id).then(setGames);
   const refreshPhotos = () => listPhotos(props.profile.id).then(setPhotos);
@@ -467,6 +485,10 @@ export default function XMB(props: {
         sfx.confirm();
         setApp("code");
         break;
+      case "manual":
+        sfx.confirm();
+        setApp("manual");
+        break;
       case "gesture-toggle":
         if (gesturesOn()) {
           stopGestures();
@@ -549,7 +571,19 @@ export default function XMB(props: {
       case "themes":
         sfx.confirm();
         setThemeIdx(currentThemeIndex());
+        setThemeRow(0);
+        setCustomHsl(loadCustomHsl());
         setThemesOpen(true);
+        break;
+      case "labs":
+        sfx.confirm();
+        setLabsIdx(0);
+        setLabsOpen(true);
+        break;
+      case "sound-settings":
+        sfx.confirm();
+        setSoundIdx(0);
+        setSoundOpen(true);
         break;
       case "sound-toggle": {
         const muted = sfx.toggleMute();
@@ -753,6 +787,7 @@ export default function XMB(props: {
       case "visualizer": case "visualiser": return openApp("visualizer");
       case "studio": case "synth": case "music-studio": return openApp("studio");
       case "code": case "playground": case "terminal": return openApp("code");
+      case "manual": case "docs": case "documentation": return openApp("manual");
       case "doom": awardT("doomguy"); return openApp("doom");
       case "chess": return openApp("chess");
       case "lichess": return openApp("lichess");
@@ -859,21 +894,34 @@ export default function XMB(props: {
     { id: "settings.screensaver", description: "Set when the screensaver starts, in minutes (0 = off).", params: [{ name: "minutes", description: "0, 1.5, 3, 5 or 10", required: true }],
       run: (a) => { const m = parseFloat(String(a.minutes)) || 0; setSaverMins(m); localStorage.setItem("asp.saver", String(m)); return m ? `Screensaver after ${m} minutes.` : "Screensaver off."; } },
     { id: "xmb.goto", description: `Move the XMB menu to a category. Categories: ${CATEGORIES.map((c) => c.label).join(", ")}.`, params: [{ name: "category", description: "category name", required: true }],
-      run: (a) => { const i = CATEGORIES.findIndex((c) => c.label.toLowerCase() === String(a.category).toLowerCase().trim()); if (i < 0) return `No category "${a.category}".`; setCat(i); return `On ${CATEGORIES[i].label}.`; } },
+      run: (a) => { const i = CATEGORIES.findIndex((c) => c.label.toLowerCase() === String(a.category).toLowerCase().trim()); if (i < 0) return `No category "${a.category}".`; if (!itemsOf(i).length) return `"${CATEGORIES[i].label}" is empty — its apps are switched off in Labs.`; setCat(i); return `On ${CATEGORIES[i].label}.`; } },
     { id: "trophies.show", description: "Open the trophy collection panel.", run: () => { setTrophiesOpen(true); return "Trophies open."; } },
     { id: "screensaver.start", description: "Start the screensaver (drifting clock) right now.", run: () => { setSaver(true); return "Screensaver on — any key wakes it."; } },
     { id: "console.status", description: "Report the visitor's stats: trophies, game library size, playtime.", run: () => consoleStatus() },
   ]);
 
   // —— navigation (keyboard + gamepad via onNav; mouse clicks & wheel reuse it) ——
-  const handleNav = (action: Parameters<Parameters<typeof onNav>[0]>[0]) => {
+  const handleNav = (action: Parameters<Parameters<typeof onNav>[0]>[0], src?: import("../input").NavSource) => {
     lastActive = Date.now();
     if (saver()) { setSaver(false); return; }
     if (padTest()) { if (action === "back") setPadTest(false); return; }
     if (app()) {
-      // bound apps route their own nav; doom/map/ai/webamp own the keyboard outright
+      // bound apps route their own nav; the rest are keyboard-driven owner apps
       if (["chess", "trivia", "flash", "cinema", "podcasts", "library", "youtube", "art", "wiki"].includes(app()!)) appNav?.(action);
       else if (app() === "lichess" && action === "back") { sfx.back(); setApp(null); }
+      else if (src === "pad" || src === "gesture") {
+        // owner apps (map/globe, lichess…) listen to the KEYBOARD — turn pad
+        // presses into the keys they already handle. Never for src "key":
+        // real keystrokes reach these apps directly, and doubling them would
+        // fire everything twice.
+        const KEY: Partial<Record<typeof action, string>> = {
+          left: "ArrowLeft", right: "ArrowRight", up: "ArrowUp", down: "ArrowDown",
+          confirm: "Enter", back: "Escape",
+        };
+        const key = KEY[action];
+        if (key) (document.activeElement ?? document.body).dispatchEvent(
+          new KeyboardEvent("keydown", { key, code: key, bubbles: true, cancelable: true }));
+      }
       return;
     }
     if (yt()) {
@@ -901,7 +949,7 @@ export default function XMB(props: {
     if (gestureTut()) {
       if (action === "confirm") {
         setGestureTut(false);
-        startGestures((a) => handleNav(a))
+        startGestures((a) => handleNav(a, "gesture"))
           .then((video) => {
             setGesturesOn(true);
             gestureBox.appendChild(video);
@@ -913,10 +961,59 @@ export default function XMB(props: {
       return;
     }
     if (themesOpen()) {
-      const n = THEMES.length;
-      if (action === "left" || action === "up") { setThemeIdx((themeIdx() + n - 1) % n); sfx.tickH(); applyTheme(THEMES[themeIdx()].color); awardT("stylist"); }
-      if (action === "right" || action === "down") { setThemeIdx((themeIdx() + 1) % n); sfx.tickH(); applyTheme(THEMES[themeIdx()].color); awardT("stylist"); }
-      if (action === "back" || action === "confirm") { sfx.back(); setThemesOpen(false); }
+      const n = THEMES.length + 1; // presets + the custom swatch
+      const isCustom = () => themeIdx() === THEMES.length;
+      const applyIdx = () => {
+        if (isCustom()) { const c = customHsl(); applyCustomHsl(c.h, c.s, c.l); }
+        else applyTheme(THEMES[themeIdx()].color);
+        awardT("stylist");
+      };
+      if (themeRow() === 0) {
+        if (action === "left") { setThemeIdx((themeIdx() + n - 1) % n); sfx.tickH(); applyIdx(); }
+        if (action === "right") { setThemeIdx((themeIdx() + 1) % n); sfx.tickH(); applyIdx(); }
+        if (action === "down" && isCustom()) { setThemeRow(1); sfx.tickV(); }
+        if (action === "back" || action === "confirm") { sfx.back(); setThemesOpen(false); setThemeRow(0); }
+      } else {
+        const step = action === "left" ? -1 : action === "right" ? 1 : 0;
+        if (step) {
+          const c = { ...customHsl() };
+          if (themeRow() === 1) c.h = (c.h + step * 6 + 360) % 360;
+          if (themeRow() === 2) c.s = Math.min(90, Math.max(10, c.s + step * 4));
+          if (themeRow() === 3) c.l = Math.min(75, Math.max(30, c.l + step * 3));
+          setCustomHsl(c); applyCustomHsl(c.h, c.s, c.l); sfx.tickH(); awardT("stylist");
+        }
+        if (action === "up") { setThemeRow(themeRow() - 1); sfx.tickV(); }
+        if (action === "down" && themeRow() < 3) { setThemeRow(themeRow() + 1); sfx.tickV(); }
+        if (action === "back" || action === "confirm") { sfx.back(); setThemesOpen(false); setThemeRow(0); }
+      }
+      return;
+    }
+    if (labsOpen()) {
+      const n = LAB_APPS.length;
+      if (action === "up") { setLabsIdx((labsIdx() + n - 1) % n); sfx.tickV(); }
+      if (action === "down") { setLabsIdx((labsIdx() + 1) % n); sfx.tickV(); }
+      if (action === "confirm") { toggleLab(LAB_APPS[labsIdx()].id); setLabsTick(labsTick() + 1); sfx.confirm(); }
+      if (action === "back") { sfx.back(); setLabsOpen(false); }
+      return;
+    }
+    if (soundOpen()) {
+      // rows: 0 master volume · 1 navigation sounds · 2 mute
+      if (action === "up") { setSoundIdx((soundIdx() + 2) % 3); sfx.tickV(); }
+      if (action === "down") { setSoundIdx((soundIdx() + 1) % 3); sfx.tickV(); }
+      if (action === "left" || action === "right") {
+        const d = action === "left" ? -1 : 1;
+        if (soundIdx() === 0) { sfx.setVolume(sfx.getVolume() + d * 0.05); sfx.tickH(); }
+        if (soundIdx() === 1) {
+          const packs = sfx.SND_PACKS;
+          const i = packs.findIndex((p) => p.id === sfx.getSndPack());
+          sfx.setSndPack(packs[(i + d + packs.length) % packs.length].id);
+          sfx.tickH(); // audition the new voice immediately
+        }
+        if (soundIdx() === 2) sfx.toggleMute();
+        setSndTick(sndTick() + 1);
+      }
+      if (action === "confirm" && soundIdx() === 2) { sfx.toggleMute(); setSndTick(sndTick() + 1); }
+      else if (action === "back" || action === "confirm") { sfx.back(); setSoundOpen(false); }
       return;
     }
     if (tv()) {
@@ -953,12 +1050,16 @@ export default function XMB(props: {
     }
     const items = itemsOf(cat());
     switch (action) {
-      case "left":
-        if (cat() > 0) { setCat(cat() - 1); sfx.tickH(); }
+      case "left": {
+        const vs = visCats(), p = vs.indexOf(cat());
+        if (p > 0) { setCat(vs[p - 1]); sfx.tickH(); }
         break;
-      case "right":
-        if (cat() < CATEGORIES.length - 1) { setCat(cat() + 1); sfx.tickH(); }
+      }
+      case "right": {
+        const vs = visCats(), p = vs.indexOf(cat());
+        if (p >= 0 && p < vs.length - 1) { setCat(vs[p + 1]); sfx.tickH(); }
         break;
+      }
       case "up": {
         const s = selOf(cat());
         if (s > 0) { setSels({ ...sels(), [CATEGORIES[cat()].id]: s - 1 }); sfx.tickV(); }
@@ -1107,19 +1208,21 @@ export default function XMB(props: {
         <Icon name="triangle" /><Icon name="circle" /><Icon name="cross" /><Icon name="square" />
       </div>
 
-      {/* category strip */}
-      <div class="cat-strip" style={{ transform: `translateX(${-cat() * CAT_SPACING}px)` }}>
+      {/* category strip — empty (fully Labs-disabled) categories don't render */}
+      <div class="cat-strip" style={{ transform: `translateX(${-visPos(cat()) * CAT_SPACING}px)` }}>
         <For each={CATEGORIES}>
           {(c, i) => (
-            <div
-              class="cat"
-              classList={{ active: i() === cat() }}
-              style={{ left: `${i() * CAT_SPACING}px` }}
-              onClick={() => { if (i() !== cat()) { setCat(i()); sfx.tickH(); } }}
-            >
-              <div class="cat-icon"><Icon name={c.icon} /></div>
-              <div class="cat-label">{c.label}</div>
-            </div>
+            <Show when={visCats().includes(i())}>
+              <div
+                class="cat"
+                classList={{ active: i() === cat() }}
+                style={{ left: `${visPos(i()) * CAT_SPACING}px` }}
+                onClick={() => { if (i() !== cat()) { setCat(i()); sfx.tickH(); } }}
+              >
+                <div class="cat-icon"><Icon name={c.icon} /></div>
+                <div class="cat-label">{c.label}</div>
+              </div>
+            </Show>
           )}
         </For>
       </div>
@@ -1323,6 +1426,7 @@ export default function XMB(props: {
       <Show when={app() === "visualizer"}><Visualizer onClose={() => setApp(null)} /></Show>
       <Show when={app() === "studio"}><Studio onClose={() => setApp(null)} /></Show>
       <Show when={app() === "code"}><CodeApp onClose={() => setApp(null)} /></Show>
+      <Show when={app() === "manual"}><Manual onClose={() => setApp(null)} /></Show>
       <Show when={app() === "lichess"}>
         <div class="fullapp">
           <iframe credentialless={true} class="fullapp-frame" src="https://lichess.org/tv/frame?theme=brown&bg=dark" allow="fullscreen" title="Lichess TV" />
@@ -1492,20 +1596,101 @@ export default function XMB(props: {
         <div class="panel-backdrop" onClick={() => setThemesOpen(false)} />
         <div class="modal themes-modal">
           <div class="panel-tag">CONSOLE THEME</div>
-          <div class="modal-title">{THEMES[themeIdx()].name}</div>
+          <div class="modal-title">{themeIdx() < THEMES.length ? THEMES[themeIdx()].name : "Custom colour"}</div>
           <div class="theme-row">
             <For each={THEMES}>
               {(t, i) => (
                 <div
                   class="theme-swatch"
-                  classList={{ active: i() === themeIdx() }}
+                  classList={{ active: i() === themeIdx() && themeRow() === 0 }}
                   style={{ background: t.color ?? "conic-gradient(#8a8f98,#c8b45a,#7fb069,#3fa7a0,#4a7fc8,#8e6bb4,#c85555,#8a8f98)" }}
-                  onClick={() => { setThemeIdx(i()); applyTheme(t.color); sfx.tickH(); awardT("stylist"); }}
+                  onClick={() => { setThemeIdx(i()); setThemeRow(0); applyTheme(t.color); sfx.tickH(); awardT("stylist"); }}
                 />
               )}
             </For>
+            {/* the custom swatch — a hue wheel */}
+            <div
+              class="theme-swatch theme-swatch-custom"
+              classList={{ active: themeIdx() === THEMES.length && themeRow() === 0 }}
+              style={{ background: "conic-gradient(hsl(0 60% 55%),hsl(60 60% 55%),hsl(120 60% 55%),hsl(180 60% 55%),hsl(240 60% 55%),hsl(300 60% 55%),hsl(360 60% 55%))" }}
+              onClick={() => { setThemeIdx(THEMES.length); setThemeRow(0); const c = customHsl(); applyCustomHsl(c.h, c.s, c.l); sfx.tickH(); awardT("stylist"); }}
+            />
           </div>
-          <div class="modal-hint">←→ preview live · ENTER / Esc — done</div>
+          <Show when={themeIdx() === THEMES.length}>
+            <div class="theme-sliders">
+              <For each={[
+                { label: "Hue", key: "h" as const, min: 0, max: 360 },
+                { label: "Saturation", key: "s" as const, min: 10, max: 90 },
+                { label: "Lightness", key: "l" as const, min: 30, max: 75 },
+              ]}>
+                {(s, i) => (
+                  <div class="theme-slider" classList={{ active: themeRow() === i() + 1 }}>
+                    <span class="theme-slider-label">{s.label}</span>
+                    <input
+                      type="range" min={s.min} max={s.max} value={customHsl()[s.key]}
+                      onInput={(e) => {
+                        const c = { ...customHsl(), [s.key]: +e.currentTarget.value };
+                        setCustomHsl(c); applyCustomHsl(c.h, c.s, c.l); awardT("stylist");
+                      }}
+                    />
+                    <span class="theme-slider-val">{customHsl()[s.key]}{s.key === "h" ? "°" : "%"}</span>
+                  </div>
+                )}
+              </For>
+            </div>
+          </Show>
+          <div class="modal-hint">←→ preview · {themeIdx() === THEMES.length ? "↑↓ pick a slider · " : ""}ENTER / Esc — done</div>
+        </div>
+      </Show>
+
+      <Show when={labsOpen()}>
+        <div class="panel-backdrop" onClick={() => setLabsOpen(false)} />
+        <div class="modal labs-modal">
+          <div class="panel-tag">LABS — YOUR CONSOLE, YOUR APPS</div>
+          <div class="labs-note">Everything ships on. Switch an app off and it disappears from the crossbar — flip it back any time. {(labsTick(), null)}</div>
+          <div class="labs-list">
+            <For each={LAB_APPS}>
+              {(a, i) => (
+                <button
+                  class="labs-row"
+                  classList={{ active: labsIdx() === i() }}
+                  onClick={() => { setLabsIdx(i()); toggleLab(a.id); setLabsTick(labsTick() + 1); sfx.confirm(); }}
+                >
+                  <span class="labs-cat">{a.cat}</span>
+                  <span class="labs-title">{a.title}</span>
+                  <span class="labs-state" classList={{ off: (labsTick(), !labEnabled(a.id)) }}>{(labsTick(), labEnabled(a.id)) ? "ON" : "OFF"}</span>
+                </button>
+              )}
+            </For>
+          </div>
+          <div class="modal-hint">↑↓ browse · <span class="btn-x" /> toggle · <span class="btn-o" /> done</div>
+        </div>
+      </Show>
+
+      <Show when={soundOpen()}>
+        <div class="panel-backdrop" onClick={() => setSoundOpen(false)} />
+        <div class="modal sound-modal">
+          <div class="panel-tag">SOUND SETTINGS</div>
+          <div class="sound-row" classList={{ active: soundIdx() === 0 }}>
+            <span class="sound-label">Master Volume</span>
+            <input
+              type="range" min="0" max="100" value={(sndTick(), Math.round(sfx.getVolume() * 100))}
+              onInput={(e) => { sfx.setVolume(+e.currentTarget.value / 100); setSndTick(sndTick() + 1); }}
+              onChange={() => sfx.tickH()}
+            />
+            <span class="sound-val">{(sndTick(), Math.round(sfx.getVolume() * 100))}%</span>
+          </div>
+          <div class="sound-row" classList={{ active: soundIdx() === 1 }}
+            onClick={() => { const packs = sfx.SND_PACKS; const i = packs.findIndex((p) => p.id === sfx.getSndPack()); sfx.setSndPack(packs[(i + 1) % packs.length].id); setSndTick(sndTick() + 1); sfx.tickH(); }}>
+            <span class="sound-label">Navigation Sounds</span>
+            <span class="sound-val wide">‹ {(sndTick(), sfx.SND_PACKS.find((p) => p.id === sfx.getSndPack())?.name)} ›</span>
+          </div>
+          <div class="sound-row" classList={{ active: soundIdx() === 2 }}
+            onClick={() => { sfx.toggleMute(); setSndTick(sndTick() + 1); }}>
+            <span class="sound-label">Mute Console</span>
+            <span class="sound-val">{(sndTick(), sfx.isMuted()) ? "ON" : "OFF"}</span>
+          </div>
+          <div class="modal-hint">↑↓ row · ←→ adjust · <span class="btn-o" /> done</div>
         </div>
       </Show>
 

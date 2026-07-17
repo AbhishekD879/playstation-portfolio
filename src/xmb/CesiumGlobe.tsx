@@ -23,6 +23,8 @@ export interface GlobeApi {
   setIss: (lat: number, lon: number) => void;
   /** Zoom in (+1) / out (−1). */
   zoom: (dir: 1 | -1) => void;
+  /** Nudge the camera across the globe (d-pad / arrow keys); step scales with altitude. */
+  pan: (dx: number, dy: number) => void;
 }
 
 const C3 = Cesium.Cartesian3.fromDegrees;
@@ -148,6 +150,14 @@ export default function CesiumGlobe(props: { quakes: Quake[]; bind?: (api: Globe
         const h = viewer.camera.positionCartographic.height;
         if (dir === 1) viewer.camera.zoomIn(h * 0.4);
         else viewer.camera.zoomOut(h * 0.6);
+      },
+      pan: (dx, dy) => {
+        const c = viewer.camera.positionCartographic;
+        // step size follows altitude: whole continents from orbit, blocks near street level
+        const step = Math.max(0.02, (c.height / 6_378_000) * 18);
+        const lon = Cesium.Math.toDegrees(c.longitude) + dx * step;
+        const lat = Math.max(-85, Math.min(85, Cesium.Math.toDegrees(c.latitude) + dy * step));
+        viewer.camera.setView({ destination: C3(lon, lat, c.height) });
       },
     });
 

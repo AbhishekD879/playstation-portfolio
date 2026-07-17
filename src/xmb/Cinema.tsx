@@ -82,7 +82,7 @@ export default function Cinema(props: {
                 e.stopPropagation();
                 if (e.key === "ArrowDown") { e.preventDefault(); e.currentTarget.blur(); }
                 if (e.key === "Enter") play();
-                if (e.key === "Escape") { sfx.back(); props.onClose(); }
+                if (e.key === "Escape") { sfx.back(); e.currentTarget.blur(); } // step out of the field; next Esc closes the app
               }}
             />
           </div>

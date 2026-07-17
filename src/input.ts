@@ -2,13 +2,24 @@
 // initial-delay + repeat on held directions. Consumers subscribe to actions.
 
 export type NavAction = "left" | "right" | "up" | "down" | "confirm" | "back" | "options";
-type Handler = (a: NavAction) => void;
+/** src tells the consumer where the action came from — real keyboard events
+ *  also reach apps directly, so only pad/gesture sources may be re-synthesized
+ *  as keys (else keyboard users would get every action twice). */
+export type NavSource = "key" | "pad" | "gesture";
+type Handler = (a: NavAction, src?: NavSource) => void;
 
 let handler: Handler | null = null;
 let enabled = true;
+// the on-screen keyboard claims the pad while open — nav must not see it
+let oskBlock = false;
+// games (gamepadBridge) and the PS2 joiner read the pad themselves — while any
+// of them holds a claim, the app-mode key synthesis below stays quiet
+let padClaims = 0;
 
 export function onNav(h: Handler) { handler = h; }
 export function setNavEnabled(on: boolean) { enabled = on; }
+export function setOskBlock(on: boolean) { oskBlock = on; }
+export function claimPad(on: boolean) { padClaims = Math.max(0, padClaims + (on ? 1 : -1)); }
 
 const KEYMAP: Record<string, NavAction> = {
   ArrowLeft: "left", a: "left",
@@ -26,14 +37,16 @@ const held: Partial<Record<NavAction, { t0: number; last: number }>> = {};
 const isDir = (a: NavAction) => a === "left" || a === "right" || a === "up" || a === "down";
 
 addEventListener("keydown", (e) => {
-  if (!enabled || !handler) return;
-  if ((e.target as HTMLElement)?.tagName === "INPUT") return;
+  if (!e.isTrusted) return; // synthesized keys must never loop back into nav
+  if (!enabled || oskBlock || !handler) return;
+  const t = (e.target as HTMLElement)?.tagName;
+  if (t === "INPUT" || t === "TEXTAREA") return;
   const a = KEYMAP[e.key.length === 1 ? e.key.toLowerCase() : e.key];
   if (!a) return;
   e.preventDefault();
   if (e.repeat) return; // we do our own repeat
   if (isDir(a)) held[a] = { t0: performance.now(), last: performance.now() }; // ONLY directions repeat
-  handler(a);
+  handler(a, "key");
 });
 addEventListener("keyup", (e) => {
   const a = KEYMAP[e.key.length === 1 ? e.key.toLowerCase() : e.key];
@@ -54,7 +67,7 @@ function connectedPads(): Gamepad[] {
 }
 // the ONE pad to read: prefer a standard-mapped one (the real Xbox pad; phantom
 // HID duplicates report mapping ""), else the pad with the most buttons.
-function primaryPad(): Gamepad | null {
+export function primaryPad(): Gamepad | null {
   const pads = connectedPads();
   if (!pads.length) return null;
   const std = pads.filter((p) => p.mapping === "standard");
@@ -110,7 +123,41 @@ function pollPad(now: number) {
   // ONE real pad — the standard-mapped one — rather than merging, because the
   // phantom's stuck axes mask the stick and its stuck buttons jam edge-detection.
   const p = primaryPad();
-  if (!p || !enabled || !handler) return;
+  if (!p) return;
+  // Two consumers, by mode:
+  //  · nav enabled (XMB): pad presses become NavActions, as ever.
+  //  · nav disabled (inside an app) and no game holds a pad claim: pad presses
+  //    become synthetic keyboard events (arrows/Enter/Escape) — apps are
+  //    keyboard-driven, so the controller can walk their lists too.
+  // A focused text field owns the pad either way: ✕/d-pad summon the on-screen
+  // keyboard (Osk.tsx); only "back" (◯) passes through, to cancel/blur.
+  // While blocked (OSK open, game claim) we still TRACK edges below — otherwise
+  // a button held across the hand-off replays as a fresh press and one ◯ ends
+  // up closing the keyboard AND the app behind it.
+  const navMode = enabled && !!handler && !oskBlock;
+  const synthMode = !enabled && padClaims === 0 && !oskBlock;
+  const live = navMode || synthMode;
+  const tag = document.activeElement?.tagName;
+  const typing = tag === "INPUT" || tag === "TEXTAREA";
+  const SYNTH_KEY: Partial<Record<NavAction, string>> = {
+    left: "ArrowLeft", right: "ArrowRight", up: "ArrowUp", down: "ArrowDown",
+    confirm: "Enter", back: "Escape",
+  };
+  const fire = (k: NavAction) => {
+    if (typing) { // a focused text field: ◯ steps OUT of the field, nothing else leaks
+      if (k === "back") (document.activeElement as HTMLElement)?.blur?.();
+      return;
+    }
+    if (navMode) {
+      handler!(k, "pad");
+      return;
+    }
+    const key = SYNTH_KEY[k];
+    if (!key) return;
+    (document.activeElement ?? document.body).dispatchEvent(
+      new KeyboardEvent("keydown", { key, code: key, bubbles: true, cancelable: true }),
+    );
+  };
   const b = (i: number) => !!p.buttons[i]?.pressed;
   const axis = (i: number) => p.axes[i] ?? 0;
   const ax = axis(0), ay = axis(1);
@@ -131,22 +178,22 @@ function pollPad(now: number) {
     const on = dir[k];
     const isDir = k === "left" || k === "right" || k === "up" || k === "down";
     if (on && !padPrev[k]) {
-      handler(k);
+      if (live) fire(k);
       if (isDir) padHeld[k] = { t0: now, last: now };
     } else if (on && isDir && padHeld[k]) {
       const h = padHeld[k]!;
       if (now - h.t0 > REPEAT_DELAY && now - h.last > REPEAT_RATE) {
         h.last = now;
-        handler(k);
+        if (live && !typing) fire(k);
       }
     }
     if (!on) delete padHeld[k];
-    padPrev[k] = on;
+    padPrev[k] = on; // edge state stays fresh even while blocked
   }
 }
 
 function tickRepeats(now: number) {
-  if (!enabled || !handler) return;
+  if (!enabled || oskBlock || !handler) return;
   for (const k of Object.keys(held) as NavAction[]) {
     const h = held[k]!;
     if (now - h.t0 > REPEAT_DELAY && now - h.last > REPEAT_RATE) {

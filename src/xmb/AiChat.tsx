@@ -352,7 +352,7 @@ Examples — these MUST become console_control calls (flat JSON, no nesting):
             <span class="ai-ico"><Icon name="plus" /></span>new chat
           </button>
         </Show>
-        <button class="ghost-btn" onClick={() => { sfx.back(); props.onClose(); }}>✕ close</button>
+        <button class="ps-act" onClick={() => { sfx.back(); props.onClose(); }}><span class="btn-o" /> back</button>
       </div>
 
       <Show when={supported() !== null} fallback={<div class="guide-loading">Checking your GPU…</div>}>

@@ -57,7 +57,7 @@ export default function Guestbook(props: { userName: string; onClose: () => void
     <div class="gbook">
       <div class="gbook-head">
         <div class="panel-tag">GUESTBOOK — SIGN THE CONSOLE</div>
-        <button class="ghost-btn" onClick={() => { sfx.back(); props.onClose(); }}>✕ close</button>
+        <button class="ps-act" onClick={() => { sfx.back(); props.onClose(); }}><span class="btn-o" /> back</button>
       </div>
 
       <div class="gbook-form">
@@ -81,7 +81,7 @@ export default function Guestbook(props: { userName: string; onClose: () => void
             if (e.key === "Escape") { sfx.back(); props.onClose(); }
           }}
         />
-        <button class="ps2-launch gbook-sign" disabled={busy()} onClick={sign}>✒ SIGN</button>
+        <button class="ps2-launch gbook-sign" disabled={busy()} onClick={sign}><span class="btn-x" /> SIGN</button>
       </div>
       <Show when={note()}><div class="gbook-note">{note()}</div></Show>
 

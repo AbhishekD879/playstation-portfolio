@@ -47,7 +47,7 @@ export default function Tv(props: { url: string; label: string; onClose: () => v
           {props.label}
           <Show when={quality()}><span class="tv-quality">{quality()}</span></Show>
         </div>
-        <button class="ghost-btn" onClick={props.onClose}>✕ close</button>
+        <button class="ps-act" onClick={props.onClose}><span class="btn-o" /> back</button>
       </div>
       <Show when={state() === "tuning"}>
         <div class="tv-msg">Tuning in…</div>

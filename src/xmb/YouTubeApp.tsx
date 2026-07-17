@@ -111,7 +111,7 @@ export default function YouTubeApp(props: { onClose: () => void; bind: (nav: (a:
                 e.stopPropagation();
                 if (e.key === "ArrowDown") { e.preventDefault(); e.currentTarget.blur(); } // drop into the grid
                 if (e.key === "Enter") { const t = q().trim(); if (t && t !== lastSearched) runSearch(t); else play(); }
-                if (e.key === "Escape") { sfx.back(); props.onClose(); }
+                if (e.key === "Escape") { sfx.back(); e.currentTarget.blur(); } // step out of the field; next Esc closes the app
               }}
             />
           </div>

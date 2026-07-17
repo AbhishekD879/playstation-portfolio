@@ -1,17 +1,26 @@
-// Console theme — a single accent tint driving the wave gradient.
-// Persisted system-wide, like console wallpaper.
+// Console theme — a single accent tint driving the wave gradient and every
+// themed surface (--xmb-tint). Presets plus a fully custom HSL colour,
+// persisted system-wide like console wallpaper.
 import { createSignal } from "solid-js";
 import { MONTH_COLORS } from "./content";
 
 export const THEMES: { name: string; color: string | null }[] = [
   { name: "Classic — monthly", color: null }, // the PS3 monthly rotation
   { name: "Midnight", color: "#2c3e67" },
+  { name: "Aqua", color: "#2e86ab" },
   { name: "Horizon", color: "#c86a4a" },
+  { name: "Sunset", color: "#d4634f" },
   { name: "Forest", color: "#3e7a55" },
+  { name: "Emerald", color: "#2e9e6b" },
   { name: "Orchid", color: "#7a55a8" },
+  { name: "Violet", color: "#8a5fd4" },
+  { name: "Sakura", color: "#d487a6" },
   { name: "Crimson", color: "#a83e4c" },
-  { name: "Slate", color: "#5c6672" },
+  { name: "Neon", color: "#3ec9a7" },
   { name: "Gold", color: "#b08a3e" },
+  { name: "Sand", color: "#b39a6b" },
+  { name: "Slate", color: "#5c6672" },
+  { name: "Graphite", color: "#4a4f58" },
 ];
 
 const monthly = () => MONTH_COLORS[new Date().getMonth()];
@@ -32,8 +41,22 @@ export function applyTheme(color: string | null) {
   applyVar(color || monthly());
 }
 
+// —— custom colour: HSL sliders in Theme Settings ——
+// remembered separately so the sliders reopen where you left them
+const CUSTOM_KEY = "asp.theme.custom";
+export function loadCustomHsl(): { h: number; s: number; l: number } {
+  try { return { h: 210, s: 55, l: 55, ...JSON.parse(localStorage.getItem(CUSTOM_KEY) ?? "{}") }; }
+  catch { return { h: 210, s: 55, l: 55 }; }
+}
+export function applyCustomHsl(h: number, s: number, l: number) {
+  localStorage.setItem(CUSTOM_KEY, JSON.stringify({ h, s, l }));
+  applyTheme(`hsl(${h} ${s}% ${l}%)`);
+}
+
+/** Index into THEMES; THEMES.length means "custom colour". */
 export function currentThemeIndex(): number {
   const c = localStorage.getItem("asp.theme");
+  if (!c) return 0;
   const i = THEMES.findIndex((t) => t.color === c);
-  return i === -1 ? 0 : i;
+  return i === -1 ? THEMES.length : i;
 }

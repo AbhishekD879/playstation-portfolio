@@ -54,6 +54,7 @@ export interface XmbItem {
     | { type: "pc" }
     | { type: "guestbook" }
     | { type: "code" }
+    | { type: "manual" }
     | { type: "browser" }
     | { type: "visualizer" }
     | { type: "studio" }
@@ -64,6 +65,8 @@ export interface XmbItem {
     | { type: "wiki" }
     | { type: "lichess-tv" }
     | { type: "themes" }
+    | { type: "labs" }
+    | { type: "sound-settings" }
     | { type: "sound-toggle" }
     | { type: "clock-format" }
     | { type: "saver-cycle" }
@@ -235,6 +238,7 @@ export const CATEGORIES: XmbCategory[] = [
           ],
         },
       },
+      { id: "resume", title: "Download Résumé", sub: "PDF — view or save a copy", icon: "disc-doc", action: { type: "link", href: "/resume.pdf" } },
       { id: "ai", title: "AI Abhishek", sub: "On-device LLM — ask about my work", icon: "chip", action: { type: "ai-chat" } },
       { id: "guestbook", title: "Guestbook", sub: "Sign the console — notes from visitors", icon: "pen", action: { type: "guestbook" } },
       { id: "whatsnew", title: "What's New", sub: "Your activity on this console", icon: "spark", action: { type: "whats-new" } },
@@ -310,7 +314,18 @@ export const CATEGORIES: XmbCategory[] = [
     id: "game",
     label: "Game",
     icon: "gamepad",
-    items: [], // injected: playables (DOOM, chess, PS2, Other OS…) + insert disc + library
+    items: [], // injected: built-in games, then the consoles, then your library
+  },
+  {
+    // not games, not media — the machine's weird side. PSP called it Extras.
+    id: "extras",
+    label: "Extras",
+    icon: "chip",
+    items: [
+      { id: "code", title: "Code Playground", sub: "Write & run JavaScript / Python — sandboxed on this console", icon: "chip", action: { type: "code" } },
+      { id: "pc", title: "Other OS", sub: "Boot a whole x86 PC (KolibriOS) inside the console", icon: "monitor", action: { type: "pc" } },
+      { id: "manual", title: "System Manual", sub: "How this console is built — architecture, APIs, diagrams", icon: "book", action: { type: "manual" } },
+    ],
   },
   {
     id: "news",
@@ -346,8 +361,9 @@ export const CATEGORIES: XmbCategory[] = [
     label: "Settings",
     icon: "gear",
     items: [
-      { id: "theme", title: "Theme Settings", sub: "Change the console colour", icon: "spark", action: { type: "themes" } },
-      { id: "sound", title: "Sound Settings", sub: "Toggle console audio", icon: "speaker", action: { type: "sound-toggle" } },
+      { id: "theme", title: "Theme Settings", sub: "Presets & fully custom colours", icon: "spark", action: { type: "themes" } },
+      { id: "sound", title: "Sound Settings", sub: "Volume, navigation sounds & mute", icon: "speaker", action: { type: "sound-settings" } },
+      { id: "labs", title: "Labs", sub: "Declutter — choose which apps live on this console", icon: "spark", action: { type: "labs" } },
       { id: "datetime", title: "Date and Time Settings", sub: "12-hour / 24-hour clock", icon: "info", action: { type: "clock-format" } },
       { id: "powersave", title: "Power Save Settings", sub: "Screen saver — start time", icon: "power", action: { type: "saver-cycle" } },
       { id: "rumble", title: "Vibration", sub: "Controller rumble on / off", icon: "gamepad", action: { type: "rumble-toggle" } },

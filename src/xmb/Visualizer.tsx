@@ -151,7 +151,7 @@ export default function Visualizer(props: { onClose: () => void }) {
         <div class="panel-tag">MUSIC VISUALIZER</div>
         <button class="ghost-btn" classList={{ on: playing() }} onClick={toggleRadio}>{playing() ? "⏸ radio" : "▶ radio"}</button>
         <button class="ghost-btn" classList={{ on: micOn() }} onClick={toggleMic}>🎤 mic</button>
-        <button class="ghost-btn" onClick={() => { sfx.back(); props.onClose(); }}>✕ close</button>
+        <button class="ps-act" onClick={() => { sfx.back(); props.onClose(); }}><span class="btn-o" /> back</button>
       </div>
       <div class="viz-stage" ref={host} />
       <Show when={source() === "console" && !playing()}>

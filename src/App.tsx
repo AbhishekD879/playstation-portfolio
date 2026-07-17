@@ -3,6 +3,7 @@ import Boot from "./boot/Boot";
 import ProfileSelect from "./profileSelect";
 import Wave from "./xmb/Wave";
 import XMB from "./xmb/XMB";
+import Osk from "./xmb/Osk";
 import GameSession from "./emulator/GameSession";
 import { createProfile, loadProfiles, updateProfile, type Profile } from "./profiles";
 import type { GameRecord } from "./gamesdb";
@@ -56,6 +57,8 @@ export default function App() {
       <Show when={session()}>
         <GameSession game={session()!} profileId={profile()!.id} />
       </Show>
+      {/* controller users get the PS on-screen keyboard on any text field */}
+      <Osk />
     </>
   );
 }

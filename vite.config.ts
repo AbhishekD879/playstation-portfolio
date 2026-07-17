@@ -1,5 +1,6 @@
 import { defineConfig } from "vite";
 import solid from "vite-plugin-solid";
+import { multiplayerSignaling } from "./vite-plugin-mp";
 
 // Cross-origin isolation (COOP + COEP:credentialless) turns on SharedArrayBuffer,
 // which the in-browser PS2 emulator (Play!.js) needs for its threads. We use
@@ -14,7 +15,7 @@ const isolation = {
 };
 
 export default defineConfig({
-  plugins: [solid()],
+  plugins: [solid(), multiplayerSignaling()],
   server: {
     allowedHosts: true,
     headers: isolation,

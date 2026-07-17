@@ -171,7 +171,7 @@ export default function Studio(props: { onClose: () => void }) {
       <div class="studio-bar">
         <div class="panel-tag">STUDIO — SYNTH · DRUM MACHINE · MIDI</div>
         <Show when={midiName()}><span class="studio-midi">🎹 {midiName()}</span></Show>
-        <button class="ghost-btn" onClick={() => { sfx.back(); props.onClose(); }}>✕ close</button>
+        <button class="ps-act" onClick={() => { sfx.back(); props.onClose(); }}><span class="btn-o" /> back</button>
       </div>
 
       <div class="studio-body">

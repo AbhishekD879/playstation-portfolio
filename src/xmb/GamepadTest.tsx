@@ -50,7 +50,7 @@ export default function GamepadTest(props: { onClose: () => void }) {
     <div class="gptest" ref={root} tabindex="-1" onClick={() => { try { window.focus(); } catch { /* ignore */ } }}>
       <div class="gptest-head">
         <div class="panel-tag">CONTROLLER TEST — LIVE RAW STATE</div>
-        <button class="ghost-btn" onClick={props.onClose}>✕ close</button>
+        <button class="ps-act" onClick={props.onClose}><span class="btn-o" /> back</button>
       </div>
 
       {/* always-visible raw readout — the ground truth */}

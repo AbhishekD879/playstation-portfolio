@@ -5,7 +5,7 @@
 // engines read keyCode) on the game element AND document. All reads merge
 // across every connected pad (Xbox controllers register a phantom 2nd slot).
 
-import { rumble } from "./input";
+import { claimPad, rumble } from "./input";
 
 interface KeyDef { key: string; code: string; keyCode: number }
 const K = (key: string, code: string, keyCode: number): KeyDef => ({ key, code, keyCode });
@@ -164,6 +164,7 @@ function loop() {
 export function startBridge(target: EventTarget | null, quit: () => void, config: BridgeConfig = DEFAULT_CONFIG) {
   onQuit = quit;
   cfg = config;
+  if (!targets.length) claimPad(true); // the game owns the pad — no app-key synthesis
   targets = target ? [target, document] : [document];
   down.clear();
   cancelAnimationFrame(raf);
@@ -182,6 +183,7 @@ export function stopBridge() {
   }
   cfg.hold?.forEach((k) => fire("keyup", k));
   down.clear();
+  if (targets.length) claimPad(false);
   targets = [];
   onQuit = null;
   cfg = DEFAULT_CONFIG;

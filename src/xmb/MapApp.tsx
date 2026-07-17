@@ -65,6 +65,22 @@ export default function MapApp(props: { onClose: () => void; initialAction?: "to
     const esc = (e: KeyboardEvent) => { if (e.key === "Escape") { sfx.back(); props.onClose(); } };
     addEventListener("keydown", esc);
     onCleanup(() => removeEventListener("keydown", esc));
+    // fly the planet from the keyboard — and therefore from the controller,
+    // whose d-pad arrives here as synthesized arrow keys
+    const keys = (e: KeyboardEvent) => {
+      if ((e.target as HTMLElement)?.tagName === "INPUT") return; // the search box types normally
+      const dir = e.key === "ArrowLeft" ? [-1, 0] : e.key === "ArrowRight" ? [1, 0]
+        : e.key === "ArrowUp" ? [0, 1] : e.key === "ArrowDown" ? [0, -1] : null;
+      if (dir) {
+        e.preventDefault();
+        if (mode() === "2d") map.panBy([dir[0] * 140, -dir[1] * 140]);
+        else globeApi?.pan(dir[0], dir[1]);
+      }
+      if (e.key === "+" || e.key === "=" || e.key === "Enter") mode() === "2d" ? map.zoomIn() : globeApi?.zoom(1);
+      if (e.key === "-" || e.key === "_") mode() === "2d" ? map.zoomOut() : globeApi?.zoom(-1);
+    };
+    addEventListener("keydown", keys);
+    onCleanup(() => removeEventListener("keydown", keys));
     fetchQuakes().then(setQuakes).catch(() => {});
     // the station, every 5s (API asks for ≤1 req/s)
     const pollIss = async () => {
@@ -263,7 +279,7 @@ export default function MapApp(props: { onClose: () => void; initialAction?: "to
         <button class="ghost-btn" classList={{ on: sat() }} onClick={() => { if (mode() === "3d") setMode("2d"); setSatellite(!sat()); setTimeout(() => map.invalidateSize(), 60); sfx.tickH(); }}>⬒ satellite</button>
         <button class="ghost-btn" onClick={flyToIss}>🛰 ISS</button>
         <button class="ghost-btn" classList={{ on: tour() }} onClick={toggleTour}>🌏 world tour</button>
-        <button class="ghost-btn" onClick={() => { sfx.back(); props.onClose(); }}>✕ close</button>
+        <button class="ps-act" onClick={() => { sfx.back(); props.onClose(); }}><span class="btn-o" /> back</button>
       </div>
       <div class="mapapp-map" ref={mapEl} style={{ display: mode() === "2d" ? "block" : "none" }} />
       <Show when={mode() === "3d"}>

@@ -3,12 +3,13 @@
 let ctx: AudioContext | null = null;
 let master: GainNode | null = null;
 let muted = localStorage.getItem("asp.muted") === "1";
+let vol = Math.min(1, Math.max(0, parseFloat(localStorage.getItem("asp.vol") ?? "0.5") || 0.5));
 
 function ac(): AudioContext {
   if (!ctx) {
     ctx = new AudioContext();
     master = ctx.createGain();
-    master.gain.value = muted ? 0 : 0.5;
+    master.gain.value = muted ? 0 : vol;
     master.connect(ctx.destination);
   }
   if (ctx.state === "suspended") ctx.resume();
@@ -18,10 +19,31 @@ function ac(): AudioContext {
 export function toggleMute(): boolean {
   muted = !muted;
   localStorage.setItem("asp.muted", muted ? "1" : "0");
-  if (master) master.gain.value = muted ? 0 : 0.5;
+  if (master) master.gain.value = muted ? 0 : vol;
   return muted;
 }
 export const isMuted = () => muted;
+
+// —— master volume (0..1) ——
+export const getVolume = () => vol;
+export function setVolume(v: number) {
+  vol = Math.min(1, Math.max(0, v));
+  localStorage.setItem("asp.vol", String(vol));
+  if (master && !muted) master.gain.value = vol;
+}
+
+// —— navigation sound packs: the tick voice is a preference ——
+export type SndPack = "classic" | "soft" | "click" | "off";
+export const SND_PACKS: { id: SndPack; name: string }[] = [
+  { id: "classic", name: "Classic — bright" },
+  { id: "soft", name: "Soft — rounded" },
+  { id: "click", name: "Click — mechanical" },
+  { id: "off", name: "Off — silent moves" },
+];
+let pack: SndPack = (localStorage.getItem("asp.sndpack") as SndPack) || "classic";
+if (!SND_PACKS.some((p) => p.id === pack)) pack = "classic";
+export const getSndPack = () => pack;
+export function setSndPack(p: SndPack) { pack = p; localStorage.setItem("asp.sndpack", p); }
 
 // —— visualizer tap: an analyser on the master bus (radio, sfx — everything) ——
 let analyser: AnalyserNode | null = null;
@@ -56,9 +78,14 @@ function tone(freq: number, dur: number, opts: { type?: OscillatorType; gain?: n
   o.stop(t + dur + 0.05);
 }
 
-// —— XMB navigation ——
-export const tickH = () => tone(1250, 0.06, { gain: 0.12 });                       // left/right
-export const tickV = () => tone(950, 0.055, { gain: 0.1 });                        // up/down
+// —— XMB navigation (voiced by the selected sound pack) ——
+const TICKS: Record<Exclude<SndPack, "off">, { h: [number, number, number]; v: [number, number, number]; type: OscillatorType }> = {
+  classic: { h: [1250, 0.06, 0.12], v: [950, 0.055, 0.1], type: "sine" },
+  soft: { h: [740, 0.1, 0.09], v: [590, 0.09, 0.08], type: "sine" },
+  click: { h: [2400, 0.022, 0.09], v: [1900, 0.02, 0.08], type: "square" },
+};
+export const tickH = () => { if (pack === "off") return; const p = TICKS[pack]; tone(p.h[0], p.h[1], { gain: p.h[2], type: p.type }); };
+export const tickV = () => { if (pack === "off") return; const p = TICKS[pack]; tone(p.v[0], p.v[1], { gain: p.v[2], type: p.type }); };
 export const confirm = () => { tone(880, 0.09, { gain: 0.16 }); tone(1320, 0.14, { gain: 0.12, at: 0.05 }); };
 export const back = () => { tone(1320, 0.07, { gain: 0.12 }); tone(780, 0.12, { gain: 0.12, at: 0.045 }); };
 export const deny = () => tone(190, 0.16, { type: "square", gain: 0.07 });
