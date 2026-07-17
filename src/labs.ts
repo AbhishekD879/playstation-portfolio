@@ -4,6 +4,7 @@
 // Labs only ever turns things off. Core portfolio content (career, projects,
 // skills, contact, about) is never optional — this is still a résumé.
 import { createSignal } from "solid-js";
+import { hasHtmlInCanvas } from "./gpu";
 
 export interface Flag { id: string; title: string; desc: string }
 export interface FlagGroup { group: string; icon: string; items: Flag[] }
@@ -32,7 +33,8 @@ const FEATURE_GROUPS: FlagGroup[] = [
       { id: "gpujuice", title: "Particle Bursts (WebGPU)", desc: "Compute-shader particle storms on app launch & trophies" },
       { id: "livephoto", title: "Live Photos (3D)", desc: "On-device AI depth turns gallery photos into parallax 3D" },
       { id: "vibe", title: "Vibe Search (Planet Earth)", desc: "Type a feeling — on-device embeddings fly the globe there" },
-      { id: "crt", title: "CRT Console (experimental)", desc: "The ENTIRE console on a curved phosphor tube — needs Chrome's HTML-in-Canvas trial; restarts the console" },
+      // only browsers with the HTML-in-Canvas trial even see this switch
+      ...(hasHtmlInCanvas() ? [{ id: "crt", title: "CRT Console (experimental)", desc: "The ENTIRE console on a curved phosphor tube — restarts the console" }] : []),
     ],
   },
 ];
@@ -104,4 +106,6 @@ export function toggleLab(id: string) {
   s.has(id) ? s.delete(id) : s.add(id);
   setToggled(s);
   localStorage.setItem(KEY, JSON.stringify([...s]));
+  // the tube wraps the app at boot — entering/leaving it needs a restart
+  if (id === "crt") setTimeout(() => location.reload(), 450);
 }

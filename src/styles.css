@@ -1013,6 +1013,9 @@ img.status-avatar, img.ptile-avatar { object-fit: cover; border: 1px solid rgba(
 }
 
 /* ———— APOD ———— */
+/* CRT Console — the tube the whole app renders through (Labs, experimental) */
+#crt-screen { position: fixed; inset: 0; width: 100%; height: 100%; display: block; background: #000; }
+
 /* live photos — the depth-parallax layer fades in over the still */
 .depth-canvas { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; transition: opacity 0.7s ease; pointer-events: none; }
 .depth-canvas.live { opacity: 1; }

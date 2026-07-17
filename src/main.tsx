@@ -2,8 +2,15 @@
 import { render } from "solid-js/web";
 import App from "./App";
 import "./styles.css";
+import { labEnabled } from "./labs";
+import { startCrt } from "./crt";
 
-render(() => <App />, document.getElementById("root")!);
+const root = document.getElementById("root")!;
+// CRT Console (Labs, experimental): the whole app moves inside a
+// <canvas layoutsubtree> and renders through a phosphor-tube shader.
+// No API support → startCrt is a no-op and this is a normal boot.
+if (labEnabled("crt")) startCrt(root);
+render(() => <App />, root);
 
 // PWA: register the service worker (offline shell + installability). Prod only —
 // in dev it interferes with Vite's HMR.
