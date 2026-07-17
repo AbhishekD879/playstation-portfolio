@@ -21,6 +21,18 @@ export function gpuAdapter(): Promise<GPUAdapter | null> {
 
 gpuAdapter().then((a) => { setWebGPU(!!a); setGpuReady(true); });
 
+// —— the device profile Labs rates features against ——
+export const DEVICE = {
+  /** GB, Chromium only (capped at 8 by the browser); undefined elsewhere */
+  memGB: (navigator as any).deviceMemory as number | undefined,
+  cores: navigator.hardwareConcurrency ?? 4,
+  mobile: matchMedia("(pointer: coarse)").matches,
+  isolated: (globalThis as any).crossOriginIsolated === true,
+};
+/** One-line spec readout, PS system-info style. Reactive on the WebGPU probe. */
+export const deviceSummary = () =>
+  `${DEVICE.memGB ? `${DEVICE.memGB} GB RAM · ` : ""}${DEVICE.cores} cores · ${hasWebGPU() ? "WebGPU ✓" : "no WebGPU"} · ${DEVICE.mobile ? "touch device" : "desktop"}`;
+
 // —— HTML-in-Canvas (Chrome origin trial): can we draw live DOM into WebGL? ——
 // Detects the API surface: a canvas that accepts layoutsubtree + a WebGL
 // context that can upload an element as a texture.

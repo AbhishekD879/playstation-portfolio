@@ -4,7 +4,7 @@
 // Labs only ever turns things off. Core portfolio content (career, projects,
 // skills, contact, about) is never optional — this is still a résumé.
 import { createSignal } from "solid-js";
-import { hasHtmlInCanvas } from "./gpu";
+import { DEVICE, hasHtmlInCanvas, hasWebGPU } from "./gpu";
 
 export interface Flag { id: string; title: string; desc: string }
 export interface FlagGroup { group: string; icon: string; items: Flag[] }
@@ -210,6 +210,72 @@ APP_GUIDES.doomrtx = {
 };
 
 export const LAB_GUIDES: Record<string, LabGuide> = { ...APP_GUIDES, ...FEATURE_GUIDES };
+
+// —— device suitability: recommended specs per demanding feature ——————————
+// Light features carry no entry and never warn. Anything listed here gets a
+// ✓/⚠/✕ fitness badge in Labs, a spec readout on its guide card, and — for
+// ⚠/✕ — a "press again to enable anyway" guard. Nothing is ever locked.
+interface SpecReq {
+  webgpu?: "required" | "boost"; // hard need vs "CPU fallback will be slow"
+  isolation?: boolean;           // needs crossOriginIsolated (SharedArrayBuffer)
+  desktop?: "required" | "recommended";
+  minMemGB?: number;             // recommended device memory
+  minCores?: number;
+  downloadMB?: number;           // one-time download, cached after
+  gpuHeavy?: boolean;            // sustained GPU load
+  cpuHeavy?: boolean;            // heavy wasm / CPU inference
+}
+
+const FEATURE_SPECS: Record<string, SpecReq> = {
+  // system features
+  gpujuice: { webgpu: "required", gpuHeavy: true, minMemGB: 4 },
+  livephoto: { webgpu: "boost", minMemGB: 4, downloadMB: 50, cpuHeavy: true },
+  enhance: { webgpu: "boost", minMemGB: 4, downloadMB: 45, cpuHeavy: true },
+  voice: { webgpu: "boost", downloadMB: 80, cpuHeavy: true },
+  vibe: { downloadMB: 25 },
+  crt: { gpuHeavy: true, minMemGB: 4 },
+  // apps
+  ai: { webgpu: "boost", minMemGB: 8, downloadMB: 1200, gpuHeavy: true, cpuHeavy: true },
+  doomrtx: { webgpu: "required", gpuHeavy: true, minMemGB: 8 },
+  ps2: { isolation: true, desktop: "required", minMemGB: 8, cpuHeavy: true },
+  psp: { isolation: true, desktop: "recommended", minMemGB: 4, cpuHeavy: true },
+  ps1: { minMemGB: 4, cpuHeavy: true },
+  scummvm: { downloadMB: 40, minMemGB: 4, cpuHeavy: true },
+  pc: { minMemGB: 4, cpuHeavy: true },
+};
+
+export type FitLevel = "ready" | "caution" | "no";
+export interface Suitability { level: FitLevel; notes: string[]; rec: string }
+
+/** Rate a feature against THIS device. null = light feature, always fine. */
+export function rateFeature(id: string): Suitability | null {
+  const s = FEATURE_SPECS[id];
+  if (!s) return null;
+  const notes: string[] = [];
+  let level: FitLevel = "ready";
+  const caution = (t: string) => { notes.push(t); if (level !== "no") level = "caution"; };
+  const no = (t: string) => { notes.push(t); level = "no"; };
+
+  if (s.webgpu === "required" && !hasWebGPU()) no("needs WebGPU — this browser doesn't offer it");
+  if (s.isolation && !DEVICE.isolated) no("needs cross-origin isolation — not available here");
+  if (s.desktop === "required" && DEVICE.mobile) no("built for a desktop with a real GPU and keyboard");
+  if (s.desktop === "recommended" && DEVICE.mobile) caution("really wants a desktop — expect a struggle on touch devices");
+  if (s.webgpu === "boost" && !hasWebGPU()) caution("no WebGPU here — falls back to CPU and gets slow");
+  if (s.minMemGB && DEVICE.memGB && DEVICE.memGB < s.minMemGB) caution(`likes ${s.minMemGB} GB RAM — this device reports ${DEVICE.memGB} GB`);
+  if (s.minCores && DEVICE.cores < s.minCores) caution(`likes ${s.minCores}+ cores — this device has ${DEVICE.cores}`);
+  if (s.gpuHeavy && DEVICE.mobile && level === "ready") caution("sustained GPU load — phones may heat up and throttle");
+  if (s.cpuHeavy && DEVICE.mobile && level === "ready") caution("heavy WebAssembly — midrange phones will struggle");
+  if (s.downloadMB) notes.push(`${s.downloadMB >= 1000 ? `${(s.downloadMB / 1000).toFixed(1)} GB` : `${s.downloadMB} MB`} one-time download, cached after`);
+
+  const rec = [
+    s.webgpu === "required" ? "WebGPU" : s.webgpu === "boost" ? "WebGPU (for speed)" : "",
+    s.minMemGB ? `${s.minMemGB} GB RAM` : "",
+    s.minCores ? `${s.minCores}+ cores` : "",
+    s.desktop ? "desktop" : "",
+    s.isolation ? "isolated context" : "",
+  ].filter(Boolean).join(" · ");
+  return { level, notes, rec: rec ? `recommended: ${rec}` : "runs anywhere" };
+}
 
 /** Ordered groups shown in Labs: system features first, then apps by category. */
 export const LAB_GROUPS: FlagGroup[] = [...FEATURE_GROUPS, ...APP_GROUPS];

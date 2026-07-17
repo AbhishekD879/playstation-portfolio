@@ -1045,6 +1045,31 @@ img.status-avatar, img.ptile-avatar { object-fit: cover; border: 1px solid rgba(
 .karaoke-mix input[type="range"] { flex: 1; max-width: 320px; accent-color: var(--xmb-tint); }
 .karaoke-mix-label { font-size: 10px; letter-spacing: 0.16em; color: var(--dim); }
 
+/* Labs device-fitness: THIS CONSOLE line, per-row ✓⚠✕ badges, warnings */
+.labs-device {
+  font-size: 10.5px; letter-spacing: 0.14em; color: var(--dim);
+  padding: 7px 12px; margin-bottom: 10px; border-radius: 8px;
+  background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08);
+  display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap;
+}
+.labs-device-legend { opacity: 0.75; }
+.labs-fit { margin-left: 9px; font-size: 11px; vertical-align: 1px; }
+.labs-fit.ready { color: #9fe8b0; }
+.labs-fit.caution { color: #e8c46a; }
+.labs-fit.no { color: #ff8a8a; }
+.labs-warn-text { color: #ffb3b3 !important; }
+.labs-guide-fit { border-radius: 10px; padding: 11px 14px; display: flex; flex-direction: column; gap: 5px; border: 1px solid; }
+.labs-guide-fit.ready { border-color: rgba(120,220,150,0.35); background: rgba(60,160,90,0.08); }
+.labs-guide-fit.caution { border-color: rgba(232,196,106,0.4); background: rgba(200,150,50,0.09); }
+.labs-guide-fit.no { border-color: rgba(255,120,120,0.4); background: rgba(200,60,60,0.09); }
+.labs-guide-fit-head { font-size: 11px; letter-spacing: 0.18em; }
+.labs-guide-fit.ready .labs-guide-fit-head { color: #9fe8b0; }
+.labs-guide-fit.caution .labs-guide-fit-head { color: #e8c46a; }
+.labs-guide-fit.no .labs-guide-fit-head { color: #ff8a8a; }
+.labs-guide-fit-note { font-size: 12.5px; color: rgba(255,255,255,0.75); }
+.labs-guide-fit-rec { font-size: 11px; color: var(--dim); letter-spacing: 0.04em; margin-top: 3px; }
+.labs-go.warn { background: rgba(200,60,60,0.3); border-color: rgba(255,120,120,0.6); color: #ffd6d6; }
+
 /* Labs guides — the tutorial card behind each flag's → / ⓘ */
 .labs-guide { display: flex; flex-direction: column; gap: 12px; padding: 6px 2px 0; animation: fadeIn 0.18s ease-out; }
 .labs-guide-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }

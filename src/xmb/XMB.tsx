@@ -5,7 +5,8 @@ import { CATEGORIES, TROPHIES, type XmbItem } from "../content";
 import { AVATARS, PLATINUM, award, resizePhoto, updateProfile, type Profile } from "../profiles";
 import { CORES, PS2_EXTS, PSP_ONLY_EXTS, PSX_ONLY_EXTS, addGame, listGames, addPhoto, listPhotos, fsAccessSupported, type GameRecord, type PhotoRecord } from "../gamesdb";
 import { BG_MODES, THEMES, applyCustomHsl, applyTheme, bgMode, currentThemeIndex, loadCustomHsl, setBgMode } from "../theme";
-import { LAB_FLAT, LAB_GROUPS, LAB_GUIDES, labEnabled, toggleLab } from "../labs";
+import { LAB_FLAT, LAB_GROUPS, LAB_GUIDES, labEnabled, rateFeature, toggleLab } from "../labs";
+import { deviceSummary } from "../gpu";
 import { CHANNELS, fetchDevto, fetchGuide, fetchHN, fetchRadio, fetchRss, fetchWeather, wmo, type NewsEntry, type Weather } from "../apps";
 import * as sfx from "../audio";
 import { onCcNav, onNav, onPadChange, onSystemButton, primaryPad, rumble, rumbleEnabled, setCcActive, setNavEnabled, setRumble } from "../input";
@@ -78,6 +79,25 @@ export default function XMB(props: {
   const [labsIdx, setLabsIdx] = createSignal(0);
   const [labsTick, setLabsTick] = createSignal(0); // re-render pulse for toggle states
   const [labsGuide, setLabsGuide] = createSignal<string | null>(null); // flag id whose tutorial card is open
+  const [labsWarn, setLabsWarn] = createSignal<string | null>(null); // armed "enable anyway" warning
+  let labsWarnTimer: ReturnType<typeof setTimeout> | null = null;
+  // enabling a ⚠/✕ feature takes two presses — the first shows what it'll cost
+  const tryToggle = (id: string) => {
+    const turningOn = !labEnabled(id);
+    const fit = rateFeature(id);
+    if (turningOn && fit && fit.level !== "ready" && labsWarn() !== id) {
+      setLabsWarn(id);
+      sfx.deny();
+      if (labsWarnTimer) clearTimeout(labsWarnTimer);
+      labsWarnTimer = setTimeout(() => setLabsWarn(null), 5000);
+      return;
+    }
+    if (labsWarnTimer) clearTimeout(labsWarnTimer);
+    setLabsWarn(null);
+    toggleLab(id);
+    setLabsTick(labsTick() + 1);
+    sfx.confirm();
+  };
   const [soundOpen, setSoundOpen] = createSignal(false);
   const [soundIdx, setSoundIdx] = createSignal(0);
   const [sndTick, setSndTick] = createSignal(0); // re-render pulse for volume/pack/mute
@@ -1268,18 +1288,18 @@ export default function XMB(props: {
     if (labsOpen()) {
       const view = labsView();
       if (labsGuide()) { // a tutorial card is up — ✕ runs it, ◯ back to the list
-        if (action === "back") { sfx.back(); setLabsGuide(null); }
+        if (action === "back") { sfx.back(); setLabsGuide(null); setLabsWarn(null); }
         if (action === "confirm") {
           const id = labsGuide()!, g = LAB_GUIDES[id];
           if (g?.go) runLabGo(id, g.go);
-          else { toggleLab(id); setLabsTick(labsTick() + 1); sfx.confirm(); }
+          else tryToggle(id);
         }
         return;
       }
       const n = Math.max(1, view.length);
-      if (action === "up") { setLabsIdx((labsIdx() + n - 1) % n); sfx.tickV(); }
-      if (action === "down") { setLabsIdx((labsIdx() + 1) % n); sfx.tickV(); }
-      if (action === "confirm") { const f = view[labsIdx()]; if (f) { toggleLab(f.id); setLabsTick(labsTick() + 1); sfx.confirm(); } }
+      if (action === "up") { setLabsIdx((labsIdx() + n - 1) % n); setLabsWarn(null); sfx.tickV(); }
+      if (action === "down") { setLabsIdx((labsIdx() + 1) % n); setLabsWarn(null); sfx.tickV(); }
+      if (action === "confirm") { const f = view[labsIdx()]; if (f) tryToggle(f.id); }
       if (action === "right" || action === "options") { const f = view[labsIdx()]; if (f) { setLabsGuide(f.id); sfx.tickH(); } }
       if (action === "back") { sfx.back(); setLabsOpen(false); }
       return;
@@ -2143,17 +2163,25 @@ export default function XMB(props: {
                   <p class="labs-guide-what">{g?.what ?? f?.desc}</p>
                   <div class="labs-guide-try">HOW TO TRY IT</div>
                   <ol class="labs-guide-steps"><For each={g?.steps ?? []}>{(s) => <li>{s}</li>}</For></ol>
-                  <Show when={g?.needs === "webgpu"}>
-                    <div class="labs-guide-needs" classList={{ ok: hasWebGPU() }}>
-                      {hasWebGPU() ? "⚡ WebGPU — available on this console" : "⚠ needs WebGPU — not available in this browser"}
-                    </div>
-                  </Show>
+                  {(() => {
+                    const v = rateFeature(gid);
+                    if (!v) return null;
+                    return (
+                      <div class={`labs-guide-fit ${v.level}`}>
+                        <div class="labs-guide-fit-head">
+                          {v.level === "ready" ? "✓ SUITS THIS CONSOLE" : v.level === "caution" ? "⚠ RUNS HERE — WITH CAUTION" : "✕ NOT BUILT FOR THIS CONSOLE"}
+                        </div>
+                        <For each={v.notes}>{(note) => <div class="labs-guide-fit-note">· {note}</div>}</For>
+                        <div class="labs-guide-fit-rec">{v.rec} — this console: {deviceSummary()}</div>
+                      </div>
+                    );
+                  })()}
                   <div class="labs-guide-actions">
                     <Show when={g?.go && (g.needs !== "webgpu" || hasWebGPU())}>
                       <button class="labs-go" onClick={() => runLabGo(gid, g!.go!)}>▶ {g?.goLabel ?? "TAKE ME THERE"}</button>
                     </Show>
-                    <button class="labs-go ghost" onClick={() => { toggleLab(gid); setLabsTick(labsTick() + 1); sfx.confirm(); }}>
-                      {(labsTick(), labEnabled(gid)) ? "SWITCH OFF" : "SWITCH ON"}
+                    <button class="labs-go ghost" classList={{ warn: labsWarn() === gid }} onClick={() => tryToggle(gid)}>
+                      {(labsTick(), labEnabled(gid)) ? "SWITCH OFF" : labsWarn() === gid ? "⚠ ENABLE ANYWAY" : "SWITCH ON"}
                     </button>
                   </div>
                   <div class="modal-hint"><span class="btn-x" /> {g?.go ? (g?.goLabel?.toLowerCase() ?? "take me there") : "toggle"} · <span class="btn-o" /> back to the list</div>
@@ -2163,6 +2191,7 @@ export default function XMB(props: {
           </Show>
           <Show when={!labsGuide()}>
           <div class="labs-note">Every feature and app ships on. Flip anything off to declutter the console — turn it back on any time. Press → on any row for its guide. {(labsTick(), null)}</div>
+          <div class="labs-device">THIS CONSOLE · {deviceSummary()} <span class="labs-device-legend">✓ suits it · ⚠ heavy here · ✕ can't run</span></div>
           <div class="labs-search">
             <span class="labs-search-ico"><Icon name="search" /></span>
             <input
@@ -2176,7 +2205,7 @@ export default function XMB(props: {
                 const view = labsView();
                 if (e.key === "ArrowDown") { e.preventDefault(); setLabsIdx(Math.min(Math.max(0, view.length - 1), labsIdx() + 1)); }
                 else if (e.key === "ArrowUp") { e.preventDefault(); setLabsIdx(Math.max(0, labsIdx() - 1)); }
-                else if (e.key === "Enter") { const f = view[labsIdx()]; if (f) { toggleLab(f.id); setLabsTick(labsTick() + 1); sfx.confirm(); } }
+                else if (e.key === "Enter") { const f = view[labsIdx()]; if (f) tryToggle(f.id); }
                 else if (e.key === "ArrowRight" && e.currentTarget.selectionStart === e.currentTarget.value.length) {
                   e.preventDefault();
                   const f = view[labsIdx()];
@@ -2198,11 +2227,16 @@ export default function XMB(props: {
                         <button
                           class="labs-row"
                           classList={{ active: labsIdx() === my() }}
-                          onClick={() => { setLabsIdx(my()); toggleLab(f.id); setLabsTick(labsTick() + 1); sfx.confirm(); }}
+                          onClick={() => { setLabsIdx(my()); tryToggle(f.id); }}
                         >
                           <span class="labs-info">
-                            <span class="labs-title">{f.title}</span>
-                            <Show when={f.desc}><span class="labs-desc">{f.desc}</span></Show>
+                            <span class="labs-title">
+                              {f.title}
+                              {(() => { const v = rateFeature(f.id); return v ? <span class={`labs-fit ${v.level}`}>{v.level === "ready" ? "✓" : v.level === "caution" ? "⚠" : "✕"}</span> : null; })()}
+                            </span>
+                            <Show when={labsWarn() === f.id} fallback={<Show when={f.desc}><span class="labs-desc">{f.desc}</span></Show>}>
+                              <span class="labs-desc labs-warn-text">⚠ {rateFeature(f.id)?.notes[0] ?? "heavy for this device"} — press again to enable anyway</span>
+                            </Show>
                           </span>
                           <span
                             class="labs-guide-btn" title="Guide — what it is & how to try it" role="button"
