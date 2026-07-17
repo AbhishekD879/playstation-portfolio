@@ -3,11 +3,13 @@
 // background": its motion/glow follow the chosen Background mode (Settings ›
 // Themes), and Reactive/Aurora pulse to whatever sound the console is playing
 // (radio, Winamp, videos) via the shared master-bus analyser.
-import { createEffect, onCleanup, onMount } from "solid-js";
+import { Show, createEffect, onCleanup, onMount } from "solid-js";
 import * as THREE from "three";
 import { bgMode, tint } from "../theme";
 import { getAnalyser } from "../audio";
 import { labEnabled } from "../labs";
+import { hasWebGPU } from "../gpu";
+import FluidBg from "./FluidBg";
 
 const WAVE_VERT = /* glsl */ `
   uniform float uTime;
@@ -109,7 +111,7 @@ export default function Wave() {
     // —— apply the chosen mode + tint (re-runs live when either changes) ——
     let speedMul = 1;
     createEffect(() => {
-      const m = MODE[bgMode()] ?? MODE.reactive;
+      const m = MODE[bgMode() as keyof typeof MODE] ?? MODE.reactive;
       speedMul = m.speed;
       const col = new THREE.Color(tint());
       for (const mat of mats) {
@@ -129,8 +131,9 @@ export default function Wave() {
       if (disposed) return;
       requestAnimationFrame(render); // keep polling so a Labs toggle re-animates live
       // Labs "Living Background" off → fade the wave/sparkles out, leaving the
-      // calm static gradient backdrop (the .wave-bg CSS) behind.
-      const live = labEnabled("livingbg");
+      // calm static gradient backdrop (the .wave-bg CSS) behind. Fluid mode
+      // renders on its own WebGPU canvas — the three wave sleeps under it.
+      const live = labEnabled("livingbg") && !(bgMode() === "fluid" && hasWebGPU());
       const want = live ? "1" : "0";
       if (canvas.style.opacity !== want) { canvas.style.transition = "opacity 0.5s ease"; canvas.style.opacity = want; }
       if (!live) return;
@@ -179,6 +182,9 @@ export default function Wave() {
   return (
     <div class="wave-bg" ref={wrap} style={{ "--xmb-tint": tint(), transition: "background 0.6s", filter: `brightness(${brightness})` }}>
       <canvas ref={canvas} />
+      <Show when={bgMode() === "fluid" && hasWebGPU()}>
+        <FluidBg />
+      </Show>
     </div>
   );
 }

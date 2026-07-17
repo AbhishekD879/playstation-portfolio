@@ -10,6 +10,8 @@ import { CHANNELS, fetchDevto, fetchGuide, fetchHN, fetchRadio, fetchRss, fetchW
 import * as sfx from "../audio";
 import { onCcNav, onNav, onPadChange, onSystemButton, primaryPad, rumble, rumbleEnabled, setCcActive, setNavEnabled, setRumble } from "../input";
 import { setBridgePaused } from "../gamepadBridge";
+import { hasWebGPU } from "../gpu";
+import { fluidLaunchSplash, fluidNavPulse } from "./FluidBg";
 import ControlCenter from "./ControlCenter";
 import { asrSupported, record } from "../asr";
 import { registerActions } from "../consoleBus";
@@ -321,6 +323,7 @@ export default function XMB(props: {
       sfx.trophy();
       rumble(0.9, 0.7, 320); // celebratory buzz on unlock
       pushToast(`Trophy earned — ${def.name}`, def.desc, def.tier);
+      if (labEnabled("gpujuice")) import("../particles").then((m) => m.burst({ gold: true, x: innerWidth - 180, y: 90 })).catch(() => {});
       if (!hadPlat && props.profile.trophies["platinum"]) {
         setTimeout(() => { sfx.trophy(); rumble(1, 0.9, 600); pushToast(`PLATINUM — ${PLATINUM.name}`, PLATINUM.desc, "platinum"); }, 1400);
       }
@@ -1250,12 +1253,12 @@ export default function XMB(props: {
     switch (action) {
       case "left": {
         const vs = visCats(), p = vs.indexOf(cat());
-        if (p > 0) { setCat(vs[p - 1]); sfx.tickH(); }
+        if (p > 0) { setCat(vs[p - 1]); sfx.tickH(); fluidNavPulse(-1); }
         break;
       }
       case "right": {
         const vs = visCats(), p = vs.indexOf(cat());
-        if (p >= 0 && p < vs.length - 1) { setCat(vs[p + 1]); sfx.tickH(); }
+        if (p >= 0 && p < vs.length - 1) { setCat(vs[p + 1]); sfx.tickH(); fluidNavPulse(1); }
         break;
       }
       case "up": {
@@ -1296,6 +1299,8 @@ export default function XMB(props: {
       rumble(0.5, 0.35, 90);
       setShaking(true);
       setTimeout(() => setShaking(false), 300);
+      fluidLaunchSplash(); // the fluid background splashes too (no-op otherwise)
+      if (labEnabled("gpujuice")) import("../particles").then((m) => m.burst()).catch(() => {});
     }
     prevApp = a;
   });
@@ -1910,7 +1915,7 @@ export default function XMB(props: {
           <div class="bg-modes">
             <span class="bg-modes-label">LIVING BACKGROUND</span>
             <div class="bg-modes-row">
-              <For each={BG_MODES}>
+              <For each={BG_MODES.filter((m) => m.id !== "fluid" || hasWebGPU())}>
                 {(m) => (
                   <button class="bg-mode" classList={{ active: bgMode() === m.id }}
                     onClick={() => { setBgMode(m.id); sfx.tickH(); }}>
