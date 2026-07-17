@@ -82,6 +82,100 @@ const APP_GROUPS: FlagGroup[] = [...new Set(APPS.map((a) => a.cat))].map((cat) =
   items: APPS.filter((a) => a.cat === cat).map((a) => ({ id: a.id, title: a.title, desc: "" })),
 }));
 
+// —— guides: every flag can explain itself — what it is, how to try it, and a
+// deep-link the console can execute ("take me there"). Apps get an
+// auto-generated guide (find on crossbar → launch); features are hand-written.
+export interface LabGuide {
+  what: string;          // one or two plain sentences
+  steps: string[];       // "TRY IT" — concrete, in order
+  needs?: "webgpu";      // capability the card should report on
+  go?: string;           // action id XMB executes (e.g. "app:doom", "cc", "burst-demo")
+  goLabel?: string;      // button label, defaults to TAKE ME THERE
+}
+
+const FEATURE_GUIDES: Record<string, LabGuide> = {
+  search: {
+    what: "One search box over everything on the console — apps, career sections, settings, games.",
+    steps: ["Press / anywhere (or tap ⌕ in the header)", "Type a few letters — “doom”, “résumé”, “theme”…", "↑↓ to pick, ENTER jumps straight there"],
+    go: "search", goLabel: "OPEN SEARCH",
+  },
+  cc: {
+    what: "The quick-settings overlay: volume, theme, phone-controller QR and DualSense tools, from anywhere.",
+    steps: ["Press ` (backtick) or the pad's PS button — double-tap the screen on mobile", "Drag or push the left stick to ride the volume", "Scan the QR to turn your phone into a gamepad"],
+    go: "cc", goLabel: "OPEN CONTROL CENTER",
+  },
+  osk: {
+    what: "A PlayStation-style on-screen keyboard for controller users — no reaching for the desk.",
+    steps: ["Connect any gamepad", "Focus a text box (search, guestbook…)", "The keyboard appears — ✕ types, △ deletes, START confirms"],
+  },
+  voice: {
+    what: "Push-to-talk voice commands, transcribed on-device — no audio ever leaves the console.",
+    steps: ["Hold the header mic (or hold N — R2 on a pad)", "Say “open doom”, “play radio”, “show trophies”…", "Let go — the console obeys"],
+  },
+  saver: {
+    what: "An idle screen saver: a clock drifting through the dark, like a console left on overnight.",
+    steps: ["Leave the console alone for a few minutes", "Any key, click or button wakes it", "Change the start delay under Settings › Power Save Settings"],
+    go: "saver", goLabel: "PREVIEW IT NOW",
+  },
+  phonepad: {
+    what: "Your phone becomes the controller — scan a QR, get a touch gamepad driving this screen.",
+    steps: ["Open the Control Center (` or PS button)", "Scan the QR with your phone camera", "Navigate the crossbar from the couch"],
+    go: "cc", goLabel: "GET THE QR",
+  },
+  dualsense: {
+    what: "Deep DualSense support over WebHID: theme-colored lightbar, rumble, battery readout.",
+    steps: ["Pair a DualSense via Bluetooth or USB", "Click the controller icon in the header and connect", "Watch the lightbar match the console theme"],
+  },
+  livingbg: {
+    what: "The backdrop is alive: pick from PS3 waves, fireflies, a starfield, a retro horizon grid — most react to whatever the console is playing.",
+    steps: ["Settings › Theme Settings › BACKGROUND", "Pick a backdrop — “Flat 2D” is the original still gradient", "Play the radio: Reactive, Aurora, Fireflies & Horizon pulse to the music", "On WebGPU consoles, “Fluid” is real simulated water — stir it with the pointer"],
+    go: "themes", goLabel: "PICK A BACKDROP",
+  },
+  juice: {
+    what: "Launch feedback: a quick impact shake plus a haptic kick on the pad whenever an app opens.",
+    steps: ["Launch anything from the crossbar", "Feel the thump (rumble needs a connected pad)"],
+    go: "juice-demo", goLabel: "SHOW ME",
+  },
+  gpujuice: {
+    what: "A million-particle GPU pool (WebGPU compute). Launching an app detonates a spark storm from the item you picked; trophies rain gold.",
+    steps: ["Launch any app and watch the item explode into sparks", "Earn a trophy for the gold shower"],
+    needs: "webgpu",
+    go: "burst-demo", goLabel: "FIRE A TEST BURST",
+  },
+  livephoto: {
+    what: "On-device AI depth turns your photos into parallax 3D — the picture tilts as you move the mouse.",
+    steps: ["Photo › Add Photos… and pick a real photo of yours", "Open the Slideshow — the badge shows the 3D model warming up (first time downloads ~50 MB)", "When it reads ◈ 3D, move the mouse — depth!", "Museum & NASA photos stay 2D: their servers block pixel access"],
+    go: "photo-cat", goLabel: "GO TO PHOTOS",
+  },
+  vibe: {
+    what: "Semantic search for the planet: describe a feeling and the globe flies to a place that matches, matched by on-device embeddings.",
+    steps: ["Web › Planet Earth", "Tap ✨ vibe next to the search box", "Type “somewhere cold and lonely” and press ENTER"],
+    go: "app:map", goLabel: "FLY THE GLOBE",
+  },
+  crt: {
+    what: "The entire console rendered onto a curved phosphor tube — scanlines, RGB triads, barrel glass. Chrome's experimental HTML-in-Canvas API; everything stays clickable.",
+    steps: ["Flip the switch — the console restarts inside the tube", "Look closely: scanlines and phosphor stripes over every pixel", "Flip it off to restart back to flat glass"],
+  },
+};
+
+// every app: where it lives on the crossbar + a launch deep-link
+const APP_GUIDES: Record<string, LabGuide> = Object.fromEntries(
+  APPS.map((a) => [a.id, {
+    what: `${a.title} — one of the console's apps.`,
+    steps: [`Find it on the crossbar under ${a.cat}`, "Press ✕ (or click) to launch"],
+    go: "app:" + a.id, goLabel: "LAUNCH IT",
+  } satisfies LabGuide]),
+);
+// richer words for the headliner
+APP_GUIDES.doomrtx = {
+  what: "The 1993 E1M1 rebuilt as triangles and lit by real-time path tracing — physically correct light bouncing in WebGPU compute.",
+  steps: ["Game › DOOM RTX", "Click the canvas, press ▶, then WASD + mouse to wander", "The corner panel shows FPS and rays/second — that's live ray tracing"],
+  needs: "webgpu",
+  go: "app:doomrtx", goLabel: "ENTER E1M1",
+};
+
+export const LAB_GUIDES: Record<string, LabGuide> = { ...APP_GUIDES, ...FEATURE_GUIDES };
+
 /** Ordered groups shown in Labs: system features first, then apps by category. */
 export const LAB_GROUPS: FlagGroup[] = [...FEATURE_GROUPS, ...APP_GROUPS];
 /** Flat, ordered list of every flag — used for controller navigation. */

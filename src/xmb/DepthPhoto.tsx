@@ -3,7 +3,7 @@
 // the depth map lands, a WebGL parallax layer fades in over it — the picture
 // tilts with the pointer (and drifts gently on its own). Labs flag "livephoto".
 import { Show, createSignal, onCleanup, onMount } from "solid-js";
-import { depthMap } from "../depth";
+import { depthMap, depthModelProgress, depthModelReady } from "../depth";
 import { labEnabled } from "../labs";
 
 const VERT = `attribute vec2 aPos; varying vec2 vUv;
@@ -25,6 +25,7 @@ void main() {
 
 export default function DepthPhoto(props: { src: string; alt?: string; class?: string }) {
   const [live, setLive] = createSignal(false);
+  const [prep, setPrep] = createSignal(false); // pixels are CORS-clean, depth is cooking
   let canvas!: HTMLCanvasElement;
   let img!: HTMLImageElement;
 
@@ -42,6 +43,7 @@ export default function DepthPhoto(props: { src: string; alt?: string; class?: s
       const r = await fetch(src, { mode: "cors" });
       if (!r.ok) throw new Error("http " + r.status);
       blobUrl = URL.createObjectURL(await r.blob());
+      setPrep(true); // pixels are ours — show the "preparing 3D" state
       const [depth] = await Promise.all([
         depthMap(blobUrl),
         new Promise<void>((res, rej) => {
@@ -119,9 +121,11 @@ export default function DepthPhoto(props: { src: string; alt?: string; class?: s
         gl.drawArrays(gl.TRIANGLES, 0, 3);
       };
       raf = requestAnimationFrame(draw);
+      setPrep(false);
       setLive(true);
       onCleanup(() => removeEventListener("pointermove", onMove));
-    }).catch(() => { /* no CORS, no model, no problem — stays a photo */ });
+    }).catch(() => setPrep(false) /* no CORS, no model, no problem — stays a photo */)
+      .finally(() => { if (!live()) setPrep(false); });
 
     onCleanup(() => {
       disposed = true;
@@ -134,6 +138,13 @@ export default function DepthPhoto(props: { src: string; alt?: string; class?: s
     <>
       <img ref={img} class={props.class} src={props.src} alt={props.alt ?? ""} style={{ opacity: live() ? 0 : 1 }} />
       <canvas ref={canvas} class="depth-canvas" classList={{ live: live() }} />
+      <Show when={prep() && !live()}>
+        <div class="depth-badge depth-working">
+          ◈ {depthModelProgress() !== null
+            ? `downloading 3D model · ${depthModelProgress()}%`
+            : depthModelReady() ? "preparing 3D…" : "waking the 3D model…"}
+        </div>
+      </Show>
       <Show when={live()}><div class="depth-badge">◈ 3D</div></Show>
     </>
   );

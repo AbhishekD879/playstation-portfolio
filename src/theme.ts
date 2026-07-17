@@ -55,12 +55,16 @@ export function applyCustomHsl(h: number, s: number, l: number) {
 
 // —— living background: how alive the XMB wave is, and whether it reacts to
 // sound. Persisted like the tint; the Wave component reads the signal live. ——
-export type BgMode = "calm" | "waves" | "reactive" | "aurora" | "fluid";
+export type BgMode = "flat" | "calm" | "waves" | "reactive" | "aurora" | "fireflies" | "stars" | "grid" | "fluid";
 export const BG_MODES: { id: BgMode; label: string; sub: string }[] = [
+  { id: "flat", label: "Flat 2D", sub: "the original still backdrop" },
   { id: "calm", label: "Calm", sub: "gentle PS3 waves" },
   { id: "waves", label: "Waves", sub: "fuller motion" },
   { id: "reactive", label: "Reactive", sub: "pulses to sound" },
   { id: "aurora", label: "Aurora", sub: "lively + glowing" },
+  { id: "fireflies", label: "Fireflies", sub: "drifting embers — glow to sound" },
+  { id: "stars", label: "Starfield", sub: "deep space — warps with the music" },
+  { id: "grid", label: "Horizon", sub: "retro sunset grid — rides the beat" },
   { id: "fluid", label: "Fluid", sub: "WebGPU water — flows to sound" }, // offered only with WebGPU
 ];
 const BG_KEY = "asp.bg";

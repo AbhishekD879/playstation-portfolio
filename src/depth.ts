@@ -3,8 +3,16 @@
 // feature: a photo's depth map drives a parallax shader so stills gain real
 // dimensionality. Everything is progressive: while the model thinks (or if the
 // image blocks CORS) the photo just stays a photo.
+import { createSignal } from "solid-js";
+
 let loading: Promise<any> | null = null;
 const cache = new Map<string, Promise<ImageBitmap | null>>();
+
+// download/readiness state, surfaced in the photo viewer's badge so the first
+// run (a ~50 MB model fetch) is never a silent mystery
+const [modelProgress, setModelProgress] = createSignal<number | null>(null);
+const [modelReady, setModelReady] = createSignal(false);
+export { modelProgress as depthModelProgress, modelReady as depthModelReady };
 
 function loadModel(): Promise<any> {
   if (!loading) {
@@ -12,10 +20,21 @@ function loadModel(): Promise<any> {
       const { pipeline } = await import("@huggingface/transformers");
       const device = typeof (navigator as any).gpu !== "undefined" ? "webgpu" : "wasm";
       // q8 keeps the wasm path tolerable; webgpu takes the default dtype
-      const opts: any = { device };
+      const opts: any = {
+        device,
+        progress_callback: (p: any) => {
+          // track the big file's descent; ignore config/tokenizer chatter
+          if (p?.status === "progress" && typeof p.progress === "number" && String(p.file ?? "").includes("onnx")) {
+            setModelProgress(Math.min(99, Math.round(p.progress)));
+          }
+        },
+      };
       if (device === "wasm") opts.dtype = "q8";
-      return pipeline("depth-estimation", "onnx-community/depth-anything-v2-small", opts);
-    })().catch((e) => { loading = null; throw e; });
+      const pipe = await pipeline("depth-estimation", "onnx-community/depth-anything-v2-small", opts);
+      setModelProgress(null);
+      setModelReady(true);
+      return pipe;
+    })().catch((e) => { loading = null; setModelProgress(null); throw e; });
   }
   return loading;
 }
