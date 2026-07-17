@@ -90,6 +90,12 @@ export const confirm = () => { tone(880, 0.09, { gain: 0.16 }); tone(1320, 0.14,
 export const back = () => { tone(1320, 0.07, { gain: 0.12 }); tone(780, 0.12, { gain: 0.12, at: 0.045 }); };
 export const deny = () => tone(190, 0.16, { type: "square", gain: 0.07 });
 
+// —— notification: a soft PlayStation-style rising two-note ping ——
+export function notify() {
+  tone(1174, 0.13, { gain: 0.1 });                        // D6
+  tone(1568, 0.32, { gain: 0.085, at: 0.075, type: "sine" }); // G6 — gentle lift
+}
+
 // —— trophy ding: bright triad sparkle ——
 export function trophy() {
   tone(1568, 0.5, { gain: 0.14 });

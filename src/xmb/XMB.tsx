@@ -46,7 +46,7 @@ import { startGestures, stopGestures } from "../gestures";
 
 const CAT_SPACING = 150;
 
-interface Toast { id: number; title: string; sub: string; tier?: string }
+interface Toast { id: number; title: string; sub: string; tier?: string; icon?: string }
 let toastSeq = 1;
 
 export default function XMB(props: {
@@ -104,6 +104,7 @@ export default function XMB(props: {
   const [ps2Boot, setPs2Boot] = createSignal<GameRecord | null>(null);
   const [ps2Join, setPs2Join] = createSignal(false);
   const [ccOpen, setCcOpen] = createSignal(false);
+  const [shaking, setShaking] = createSignal(false); // brief impact-shake on launch
   let ccNav: ((a: Parameters<Parameters<typeof onNav>[0]>[0]) => void) | undefined;
 
   // route a library record to the right engine: PS2 discs boot the Play! app
@@ -283,9 +284,10 @@ export default function XMB(props: {
   onCleanup(() => battCleanup?.());
 
   // —— toasts & trophies ——
-  const pushToast = (title: string, sub: string, tier?: string) => {
-    const t: Toast = { id: toastSeq++, title, sub, tier };
+  const pushToast = (title: string, sub: string, tier?: string, icon?: string) => {
+    const t: Toast = { id: toastSeq++, title, sub, tier, icon };
     setToasts((x) => [...x, t]);
+    if (!tier) sfx.notify(); // trophy toasts get their own fanfare (sfx.trophy) at the call site
     setTimeout(() => setToasts((x) => x.filter((y) => y.id !== t.id)), 4200);
   };
   // award() mutates the profile object — bump a version signal so counts react
@@ -318,6 +320,22 @@ export default function XMB(props: {
     };
     document.addEventListener("keydown", key, true);
     onCleanup(() => document.removeEventListener("keydown", key, true));
+  });
+
+  // N — quick-summon the AI copilot from the home screen (then hold N / R2
+  // inside it to push-to-talk). Ignored while typing, in an app, or in a modal.
+  onMount(() => {
+    const key = (e: KeyboardEvent) => {
+      if (e.key.toLowerCase() !== "n" || !e.isTrusted || e.repeat) return;
+      const t = (e.target as HTMLElement)?.tagName;
+      if (t === "INPUT" || t === "TEXTAREA") return;
+      if (app() !== null || ccOpen() || saver()) return;
+      e.preventDefault();
+      sfx.confirm();
+      setApp("ai");
+    };
+    addEventListener("keydown", key);
+    onCleanup(() => removeEventListener("keydown", key));
   });
 
   const markSeen = (id: string) => {
@@ -1174,6 +1192,18 @@ export default function XMB(props: {
   // game bridge underneath is paused so it doesn't also react to CC navigation
   createEffect(() => { setCcActive(ccOpen()); setBridgePaused(ccOpen()); });
 
+  // —— launch juice: a rumble pulse + a brief impact-shake whenever an app opens ——
+  let prevApp: string | null = null;
+  createEffect(() => {
+    const a = app();
+    if (a && a !== prevApp) {
+      rumble(0.5, 0.35, 90);
+      setShaking(true);
+      setTimeout(() => setShaking(false), 300);
+    }
+    prevApp = a;
+  });
+
   // mouse wheel scrolls the item list
   let wheelAcc = 0;
   const onWheel = (e: WheelEvent) => {
@@ -1249,7 +1279,7 @@ export default function XMB(props: {
   };
 
   return (
-    <div class="xmb" onWheel={onWheel}>
+    <div class="xmb" classList={{ shaking: shaking() }} onWheel={onWheel}>
       {/* status bar */}
       <div class="status">
         <div class="status-user">
@@ -1843,8 +1873,10 @@ export default function XMB(props: {
         <For each={toasts()}>
           {(t) => (
             <div class="toast" classList={{ [`tier-${t.tier}`]: !!t.tier }}>
-              <Show when={t.tier}><span class={`trophy-gem tier-${t.tier}`}>▮</span></Show>
-              <div>
+              <span class="toast-ico" classList={{ [`tier-${t.tier}`]: !!t.tier }}>
+                <Icon name={t.tier ? "trophy" : (t.icon ?? "info")} />
+              </span>
+              <div class="toast-body">
                 <div class="toast-title">{t.title}</div>
                 <div class="toast-sub">{t.sub}</div>
               </div>

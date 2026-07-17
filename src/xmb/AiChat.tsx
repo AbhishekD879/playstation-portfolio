@@ -16,7 +16,7 @@ import { buildIndex, retrieve } from "../rag";
 import { capabilitySummary, runAction } from "../consoleBus";
 import { asrSupported, record } from "../asr";
 import { Icon } from "./icons";
-import { setNavEnabled } from "../input";
+import { primaryPad, setNavEnabled } from "../input";
 import * as sfx from "../audio";
 
 // Hermes is the default (listed first) — it uses tools, memory & retrieved
@@ -147,10 +147,29 @@ export default function AiChat(props: {
     setNavEnabled(false);
     const esc = (e: KeyboardEvent) => { if (e.key === "Escape") { sfx.back(); props.onClose(); } };
     addEventListener("keydown", esc);
+    // —— push-to-talk: hold N to talk (ignored while typing in the box), and
+    // hold R2 (controller button 7) — polled, since nav is disabled here. ——
+    const typing = () => { const t = document.activeElement?.tagName; return t === "INPUT" || t === "TEXTAREA"; };
+    const kd = (e: KeyboardEvent) => { if (e.repeat || e.key.toLowerCase() !== "n" || typing()) return; e.preventDefault(); pttStart(); };
+    const ku = (e: KeyboardEvent) => { if (e.key.toLowerCase() === "n") pttEnd(); };
+    addEventListener("keydown", kd);
+    addEventListener("keyup", ku);
+    let raf = 0, r2Prev = false;
+    const poll = () => {
+      raf = requestAnimationFrame(poll);
+      const on = !!primaryPad()?.buttons[7]?.pressed;
+      if (on && !r2Prev) pttStart();
+      else if (!on && r2Prev) pttEnd();
+      r2Prev = on;
+    };
+    raf = requestAnimationFrame(poll);
     // register ALL cleanups synchronously — Solid loses the owner after an await
     onCleanup(() => {
       setNavEnabled(true);
       removeEventListener("keydown", esc);
+      removeEventListener("keydown", kd);
+      removeEventListener("keyup", ku);
+      cancelAnimationFrame(raf);
       rec?.abort?.();
       stopSpeaking();
       engine?.unload();
@@ -238,7 +257,6 @@ Examples — these MUST become console_control calls (flat JSON, no nesting):
         }
         if (ev.type === "agent_end") {
           setBusy(false);
-          setTimeout(() => input?.focus(), 30);
           persist(); // transcript + memory to IndexedDB
           if (voice()) {
             // speak the last non-empty assistant bubble
@@ -258,7 +276,7 @@ Examples — these MUST become console_control calls (flat JSON, no nesting):
           text: "Online — a pi.dev agent running on your GPU. Ask about Abhishek (I'll pull up cards), or tell me things: “open doom”, “search lofi on youtube”, “what's the weather”. Tap the mic to talk.",
         }]);
       }
-      setTimeout(() => { scroll(); input?.focus(); }, 60);
+      setTimeout(() => scroll(), 60);
     } catch (e) {
       setProgress(`Couldn't load the model — ${String(e).slice(0, 120)}`);
     }
@@ -305,35 +323,43 @@ Examples — these MUST become console_control calls (flat JSON, no nesting):
     setVoice(true);
   }
 
-  // —— voice input: on-device Whisper (private); falls back to Web Speech ——
+  // —— voice input: PUSH-TO-TALK. Hold to talk, release to send. On-device
+  // Whisper (private) when available, else the Web Speech API. Three ways to
+  // hold the same trigger: the mic button (pointer), the N key (keyboard, when
+  // you're not typing in the box), or R2 on a controller. ——
   const SR = (window as any).SpeechRecognition ?? (window as any).webkitSpeechRecognition;
   const micAvailable = asrSupported() || !!SR;
   let recording: { stop: () => void; done: Promise<string> } | null = null;
+  let ptt = false; // a hold is currently in progress
 
-  function toggleMic() {
-    // tap once to record, tap again to stop → transcribe → send
-    if (listening()) {
-      if (recording) { recording.stop(); recording = null; }
-      else rec?.stop();
-      return;
-    }
+  function pttStart() {
+    if (ptt || busy() || !ready()) return; // needs a booted agent to send to
+    ptt = true;
     sfx.tickH();
+    setListening(true);
     if (asrSupported()) {
-      setListening(true);
       recording = record();
       recording.done
-        .then((text) => { setListening(false); if (text.trim()) { input.value = text; send(); } })
-        .catch(() => { setListening(false); });
+        .then((text) => { setListening(false); if (text.trim()) send(text); })
+        .catch(() => setListening(false));
     } else if (SR) {
+      let acc = "";
       rec = new SR();
       rec.lang = navigator.language || "en-US";
       rec.interimResults = true;
-      rec.onresult = (e: any) => { input.value = Array.from(e.results as any[]).map((r: any) => r[0].transcript).join(""); };
-      rec.onend = () => { setListening(false); if (input.value.trim()) send(); };
+      rec.onresult = (e: any) => { acc = Array.from(e.results as any[]).map((r: any) => r[0].transcript).join(""); };
+      rec.onend = () => { setListening(false); if (acc.trim()) send(acc); };
       rec.onerror = () => setListening(false);
-      setListening(true);
-      rec.start();
+      try { rec.start(); } catch { setListening(false); }
+    } else {
+      ptt = false; setListening(false);
     }
+  }
+  function pttEnd() {
+    if (!ptt) return;
+    ptt = false;
+    if (recording) { const r = recording; recording = null; r.stop(); } // .done transcribes + sends
+    else rec?.stop?.(); // SR onend transcribes + sends
   }
 
   return (
@@ -403,11 +429,14 @@ Examples — these MUST become console_control calls (flat JSON, no nesting):
                 </For>
                 <Show when={busy()}><div class="ai-msg ai-thinking">▋</div></Show>
               </div>
+              <Show when={listening()}>
+                <div class="ai-listening"><span class="ai-listening-dot" />Listening… <span class="ai-listening-dim">release to send</span></div>
+              </Show>
               <div class="ai-inputrow">
                 <input
                   ref={input}
                   class="ai-input"
-                  placeholder={busy() ? "thinking…" : listening() ? "listening… tap mic to stop" : "Ask, or say: open doom · search lofi on youtube · show his skills"}
+                  placeholder={busy() ? "thinking…" : listening() ? "listening… release to send" : micAvailable ? "Hold N or R2 to talk · or click here to type" : "Ask: open doom · his skills · what's the weather"}
                   disabled={busy()}
                   onKeyDown={(e) => {
                     e.stopPropagation();
@@ -419,8 +448,12 @@ Examples — these MUST become console_control calls (flat JSON, no nesting):
                   <button
                     class="ai-mic"
                     classList={{ listening: listening() }}
-                    title={listening() ? "tap to stop & transcribe" : "speak (on-device)"}
-                    onClick={toggleMic}
+                    title="Hold to talk (or hold N / R2)"
+                    onPointerDown={(e) => { e.preventDefault(); pttStart(); }}
+                    onPointerUp={pttEnd}
+                    onPointerLeave={(e) => { if (e.buttons) pttEnd(); }}
+                    onPointerCancel={pttEnd}
+                    onContextMenu={(e) => e.preventDefault()}
                   ><span class="ai-ico"><Icon name="mic" /></span></button>
                 </Show>
               </div>

@@ -172,6 +172,18 @@ img.status-avatar, img.ptile-avatar { object-fit: cover; border: 1px solid rgba(
 .item.selected .item-icon {
   width: 62px; height: 62px;
   filter: drop-shadow(0 0 14px rgba(255,255,255,0.6));
+  animation: iconPop 0.34s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+/* springy overshoot when an item becomes selected — game-feel "juice" */
+@keyframes iconPop { 0% { transform: scale(0.72); } 58% { transform: scale(1.14); } 100% { transform: scale(1); } }
+/* brief impact shake when an app launches */
+.xmb.shaking { animation: xmbShake 0.3s ease-out; }
+@keyframes xmbShake {
+  0%, 100% { transform: translate(0, 0); }
+  22% { transform: translate(-2.5px, 1.5px); }
+  44% { transform: translate(2.5px, -1.5px); }
+  66% { transform: translate(-1.5px, -1.5px); }
+  84% { transform: translate(1.5px, 1px); }
 }
 .item-icon svg { width: 100%; height: 100%; }
 .item-title {
@@ -490,24 +502,41 @@ img.status-avatar, img.ptile-avatar { object-fit: cover; border: 1px solid rgba(
 .weather-day-temp { font-size: 14px; }
 .weather-day-temp span { color: var(--dim); }
 
-/* ———— toasts ———— */
+/* ———— toasts — PlayStation-style glass notification pills ———— */
 .toasts {
-  position: absolute; top: 64px; right: 34px;
-  display: grid; gap: 10px; justify-items: end;
-  z-index: 5;
+  position: fixed; top: 62px; right: 26px;
+  display: grid; gap: 12px; justify-items: end;
+  z-index: 80; pointer-events: none;
 }
 .toast {
-  display: flex; align-items: center; gap: 12px;
-  background: rgba(6, 10, 20, 0.88);
-  border: 1px solid rgba(255,255,255,0.16);
-  border-radius: 6px;
-  padding: 12px 18px;
-  animation: toastIn 0.35s cubic-bezier(0.2, 0.9, 0.3, 1);
-  box-shadow: 0 8px 30px rgba(0,0,0,0.45);
+  display: flex; align-items: center; gap: 13px;
+  min-width: 248px; max-width: 400px;
+  padding: 12px 22px 12px 13px;
+  border-radius: 16px;
+  background: linear-gradient(135deg, rgba(14,20,38,0.8), rgba(6,10,22,0.9));
+  border: 1px solid color-mix(in oklab, var(--xmb-tint) 32%, rgba(255,255,255,0.14));
+  -webkit-backdrop-filter: blur(22px) saturate(1.35); backdrop-filter: blur(22px) saturate(1.35);
+  box-shadow: 0 16px 44px -10px rgba(0,0,0,0.62), inset 0 1px 0 rgba(255,255,255,0.06);
+  /* slide in from the right, hold, then glide back out just before unmount (~4.2s) */
+  animation: toastIn 0.42s cubic-bezier(0.16,1,0.3,1), toastOut 0.4s ease 3.78s forwards;
 }
-@keyframes toastIn { from { transform: translateX(40px); opacity: 0; } }
-.toast-title { font-size: 14px; font-weight: 500; letter-spacing: 0.04em; }
-.toast-sub { font-size: 12px; color: var(--dim); }
+@keyframes toastIn { from { transform: translateX(118%) scale(0.96); opacity: 0; } }
+@keyframes toastOut { to { transform: translateX(118%) scale(0.96); opacity: 0; } }
+.toast-ico {
+  flex: none; width: 42px; height: 42px; border-radius: 12px;
+  display: grid; place-items: center; color: #fff;
+  background: color-mix(in oklab, var(--xmb-tint) 30%, rgba(255,255,255,0.04));
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,0.08);
+}
+.toast-ico svg { width: 23px; height: 23px; }
+.toast-body { min-width: 0; }
+.toast-title { font-size: 13.5px; font-weight: 500; letter-spacing: 0.03em; color: #fff; }
+.toast-sub { font-size: 11.5px; color: rgba(255,255,255,0.55); margin-top: 2px; }
+/* trophy tiers: tint the icon + glow the pill */
+.toast-ico.tier-bronze { color: #cd7f32; } .toast-ico.tier-silver { color: #c8ccd4; }
+.toast-ico.tier-gold { color: #ffd24a; } .toast-ico.tier-platinum { color: #9fe8ff; }
+.toast.tier-gold { border-color: rgba(255,210,74,0.5); }
+.toast.tier-platinum { border-color: rgba(159,232,255,0.55); box-shadow: 0 16px 44px -10px rgba(0,0,0,0.62), 0 0 26px rgba(159,232,255,0.32); }
 
 /* ———— hint bar ———— */
 .hint-bar {
@@ -756,6 +785,13 @@ img.status-avatar, img.ptile-avatar { object-fit: cover; border: 1px solid rgba(
 .ai-mic:hover { border-color: #fff; }
 .ai-mic.listening { border-color: #e0483e; background: rgba(224,72,62,0.18); animation: micPulse 1.2s ease-in-out infinite; }
 @keyframes micPulse { 50% { box-shadow: 0 0 18px rgba(224,72,62,0.55); } }
+.ai-listening {
+  display: flex; align-items: center; gap: 9px; padding: 8px 14px; margin-bottom: 8px;
+  border-radius: 10px; font-size: 13px; letter-spacing: 0.04em;
+  background: rgba(224,72,62,0.14); border: 1px solid rgba(224,72,62,0.4); color: #fff;
+}
+.ai-listening-dot { width: 9px; height: 9px; border-radius: 50%; background: #e0483e; animation: micPulse 1s ease-in-out infinite; }
+.ai-listening-dim { color: rgba(255,255,255,0.5); }
 .ai-thinking { opacity: 0.5; }
 
 /* —— agent widgets: cards that pop into the chat —— */
