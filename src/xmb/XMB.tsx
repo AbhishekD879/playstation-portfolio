@@ -4,7 +4,7 @@ import { For, Show, createEffect, createMemo, createSignal, onCleanup, onMount }
 import { CATEGORIES, TROPHIES, type XmbItem } from "../content";
 import { AVATARS, PLATINUM, award, resizePhoto, updateProfile, type Profile } from "../profiles";
 import { CORES, PS2_EXTS, PSP_ONLY_EXTS, addGame, listGames, addPhoto, listPhotos, fsAccessSupported, type GameRecord, type PhotoRecord } from "../gamesdb";
-import { THEMES, applyCustomHsl, applyTheme, currentThemeIndex, loadCustomHsl } from "../theme";
+import { BG_MODES, THEMES, applyCustomHsl, applyTheme, bgMode, currentThemeIndex, loadCustomHsl, setBgMode } from "../theme";
 import { LAB_APPS, labEnabled, toggleLab } from "../labs";
 import { CHANNELS, fetchDevto, fetchGuide, fetchHN, fetchRadio, fetchRss, fetchWeather, wmo, type NewsEntry, type Weather } from "../apps";
 import * as sfx from "../audio";
@@ -1789,6 +1789,20 @@ export default function XMB(props: {
               style={{ background: "conic-gradient(hsl(0 60% 55%),hsl(60 60% 55%),hsl(120 60% 55%),hsl(180 60% 55%),hsl(240 60% 55%),hsl(300 60% 55%),hsl(360 60% 55%))" }}
               onClick={() => { setThemeIdx(THEMES.length); setThemeRow(0); const c = customHsl(); applyCustomHsl(c.h, c.s, c.l); sfx.tickH(); awardT("stylist"); }}
             />
+          </div>
+          <div class="bg-modes">
+            <span class="bg-modes-label">LIVING BACKGROUND</span>
+            <div class="bg-modes-row">
+              <For each={BG_MODES}>
+                {(m) => (
+                  <button class="bg-mode" classList={{ active: bgMode() === m.id }}
+                    onClick={() => { setBgMode(m.id); sfx.tickH(); }}>
+                    <span class="bg-mode-name">{m.label}</span>
+                    <span class="bg-mode-sub">{m.sub}</span>
+                  </button>
+                )}
+              </For>
+            </div>
           </div>
           <Show when={themeIdx() === THEMES.length}>
             <div class="theme-sliders">

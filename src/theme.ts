@@ -53,6 +53,21 @@ export function applyCustomHsl(h: number, s: number, l: number) {
   applyTheme(`hsl(${h} ${s}% ${l}%)`);
 }
 
+// —— living background: how alive the XMB wave is, and whether it reacts to
+// sound. Persisted like the tint; the Wave component reads the signal live. ——
+export type BgMode = "calm" | "waves" | "reactive" | "aurora";
+export const BG_MODES: { id: BgMode; label: string; sub: string }[] = [
+  { id: "calm", label: "Calm", sub: "gentle PS3 waves" },
+  { id: "waves", label: "Waves", sub: "fuller motion" },
+  { id: "reactive", label: "Reactive", sub: "pulses to sound" },
+  { id: "aurora", label: "Aurora", sub: "lively + glowing" },
+];
+const BG_KEY = "asp.bg";
+const storedBg = localStorage.getItem(BG_KEY) as BgMode | null;
+const [bgMode, setBgSig] = createSignal<BgMode>(storedBg && BG_MODES.some((m) => m.id === storedBg) ? storedBg : "reactive");
+export { bgMode };
+export function setBgMode(m: BgMode) { localStorage.setItem(BG_KEY, m); setBgSig(m); }
+
 /** Index into THEMES; THEMES.length means "custom colour". */
 export function currentThemeIndex(): number {
   const c = localStorage.getItem("asp.theme");

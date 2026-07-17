@@ -1252,7 +1252,38 @@ img.status-avatar, img.ptile-avatar { object-fit: cover; border: 1px solid rgba(
 
 /* ———— controller test ———— */
 .gptest { position: fixed; inset: 0; z-index: 41; background: linear-gradient(200deg, rgba(6,10,22,0.98), rgba(2,4,12,0.99)); padding: 30px min(8vw,80px); overflow-y: auto; }
-.gptest-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 18px; }
+.gptest-head { display: flex; justify-content: space-between; align-items: center; gap: 16px; margin-bottom: 12px; }
+/* 3D controller test */
+.ctl3d-toggle { display: inline-flex; gap: 8px; margin-left: auto; margin-right: 14px; }
+.ctl3d-toggle button {
+  padding: 7px 16px; border-radius: 999px; cursor: pointer; font-family: inherit; font-size: 12.5px; letter-spacing: 0.04em;
+  background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.16); color: rgba(255,255,255,0.7);
+}
+.ctl3d-toggle button.on {
+  background: color-mix(in oklab, var(--xmb-tint) 26%, rgba(255,255,255,0.05));
+  border-color: color-mix(in oklab, var(--xmb-tint) 60%, #fff); color: #fff;
+  box-shadow: 0 0 16px color-mix(in oklab, var(--xmb-tint) 35%, transparent);
+}
+.ctl3d-wrap { position: relative; height: min(62vh, 560px); }
+.ctl3d { position: absolute; inset: 0; }
+.ctl3d canvas { width: 100%; height: 100%; display: block; }
+.ctl3d-status { position: absolute; inset: 0; display: grid; place-items: center; color: var(--dim); font-size: 14px; }
+.ctl3d-active {
+  position: absolute; left: 50%; bottom: 8px; transform: translateX(-50%);
+  padding: 9px 22px; border-radius: 999px; font-size: 15px; letter-spacing: 0.06em; white-space: nowrap;
+  background: rgba(6,10,20,0.6); border: 1px solid rgba(255,255,255,0.12); color: rgba(255,255,255,0.5);
+  -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px); transition: all 0.12s;
+}
+.ctl3d-active.lit {
+  color: #fff; border-color: color-mix(in oklab, var(--xmb-tint) 60%, #fff);
+  background: color-mix(in oklab, var(--xmb-tint) 22%, rgba(6,10,20,0.6));
+  box-shadow: 0 0 24px color-mix(in oklab, var(--xmb-tint) 40%, transparent);
+}
+.gptest-foot { display: flex; align-items: center; gap: 9px; margin-top: 14px; font-size: 12.5px; color: var(--dim); }
+.gptest-foot.warn { color: #e0a03e; }
+.gptest-dot { width: 9px; height: 9px; border-radius: 50%; background: #666; }
+.gptest-dot.on { background: #4ad07f; box-shadow: 0 0 10px #4ad07f; }
+.gptest-credit { margin-left: auto; font-size: 11px; color: rgba(255,255,255,0.3); }
 .gptest-empty { display: grid; place-content: center; gap: 14px; text-align: center; height: 60vh; }
 .gptest-big { font-size: 24px; }
 .gptest-empty p { color: var(--dim); line-height: 1.6; font-size: 14.5px; max-width: 560px; }
@@ -1489,6 +1520,23 @@ img.status-avatar, img.ptile-avatar { object-fit: cover; border: 1px solid rgba(
 
 /* ── theme customization: custom swatch + HSL sliders ── */
 .theme-swatch-custom { position: relative; }
+.bg-modes { margin: 20px 2px 4px; }
+.bg-modes-label { display: block; font-size: 10px; letter-spacing: 0.2em; color: var(--dim); margin-bottom: 9px; }
+.bg-modes-row { display: flex; gap: 10px; flex-wrap: wrap; }
+.bg-mode {
+  flex: 1; min-width: 92px; display: flex; flex-direction: column; gap: 3px; align-items: flex-start;
+  padding: 10px 14px; border-radius: 11px; cursor: pointer; font-family: inherit; text-align: left;
+  background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); color: rgba(255,255,255,0.75);
+  transition: background 0.12s, border-color 0.12s, box-shadow 0.12s;
+}
+.bg-mode:hover { background: rgba(255,255,255,0.09); }
+.bg-mode.active {
+  background: color-mix(in oklab, var(--xmb-tint) 24%, rgba(255,255,255,0.05));
+  border-color: color-mix(in oklab, var(--xmb-tint) 60%, #fff); color: #fff;
+  box-shadow: 0 0 16px color-mix(in oklab, var(--xmb-tint) 35%, transparent);
+}
+.bg-mode-name { font-size: 13px; letter-spacing: 0.03em; }
+.bg-mode-sub { font-size: 10.5px; color: rgba(255,255,255,0.5); }
 .theme-sliders { display: flex; flex-direction: column; gap: 10px; margin: 18px 4px 6px; }
 .theme-slider {
   display: flex; align-items: center; gap: 14px; padding: 7px 12px; border-radius: 10px;
