@@ -87,7 +87,7 @@ export interface HostHandle {
 export function startHost(opts: {
   room: string;
   max: number;
-  stream: MediaStream;
+  stream?: MediaStream; // omit for data-only hosts (e.g. the phone controller)
   onJoinerInput: (joinerId: string, data: any) => void;
   onJoinerChange?: (ids: string[]) => void;
   onStatus?: (s: string) => void;
@@ -109,8 +109,8 @@ export function startHost(opts: {
       const peer = makePeer(ice, (c) => sig.send({ t: "signal", to: id, data: { candidate: c } }));
       peers.set(id, peer);
       notify();
-      // host is the media sender + offerer
-      for (const track of opts.stream.getTracks()) peer.pc.addTrack(track, opts.stream);
+      // host is the media sender + offerer (video only when a stream exists)
+      if (opts.stream) for (const track of opts.stream.getTracks()) peer.pc.addTrack(track, opts.stream);
       const dc = peer.pc.createDataChannel("input", { ordered: true });
       dc.onmessage = (e) => { try { opts.onJoinerInput(id, JSON.parse(e.data)); } catch { /* ignore */ } };
       peer.pc.onconnectionstatechange = () => {

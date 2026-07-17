@@ -4,6 +4,7 @@ import ProfileSelect from "./profileSelect";
 import Wave from "./xmb/Wave";
 import XMB from "./xmb/XMB";
 import Osk from "./xmb/Osk";
+import PhonePad from "./xmb/PhonePad";
 import GameSession from "./emulator/GameSession";
 import { createProfile, loadProfiles, updateProfile, type Profile } from "./profiles";
 import type { GameRecord } from "./gamesdb";
@@ -21,6 +22,13 @@ function defaultProfile(): Profile {
 }
 
 export default function App() {
+  // ?pad=CODE → this device IS a controller (opened by scanning the console's
+  // QR). Render only the touch pad — no boot, no wave, no XMB.
+  const padRoom = new URLSearchParams(location.search).get("pad");
+  if (padRoom && /^[A-Za-z0-9]{1,8}$/.test(padRoom)) {
+    return <PhonePad room={padRoom.toUpperCase()} />;
+  }
+
   // ejecting a disc restarts the console — resume straight to the XMB
   const resumeId = sessionStorage.getItem("asp.resume");
   const resumed = resumeId ? loadProfiles().find((p) => p.id === resumeId) : undefined;

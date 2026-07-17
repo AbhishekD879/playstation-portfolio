@@ -8,7 +8,8 @@ import { THEMES, applyCustomHsl, applyTheme, currentThemeIndex, loadCustomHsl } 
 import { LAB_APPS, labEnabled, toggleLab } from "../labs";
 import { CHANNELS, fetchDevto, fetchGuide, fetchHN, fetchRadio, fetchRss, fetchWeather, wmo, type NewsEntry, type Weather } from "../apps";
 import * as sfx from "../audio";
-import { onNav, onPadChange, rumble, rumbleEnabled, setNavEnabled, setRumble } from "../input";
+import { onNav, onPadChange, onSystemButton, rumble, rumbleEnabled, setNavEnabled, setRumble } from "../input";
+import ControlCenter from "./ControlCenter";
 import { asrSupported, record } from "../asr";
 import { registerActions } from "../consoleBus";
 import { Icon } from "./icons";
@@ -101,6 +102,8 @@ export default function XMB(props: {
   const [app, setApp] = createSignal<null | "doom" | "chess" | "trivia" | "flash" | "cinema" | "podcasts" | "library" | "map" | "ai" | "webamp" | "youtube" | "timemachine" | "art" | "wiki" | "lichess" | "ps2" | "pc" | "guestbook" | "browser" | "visualizer" | "studio" | "code" | "manual" | "ps2home" | "psphome" | "retrohome">(null);
   const [ps2Boot, setPs2Boot] = createSignal<GameRecord | null>(null);
   const [ps2Join, setPs2Join] = createSignal(false);
+  const [ccOpen, setCcOpen] = createSignal(false);
+  let ccNav: ((a: Parameters<Parameters<typeof onNav>[0]>[0]) => void) | undefined;
 
   // route a library record to the right engine: PS2 discs boot the Play! app
   // (auto-loading the disc), everything else goes to the EmulatorJS session
@@ -300,6 +303,21 @@ export default function XMB(props: {
     }
   };
   onMount(() => awardT("boot"));
+
+  // ` (backquote) toggles the Control Center — keyboard twin of the PS button.
+  // Capture phase so games underneath never see it; text fields keep their `.
+  onMount(() => {
+    const key = (e: KeyboardEvent) => {
+      if (e.key !== "`" || !e.isTrusted) return;
+      const t = (e.target as HTMLElement)?.tagName;
+      if (t === "INPUT" || t === "TEXTAREA") return;
+      e.stopPropagation(); e.preventDefault();
+      sfx.tickH();
+      setCcOpen(!ccOpen());
+    };
+    document.addEventListener("keydown", key, true);
+    onCleanup(() => document.removeEventListener("keydown", key, true));
+  });
 
   const markSeen = (id: string) => {
     props.profile.seen[id] = true;
@@ -968,6 +986,7 @@ export default function XMB(props: {
   const handleNav = (action: Parameters<Parameters<typeof onNav>[0]>[0], src?: import("../input").NavSource) => {
     lastActive = Date.now();
     if (saver()) { setSaver(false); return; }
+    if (ccOpen()) { ccNav?.(action); return; } // Control Center owns the pad while open
     if (padTest()) { if (action === "back") setPadTest(false); return; }
     if (app()) {
       // bound apps route their own nav; the rest are keyboard-driven owner apps
@@ -1147,6 +1166,9 @@ export default function XMB(props: {
     }
   };
   onNav(handleNav);
+  // the PS/Guide button (pad index 16) toggles the Control Center from
+  // anywhere — even mid-game while a bridge claims the pad
+  onSystemButton(() => { sfx.tickH(); setCcOpen(!ccOpen()); });
 
   // mouse wheel scrolls the item list
   let wheelAcc = 0;
@@ -1491,6 +1513,16 @@ export default function XMB(props: {
       <Show when={app() === "studio"}><Studio onClose={() => setApp(null)} /></Show>
       <Show when={app() === "code"}><CodeApp onClose={() => setApp(null)} /></Show>
       <Show when={app() === "manual"}><Manual onClose={() => setApp(null)} /></Show>
+
+      {/* Control Center — PS button / ` from anywhere */}
+      <ControlCenter
+        open={ccOpen()}
+        appOpen={!!app()}
+        onClose={() => setCcOpen(false)}
+        onHome={() => { setPs2Boot(null); setPs2Join(false); setApp(null); }}
+        onTheme={() => { setThemeIdx(currentThemeIndex()); setThemeRow(0); setCustomHsl(loadCustomHsl()); setThemesOpen(true); }}
+        bind={(f) => (ccNav = f)}
+      />
       <Show when={app() === "ps2home"}>
         <GameShelf
           bind={(f) => (appNav = f)}

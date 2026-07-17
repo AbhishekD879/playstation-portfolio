@@ -21,6 +21,18 @@ export function setNavEnabled(on: boolean) { enabled = on; }
 export function setOskBlock(on: boolean) { oskBlock = on; }
 export function claimPad(on: boolean) { padClaims = Math.max(0, padClaims + (on ? 1 : -1)); }
 
+// —— the "PS button" (Guide, index 16): SYSTEM-level, works even while a game
+// claims the pad or nav is disabled — it opens the Control Center. ——
+let sysBtnCb: (() => void) | null = null;
+let sysBtnPrev = false;
+export function onSystemButton(cb: () => void) { sysBtnCb = cb; }
+function pollSystemButton() {
+  const p = primaryPad();
+  const on = !!p?.buttons[16]?.pressed;
+  if (on && !sysBtnPrev) sysBtnCb?.();
+  sysBtnPrev = on;
+}
+
 const KEYMAP: Record<string, NavAction> = {
   ArrowLeft: "left", a: "left",
   ArrowRight: "right", d: "right",
@@ -85,7 +97,11 @@ export function rumble(strong = 0.6, weak = 0.4, duration = 120) {
   if (!rumbleOn) return;
   const act = (primaryPad() as any)?.vibrationActuator;
   act?.playEffect?.("dual-rumble", { duration, strongMagnitude: strong, weakMagnitude: weak }).catch?.(() => {});
+  dsHook?.(strong, weak, duration); // DualSense-over-WebHID, when connected
 }
+// registered by dualsense.ts consumers — avoids a hard import cycle
+let dsHook: ((s: number, w: number, d: number) => void) | null = null;
+export function setRumbleHook(h: ((s: number, w: number, d: number) => void) | null) { dsHook = h; }
 
 // Connection state is POLL-based, not event-based: browsers (esp. Xbox pads on
 // macOS) fire spurious `gamepaddisconnected` for phantom/duplicate slots the
@@ -204,7 +220,8 @@ function tickRepeats(now: number) {
 }
 
 function loop(now: number) {
-  trackPad();       // connection detection runs always (even when nav is disabled)
+  trackPad();        // connection detection runs always (even when nav is disabled)
+  pollSystemButton(); // PS/Guide button is system-level — always watched
   tickRepeats(now);
   pollPad(now);
   requestAnimationFrame(loop);
