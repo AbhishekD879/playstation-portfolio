@@ -14,7 +14,6 @@ export interface XmbItem {
   title: string;
   sub?: string;
   icon: string; // key into icons.tsx
-  group?: string; // optional sub-section header shown above the first item of a run
   action:
     | { type: "panel"; heading: string; tag?: string; body: string[] }
     | { type: "link"; href: string }
@@ -232,7 +231,7 @@ export const CATEGORIES: XmbCategory[] = [
     icon: "user",
     items: [
       {
-        id: "about-owner", title: "About Abhishek", sub: OWNER.title, icon: "id", group: "Profile",
+        id: "about-owner", title: "About Abhishek", sub: OWNER.title, icon: "id",
         action: {
           type: "panel", heading: OWNER.name, tag: OWNER.title + " · " + OWNER.location,
           body: [
@@ -242,13 +241,13 @@ export const CATEGORIES: XmbCategory[] = [
           ],
         },
       },
-      { id: "resume", title: "Download Résumé", sub: "PDF — view or save a copy", icon: "disc-doc", group: "Profile", action: { type: "link", href: "/resume.pdf" } },
-      { id: "ai", title: "AI Abhishek", sub: "On-device LLM — ask about my work", icon: "chip", group: "On This Console", action: { type: "ai-chat" } },
-      { id: "guestbook", title: "Guestbook", sub: "Sign the console — notes from visitors", icon: "pen", group: "On This Console", action: { type: "guestbook" } },
-      { id: "whatsnew", title: "What's New", sub: "Your activity on this console", icon: "spark", group: "On This Console", action: { type: "whats-new" } },
-      { id: "trophies", title: "Trophy Collection", sub: "Your haul so far", icon: "trophy", group: "On This Console", action: { type: "trophies" } },
-      { id: "photo", title: "Profile Photo", sub: "Upload your own avatar", icon: "camera", group: "Account", action: { type: "photo" } },
-      { id: "switch", title: "Switch User", sub: "Back to profile select", icon: "users", group: "Account", action: { type: "switch-user" } },
+      { id: "resume", title: "Download Résumé", sub: "PDF — view or save a copy", icon: "disc-doc", action: { type: "link", href: "/resume.pdf" } },
+      { id: "ai", title: "AI Abhishek", sub: "On-device LLM — ask about my work", icon: "chip", action: { type: "ai-chat" } },
+      { id: "guestbook", title: "Guestbook", sub: "Sign the console — notes from visitors", icon: "pen", action: { type: "guestbook" } },
+      { id: "whatsnew", title: "What's New", sub: "Your activity on this console", icon: "spark", action: { type: "whats-new" } },
+      { id: "trophies", title: "Trophy Collection", sub: "Your haul so far", icon: "trophy", action: { type: "trophies" } },
+      { id: "photo", title: "Profile Photo", sub: "Upload your own avatar", icon: "camera", action: { type: "photo" } },
+      { id: "switch", title: "Switch User", sub: "Back to profile select", icon: "users", action: { type: "switch-user" } },
     ],
   },
   {
@@ -342,12 +341,12 @@ export const CATEGORIES: XmbCategory[] = [
     label: "Web",
     icon: "globe",
     items: [
-      { id: "browser", title: "Browser", sub: "Search & read the web — reader mode", icon: "globe", group: "Read & Reference", action: { type: "browser" } },
-      { id: "wiki", title: "Wikipedia", sub: "Search & read, console style", icon: "book", group: "Read & Reference", action: { type: "wiki" } },
-      { id: "dict", title: "Dictionary", sub: "Look up any English word", icon: "id", group: "Read & Reference", action: { type: "dictionary" } },
-      { id: "tm", title: "Time Machine", sub: "Browse any website in 1996–today", icon: "clock", group: "Read & Reference", action: { type: "timemachine" } },
-      { id: "map", title: "Planet Earth", sub: "Live globe — world tour, ISS, quakes & rain", icon: "globe", group: "Explore", action: { type: "map" } },
-      { id: "weather", title: "Weather", sub: "Live conditions & forecast", icon: "cloud", group: "Explore", action: { type: "weather" } },
+      { id: "browser", title: "Browser", sub: "Search & read the web — reader mode", icon: "globe", action: { type: "browser" } },
+      { id: "wiki", title: "Wikipedia", sub: "Search & read, console style", icon: "book", action: { type: "wiki" } },
+      { id: "dict", title: "Dictionary", sub: "Look up any English word", icon: "id", action: { type: "dictionary" } },
+      { id: "tm", title: "Time Machine", sub: "Browse any website in 1996–today", icon: "clock", action: { type: "timemachine" } },
+      { id: "map", title: "Planet Earth", sub: "Live globe — world tour, ISS, quakes & rain", icon: "globe", action: { type: "map" } },
+      { id: "weather", title: "Weather", sub: "Live conditions & forecast", icon: "cloud", action: { type: "weather" } },
     ],
   },
   {
@@ -365,18 +364,18 @@ export const CATEGORIES: XmbCategory[] = [
     label: "Settings",
     icon: "gear",
     items: [
-      { id: "theme", title: "Theme Settings", sub: "Presets & fully custom colours", icon: "spark", group: "Personalization", action: { type: "themes" } },
-      { id: "sound", title: "Sound Settings", sub: "Volume, navigation sounds & mute", icon: "speaker", group: "Personalization", action: { type: "sound-settings" } },
-      { id: "labs", title: "Labs", sub: "Feature flags — toggle every system feature & app", icon: "spark", group: "Personalization", action: { type: "labs" } },
-      { id: "datetime", title: "Date and Time Settings", sub: "12-hour / 24-hour clock", icon: "info", group: "Personalization", action: { type: "clock-format" } },
-      { id: "powersave", title: "Power Save Settings", sub: "Screen saver — start time", icon: "power", group: "Personalization", action: { type: "saver-cycle" } },
-      { id: "rumble", title: "Vibration", sub: "Controller rumble on / off", icon: "gamepad", group: "Controller", action: { type: "rumble-toggle" } },
-      { id: "gesture", title: "Camera Navigation", sub: "Beta — wave at the webcam to browse", icon: "camera", group: "Controller", action: { type: "gesture-toggle" } },
-      { id: "padtest", title: "Controller Test", sub: "See your pad in 3D — buttons light up live", icon: "gamepad", group: "Controller", action: { type: "gamepad-test" } },
-      { id: "sysinfo", title: "System Information", sub: "Hardware, display & battery", icon: "info", group: "System", action: { type: "sysinfo" } },
-      { id: "backup", title: "Back Up Console Data", sub: "Profiles, trophies & links → JSON file", icon: "disc-doc", group: "System", action: { type: "backup" } },
-      { id: "restore", title: "Restore Backup", sub: "Load a console backup file", icon: "folder", group: "System", action: { type: "restore" } },
-      { id: "restart", title: "Restart Console", sub: "Full boot sequence", icon: "power", group: "System", action: { type: "restart" } },
+      { id: "theme", title: "Theme Settings", sub: "Presets & fully custom colours", icon: "spark", action: { type: "themes" } },
+      { id: "sound", title: "Sound Settings", sub: "Volume, navigation sounds & mute", icon: "speaker", action: { type: "sound-settings" } },
+      { id: "labs", title: "Labs", sub: "Feature flags — toggle every system feature & app", icon: "spark", action: { type: "labs" } },
+      { id: "datetime", title: "Date and Time Settings", sub: "12-hour / 24-hour clock", icon: "info", action: { type: "clock-format" } },
+      { id: "powersave", title: "Power Save Settings", sub: "Screen saver — start time", icon: "power", action: { type: "saver-cycle" } },
+      { id: "rumble", title: "Vibration", sub: "Controller rumble on / off", icon: "gamepad", action: { type: "rumble-toggle" } },
+      { id: "gesture", title: "Camera Navigation", sub: "Beta — wave at the webcam to browse", icon: "camera", action: { type: "gesture-toggle" } },
+      { id: "padtest", title: "Controller Test", sub: "See your pad in 3D — buttons light up live", icon: "gamepad", action: { type: "gamepad-test" } },
+      { id: "sysinfo", title: "System Information", sub: "Hardware, display & battery", icon: "info", action: { type: "sysinfo" } },
+      { id: "backup", title: "Back Up Console Data", sub: "Profiles, trophies & links → JSON file", icon: "disc-doc", action: { type: "backup" } },
+      { id: "restore", title: "Restore Backup", sub: "Load a console backup file", icon: "folder", action: { type: "restore" } },
+      { id: "restart", title: "Restart Console", sub: "Full boot sequence", icon: "power", action: { type: "restart" } },
     ],
   },
 ];

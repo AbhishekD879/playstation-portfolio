@@ -161,36 +161,36 @@ export default function XMB(props: {
   const pspCount = () => games().filter((g) => g.core === "psp").length;
   const retroCount = () => games().filter((g) => g.sys !== "ps2" && g.core !== "psp").length;
   const gameItems = createMemo<XmbItem[]>(() => [
-    { id: "doom", title: "DOOM", sub: "Built-in game · the 1993 shareware, playable now", icon: "skull", group: "Arcade & Classics", action: { type: "doom" } },
-    { id: "chess", title: "Chess vs Stockfish", sub: "Built-in game · the real engine, on this device", icon: "knight", group: "Arcade & Classics", action: { type: "chess" } },
-    { id: "trivia", title: "Trivia Arcade", sub: "Built-in game · 10 questions, endless rounds", icon: "question", group: "Arcade & Classics", action: { type: "trivia" } },
-    { id: "flash", title: "Flash Arcade", sub: "Built-in arcade · classic Flash games, streamed", icon: "lightning", group: "Arcade & Classics", action: { type: "flash" } },
-    { id: "ps2", title: "PlayStation 2", sub: `Library, downloads & 2-player online${ps2Count() ? ` · ${ps2Count()} in your shelf` : ""}`, icon: "disc", group: "Emulators", action: { type: "ps2-home" } },
-    { id: "psp", title: "PlayStation Portable", sub: `PSP library & downloads — experimental (PPSSPP)${pspCount() ? ` · ${pspCount()} in your shelf` : ""}`, icon: "disc", group: "Emulators", action: { type: "psp-home" } },
-    { id: "retro", title: "Retro Games", sub: `NES · SNES · GBA · N64 & more — library + downloads${retroCount() ? ` · ${retroCount()} in your shelf` : ""}`, icon: "gamepad", group: "Emulators", action: { type: "retro-home" } },
-    { id: "lichesstv", title: "Lichess TV", sub: "Spectate · live grandmaster games", icon: "knight", group: "Watch Live", action: { type: "lichess-tv" } },
+    { id: "doom", title: "DOOM", sub: "Built-in game · the 1993 shareware, playable now", icon: "skull", action: { type: "doom" } },
+    { id: "chess", title: "Chess vs Stockfish", sub: "Built-in game · the real engine, on this device", icon: "knight", action: { type: "chess" } },
+    { id: "trivia", title: "Trivia Arcade", sub: "Built-in game · 10 questions, endless rounds", icon: "question", action: { type: "trivia" } },
+    { id: "flash", title: "Flash Arcade", sub: "Built-in arcade · classic Flash games, streamed", icon: "lightning", action: { type: "flash" } },
+    { id: "ps2", title: "PlayStation 2", sub: `Library, downloads & 2-player online${ps2Count() ? ` · ${ps2Count()} in your shelf` : ""}`, icon: "disc", action: { type: "ps2-home" } },
+    { id: "psp", title: "PlayStation Portable", sub: `PSP library & downloads — experimental (PPSSPP)${pspCount() ? ` · ${pspCount()} in your shelf` : ""}`, icon: "disc", action: { type: "psp-home" } },
+    { id: "retro", title: "Retro Games", sub: `NES · SNES · GBA · N64 & more — library + downloads${retroCount() ? ` · ${retroCount()} in your shelf` : ""}`, icon: "gamepad", action: { type: "retro-home" } },
+    { id: "lichesstv", title: "Lichess TV", sub: "Spectate · live grandmaster games", icon: "knight", action: { type: "lichess-tv" } },
   ]);
 
   const RETRO_SYSTEMS = ["gba", "gb", "nes", "snes", "segaMD", "n64", "nds"] as const;
 
   const musicItems = createMemo<XmbItem[]>(() => [
-    { id: "radio-guide", title: "Radio Stations", sub: "Search ~3,000 live stations worldwide", icon: "globe", group: "Stations & Radio", action: { type: "radio-guide" } },
-    { id: "podcasts", title: "Podcasts", sub: "Search any show — plays in the background", icon: "mic", group: "Stations & Radio", action: { type: "podcasts" } },
-    { id: "winamp", title: "Winamp", sub: "The 1997 legend, resurrected in JS", icon: "lightning", group: "Stations & Radio", action: { type: "webamp" } },
+    { id: "radio-guide", title: "Radio Stations", sub: "Search ~3,000 live stations worldwide", icon: "globe", action: { type: "radio-guide" } },
+    { id: "podcasts", title: "Podcasts", sub: "Search any show — plays in the background", icon: "mic", action: { type: "podcasts" } },
+    { id: "winamp", title: "Winamp", sub: "The 1997 legend, resurrected in JS", icon: "lightning", action: { type: "webamp" } },
     ...(station()
-      ? [{ id: "radio-stop", title: `■ Stop — ${station()!.label}`, sub: "Now playing", icon: "speaker", group: "Stations & Radio", action: { type: "radio-play" as const, url: "", label: "" } }]
+      ? [{ id: "radio-stop", title: `■ Stop — ${station()!.label}`, sub: "Now playing", icon: "speaker", action: { type: "radio-play" as const, url: "", label: "" } }]
       : []),
     ...recentStations()
       .filter((r) => r.label !== station()?.label)
       .map((r, i) => ({
-        id: `rh-${i}`, title: r.label, sub: "Recently played station", icon: "note", group: "Stations & Radio",
+        id: `rh-${i}`, title: r.label, sub: "Recently played station", icon: "note",
         action: { type: "radio-play" as const, url: r.url, label: r.label },
       })),
-    { id: "radio", title: "Console Radio", sub: "Generative lo-fi — synthesized live", icon: "note", group: "Stations & Radio", action: { type: "music-toggle" } },
-    { id: "visualizer", title: "Visualizer", sub: "Music visualizations — reacts to the radio & mic", icon: "wave", group: "Make Sound", action: { type: "visualizer" } },
-    { id: "studio", title: "Studio", sub: "Playable synth, drum machine & MIDI — synthesized live", icon: "note", group: "Make Sound", action: { type: "studio" } },
+    { id: "radio", title: "Console Radio", sub: "Generative lo-fi — synthesized live", icon: "note", action: { type: "music-toggle" } },
+    { id: "visualizer", title: "Visualizer", sub: "Music visualizations — reacts to the radio & mic", icon: "wave", action: { type: "visualizer" } },
+    { id: "studio", title: "Studio", sub: "Playable synth, drum machine & MIDI — synthesized live", icon: "note", action: { type: "studio" } },
     {
-      id: "sp-default", title: "lofi beats", sub: "Spotify · curated focus playlist", icon: "disc", group: "Spotify",
+      id: "sp-default", title: "lofi beats", sub: "Spotify · curated focus playlist", icon: "disc",
       action: { type: "spotify", url: "https://open.spotify.com/embed/playlist/37i9dQZF1DWWQRwui0ExPn", label: "lofi beats" },
     },
     ...links().map((l, i) => ({
@@ -198,10 +198,9 @@ export default function XMB(props: {
       title: l.label,
       sub: "Spotify · your link",
       icon: "disc",
-      group: "Spotify",
       action: { type: "spotify" as const, url: l.url, label: l.label },
     })),
-    { id: "sp-link", title: "Connect Spotify…", sub: "Paste any playlist, album or track link", icon: "plus", group: "Spotify", action: { type: "spotify-link" } },
+    { id: "sp-link", title: "Connect Spotify…", sub: "Paste any playlist, album or track link", icon: "plus", action: { type: "spotify-link" } },
   ]);
 
   const tvItems = createMemo<XmbItem[]>(() => [
@@ -246,37 +245,7 @@ export default function XMB(props: {
     : CATEGORIES[ci].id === "photo" ? photoItems()
     : CATEGORIES[ci].items).filter((i) => labEnabled(i.id));
 
-  // —— XMB folders: authentic drill-in. A category's column shows its groups as
-  // folders (plus any ungrouped items); press → (or ✕) on a folder to ENTER it
-  // — its items become the column — and ← / ◯ to go back. Ungrouped categories
-  // are a plain flat list. (Per the PS3/PSP XMB: items expand into columns; →
-  // enters, ← / ◯ backs out — no accordion, no chevrons/counts clutter.) ——
-  type Row = { kind: "folder"; group: string; count: number } | { kind: "item"; item: XmbItem };
-  const [drill, setDrill] = createSignal<Record<string, string | null>>({});
-  const drillOf = (ci: number) => drill()[CATEGORIES[ci].id] ?? null;
-  const rowsOf = (ci: number): Row[] => {
-    const items = itemsOf(ci);
-    const cur = drillOf(ci);
-    if (cur) return items.filter((it) => (it.group ?? "") === cur).map((item) => ({ kind: "item" as const, item }));
-    if (!items.some((it) => it.group)) return items.map((item) => ({ kind: "item" as const, item }));
-    const rows: Row[] = [];
-    const seen = new Set<string>();
-    for (const it of items) {
-      const g = it.group ?? "";
-      if (!g) { rows.push({ kind: "item", item: it }); continue; }
-      if (!seen.has(g)) { seen.add(g); rows.push({ kind: "folder", group: g, count: items.filter((x) => (x.group ?? "") === g).length }); }
-    }
-    return rows;
-  };
-  const colRows = createMemo<Row[]>(() => rowsOf(cat()));
-  const enterFolder = (ci: number, group: string) => { setDrill({ ...drill(), [CATEGORIES[ci].id]: group }); setSels({ ...sels(), [CATEGORIES[ci].id]: 0 }); sfx.confirm(); };
-  const exitFolder = (ci: number) => {
-    const cur = drillOf(ci);
-    setDrill({ ...drill(), [CATEGORIES[ci].id]: null });
-    sfx.back();
-    if (cur) { const idx = rowsOf(ci).findIndex((r) => r.kind === "folder" && r.group === cur); if (idx >= 0) setSels({ ...sels(), [CATEGORIES[ci].id]: idx }); }
-  };
-  const selOf = (ci: number) => Math.min(sels()[CATEGORIES[ci].id] ?? 0, Math.max(0, rowsOf(ci).length - 1));
+  const selOf = (ci: number) => Math.min(sels()[CATEGORIES[ci].id] ?? 0, Math.max(0, itemsOf(ci).length - 1));
 
   // a category with every app switched off in Labs simply leaves the crossbar;
   // cat() stays a raw CATEGORIES index, only rendering + nav use visible slots
@@ -1114,9 +1083,7 @@ export default function XMB(props: {
   const launchSearch = (h: SearchHit) => {
     setSearchOpen(false);
     setCat(h.ci);
-    // reveal the result: drill into its folder (if any) and select its row
-    setDrill({ ...drill(), [CATEGORIES[h.ci].id]: h.item.group ?? null });
-    const ri = rowsOf(h.ci).findIndex((r) => r.kind === "item" && r.item.id === h.item.id);
+    const ri = itemsOf(h.ci).findIndex((it) => it.id === h.item.id);
     if (ri >= 0) setSels({ ...sels(), [CATEGORIES[h.ci].id]: ri });
     act(h.item);
   };
@@ -1279,17 +1246,14 @@ export default function XMB(props: {
       if (action === "back" || action === "confirm") { sfx.back(); setPanel(null); }
       return;
     }
-    const rows = colRows();
+    const items = itemsOf(cat());
     switch (action) {
       case "left": {
-        if (drillOf(cat())) { exitFolder(cat()); break; } // ← backs out of a folder first
         const vs = visCats(), p = vs.indexOf(cat());
         if (p > 0) { setCat(vs[p - 1]); sfx.tickH(); }
         break;
       }
       case "right": {
-        const row = rows[selOf(cat())];
-        if (row?.kind === "folder") { enterFolder(cat(), row.group); break; } // → drills into a folder
         const vs = visCats(), p = vs.indexOf(cat());
         if (p >= 0 && p < vs.length - 1) { setCat(vs[p + 1]); sfx.tickH(); }
         break;
@@ -1301,21 +1265,18 @@ export default function XMB(props: {
       }
       case "down": {
         const s = selOf(cat());
-        if (s < rows.length - 1) { setSels({ ...sels(), [CATEGORIES[cat()].id]: s + 1 }); sfx.tickV(); }
+        if (s < items.length - 1) { setSels({ ...sels(), [CATEGORIES[cat()].id]: s + 1 }); sfx.tickV(); }
         break;
       }
       case "confirm": {
-        const row = rows[selOf(cat())];
-        if (!row) break;
-        if (row.kind === "folder") enterFolder(cat(), row.group);
-        else { rumble(0.35, 0.25, 60); act(row.item); } // light tactile tick on select
+        const it = items[selOf(cat())];
+        if (it) { rumble(0.35, 0.25, 60); act(it); } // light tactile tick on select
         break;
       }
       case "options":
         setTrophiesOpen(true);
         break;
       case "back":
-        if (drillOf(cat())) exitFolder(cat()); // ◯ backs out of a folder
         break;
     }
   };
@@ -1504,48 +1465,28 @@ export default function XMB(props: {
         </For>
       </div>
 
-      {/* breadcrumb — shown while drilled inside a folder (◯/← to go back) */}
-      <Show when={drillOf(cat())}>
-        <button class="drill-crumb" onClick={() => exitFolder(cat())}>
-          <span class="btn-o" /> {CATEGORIES[cat()].label} <span class="drill-sep">›</span> {drillOf(cat())}
-        </button>
-      </Show>
-
-      {/* item column for the active category — folders drill into their items */}
+      {/* item column for the active category */}
       <div class="item-col">
-        <For each={colRows()}>
-          {(row, i) => {
+        <For each={itemsOf(cat())}>
+          {(item, i) => {
             const d = () => i() - selOf(cat());
             const onClick = () => {
               setSels({ ...sels(), [CATEGORIES[cat()].id]: i() });
-              if (row.kind === "folder") enterFolder(cat(), row.group);
-              else { sfx.confirm(); act(row.item); }
+              sfx.confirm();
+              act(item);
             };
             return (
               <div
                 class="item"
-                classList={{ selected: d() === 0, above: d() < 0, offscreen: d() > 4 || d() < -3, folder: row.kind === "folder" }}
+                classList={{ selected: d() === 0, above: d() < 0, offscreen: d() > 4 || d() < -3 }}
                 style={{ transform: `translateY(${itemY(d())}px)` }}
                 onClick={onClick}
               >
-                {row.kind === "folder" ? (
-                  <>
-                    <div class="item-icon"><Icon name="folder" /></div>
-                    <div class="item-text">
-                      <div class="item-title">{row.group}</div>
-                      <Show when={d() === 0}><div class="item-sub">{row.count} item{row.count === 1 ? "" : "s"}</div></Show>
-                    </div>
-                    <span class="folder-arrow">›</span>
-                  </>
-                ) : (
-                  <>
-                    <div class="item-icon"><Icon name={row.item.icon} /></div>
-                    <div class="item-text">
-                      <div class="item-title">{row.item.title}</div>
-                      <Show when={d() === 0 && row.item.sub}><div class="item-sub">{row.item.sub}</div></Show>
-                    </div>
-                  </>
-                )}
+                <div class="item-icon"><Icon name={item.icon} /></div>
+                <div class="item-text">
+                  <div class="item-title">{item.title}</div>
+                  <Show when={d() === 0 && item.sub}><div class="item-sub">{item.sub}</div></Show>
+                </div>
               </div>
             );
           }}

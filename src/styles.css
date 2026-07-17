@@ -163,22 +163,6 @@ img.status-avatar, img.ptile-avatar { object-fit: cover; border: 1px solid rgba(
 .item.above { opacity: 0.35; }
 .item.selected { opacity: 1; }
 .item.offscreen { opacity: 0; pointer-events: none; }
-/* XMB folders — a folder row you drill into with → (items become the column) */
-.item.folder .item-icon { color: color-mix(in oklab, var(--xmb-tint) 62%, #fff); }
-.folder-arrow { margin-left: auto; padding-left: 14px; font-size: 24px; line-height: 1; color: color-mix(in oklab, var(--xmb-tint) 60%, #fff); opacity: 0.55; }
-.item.selected .folder-arrow { opacity: 1; }
-/* breadcrumb shown while drilled inside a folder (◯ / ← to go back) */
-.drill-crumb {
-  position: absolute; top: 92px; left: max(6vw, 38px); z-index: 4;
-  display: inline-flex; align-items: center; gap: 9px;
-  padding: 7px 15px; border-radius: 999px; cursor: pointer; font-family: inherit;
-  font-size: 12px; letter-spacing: 0.12em; text-transform: uppercase; color: rgba(255,255,255,0.75);
-  background: rgba(6,10,20,0.45); border: 1px solid color-mix(in oklab, var(--xmb-tint) 32%, rgba(255,255,255,0.12));
-  -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px);
-  animation: fadeIn 0.2s ease-out;
-}
-.drill-crumb .btn-o { width: 15px; height: 15px; }
-.drill-sep { color: color-mix(in oklab, var(--xmb-tint) 55%, #fff); padding: 0 2px; }
 .item-icon {
   width: 44px; height: 44px; flex: 0 0 auto;
   color: #fff; opacity: 0.9;
