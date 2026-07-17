@@ -7,6 +7,7 @@
 import { createSignal, onCleanup, onMount } from "solid-js";
 import * as THREE from "three";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
+import { RoomEnvironment } from "three/examples/jsm/environments/RoomEnvironment.js";
 import { tint } from "../theme";
 import * as sfx from "../audio";
 import { rumble } from "../input";
@@ -49,14 +50,14 @@ const LAYOUT: Record<PadModel, Spot[]> = {
     { id: "l3", p: [-0.42, 0.08, 0.42], kind: "stickL" }, { id: "r3", p: [0.42, 0.08, 0.42], kind: "stickR" },
   ],
   xbox: [
-    { id: "triangle", p: [0.6, 0.5, 0.7] }, { id: "circle", p: [0.76, 0.33, 0.7] },
-    { id: "cross", p: [0.6, 0.16, 0.7] }, { id: "square", p: [0.44, 0.33, 0.7] },
-    { id: "up", p: [-0.29, 0.02, 0.7] }, { id: "down", p: [-0.29, -0.32, 0.7] },
-    { id: "left", p: [-0.44, -0.15, 0.7] }, { id: "right", p: [-0.14, -0.15, 0.7] },
-    { id: "share", p: [-0.13, 0.5, 0.7] }, { id: "options", p: [0.16, 0.5, 0.7] },
-    { id: "ps", p: [0, 0.72, 0.72] },
-    { id: "l1", p: [-0.7, 0.85, 0.35] }, { id: "r1", p: [0.7, 0.85, 0.35] },
-    { id: "l2", p: [-0.7, 1.0, 0.0], kind: "trig" }, { id: "r2", p: [0.7, 1.0, 0.0], kind: "trig" },
+    { id: "triangle", p: [0.6, 0.54, 0.7] }, { id: "circle", p: [0.76, 0.39, 0.7] },
+    { id: "cross", p: [0.6, 0.24, 0.7] }, { id: "square", p: [0.44, 0.39, 0.7] },
+    { id: "up", p: [-0.34, 0.09, 0.7] }, { id: "down", p: [-0.34, -0.16, 0.7] },
+    { id: "left", p: [-0.47, -0.03, 0.7] }, { id: "right", p: [-0.21, -0.03, 0.7] },
+    { id: "share", p: [-0.21, 0.48, 0.7] }, { id: "options", p: [0.14, 0.5, 0.7] },
+    { id: "ps", p: [0, 0.73, 0.72] },
+    { id: "l1", p: [-0.6, 0.83, 0.35] }, { id: "r1", p: [0.6, 0.83, 0.35] },
+    { id: "l2", p: [-0.6, 0.95, 0.0], kind: "trig" }, { id: "r2", p: [0.6, 0.95, 0.0], kind: "trig" },
     { id: "l3", p: [-0.66, 0.51, 0.7], kind: "stickL" }, { id: "r3", p: [0.36, 0.0, 0.7], kind: "stickR" },
   ],
 };
@@ -74,7 +75,13 @@ export default function Controller3D(props: { model: PadModel; onActive?: (label
 
   onMount(() => {
     const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = 1.0;
     const scene = new THREE.Scene();
+    // a soft studio environment so PBR materials read as real plastic/metal
+    // instead of dead grey (metallic surfaces need something to reflect)
+    const pmrem = new THREE.PMREMGenerator(renderer);
+    scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
     const camera = new THREE.PerspectiveCamera(38, 1, 0.1, 100);
     camera.position.set(0, 0.2, 6);
     camera.lookAt(0, 0, 0);
@@ -96,14 +103,22 @@ export default function Controller3D(props: { model: PadModel; onActive?: (label
     const pivot = new THREE.Group();
     scene.add(pivot);
 
-    // hotspots — small additive spheres parented to the pivot at each control
+    // hotspots — additive glow discs parented to the pivot at each control,
+    // sized to roughly match the real control they sit on, drawn always-on-top
     const hot = new Map<string, THREE.Mesh>();
     const hotBase = new Map<string, THREE.Vector3>();
-    const spotGeo = new THREE.SphereGeometry(0.11, 20, 20);
+    const sizeFor = (s: Spot) =>
+      s.kind === "stickL" || s.kind === "stickR" ? 0.16
+        : s.kind === "trig" ? 0.11
+        : s.id === "l1" || s.id === "r1" ? 0.12
+        : /^(up|down|left|right)$/.test(s.id) ? 0.07
+        : /^(share|options|ps)$/.test(s.id) ? 0.07
+        : 0.095; // face buttons
     for (const s of LAYOUT[props.model]) {
-      const mat = new THREE.MeshBasicMaterial({ color: new THREE.Color(tint()), transparent: true, opacity: 0.16, blending: THREE.AdditiveBlending, depthWrite: false });
-      const m = new THREE.Mesh(spotGeo, mat);
+      const mat = new THREE.MeshBasicMaterial({ color: new THREE.Color(tint()), transparent: true, opacity: 0.16, blending: THREE.AdditiveBlending, depthWrite: false, depthTest: false });
+      const m = new THREE.Mesh(new THREE.SphereGeometry(sizeFor(s), 16, 16), mat);
       m.position.set(...s.p);
+      m.renderOrder = 999;
       m.userData.spot = s;
       pivot.add(m);
       hot.set(s.id, m);
@@ -125,7 +140,21 @@ export default function Controller3D(props: { model: PadModel; onActive?: (label
         const sphere = box.getBoundingSphere(new THREE.Sphere());
         const s = o.scale / (sphere.radius || 1);
         model.scale.set(o.mirror ? -s : s, s, s); // some GLBs are mirrored — flip X back
-        if (o.mirror) model.traverse((n: any) => { if (n.isMesh && n.material) { const set = (m: any) => (m.side = THREE.DoubleSide); Array.isArray(n.material) ? n.material.forEach(set) : set(n.material); } });
+        model.traverse((n: any) => {
+          if (!n.isMesh || !n.material) return;
+          const fix = (m: any) => {
+            if (o.mirror) m.side = THREE.DoubleSide; // negative scale flips winding
+            if (m.isMeshStandardMaterial) {
+              m.envMapIntensity = 1.1;
+              if (!m.map) { // untextured PBR (e.g. the Xbox GLB) → read as moulded plastic, not dead metal
+                m.metalness = Math.min(m.metalness ?? 1, 0.2);
+                m.roughness = Math.min(Math.max(m.roughness ?? 1, 0.45), 0.7);
+                if (m.color && Math.min(m.color.r, m.color.g, m.color.b) > 0.85) m.color.setHex(0xe2e4ea);
+              }
+            }
+          };
+          Array.isArray(n.material) ? n.material.forEach(fix) : fix(n.material);
+        });
         model.updateMatrixWorld(true);
         box = new THREE.Box3().setFromObject(model);
         model.position.sub(box.getCenter(new THREE.Vector3()));
