@@ -22,6 +22,8 @@ export interface GameRecord {
   origin?: "disk" | "download";     // link source: your drive vs downloaded to OPFS
 }
 
+export type GameSystem = "ps2" | "psp" | "gba" | "gb" | "nes" | "snes" | "segaMD" | "n64" | "nds";
+
 export const isLinked = (g: GameRecord) => g.kind === "link";
 
 /** Chromium-only: real on-disk file pickers + storable handles. */

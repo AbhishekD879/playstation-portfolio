@@ -69,7 +69,6 @@ export interface XmbItem {
     | { type: "lichess-tv" }
     | { type: "themes" }
     | { type: "labs" }
-    | { type: "game-source" }
     | { type: "sound-settings" }
     | { type: "sound-toggle" }
     | { type: "clock-format" }
@@ -368,7 +367,6 @@ export const CATEGORIES: XmbCategory[] = [
       { id: "theme", title: "Theme Settings", sub: "Presets & fully custom colours", icon: "spark", action: { type: "themes" } },
       { id: "sound", title: "Sound Settings", sub: "Volume, navigation sounds & mute", icon: "speaker", action: { type: "sound-settings" } },
       { id: "labs", title: "Labs", sub: "Declutter — choose which apps live on this console", icon: "spark", action: { type: "labs" } },
-      { id: "gamesrc", title: "Game Sources", sub: "Add a download catalog for PS2 / PSP / retro (a GitHub repo you control)", icon: "disc-doc", action: { type: "game-source" } },
       { id: "datetime", title: "Date and Time Settings", sub: "12-hour / 24-hour clock", icon: "info", action: { type: "clock-format" } },
       { id: "powersave", title: "Power Save Settings", sub: "Screen saver — start time", icon: "power", action: { type: "saver-cycle" } },
       { id: "rumble", title: "Vibration", sub: "Controller rumble on / off", icon: "gamepad", action: { type: "rumble-toggle" } },

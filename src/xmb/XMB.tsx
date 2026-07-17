@@ -4,7 +4,6 @@ import { For, Show, createEffect, createMemo, createSignal, onCleanup, onMount }
 import { CATEGORIES, TROPHIES, type XmbItem } from "../content";
 import { AVATARS, PLATINUM, award, resizePhoto, updateProfile, type Profile } from "../profiles";
 import { CORES, PS2_EXTS, PSP_ONLY_EXTS, addGame, listGames, addPhoto, listPhotos, fsAccessSupported, type GameRecord, type PhotoRecord } from "../gamesdb";
-import { addSource } from "../gameSources";
 import { THEMES, applyCustomHsl, applyTheme, currentThemeIndex, loadCustomHsl } from "../theme";
 import { LAB_APPS, labEnabled, toggleLab } from "../labs";
 import { CHANNELS, fetchDevto, fetchGuide, fetchHN, fetchRadio, fetchRss, fetchWeather, wmo, type NewsEntry, type Weather } from "../apps";
@@ -61,8 +60,7 @@ export default function XMB(props: {
   const [games, setGames] = createSignal<GameRecord[]>([]);
   const [clock, setClock] = createSignal("");
   const [spotify, setSpotify] = createSignal<{ url: string; label: string } | null>(null);
-  const [inputMode, setInputMode] = createSignal<null | "spotify" | "tv" | "rss" | "yt" | "gamesrc">(null);
-  const openInput = (m: "gamesrc") => { setInputMode(m); setTimeout(() => { setNavEnabled(false); linkInput.focus(); }, 50); };
+  const [inputMode, setInputMode] = createSignal<null | "spotify" | "tv" | "rss" | "yt">(null);
   const [themesOpen, setThemesOpen] = createSignal(false);
   const [themeIdx, setThemeIdx] = createSignal(0);
   const [themeRow, setThemeRow] = createSignal(0); // 0 = swatches · 1-3 = custom H/S/L sliders
@@ -598,9 +596,6 @@ export default function XMB(props: {
         setLabsIdx(0);
         setLabsOpen(true);
         break;
-      case "game-source":
-        openInput("gamesrc");
-        break;
       case "sound-settings":
         sfx.confirm();
         setSoundIdx(0);
@@ -754,7 +749,6 @@ export default function XMB(props: {
     tv: { title: "Add a TV channel", ph: "https://…/master.m3u8", hint: "Any HLS live stream URL · ENTER to tune in" },
     rss: { title: "Add an RSS feed", ph: "https://example.com/feed.xml", hint: "RSS or Atom URL · ENTER to add" },
     yt: { title: "Play a YouTube video", ph: "https://youtube.com/watch?v=…", hint: "Any YouTube link · plays right here" },
-    gamesrc: { title: "Add a game source", ph: "https://raw.githubusercontent.com/you/games/main/catalog.json", hint: "A catalog manifest URL you control — a GitHub repo's raw JSON is ideal (CORS-open)" },
   };
 
   function submitLink() {
@@ -801,14 +795,6 @@ export default function XMB(props: {
       closeInput();
       sfx.confirm();
       pushToast("Feed added", `${label} → News`);
-    } else if (mode === "gamesrc") {
-      if (!/^https?:\/\/.+/.test(raw) && !raw.startsWith("/")) { sfx.deny(); pushToast("Not a URL", "Paste a full http(s) manifest URL"); return; }
-      let label = "My games";
-      try { label = new URL(raw, location.origin).hostname.replace(/^www\./, "") || label; } catch { /* keep default */ }
-      addSource(label, raw);
-      closeInput();
-      sfx.confirm();
-      pushToast("Game source added", `${label} → open a console to browse it`);
     }
   }
 
@@ -1394,7 +1380,7 @@ export default function XMB(props: {
       <Show when={inputMode()}>
         <div class="panel-backdrop" />
         <div class="modal">
-          <div class="panel-tag">{inputMode() === "spotify" ? "CONNECT SPOTIFY" : inputMode() === "tv" ? "LIVE TV" : inputMode() === "gamesrc" ? "GAME SOURCE" : inputMode() === "yt" ? "YOUTUBE" : "NEWS"}</div>
+          <div class="panel-tag">{inputMode() === "spotify" ? "CONNECT SPOTIFY" : inputMode() === "tv" ? "LIVE TV" : inputMode() === "yt" ? "YOUTUBE" : "NEWS"}</div>
           <div class="modal-title">{INPUT_COPY[inputMode()!].title}</div>
           <input
             ref={linkInput}
