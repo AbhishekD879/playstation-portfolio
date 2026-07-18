@@ -10,7 +10,7 @@
 //                        service worker serves the files into an iframe.
 //   · rm2k / rm2k3     → EasyRPG (WASM) — RPG Maker 2000 / 2003.
 //   · xp / vx / vxace  → mkxp (WASM, RGSS) — RPG Maker XP / VX / VX Ace.
-import { Unzip, UnzipInflate, unzipSync } from "fflate";
+import { Inflate } from "fflate";
 
 export type RpgEngine =
   | "mz" | "mv" | "rm2k3" | "rm2k" | "vxace" | "vx" | "xp"
@@ -248,16 +248,72 @@ export interface ImportProgress { phase: "reading" | "detecting" | "extracting";
 // scene; the quota pre-check below still keeps oversized games honest.
 const isRuntimeJunk = (_p: string) => false;
 
-/** Turn fflate's cryptic zip errors into something a person can act on. The
- *  "unknown compression type N" one means the archive uses a method we can't
- *  read (only Store + Deflate) or is laid out in a way our parser can't follow —
- *  usually fixed by re-zipping the folder with a standard tool. */
+/** Turn cryptic zip errors into something a person can act on. */
 function zipReadError(e: unknown): Error {
   const m = e instanceof Error ? e.message : String(e);
-  if (/unknown compression|invalid zip|compression type/i.test(m)) {
+  if (/unknown compression|invalid zip|compression type|invalid (distance|length|block)/i.test(m)) {
     return new Error("Couldn't read this zip — it uses a compression method the browser can't unpack (only standard Zip/Deflate works). Re-create it as a plain .zip of the game folder (right-click → Compress, or `zip -r game.zip <folder>`) and try again.");
   }
   return e instanceof Error ? e : new Error(m);
+}
+
+// —— zip central-directory reader ——————————————————————————————————————————————
+// The importer never loads the archive into memory. The central directory (the
+// index at the END of a zip) is authoritative — names, sizes, offsets — so each
+// entry can be sliced straight off the on-disk File and streamed out one at a
+// time. This is also inherently robust to data descriptors and odd layouts that
+// trip sequential parsers. ZIP64 (multi-GB archives) is handled.
+interface ZipEntry { name: string; method: number; flag: number; compSize: number; uncompSize: number; lho: number }
+
+async function zipEntries(file: File): Promise<ZipEntry[]> {
+  const U32 = (d: DataView, o: number) => d.getUint32(o, true);
+  const U16 = (d: DataView, o: number) => d.getUint16(o, true);
+  const U64 = (d: DataView, o: number) => Number(d.getBigUint64(o, true));
+  // find the end-of-central-directory record (EOCD) in the file tail
+  const tailLen = Math.min(file.size, 65557 + 20); // EOCD + max comment + zip64 locator
+  const tail = new DataView(await file.slice(file.size - tailLen).arrayBuffer());
+  let eocd = -1;
+  for (let i = tail.byteLength - 22; i >= 0; i--) { if (U32(tail, i) === 0x06054b50) { eocd = i; break; } }
+  if (eocd < 0) throw new Error("Couldn't read this zip — no end-of-archive record found (is it a complete, standard .zip?).");
+  let count: number = U16(tail, eocd + 10);
+  let cdSize: number = U32(tail, eocd + 12);
+  let cdOff: number = U32(tail, eocd + 16);
+  // ZIP64: a locator sits 20 bytes before the EOCD when any field overflowed
+  if ((count === 0xffff || cdSize === 0xffffffff || cdOff === 0xffffffff) && eocd >= 20 && U32(tail, eocd - 20) === 0x07064b50) {
+    const z64Off = U64(tail, eocd - 20 + 8);
+    const z = new DataView(await file.slice(z64Off, z64Off + 56).arrayBuffer());
+    if (U32(z, 0) === 0x06064b50) { count = U64(z, 32); cdSize = U64(z, 40); cdOff = U64(z, 48); }
+  }
+  const cd = new DataView(await file.slice(cdOff, cdOff + cdSize).arrayBuffer());
+  const dec = new TextDecoder();
+  const out: ZipEntry[] = [];
+  let p = 0;
+  for (let n = 0; n < count && p + 46 <= cd.byteLength; n++) {
+    if (U32(cd, p) !== 0x02014b50) break;
+    const flag = U16(cd, p + 8), method = U16(cd, p + 10);
+    let compSize: number = U32(cd, p + 20), uncompSize: number = U32(cd, p + 24), lho: number = U32(cd, p + 42);
+    const nlen = U16(cd, p + 28), elen = U16(cd, p + 30), clen = U16(cd, p + 32);
+    const nameBytes = new Uint8Array(cd.buffer, cd.byteOffset + p + 46, nlen);
+    // decode like fflate did (parity with already-imported games): UTF-8 when
+    // the zip says so, latin1 otherwise
+    const name = flag & 0x800 ? dec.decode(nameBytes) : Array.from(nameBytes, (b) => String.fromCharCode(b)).join("");
+    // per-entry ZIP64 extra field (id 0x0001) carries the overflowed values
+    let ep = p + 46 + nlen;
+    const eEnd = ep + elen;
+    while (ep + 4 <= eEnd) {
+      const eid = U16(cd, ep), esz = U16(cd, ep + 2);
+      if (eid === 0x0001) {
+        let fp = ep + 4;
+        if (uncompSize === 0xffffffff) { uncompSize = U64(cd, fp); fp += 8; }
+        if (compSize === 0xffffffff) { compSize = U64(cd, fp); fp += 8; }
+        if (lho === 0xffffffff) { lho = U64(cd, fp); fp += 8; }
+      }
+      ep += 4 + esz;
+    }
+    out.push({ name, method, flag, compSize, uncompSize, lho });
+    p += 46 + nlen + elen + clen;
+  }
+  return out;
 }
 
 /** Parse a zip and extract into OPFS — fully STREAMING. Never loads the whole
@@ -297,126 +353,70 @@ async function doImport(
 ): Promise<RpgGame> {
   onProgress?.({ phase: "reading", pct: 0 });
 
-  // fail EARLY (with a clear message, not a crash) if it can't possibly fit —
-  // the compressed size is already a floor for what OPFS must hold
-  try {
-    const est = await navigator.storage?.estimate?.();
-    if (est && est.quota != null && est.usage != null) {
-      const free = est.quota - est.usage;
-      if (file.size > free) {
-        const gb = (n: number) => (n / 1073741824).toFixed(1);
-        throw new Error(`Not enough room: this game is ${gb(file.size)} GB but only ${gb(free)} GB is free on this device.`);
-      }
-    }
-  } catch (e) { if (e instanceof Error && e.message.startsWith("Not enough")) throw e; }
-
   const dir = await gameDir(id, true);
   const names: string[] = [];
   let bytes = 0;
 
-  const writeEntry = async (path: string, data: Uint8Array) => {
-    const { dir: parent, name } = await ensurePath(dir, path);
-    const fh = await parent.getFileHandle(name, { create: true });
-    const w = await fh.createWritable();
-    // large single writes can transiently fail under memory pressure — slice
-    for (let o = 0; o < data.length; o += 8388608) await w.write(data.subarray(o, Math.min(o + 8388608, data.length)) as unknown as BufferSource);
-    await w.close();
-    bytes += data.length;
-  };
-
-  // Two extraction paths — both MEMORY-BOUNDED (the whole zip now imports
-  // as-is, including a desktop build's multi-GB runtime, so "hold it all in
-  // RAM" is no longer an option — it OOM'd with "unknown transient reason"):
-  //  · Whole-buffer (fflate unzipSync) reads the zip's CENTRAL DIRECTORY, so it
-  //    handles data descriptors / odd layouts that the sequential parser trips
-  //    over. It holds only the COMPRESSED archive plus one ≤64MB batch of
-  //    decompressed entries at a time (the filter gates which entries inflate).
-  //  · Streaming never buffers the whole file — and each entry now streams
-  //    straight into its OPFS writable chunk-by-chunk (no per-file buffering,
-  //    so even a 500MB movie or Game.exe costs only chunk-sized memory).
-  const BUFFER_MAX = 400 * 1048576;
-  const BATCH_MAX = 64 * 1048576;
-
+  // ONE lazy path for every size of zip, built for mobile: the archive stays on
+  // DISK; its central directory gives every entry's exact location, and each
+  // entry is sliced off the File and streamed through the decompressor straight
+  // into OPFS in small chunks. Peak memory is a few chunk buffers (~16MB)
+  // whether the game is 50MB or 6GB.
   try {
-    if (file.size <= BUFFER_MAX) {
-      onProgress?.({ phase: "extracting", pct: 0 });
-      const u8 = new Uint8Array(await file.arrayBuffer());
-      // pass 1: names + uncompressed sizes only (nothing inflates)
-      const infos: { name: string; size: number }[] = [];
-      try {
-        unzipSync(u8, { filter: (f) => { infos.push({ name: f.name, size: f.originalSize || 0 }); return false; } });
-      } catch (e) { throw zipReadError(e); }
-      names.push(...infos.map((i) => i.name));
-      const files = infos.filter((i) => !i.name.endsWith("/") && !isRuntimeJunk(i.name));
-      // the INFLATED total is what OPFS must hold — check it up front
-      const totalOut = files.reduce((s, f) => s + f.size, 0);
-      try {
-        const est = await navigator.storage?.estimate?.();
-        if (est && est.quota != null && est.usage != null && totalOut > (est.quota - est.usage)) {
-          const gb = (n: number) => (n / 1073741824).toFixed(1);
-          throw new Error(`Not enough room: this game unpacks to ${gb(totalOut)} GB but only ${gb(est.quota - est.usage)} GB is free on this device.`);
-        }
-      } catch (e) { if (e instanceof Error && e.message.startsWith("Not enough")) throw e; }
-      // pass 2+: inflate + write in ≤64MB batches so memory stays bounded
-      let done = 0;
-      for (let i = 0; i < files.length;) {
-        const batch = new Set<string>();
-        let acc = 0;
-        do { batch.add(files[i].name); acc += files[i].size; i++; } while (i < files.length && acc + files[i].size <= BATCH_MAX);
-        let entries: Record<string, Uint8Array>;
-        try { entries = unzipSync(u8, { filter: (f) => batch.has(f.name) }); } catch (e) { throw zipReadError(e); }
-        for (const p of Object.keys(entries)) {
-          await writeEntry(p, entries[p]);
-          onProgress?.({ phase: "extracting", pct: Math.min(99, Math.round((++done / files.length) * 100)) });
-        }
+    const entries = await zipEntries(file);
+    if (!entries.length) throw new Error("Couldn't read this zip — it looks empty or isn't a standard .zip archive.");
+    names.push(...entries.map((e) => e.name));
+    const files = entries.filter((e) => !e.name.endsWith("/") && !isRuntimeJunk(e.name));
+
+    // the UNPACKED total is what OPFS must hold — fail clearly before writing
+    const totalOut = files.reduce((s, f) => s + f.uncompSize, 0);
+    try {
+      const est = await navigator.storage?.estimate?.();
+      if (est && est.quota != null && est.usage != null && totalOut > (est.quota - est.usage)) {
+        const gb = (n: number) => (n / 1073741824).toFixed(1);
+        throw new Error(`Not enough room: this game unpacks to ${gb(totalOut)} GB but only ${gb(est.quota - est.usage)} GB is free on this device.`);
       }
-    } else {
-      // streaming: decompress chunk-by-chunk and append each chunk straight to
-      // the entry's OPFS writable — constant memory even for huge single files
-      type Rec = { path: string; queue: Uint8Array[]; done: boolean; w?: FileSystemWritableFileStream };
-      const order: Rec[] = [];
-      const uz = new Unzip();
-      uz.register(UnzipInflate);
-      uz.onfile = (f) => {
-        names.push(f.name);
-        if (f.name.endsWith("/") || isRuntimeJunk(f.name)) return; // dirs
-        const rec: Rec = { path: f.name, queue: [], done: false };
-        order.push(rec);
-        f.ondata = (err, chunk, final) => {
-          if (err) throw err;
-          if (chunk && chunk.length) rec.queue.push(chunk.slice()); // copy: fflate reuses buffers
-          if (final) rec.done = true;
-        };
-        f.start();
-      };
-      // entries arrive sequentially; write what's queued, close finished files
-      const flushStreaming = async () => {
-        while (order.length) {
-          const rec = order[0];
-          if (!rec.w) {
-            const { dir: parent, name } = await ensurePath(dir, rec.path);
-            rec.w = await (await parent.getFileHandle(name, { create: true })).createWritable();
+    } catch (e) { if (e instanceof Error && e.message.startsWith("Not enough")) throw e; }
+
+    onProgress?.({ phase: "extracting", pct: 0 });
+    const totalComp = files.reduce((s, f) => s + f.compSize, 0) || 1;
+    let readComp = 0;
+    const U16L = (d: DataView, o: number) => d.getUint16(o, true);
+    for (const ent of files) {
+      if (ent.flag & 1) throw new Error("This zip is password-protected — export it without a password and try again.");
+      if (ent.method !== 0 && ent.method !== 8) throw new Error("Couldn't read this zip — it uses a compression method the browser can't unpack (only standard Zip/Deflate works). Re-create it as a plain .zip of the game folder and try again.");
+      // the local header's name/extra lengths tell us where the data starts
+      const lh = new DataView(await file.slice(ent.lho, ent.lho + 30).arrayBuffer());
+      if (lh.getUint32(0, true) !== 0x04034b50) throw new Error("Couldn't read this zip — a file entry is damaged. Re-zip the folder and try again.");
+      const dataStart = ent.lho + 30 + U16L(lh, 26) + U16L(lh, 28);
+
+      const { dir: parent, name } = await ensurePath(dir, ent.name);
+      const w = await (await parent.getFileHandle(name, { create: true })).createWritable();
+      const reader = (file.slice(dataStart, dataStart + ent.compSize).stream() as ReadableStream<Uint8Array>).getReader();
+      try {
+        if (ent.method === 0) {
+          for (;;) { // stored: pipe as-is
+            const { done, value } = await reader.read();
+            if (value?.length) { await w.write(value as unknown as BufferSource); bytes += value.length; readComp += value.length; }
+            if (done) break;
+            onProgress?.({ phase: "extracting", pct: Math.min(99, Math.round((readComp / totalComp) * 100)) });
           }
-          while (rec.queue.length) {
-            const c = rec.queue.shift()!;
-            await rec.w.write(c as unknown as BufferSource);
-            bytes += c.length;
+        } else {
+          // deflated: stream through fflate's raw-inflate, write as chunks emerge
+          const q: Uint8Array[] = [];
+          const inf = new Inflate();
+          inf.ondata = (chunk) => { if (chunk?.length) q.push(chunk.slice()); }; // copy: fflate reuses buffers
+          for (;;) {
+            const { done, value } = await reader.read();
+            if (value?.length) { inf.push(value, false); readComp += value.length; }
+            if (done) inf.push(new Uint8Array(0), true);
+            while (q.length) { const c = q.shift()!; await w.write(c as unknown as BufferSource); bytes += c.length; }
+            if (done) break;
+            onProgress?.({ phase: "extracting", pct: Math.min(99, Math.round((readComp / totalComp) * 100)) });
           }
-          if (!rec.done) break; // this file has more data coming — wait for it
-          await rec.w.close();
-          order.shift();
         }
-      };
-      const reader = (file.stream() as ReadableStream<Uint8Array>).getReader();
-      let read = 0;
-      for (;;) {
-        const { done, value } = await reader.read();
-        if (value) { uz.push(value, false); read += value.length; }
-        if (done) uz.push(new Uint8Array(0), true);
-        await flushStreaming();
-        if (file.size) onProgress?.({ phase: "extracting", pct: Math.min(99, Math.round((read / file.size) * 100)) });
-        if (done) break;
-      }
+        await w.close();
+      } catch (e) { try { await w.close(); } catch { /* already broken */ } throw e; }
     }
   } catch (e) {
     await (await rpgmDir()).removeEntry(id, { recursive: true }).catch(() => {});
