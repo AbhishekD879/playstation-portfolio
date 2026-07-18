@@ -987,6 +987,15 @@ img.status-avatar, img.ptile-avatar { object-fit: cover; border: 1px solid rgba(
   position: absolute; left: 0; right: 0; bottom: 40px; text-align: center;
   color: var(--dim); font-size: 14px; letter-spacing: 0.08em; pointer-events: none;
 }
+.viz-modes {
+  position: absolute; left: 0; right: 0; bottom: 16px; display: flex; gap: 10px;
+  justify-content: center; pointer-events: none; font-size: 10.5px; letter-spacing: 0.22em;
+}
+.viz-modes span { color: var(--dim); opacity: 0.5; transition: color 0.2s, opacity 0.2s; text-transform: uppercase; }
+.viz-modes span.on {
+  color: #fff; opacity: 1;
+  text-shadow: 0 0 12px color-mix(in oklab, var(--xmb-tint) 70%, transparent);
+}
 
 .ps2-savenote {
   position: absolute; bottom: 22px; left: 50%; transform: translateX(-50%); z-index: 6;
