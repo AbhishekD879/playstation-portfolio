@@ -8,7 +8,7 @@ import * as sfx from "../audio";
 import type { NavAction } from "../input";
 import { Icon } from "./icons";
 import {
-  ENGINE_LABEL, engineKind, importRpgZip, listRpgGames, removeRpgGame,
+  ENGINE_LABEL, engineKind, estimateRuntimeMB, importRpgZip, listRpgGames, looksHeavy, removeRpgGame,
   type ImportProgress, type RpgGame,
 } from "../rpgm";
 import RpgHtml5 from "./RpgHtml5";
@@ -160,6 +160,16 @@ export default function RpgMaker(props: { profile: { id: string }; onClose: () =
             <div class="rpg-title">Add a game (.zip)</div>
           </div>
         </div>
+
+        {/* advisory memory readout for the selected game — informs, never blocks */}
+        <Show when={games()[sel()]}>
+          {(g) => (
+            <div class="rpg-meminfo" classList={{ heavy: looksHeavy(g()) }}>
+              ≈ {estimateRuntimeMB(g())} MB to run · {(g().bytes / 1048576).toFixed(0)} MB on disk · saves kept on this device
+              <Show when={looksHeavy(g())}> · ⚠ may be heavy on this device — still your call</Show>
+            </div>
+          )}
+        </Show>
 
         <Show when={!games().length && !importing()}>
           <p class="rpg-empty-note">

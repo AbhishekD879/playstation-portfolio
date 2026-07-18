@@ -19,6 +19,36 @@ const mimeOf = (p) => MIME[(p.split(".").pop() || "").toLowerCase()] || "applica
 self.addEventListener("install", () => self.skipWaiting());
 self.addEventListener("activate", (e) => e.waitUntil(self.clients.claim()));
 
+// Save isolation — injected into the game's index.html so its storage is
+// namespaced per game. Without this, same-origin iframes all share our
+// "localforage" IndexedDB and collide (every MZ game uses file1/config keys)
+// and pollute the app. Prefixes MUST match rpgm.ts (SAVE_IDB/LS_PREFIX).
+function isolationShim(gameId) {
+  const IDB = "rpgm-" + gameId + "-";
+  const LS = "__rpgmls_" + gameId + "__:";
+  return `<script>(function(){
+    try {
+      var o = indexedDB.open.bind(indexedDB);
+      indexedDB.open = function(n, v){ return o(${JSON.stringify(IDB)} + n, v); };
+      var d = indexedDB.deleteDatabase.bind(indexedDB);
+      indexedDB.deleteDatabase = function(n){ return d(${JSON.stringify(IDB)} + n); };
+    } catch(e){}
+    try {
+      var real = window.localStorage, P = ${JSON.stringify(LS)};
+      var keys = function(){ return Object.keys(real).filter(function(k){ return k.indexOf(P) === 0; }); };
+      var proxy = {
+        getItem: function(k){ return real.getItem(P + k); },
+        setItem: function(k, v){ real.setItem(P + k, v); },
+        removeItem: function(k){ real.removeItem(P + k); },
+        clear: function(){ keys().forEach(function(k){ real.removeItem(k); }); },
+        key: function(i){ var a = keys()[i]; return a ? a.slice(P.length) : null; },
+        get length(){ return keys().length; }
+      };
+      Object.defineProperty(window, "localStorage", { configurable: true, get: function(){ return proxy; } });
+    } catch(e){}
+  })();</` + `script>`;
+}
+
 async function fileFromOpfs(gameId, path) {
   let dir = await (await navigator.storage.getDirectory()).getDirectoryHandle("rpgm");
   dir = await dir.getDirectoryHandle(gameId);
@@ -50,6 +80,13 @@ self.addEventListener("fetch", (e) => {
         "Cross-Origin-Embedder-Policy": "credentialless",
         "Cross-Origin-Opener-Policy": "same-origin",
       };
+      // inject the save-isolation shim into the game's HTML entry point
+      if (type === "text/html") {
+        let html = await file.text();
+        const shim = isolationShim(gameId);
+        html = html.includes("<head>") ? html.replace(/<head>/i, "<head>" + shim) : shim + html;
+        return new Response(html, { headers: base });
+      }
       const range = e.request.headers.get("range");
       const m2 = range && range.match(/bytes=(\d*)-(\d*)/);
       if (m2) {

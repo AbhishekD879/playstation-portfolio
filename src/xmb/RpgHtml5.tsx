@@ -14,7 +14,6 @@ export default function RpgHtml5(props: { game: RpgGame; onClose: () => void; bi
 
   onMount(() => {
     const release = holdWakeLock();
-    onCleanup(release);
     ensureRpgSw()
       .then(() => {
         const entry = props.game.entry || "index.html";
@@ -22,6 +21,13 @@ export default function RpgHtml5(props: { game: RpgGame; onClose: () => void; bi
         setStatus("ready");
       })
       .catch(() => setStatus("failed"));
+    // memory priority: when this game closes/switches, tear it down completely
+    // (about:blank drops the JS heap, WebGL context and audio at once) so no
+    // game is ever left resident behind the next one.
+    onCleanup(() => {
+      release();
+      try { frame.src = "about:blank"; frame.removeAttribute("src"); } catch { /* gone */ }
+    });
   });
 
   // the game owns the keyboard/gamepad while it's focused; ◯ from the pad exits

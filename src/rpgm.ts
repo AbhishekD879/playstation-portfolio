@@ -22,7 +22,28 @@ export interface RpgGame {
   entry: string;      // MV/MZ: path to index.html within the OPFS game root
   addedAt: number;
   fileCount: number;
+  bytes: number;      // total on-disk size, for the storage + runtime readouts
   cover?: string;     // data URL, best-effort (title/system image)
+}
+
+// —— memory model ————————————————————————————————————————————————————————————
+// Only ONE game is ever resident (see RpgMaker.tsx — a single player mounts,
+// and switching tears the previous one down completely). RAM budgets here are
+// ADVISORY: they tell the visitor what a game will cost, never block it.
+export const DEVICE_MEM_GB: number | undefined = (navigator as any).deviceMemory;
+/** Rough peak-RAM estimate while a game runs. MV/MZ stream assets on demand,
+ *  so it's a baseline engine cost plus a fraction of the game size — clearly
+ *  approximate, shown to inform, not to gate. */
+export function estimateRuntimeMB(g: RpgGame): number {
+  const sizeMB = g.bytes / 1048576;
+  const base = engineKind(g.engine) === "html5" ? 130 : 90; // PixiJS+WebGL vs WASM engine
+  return Math.round(base + Math.min(sizeMB * 0.5, 400));
+}
+/** True when the estimate is a large share of a (Chromium-reported) device
+ *  memory — surfaces a gentle "may be heavy" note; still always launches. */
+export function looksHeavy(g: RpgGame): boolean {
+  if (!DEVICE_MEM_GB) return false;
+  return estimateRuntimeMB(g) > DEVICE_MEM_GB * 1024 * 0.5;
 }
 
 export const ENGINE_LABEL: Record<RpgEngine, string> = {
@@ -195,7 +216,8 @@ export async function importRpgZip(
 
   const title = file.name.replace(/\.zip$/i, "").replace(/[._]+/g, " ").trim() || "RPG Maker Game";
   const cover = await bestCover(id, det.engine).catch(() => undefined);
-  const game: RpgGame = { id, profileId, title, engine: det.engine, entry: det.entry, addedAt: Date.now(), fileCount: entries.length, cover };
+  const bytes = entries.reduce((s, p) => s + (files[p]?.length ?? 0), 0);
+  const game: RpgGame = { id, profileId, title, engine: det.engine, entry: det.entry, addedAt: Date.now(), fileCount: entries.length, bytes, cover };
   await putGame(game);
   return game;
 }
@@ -225,8 +247,29 @@ const blobToDataUrl = (b: Blob) => new Promise<string>((res, rej) => { const r =
 // —— delete ————————————————————————————————————————————————————————————————————
 export async function removeRpgGame(id: string): Promise<void> {
   try { await (await rpgmDir()).removeEntry(id, { recursive: true }); } catch { /* already gone */ }
+  await purgeGameStorage(id); // its isolated saves, too
   const d = await db();
   await new Promise<void>((res) => { const tx = d.transaction(STORE, "readwrite"); tx.objectStore(STORE).delete(id); tx.oncomplete = () => res(); tx.onerror = () => res(); });
+}
+
+// —— per-game save isolation ————————————————————————————————————————————————
+// A game runs in a same-origin iframe, so its localStorage/IndexedDB would
+// otherwise be OURS — every MZ game's localforage collides on the shared
+// "localforage" DB (same file1/config keys). The SW injects a shim that
+// namespaces both per game (prefix below). Deleting a game purges them.
+export const SAVE_IDB_PREFIX = (id: string) => `rpgm-${id}-`;
+export const SAVE_LS_PREFIX = (id: string) => `__rpgmls_${id}__:`;
+
+async function purgeGameStorage(id: string): Promise<void> {
+  const idbPrefix = SAVE_IDB_PREFIX(id);
+  try {
+    const dbs = await (indexedDB.databases?.() ?? Promise.resolve([]));
+    await Promise.all(dbs
+      .filter((d) => d.name && d.name.startsWith(idbPrefix))
+      .map((d) => new Promise<void>((res) => { const r = indexedDB.deleteDatabase(d.name!); r.onsuccess = r.onerror = r.onblocked = () => res(); })));
+  } catch { /* databases() unsupported — leaves them, harmless & tiny */ }
+  const lsPrefix = SAVE_LS_PREFIX(id);
+  for (const k of Object.keys(localStorage)) if (k.startsWith(lsPrefix)) localStorage.removeItem(k);
 }
 
 // —— the scoped service worker that serves games into the iframe ————————————————
