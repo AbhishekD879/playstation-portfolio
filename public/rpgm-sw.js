@@ -180,6 +180,34 @@ const DIAG_SHIM = `<script>(function(){
   setInterval(post, 1000); post();
 })();</` + `script>`;
 
+// —— media probe (injected into all HTML routes) ——
+// A cutscene that "opens for a moment then closes" is usually a VIDEO that
+// failed to start: (a) blocked autoplay — synthetic pad presses carry no user
+// activation, so video/audio .play() rejects NotAllowedError until a REAL tap
+// lands inside the game frame; or (b) an unsupported codec — Safari can't
+// decode the .webm movies RPG Maker ships. Both died silently. This wraps
+// media playback, reports the exact reason to the host (which shows it and
+// lets a real tap through), and auto-retries blocked media on that tap.
+const MEDIA_SHIM = `<script>(function(){
+  var blocked=[];
+  function notify(kind,msg){ try{ parent.postMessage({source:"rpgm-media",kind:kind,msg:String(msg||"").slice(0,200)},"*"); }catch(e){} }
+  function unlock(){ var list=blocked.splice(0);
+    list.forEach(function(el){ try{ var p=el.play(); if(p&&p.catch)p.catch(function(){}); }catch(e){} });
+    if(list.length) notify("unlocked",""); }
+  document.addEventListener("pointerdown",unlock,true);
+  document.addEventListener("touchend",unlock,true);
+  try{ var P=HTMLMediaElement.prototype.play;
+    HTMLMediaElement.prototype.play=function(){ var el=this,r;
+      try{ r=P.apply(this,arguments); }catch(e){ notify("error",e&&e.message); throw e; }
+      if(r&&r.catch){ r=r.catch(function(err){
+        if(err&&err.name==="NotAllowedError"){ if(blocked.indexOf(el)<0)blocked.push(el); notify("gesture",""); return; }
+        notify("error",(err&&(err.name+": "+err.message))||err); }); }
+      return r; }; }catch(e){}
+  document.addEventListener("error",function(ev){ var t=ev.target;
+    if(t&&(t.tagName==="VIDEO"||t.tagName==="AUDIO")){ var e=t.error;
+      notify("error","media error"+(e?" code "+e.code:"")+" · "+((t.currentSrc||t.src||"").split("/").pop()||"")); } },true);
+})();</` + `script>`;
+
 // —— Ren'Py neutraliser (injected into Ren'Py web-build HTML) ——
 // A Ren'Py web export ships its OWN service worker and registers it from
 // index.html (register("./service-worker.js")). If it succeeded it would claim
@@ -304,7 +332,7 @@ self.addEventListener("fetch", (e) => {
       // usually has a <head>; if it somehow doesn't, prepend.
       const raw = await file.text();
       const headShim = isRenpy ? RENPY_SHIM : isWeb ? WEB_SHIM : NW_SHIM;
-      const shims = headShim + DIAG_SHIM + isolationShim(gameId);
+      const shims = headShim + DIAG_SHIM + MEDIA_SHIM + isolationShim(gameId);
       const html = /<head[^>]*>/i.test(raw)
         ? raw.replace(/<head[^>]*>/i, (m) => m + shims)
         : shims + raw;

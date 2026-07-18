@@ -30,6 +30,11 @@ export default function RpgPlayer(props: {
   const [showDiag, setShowDiag] = createSignal(false);
   const [showPad, setShowPad] = createSignal(false);
   const [barShown, setBarShown] = createSignal(true);
+  // media probe: "" = fine · "gesture" = needs one real tap in the game frame
+  // (autoplay blocked — synthetic pad keys carry no user activation) · else an
+  // error string to show (e.g. Safari can't decode .webm movies)
+  const [mediaHint, setMediaHint] = createSignal("");
+  let mediaHintTimer: ReturnType<typeof setTimeout> | undefined;
   let frame!: HTMLIFrameElement;
   let container!: HTMLDivElement;
   let release: (() => void) | undefined;
@@ -109,8 +114,20 @@ export default function RpgPlayer(props: {
   onMount(() => {
     const onMsg = (e: MessageEvent) => {
       if (e.origin !== location.origin) return;
-      const d = e.data as Snap;
-      if (d && d.source === "rpgm-diag") setDiag(d);
+      const d = e.data as Snap & { kind?: string; msg?: string };
+      if (d && d.source === "rpgm-diag") setDiag(d as Snap);
+      if (d && (d as { source?: string }).source === "rpgm-media") {
+        clearTimeout(mediaHintTimer);
+        if (d.kind === "gesture") setMediaHint("gesture");
+        else if (d.kind === "unlocked") setMediaHint("");
+        else if (d.kind === "error") {
+          const m = d.msg ?? "";
+          setMediaHint(/webm|code 4/i.test(m)
+            ? `A cutscene video couldn't be decoded (${m}). This browser can't play .webm movies — Safari doesn't support them.`
+            : `A cutscene video failed: ${m}`);
+          mediaHintTimer = setTimeout(() => setMediaHint(""), 10000);
+        }
+      }
     };
     addEventListener("message", onMsg);
     // Esc: on desktop it exits browser fullscreen natively (fullscreenchange
@@ -125,6 +142,7 @@ export default function RpgPlayer(props: {
       document.removeEventListener("fullscreenchange", onFs);
       removeEventListener("keydown", onKey);
       clearTimeout(hideTimer);
+      clearTimeout(mediaHintTimer);
       release?.();
       exitFullscreen();
       // teardown: about:blank drops the JS heap, WebGL context and audio at once
@@ -199,11 +217,21 @@ export default function RpgPlayer(props: {
       <iframe
         ref={frame}
         class="rpgplay-frame"
-        classList={{ hidden: phase() !== "ready", "pad-open": showPad() }}
+        classList={{ hidden: phase() !== "ready", "pad-open": showPad() && mediaHint() !== "gesture" }}
         title={props.game.title}
         sandbox="allow-scripts allow-same-origin allow-pointer-lock allow-popups"
         allow="gamepad; fullscreen; autoplay"
       />
+
+      {/* media probe verdicts — a needed tap, or the real reason a video died */}
+      <Show when={phase() === "ready" && mediaHint() !== ""}>
+        <div class="rpg-mediahint" classList={{ err: mediaHint() !== "gesture" }}
+          onClick={() => { if (mediaHint() !== "gesture") setMediaHint(""); }}>
+          {mediaHint() === "gesture"
+            ? "▶ tap the game once to start video / sound"
+            : mediaHint()}
+        </div>
+      </Show>
 
       <Show when={phase() === "ready"}>
         <div class="rpgplay-reveal" onPointerDown={flashBar} />

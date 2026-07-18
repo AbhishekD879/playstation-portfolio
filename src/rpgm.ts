@@ -241,17 +241,12 @@ function detect(paths: string[]): Detected {
 // —— import ————————————————————————————————————————————————————————————————————
 export interface ImportProgress { phase: "reading" | "detecting" | "extracting"; pct: number }
 
-// runtime/OS files useless in the browser — never extracted (a desktop NW.js
-// build ships a huge Chromium runtime — Game.exe, *.pak, *.dll, icudtl.dat,
-// locales/ — around the www/ game; inflating that would waste space/time).
-// NOTE: only the KNOWN NW.js .dat/.bin files are skipped, by name — games
-// legitimately ship game data as *.dat/*.bin (plugin data, cutscene assets),
-// and a blanket extension skip silently broke those scenes.
-const isRuntimeJunk = (p: string) =>
-  /\.(exe|pak|dll|so|dylib|nro|elf|msi|lib|node)$/i.test(p) ||
-  /(^|\/)(icudtl\.dat|natives_blob\.bin|snapshot_blob\.bin|v8_context_snapshot\.bin)$/i.test(p) ||
-  /(^|\/)(locales|swiftshader)\//i.test(p) ||
-  /(^|\/)(credits\.html|d3dcompiler|libegl|libglesv2|ffmpeg|vk_swiftshader|vulkan-1|chrome_.*\.bin)/i.test(p);
+// The zip is imported EXACTLY as-is — every file. There used to be a "runtime
+// junk" skip-list (NW.js/Chromium files) to save space on desktop builds, but
+// name-based guessing silently broke games twice (*.dat cutscene data, and any
+// asset that happened to match a runtime name). Disk is cheaper than a broken
+// scene; the quota pre-check below still keeps oversized games honest.
+const isRuntimeJunk = (_p: string) => false;
 
 /** Turn fflate's cryptic zip errors into something a person can act on. The
  *  "unknown compression type N" one means the archive uses a method we can't

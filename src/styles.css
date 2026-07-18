@@ -1485,6 +1485,16 @@ img.status-avatar, img.ptile-avatar { object-fit: cover; border: 1px solid rgba(
   box-shadow: 0 4px 20px rgba(0,0,0,0.35); text-shadow: 0 1px 3px rgba(0,0,0,0.6);
   -webkit-user-select: none; user-select: none; touch-action: none;
 }
+/* media probe hint — why a cutscene isn't playing (tap-to-unlock, or codec) */
+.rpg-mediahint {
+  position: absolute; top: 56px; left: 50%; transform: translateX(-50%);
+  z-index: 6; max-width: min(86vw, 560px); text-align: center;
+  padding: 9px 16px; border-radius: 12px; font-size: 12.5px; line-height: 1.5; color: #fff;
+  background: rgba(6,10,20,0.82); border: 1px solid color-mix(in oklab, var(--xmb-tint) 55%, transparent);
+  text-shadow: 0 1px 3px rgba(0,0,0,0.6); pointer-events: none;
+}
+.rpg-mediahint.err { pointer-events: auto; cursor: pointer; border-color: rgba(224,72,62,0.6); }
+
 .rpgplay-padfab .padfab-ico { font-size: 17px; line-height: 1; }
 .rpgplay-padfab.on { background: color-mix(in oklab, var(--xmb-tint) 42%, rgba(6,10,20,0.65)); border-color: color-mix(in oklab, var(--xmb-tint) 60%, #fff); }
 .rpgplay-padfab:active { transform: translateX(-50%) scale(0.95); }
