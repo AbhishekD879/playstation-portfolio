@@ -318,59 +318,93 @@ async function doImport(
     const { dir: parent, name } = await ensurePath(dir, path);
     const fh = await parent.getFileHandle(name, { create: true });
     const w = await fh.createWritable();
-    await w.write(data as unknown as BufferSource);
+    // large single writes can transiently fail under memory pressure — slice
+    for (let o = 0; o < data.length; o += 8388608) await w.write(data.subarray(o, Math.min(o + 8388608, data.length)) as unknown as BufferSource);
     await w.close();
     bytes += data.length;
   };
 
-  // Two extraction paths:
+  // Two extraction paths — both MEMORY-BOUNDED (the whole zip now imports
+  // as-is, including a desktop build's multi-GB runtime, so "hold it all in
+  // RAM" is no longer an option — it OOM'd with "unknown transient reason"):
   //  · Whole-buffer (fflate unzipSync) reads the zip's CENTRAL DIRECTORY, so it
-  //    handles data descriptors / odd layouts that a sequential streaming parser
-  //    trips over ("unknown compression type …"). It holds the archive in
-  //    memory, so it's for reasonably-sized games — which is every Ren'Py web
-  //    build and almost all RPG Maker games.
-  //  · Streaming never buffers the whole file, so it's the ONLY way to handle a
-  //    multi-GB desktop build without OOM, at the cost of a fragile parser.
+  //    handles data descriptors / odd layouts that the sequential parser trips
+  //    over. It holds only the COMPRESSED archive plus one ≤64MB batch of
+  //    decompressed entries at a time (the filter gates which entries inflate).
+  //  · Streaming never buffers the whole file — and each entry now streams
+  //    straight into its OPFS writable chunk-by-chunk (no per-file buffering,
+  //    so even a 500MB movie or Game.exe costs only chunk-sized memory).
   const BUFFER_MAX = 400 * 1048576;
+  const BATCH_MAX = 64 * 1048576;
 
   try {
     if (file.size <= BUFFER_MAX) {
       onProgress?.({ phase: "extracting", pct: 0 });
       const u8 = new Uint8Array(await file.arrayBuffer());
-      let entries: Record<string, Uint8Array>;
+      // pass 1: names + uncompressed sizes only (nothing inflates)
+      const infos: { name: string; size: number }[] = [];
       try {
-        entries = unzipSync(u8, { filter: (f) => { names.push(f.name); return !f.name.endsWith("/") && !isRuntimeJunk(f.name); } });
+        unzipSync(u8, { filter: (f) => { infos.push({ name: f.name, size: f.originalSize || 0 }); return false; } });
       } catch (e) { throw zipReadError(e); }
-      const keys = Object.keys(entries);
-      let n = 0;
-      for (const p of keys) {
-        await writeEntry(p, entries[p]);
-        onProgress?.({ phase: "extracting", pct: Math.min(99, Math.round((++n / keys.length) * 100)) });
+      names.push(...infos.map((i) => i.name));
+      const files = infos.filter((i) => !i.name.endsWith("/") && !isRuntimeJunk(i.name));
+      // the INFLATED total is what OPFS must hold — check it up front
+      const totalOut = files.reduce((s, f) => s + f.size, 0);
+      try {
+        const est = await navigator.storage?.estimate?.();
+        if (est && est.quota != null && est.usage != null && totalOut > (est.quota - est.usage)) {
+          const gb = (n: number) => (n / 1073741824).toFixed(1);
+          throw new Error(`Not enough room: this game unpacks to ${gb(totalOut)} GB but only ${gb(est.quota - est.usage)} GB is free on this device.`);
+        }
+      } catch (e) { if (e instanceof Error && e.message.startsWith("Not enough")) throw e; }
+      // pass 2+: inflate + write in ≤64MB batches so memory stays bounded
+      let done = 0;
+      for (let i = 0; i < files.length;) {
+        const batch = new Set<string>();
+        let acc = 0;
+        do { batch.add(files[i].name); acc += files[i].size; i++; } while (i < files.length && acc + files[i].size <= BATCH_MAX);
+        let entries: Record<string, Uint8Array>;
+        try { entries = unzipSync(u8, { filter: (f) => batch.has(f.name) }); } catch (e) { throw zipReadError(e); }
+        for (const p of Object.keys(entries)) {
+          await writeEntry(p, entries[p]);
+          onProgress?.({ phase: "extracting", pct: Math.min(99, Math.round((++done / files.length) * 100)) });
+        }
       }
     } else {
-      // streaming: read chunk-by-chunk, decompress + write each entry, free
-      const pending: { path: string; chunks: Uint8Array[] }[] = [];
+      // streaming: decompress chunk-by-chunk and append each chunk straight to
+      // the entry's OPFS writable — constant memory even for huge single files
+      type Rec = { path: string; queue: Uint8Array[]; done: boolean; w?: FileSystemWritableFileStream };
+      const order: Rec[] = [];
       const uz = new Unzip();
       uz.register(UnzipInflate);
       uz.onfile = (f) => {
         names.push(f.name);
-        if (f.name.endsWith("/") || isRuntimeJunk(f.name)) return; // dirs + runtime → skipped
-        const chunks: Uint8Array[] = [];
+        if (f.name.endsWith("/") || isRuntimeJunk(f.name)) return; // dirs
+        const rec: Rec = { path: f.name, queue: [], done: false };
+        order.push(rec);
         f.ondata = (err, chunk, final) => {
           if (err) throw err;
-          if (chunk && chunk.length) chunks.push(chunk.slice()); // copy: fflate reuses buffers
-          if (final) pending.push({ path: f.name, chunks });
+          if (chunk && chunk.length) rec.queue.push(chunk.slice()); // copy: fflate reuses buffers
+          if (final) rec.done = true;
         };
         f.start();
       };
-      // writeEntry truncates per call, so concat a file's chunks then write once
+      // entries arrive sequentially; write what's queued, close finished files
       const flushStreaming = async () => {
-        while (pending.length) {
-          const { path, chunks } = pending.shift()!;
-          const total = chunks.reduce((s, c) => s + c.length, 0);
-          const buf = new Uint8Array(total);
-          let o = 0; for (const c of chunks) { buf.set(c, o); o += c.length; }
-          await writeEntry(path, buf);
+        while (order.length) {
+          const rec = order[0];
+          if (!rec.w) {
+            const { dir: parent, name } = await ensurePath(dir, rec.path);
+            rec.w = await (await parent.getFileHandle(name, { create: true })).createWritable();
+          }
+          while (rec.queue.length) {
+            const c = rec.queue.shift()!;
+            await rec.w.write(c as unknown as BufferSource);
+            bytes += c.length;
+          }
+          if (!rec.done) break; // this file has more data coming — wait for it
+          await rec.w.close();
+          order.shift();
         }
       };
       const reader = (file.stream() as ReadableStream<Uint8Array>).getReader();
@@ -388,6 +422,9 @@ async function doImport(
     await (await rpgmDir()).removeEntry(id, { recursive: true }).catch(() => {});
     if (e instanceof Error && /quota|space|QuotaExceeded/i.test(e.name + e.message)) {
       throw new Error("Ran out of storage while installing — this game is too big for this device.");
+    }
+    if (e instanceof Error && /transient|out of memory|UnknownError/i.test(e.name + " " + e.message)) {
+      throw new Error("The browser ran out of memory while installing. Close other tabs and apps and try again — for very large games, a desktop browser handles this best.");
     }
     throw zipReadError(e);
   }
