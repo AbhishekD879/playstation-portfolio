@@ -2437,3 +2437,25 @@ img.status-avatar, img.ptile-avatar { object-fit: cover; border: 1px solid rgba(
   transition: transform 0.12s, border-color 0.15s, background 0.15s;
 }
 .gbook-row:hover { border-color: color-mix(in oklab, var(--xmb-tint) 40%, rgba(255,255,255,0.12)); }
+
+/* ————— Controller / keyboard focus visibility (PlayStation-style) —————
+   PS system UI always shows exactly one highlighted element. We had no global
+   focus ring, so pad/keyboard focus was invisible in many app panels. A light
+   ring for general keyboard focus; a stronger tinted glow for controls walked
+   by the pad inside an owner app (.pad-focus-scope, cycled with L1/R1). */
+:focus-visible {
+  outline: 2px solid color-mix(in oklab, var(--xmb-tint, #7fb4ff) 75%, #fff);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+.pad-focus-scope button:focus,
+.pad-focus-scope a:focus,
+.pad-focus-scope [role="button"]:focus,
+.pad-focus-scope input:focus,
+.pad-focus-scope select:focus,
+.pad-focus-scope [tabindex]:focus {
+  outline: 2px solid color-mix(in oklab, var(--xmb-tint, #7fb4ff) 90%, #fff);
+  outline-offset: 3px;
+  box-shadow: 0 0 18px color-mix(in oklab, var(--xmb-tint, #7fb4ff) 55%, transparent);
+  border-radius: 6px;
+}

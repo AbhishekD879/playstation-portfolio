@@ -242,20 +242,20 @@ export default function XMB(props: {
     { id: "flash", title: "Flash Arcade", sub: "Built-in arcade · classic Flash games, streamed", icon: "lightning", action: { type: "flash" } },
     { id: "ps2", title: "PlayStation 2", sub: `Library, downloads & 2-player online${ps2Count() ? ` · ${ps2Count()} in your shelf` : ""}`, icon: "disc", action: { type: "ps2-home" } },
     { id: "ps1", title: "PlayStation", sub: `The original — .chd/.pbp discs, no BIOS needed${psxCount() ? ` · ${psxCount()} in your shelf` : ""}`, icon: "disc", action: { type: "ps1-home" } },
-    { id: "psp", title: "PlayStation Portable", sub: `PSP library & downloads — experimental (PPSSPP)${pspCount() ? ` · ${pspCount()} in your shelf` : ""}`, icon: "disc", action: { type: "psp-home" } },
+    { id: "psp", title: "PlayStation Portable", sub: `PSP library & downloads — experimental (PPSSPP)${pspCount() ? ` · ${pspCount()} in your shelf` : ""}`, icon: "handheld", action: { type: "psp-home" } },
     { id: "retro", title: "Retro Games", sub: `NES · SNES · GBA · N64 & more — library + downloads${retroCount() ? ` · ${retroCount()} in your shelf` : ""}`, icon: "gamepad", action: { type: "retro-home" } },
-    { id: "scummvm", title: "Point & Click", sub: "ScummVM in wasm — classic adventures, free ones included", icon: "folder-open", action: { type: "scummvm" } },
-    { id: "rpgmaker", title: "RPG Maker", sub: `Drop a zip of a game you own — MV/MZ play natively, 2000/2003 via EasyRPG${rpgCount() ? ` · ${rpgCount()} in your library` : ""}`, icon: "folder-open", action: { type: "rpg-maker" } },
-    { id: "renpy", title: "Ren'Py", sub: `Drop a Ren'Py Web build — visual novels, experimental${renpyCount() ? ` · ${renpyCount()} in your library` : ""}`, icon: "folder-open", action: { type: "renpy" as const } },
+    { id: "scummvm", title: "Point & Click", sub: "ScummVM in wasm — classic adventures, free ones included", icon: "cursor", action: { type: "scummvm" } },
+    { id: "rpgmaker", title: "RPG Maker", sub: `Drop a zip of a game you own — MV/MZ play natively, 2000/2003 via EasyRPG${rpgCount() ? ` · ${rpgCount()} in your library` : ""}`, icon: "rpgmaker", action: { type: "rpg-maker" } },
+    { id: "renpy", title: "Ren'Py", sub: `Drop a Ren'Py Web build — visual novels, experimental${renpyCount() ? ` · ${renpyCount()} in your library` : ""}`, icon: "renpy", action: { type: "renpy" as const } },
     { id: "lichesstv", title: "Lichess TV", sub: "Spectate · live grandmaster games", icon: "knight", action: { type: "lichess-tv" } },
   ]);
 
   const RETRO_SYSTEMS = ["gba", "gb", "nes", "snes", "segaMD", "n64", "nds"] as const;
 
   const musicItems = createMemo<XmbItem[]>(() => [
-    { id: "radio-guide", title: "Radio Stations", sub: "Search ~3,000 live stations worldwide", icon: "globe", action: { type: "radio-guide" } },
+    { id: "radio-guide", title: "Radio Stations", sub: "Search ~3,000 live stations worldwide", icon: "wave", action: { type: "radio-guide" } },
     { id: "podcasts", title: "Podcasts", sub: "Search any show — plays in the background", icon: "mic", action: { type: "podcasts" } },
-    { id: "winamp", title: "Winamp", sub: "The 1997 legend, resurrected in JS", icon: "lightning", action: { type: "webamp" } },
+    { id: "winamp", title: "Winamp", sub: "The 1997 legend, resurrected in JS", icon: "equalizer", action: { type: "webamp" } },
     { id: "karaoke", title: "Karaoke", sub: "Any song you own — vocals cancelled live, you sing", icon: "mic", action: { type: "karaoke" } },
     ...(station()
       ? [{ id: "radio-stop", title: `■ Stop — ${station()!.label}`, sub: "Now playing", icon: "speaker", action: { type: "radio-play" as const, url: "", label: "" } }]
@@ -285,7 +285,7 @@ export default function XMB(props: {
   ]);
 
   const tvItems = createMemo<XmbItem[]>(() => [
-    { id: "tv-guide", title: "Channel Guide", sub: "Search ~17,000 live channels worldwide", icon: "globe", action: { type: "tv-guide" } },
+    { id: "tv-guide", title: "Channel Guide", sub: "Search ~17,000 live channels worldwide", icon: "tv", action: { type: "tv-guide" } },
     ...CHANNELS.map((c, i) => ({
       id: `tv-${i}`, title: c.label, sub: c.sub, icon: "tv",
       action: { type: "tv" as const, url: c.url, label: c.label },
@@ -314,8 +314,8 @@ export default function XMB(props: {
       : []),
     { id: "photos-add", title: "Add Photos…", sub: "Stored in this browser only — never uploaded", icon: "plus", action: { type: "photos-add" } },
     { id: "photomode", title: "Photo Mode", sub: "Snapshot the living console — framed, shareable, on-device", icon: "camera", action: { type: "photo-mode" } },
-    { id: "art", title: "Art Gallery", sub: "Masterpieces · The Met, New York", icon: "spark", action: { type: "art" } },
-    { id: "apod", title: "Astronomy Photo of the Day", sub: "Live from NASA", icon: "spark", action: { type: "apod" } },
+    { id: "art", title: "Art Gallery", sub: "Masterpieces · The Met, New York", icon: "palette", action: { type: "art" } },
+    { id: "apod", title: "Astronomy Photo of the Day", sub: "Live from NASA", icon: "star", action: { type: "apod" } },
   ]);
 
   // one gate for every category: Labs-disabled apps simply don't exist here

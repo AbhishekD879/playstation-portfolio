@@ -94,7 +94,7 @@ export default function CodeApp(props: { onClose: () => void }) {
   }
 
   return (
-    <div class="codeapp">
+    <div class="codeapp pad-focus-scope">
       <div class="codeapp-bar">
         <div class="panel-tag">CODE PLAYGROUND — SANDBOXED · TIME-LIMITED</div>
         <div class="codeapp-langs">

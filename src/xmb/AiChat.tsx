@@ -363,7 +363,7 @@ Examples — these MUST become console_control calls (flat JSON, no nesting):
   }
 
   return (
-    <div class="ai">
+    <div class="ai pad-focus-scope">
       <div class="ai-head">
         <div class="panel-tag">
           AI ABHISHEK — {model() ? `${MODELS[model()!].label} · ` : ""}PI.DEV AGENT · WEBGPU, ON-DEVICE

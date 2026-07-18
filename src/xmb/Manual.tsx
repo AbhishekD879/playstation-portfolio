@@ -404,6 +404,7 @@ const CHAPTERS: Chapter[] = [
             <tr><td>Play!</td><td>PS2 emulator, wasm</td><td>the PS2 home + online multiplayer</td></tr>
             <tr><td>ScummVM</td><td>adventure-game engine, wasm</td><td>the point-and-click shelf</td></tr>
             <tr><td>RPG Maker (bring-your-own)</td><td>MV/MZ native HTML5 · self-hosted EasyRPG for 2000/2003 (CC-BY RTP bundled)</td><td>drop a .zip → detect engine → OPFS + scoped SW → play</td></tr>
+            <tr><td>Ren'Py (bring-your-own · experimental)</td><td>self-hosted Ren'Py Web build — CPython + the engine in wasm</td><td>drop a launcher "Build → Web" .zip → OPFS + scoped SW → visual novels play</td></tr>
             <tr><td>stockfish</td><td>chess engine, wasm</td><td>Chess vs Stockfish</td></tr>
             <tr><td>@ruffle-rs/ruffle</td><td>Flash Player, wasm</td><td>Flash Arcade</td></tr>
             <tr><td>cesium</td><td>3D globe engine</td><td>Planet Earth + Vibe Search</td></tr>
@@ -426,6 +427,7 @@ const CHAPTERS: Chapter[] = [
         <h2>Standing on excellent shoulders</h2>
         <p>· <b>Play!</b> — PS2 emulator, BSD-2-Clause · jpd002<br />
           · <b>EmulatorJS</b> — retro cores (GPLv3) · <b>js-dos</b> — DOSBox WASM<br />
+          · <b>EasyRPG</b> — RPG Maker 2000/2003, GPLv3 (+ CC-BY RTP) · <b>Ren'Py Web</b> — visual-novel engine, MIT/LGPL · both self-hosted<br />
           · <b>Ruffle</b> — Flash, MIT/Apache · <b>v86</b> — x86 in WASM, BSD-2<br />
           · <b>Stockfish</b> — GPLv3 · <b>chess.js</b> — MIT · <b>Webamp</b> — MIT<br />
           · <b>CesiumJS</b> — Apache-2.0 · <b>Leaflet</b> — BSD-2 · globe textures — Solar System Scope, CC BY 4.0<br />

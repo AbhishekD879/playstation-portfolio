@@ -279,7 +279,7 @@ export default function MapApp(props: { onClose: () => void; initialAction?: "to
   }
 
   return (
-    <div class="mapapp">
+    <div class="mapapp pad-focus-scope">
       <div class="mapapp-bar">
         <div class="panel-tag">PLANET EARTH — LIVE</div>
         <button class="ghost-btn" classList={{ on: mode() === "3d" }} onClick={() => { setMode(mode() === "3d" ? "2d" : "3d"); sfx.tickH(); }}>

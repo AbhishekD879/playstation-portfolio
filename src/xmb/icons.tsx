@@ -48,6 +48,14 @@ export const ICONS: Record<string, () => JSX.Element> = {
   wave: () => S(<><path d="M9 20v8M16.5 13v22M24 8v32M31.5 15v18M39 21v6" /></>),
   mic: () => S(<><rect x="18" y="7" width="12" height="21" rx="6" /><path d="M12 23a12 12 0 0 0 24 0M24 35v6M17 41h14" /></>),
   pen: () => S(<><path d="M9 39l3-9L31 11l6 6-19 19-9 3Z" /><path d="M28 14l6 6" /></>),
+  // distinct app icons (added to break up generic folder/disc/spark reuse)
+  renpy: () => S(<><path d="M8 9h32a3 3 0 0 1 3 3v17a3 3 0 0 1-3 3H22l-9 8v-8H8a3 3 0 0 1-3-3V12a3 3 0 0 1 3-3Z" /><circle cx="18" cy="20" r="1.5" fill="currentColor" /><circle cx="24" cy="20" r="1.5" fill="currentColor" /><circle cx="30" cy="20" r="1.5" fill="currentColor" /></>),
+  rpgmaker: () => S(<><rect x="8" y="8" width="32" height="32" rx="2" /><path d="M8 19h32M8 29h32M19 8v32M29 8v32" /><circle cx="24" cy="24" r="2.6" fill="currentColor" /></>),
+  handheld: () => S(<><rect x="4" y="14" width="40" height="21" rx="6" /><rect x="16" y="18" width="16" height="13" rx="1.5" /><path d="M10 21v6M13 24h-6" /><circle cx="36" cy="22" r="1.5" fill="currentColor" /><circle cx="40" cy="26" r="1.5" fill="currentColor" /></>),
+  cursor: () => S(<><path d="M12 8l7 32 5-13 13-4L12 8Z" /></>),
+  palette: () => S(<><path d="M24 8C14 8 6 15 6 24c0 6 4.5 9 9.5 9 3 0 3.5-2 3.5-4 0-2.6 2.4-4 5-4 6.5 0 14-2.5 14-10 0-4.5-6.5-7-14-7Z" /><circle cx="15" cy="21" r="2" fill="currentColor" /><circle cx="23" cy="15" r="2" fill="currentColor" /><circle cx="31" cy="18" r="2" fill="currentColor" /></>),
+  star: () => S(<><path d="M24 6l5.2 12.4 13.4 1-10.2 8.7 3.1 13.1L24 34.4 12.5 41.2l3.1-13.1L5.4 19.4l13.4-1L24 6Z" /></>),
+  equalizer: () => S(<><path d="M12 36V22M20 36V12M28 36V26M36 36V16" /><circle cx="12" cy="26" r="2.2" fill="currentColor" /><circle cx="20" cy="18" r="2.2" fill="currentColor" /><circle cx="28" cy="29" r="2.2" fill="currentColor" /><circle cx="36" cy="21" r="2.2" fill="currentColor" /></>),
   // the PlayStation face-button glyphs — the signature visual language
   triangle: () => S(<><path d="M24 9 41 38H7L24 9Z" /></>),
   circle: () => S(<><circle cx="24" cy="24" r="15" /></>),

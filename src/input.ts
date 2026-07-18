@@ -170,6 +170,20 @@ function trackPad() {
 const padPrev: Record<string, boolean> = {};
 const padHeld: Partial<Record<NavAction, { t0: number; last: number }>> = {};
 
+// Move DOM focus among the focusable controls inside the current owner app's
+// ".pad-focus-scope". Scoped so it never wanders into the XMB behind the app;
+// a no-op if the app didn't opt in (then only its own keydown handling applies).
+function padFocusWalk(dir: 1 | -1) {
+  const scope = document.querySelector<HTMLElement>(".pad-focus-scope");
+  if (!scope) return;
+  const els = [...scope.querySelectorAll<HTMLElement>(
+    'button, a[href], input:not([type="hidden"]), select, textarea, [tabindex]:not([tabindex="-1"])',
+  )].filter((el) => el.offsetParent !== null && !(el as HTMLButtonElement).disabled);
+  if (!els.length) return;
+  const i = els.indexOf(document.activeElement as HTMLElement);
+  (els[(i + dir + els.length) % els.length] ?? els[0]).focus();
+}
+
 function pollPad(now: number) {
   // An Xbox pad often registers TWICE (real + phantom duplicate). Read from the
   // ONE real pad — the standard-mapped one — rather than merging, because the
@@ -205,6 +219,15 @@ function pollPad(now: number) {
       handler!(k, "pad");
       return;
     }
+    // —— synth mode (inside an "owner" app, driven by focus + synthetic keys) ——
+    // ✕ on a focused button/link CLICKS it. A synthetic Enter alone doesn't
+    // activate onClick controls, which is exactly why pad users couldn't operate
+    // app toolbars — only keydown-listening apps responded. Click button-likes;
+    // fall through to Enter for text/content that listens for it.
+    if (k === "confirm") {
+      const el = document.activeElement as HTMLElement | null;
+      if (el && (el.tagName === "BUTTON" || el.tagName === "A" || el.getAttribute?.("role") === "button")) { el.click(); return; }
+    }
     const key = SYNTH_KEY[k];
     if (!key) return;
     (document.activeElement ?? document.body).dispatchEvent(
@@ -227,6 +250,18 @@ function pollPad(now: number) {
     confirm: b(0), // "A"/cross is index 0 across virtually all layouts
     back: b(1),    // "B"/circle
   };
+  // —— L1/R1 (shoulders): walk DOM focus inside an owner app so click-only
+  // toolbar controls are reachable by pad. PURELY ADDITIVE — arrows/✕/◯ are
+  // untouched, and this only acts in synth mode within a ".pad-focus-scope"
+  // container (apps opt in), so nothing else can regress. (PS convention:
+  // shoulders move between regions; here they cycle the focusable controls.)
+  if (synthMode && !typing) {
+    const l1 = b(4), r1 = b(5);
+    if (r1 && !padPrev.__r1) padFocusWalk(1);
+    if (l1 && !padPrev.__l1) padFocusWalk(-1);
+    padPrev.__r1 = r1; padPrev.__l1 = l1;
+  } else { padPrev.__r1 = false; padPrev.__l1 = false; }
+
   for (const k of Object.keys(dir) as NavAction[]) {
     const on = !!dir[k];
     const isDir = k === "left" || k === "right" || k === "up" || k === "down";

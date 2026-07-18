@@ -167,7 +167,7 @@ export default function Studio(props: { onClose: () => void }) {
   });
 
   return (
-    <div class="studio">
+    <div class="studio pad-focus-scope">
       <div class="studio-bar">
         <div class="panel-tag">STUDIO — SYNTH · DRUM MACHINE · MIDI</div>
         <Show when={midiName()}><span class="studio-midi">🎹 {midiName()}</span></Show>

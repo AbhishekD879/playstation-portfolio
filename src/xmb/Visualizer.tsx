@@ -146,7 +146,7 @@ export default function Visualizer(props: { onClose: () => void }) {
   });
 
   return (
-    <div class="viz">
+    <div class="viz pad-focus-scope">
       <div class="viz-bar">
         <div class="panel-tag">MUSIC VISUALIZER</div>
         <button class="ghost-btn" classList={{ on: playing() }} onClick={toggleRadio}>{playing() ? "⏸ radio" : "▶ radio"}</button>
