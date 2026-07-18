@@ -14,6 +14,7 @@ import { bootChime } from "../audio";
 import { tint } from "../theme";
 import { labEnabled } from "../labs";
 import { DEVICE } from "../gpu";
+import { onNav } from "../input";
 
 function glowTexture(color: string): THREE.Texture {
   const S = 128;
@@ -41,8 +42,26 @@ export default function Boot(props: { onDone: () => void }) {
     let cancelled = false;
     let teardown: (() => void) | null = null;
 
+    // skip works from frame zero — keyboard, mouse, touch AND controller —
+    // even while the (possibly async) GPU setup is still running
+    let tlRef: gsap.core.Timeline | null = null;
+    let skipRequested = false;
+    const doSkip = () => { if (tlRef) tlRef.progress(1); else skipRequested = true; };
+    const skip = (e: KeyboardEvent | PointerEvent) => {
+      if (e instanceof KeyboardEvent && !["Enter", " ", "Escape"].includes(e.key)) return;
+      doSkip();
+    };
+    addEventListener("keydown", skip);
+    addEventListener("pointerdown", skip);
+    onNav((a) => { if (a === "confirm" || a === "back") doSkip(); });
+
     void start();
-    onCleanup(() => { cancelled = true; teardown?.(); });
+    onCleanup(() => {
+      cancelled = true;
+      removeEventListener("keydown", skip);
+      removeEventListener("pointerdown", skip);
+      teardown?.();
+    });
 
     async function start() {
       const accent = new THREE.Color(tint());
@@ -93,7 +112,7 @@ export default function Boot(props: { onDone: () => void }) {
             transparent: true, blending: (T as any).AdditiveBlending, depthWrite: false, depthTest: false,
           });
           mat.positionNode = vec3(rr.mul(a.cos()), y, rr.mul(a.sin()));
-          mat.scaleNode = h1.mul(0.16).add(0.09)
+          mat.scaleNode = h1.mul(0.24).add(0.16)
             .mul(uT.mul(2.2).add(h2.mul(6.283)).sin().mul(0.18).add(1.0)); // twinkle
           // soft round glow in the fragment stage — no texture needed
           const d = uv().sub(vec2(0.5, 0.5)).length();
@@ -103,8 +122,8 @@ export default function Boot(props: { onDone: () => void }) {
           const deep = vec3(0.23, 0.42, 0.85);
           const m = hash(instanceIndex.add(uint(777)));
           const starCol = white.mix(acc, m.smoothstep(0.30, 0.55)).mix(deep, m.smoothstep(0.78, 0.95));
-          // 33× the classic star count stacks additively — keep per-star alpha tiny
-          mat.colorNode = vec4(starCol.add(glow.pow(8.0).mul(0.4)), glow.mul(glow).mul(0.1).mul(uFade));
+          // 33× the classic star count stacks additively — keep per-star alpha low
+          mat.colorNode = vec4(starCol.add(glow.pow(8.0).mul(0.4)), glow.mul(glow).mul(0.28).mul(uFade));
           const sprites = new (T as any).Sprite(mat);
           sprites.count = N;
           sprites.frustumCulled = false;
@@ -231,6 +250,11 @@ export default function Boot(props: { onDone: () => void }) {
       };
       addEventListener("resize", onResize);
 
+      // GPU path: compile the star pipeline BEFORE the chime starts, so the
+      // first frames don't stall and drift out of sync with the audio
+      if (gpuStars) { try { await renderer.renderAsync?.(scene, camera); } catch { /* prewarm only */ } }
+      if (cancelled) return;
+
       // —— the sequence (chime's arrival hit lands ~3.1s in — ignition syncs to it) ——
       bootChime();
       const fade: { obj: any; key: string } = gpuStars
@@ -274,19 +298,13 @@ export default function Boot(props: { onDone: () => void }) {
         done = true;
         props.onDone();
       }
-      const skip = (e: KeyboardEvent | MouseEvent) => {
-        if (e instanceof KeyboardEvent && !["Enter", " ", "Escape"].includes(e.key)) return;
-        tl.progress(1); // jumps to onComplete
-      };
-      addEventListener("keydown", skip);
-      addEventListener("click", skip);
+      tlRef = tl;
+      if (skipRequested) tl.progress(1); // they asked before we were ready
 
       teardown = () => {
         tl.kill();
         renderer.setAnimationLoop(null);
         removeEventListener("resize", onResize);
-        removeEventListener("keydown", skip);
-        removeEventListener("click", skip);
         geo?.dispose();
         cpuMat?.dispose();
         dotTex?.dispose();

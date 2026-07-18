@@ -53,7 +53,7 @@ const FEATURE_GROUPS: FlagGroup[] = [
 ];
 
 /** Flags that ship OFF and are opted INTO via Labs (experimental tier). */
-const DEFAULT_OFF = new Set(["crt"]);
+const DEFAULT_OFF = new Set(["crt", "galaxyboot"]); // opt-in: full-console CRT, GPU galaxy boot
 
 // —— apps (each id matches the XmbItem id it hides on the crossbar) ——
 const APPS: { id: string; title: string; cat: string }[] = [
@@ -161,7 +161,7 @@ const FEATURE_GUIDES: Record<string, LabGuide> = {
   },
   moderncss: {
     what: "A pack of 2026 CSS upgrades: panels that reflow to their own width (container queries), Labs group headers that shadow when stuck, height-to-auto animations, and scroll-in reveals — all zero JavaScript.",
-    steps: ["Open Labs and scroll — group headers pin and pick up a shadow", "Watch list rows and tiles fade in as they scroll into view", "Everything falls back gracefully on older browsers"],
+    steps: ["Open Console Settings → LABS and scroll — group headers pin and pick up a shadow", "Watch list rows and tiles fade in as they scroll into view", "Everything falls back gracefully on older browsers"],
   },
   parallaxbg: {
     what: "The living background gains depth: waves and sparkles lean subtly toward your pointer, like tilting a diorama.",

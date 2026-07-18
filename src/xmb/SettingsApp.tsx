@@ -9,8 +9,8 @@ import { For, Show, createSignal, onMount } from "solid-js";
 import * as sfx from "../audio";
 import { SND_PACKS, getSndPack, getVolume, isMuted, setSndPack, setVolume, toggleMute } from "../audio";
 import { CATEGORIES } from "../content";
-import { DEVICE, deviceSummary } from "../gpu";
-import { LAB_GROUPS, labEnabled, rateFeature, toggleLab } from "../labs";
+import { DEVICE, deviceSummary, hasWebGPU } from "../gpu";
+import { LAB_GROUPS, LAB_GUIDES, labEnabled, rateFeature, toggleLab } from "../labs";
 import { MODEL_BUDGET_MB, freeAllModels, residentModels } from "../models";
 import type { NavAction } from "../input";
 import {
@@ -36,11 +36,14 @@ export default function SettingsApp(props: {
   onClose: () => void;
   bind: (nav: (a: NavAction) => void) => void;
   onOpenThemes: () => void;
+  onLabGo: (id: string, go: string) => void;
 }) {
   const [sec, setSec] = createSignal(0);
   const [row, setRow] = createSignal(0);
   const [picking, setPicking] = createSignal<IconTarget | null>(null);
   const [pickIdx, setPickIdx] = createSignal(0);
+  const [guide, setGuide] = createSignal<string | null>(null); // labs flag whose card is open
+  const [q, setQ] = createSignal(""); // settings-wide search
   const [vol, setVol] = createSignal(getVolume());
   const [muted, setMuted] = createSignal(isMuted());
   const [pack, setPack] = createSignal(getSndPack());
@@ -96,6 +99,38 @@ export default function SettingsApp(props: {
     sfx.confirm();
   };
 
+  // —— settings-wide search: every row in every section, one box ————————————
+  interface Hit { sec: number; row: number; title: string; sub?: string }
+  const searchHits = (): Hit[] => {
+    const query = q().trim().toLowerCase();
+    if (!query) return [];
+    const hits: Hit[] = [];
+    const add = (s: (typeof SECTIONS)[number], r: number, title: string, sub?: string) => {
+      if (`${title} ${sub ?? ""}`.toLowerCase().includes(query)) hits.push({ sec: SECTIONS.indexOf(s), row: r, title, sub });
+    };
+    add("APPEARANCE", 0, "Console Font", "typeface for every label, applied live");
+    add("APPEARANCE", 1, "Letter Spacing");
+    add("APPEARANCE", 2, "Display Size", "scale the whole console");
+    add("APPEARANCE", 3, "Theme & Background", "tint presets, custom colour, living backdrops");
+    add("AUDIO", 0, "Master Volume", "sound");
+    add("AUDIO", 1, "Navigation Sounds", "sound pack");
+    add("AUDIO", 2, "Mute Console", "sound");
+    LANGS.forEach((l, i) => add("LANGUAGE", i, `${l.native} — ${l.name}`, "console language"));
+    labsFlat().forEach((f, i) => add("LABS", i, f.title, `Labs · ${f.desc ?? ""}`));
+    iconTargets().forEach((t, i) => add("ICONS", i, `${t.label} icon`, t.kind));
+    add("SYSTEM", 0, "This Console", "hardware, WebGPU, cores");
+    add("SYSTEM", 0, "On-Device AI Memory", "resident models, free memory");
+    add("SYSTEM", 0, "Storage", "browser space used");
+    return hits.slice(0, 40);
+  };
+  const jumpTo = (h: Hit) => {
+    setSec(h.sec);
+    setRow(h.row);
+    setQ("");
+    sfx.confirm();
+    rail?.children[h.sec]?.scrollIntoView({ behavior: "smooth", inline: "center", block: "nearest" });
+  };
+
   // —— rows per section, for pad navigation (confirm = cycle/open) ——————————
   const rowCount = () => {
     switch (SECTIONS[sec()]) {
@@ -133,6 +168,16 @@ export default function SettingsApp(props: {
   };
 
   props.bind((a) => {
+    if (guide()) { // a feature guide card is up — ✕ runs it, △ toggles, ◯ closes
+      const gid = guide()!, g = LAB_GUIDES[gid];
+      if (a === "confirm") {
+        if (g?.go && (g.needs !== "webgpu" || hasWebGPU())) { setGuide(null); props.onLabGo(gid, g.go); }
+        else tryToggle(gid);
+      }
+      if (a === "options") tryToggle(gid);
+      if (a === "back") { setGuide(null); sfx.back(); }
+      return;
+    }
     if (picking()) { // icon-picker grid: 8 per row
       const n = ICON_NAMES.length;
       if (a === "left") { setPickIdx((pickIdx() + n - 1) % n); sfx.tickV(); }
@@ -149,6 +194,7 @@ export default function SettingsApp(props: {
     if (a === "up") { setRow(Math.max(0, row() - 1)); sfx.tickV(); }
     if (a === "down") { setRow(Math.min(rowCount()! - 1, row() + 1)); sfx.tickV(); }
     if (a === "confirm") confirmRow();
+    if (a === "options" && SECTIONS[sec()] === "LABS") { const f = labsFlat()[row()]; if (f) { setGuide(f.id); sfx.tickH(); } }
     if (a === "back") { sfx.back(); props.onClose(); }
   });
 
@@ -158,6 +204,16 @@ export default function SettingsApp(props: {
     <div class="setapp">
       <div class="guide-head">
         <div class="panel-tag">CONSOLE SETTINGS</div>
+        <div class="set-search">
+          <span class="set-search-ico"><Icon name="search" /></span>
+          <input class="set-search-input" placeholder="Search every setting…" value={q()}
+            onInput={(e) => setQ(e.currentTarget.value)}
+            onKeyDown={(e) => {
+              e.stopPropagation();
+              if (e.key === "Escape") { setQ(""); e.currentTarget.blur(); }
+              else if (e.key === "Enter") { const h = searchHits()[0]; if (h) { jumpTo(h); e.currentTarget.blur(); } }
+            }} />
+        </div>
         <button class="ps-act" onClick={() => { sfx.back(); props.onClose(); }}><span class="btn-o" /> back</button>
       </div>
 
@@ -172,8 +228,23 @@ export default function SettingsApp(props: {
       </div>
 
       <div class="set-body">
+        {/* ————— SEARCH RESULTS (replace the sections while typing) ————— */}
+        <Show when={q().trim()}>
+          <div class="set-rows">
+            <For each={searchHits()} fallback={<div class="set-note">No settings match “{q()}”</div>}>
+              {(h) => (
+                <button class="set-hit" onClick={() => jumpTo(h)}>
+                  <span class="set-hit-sec">{SECTIONS[h.sec]}</span>
+                  <span class="set-hit-title">{h.title}</span>
+                  <Show when={h.sub}><span class="set-hit-sub">{h.sub}</span></Show>
+                </button>
+              )}
+            </For>
+          </div>
+        </Show>
+
         {/* ————— APPEARANCE ————— */}
-        <Show when={SECTIONS[sec()] === "APPEARANCE"}>
+        <Show when={!q().trim() && SECTIONS[sec()] === "APPEARANCE"}>
           <div class="set-rows">
             <div class="set-row" classList={{ focus: row() === 0 }}>
               <div class="set-row-head"><span class="set-row-title">Console Font</span><span class="set-row-sub">every label, every app — applied live</span></div>
@@ -206,7 +277,7 @@ export default function SettingsApp(props: {
         </Show>
 
         {/* ————— ICONS ————— */}
-        <Show when={SECTIONS[sec()] === "ICONS"}>
+        <Show when={!q().trim() && SECTIONS[sec()] === "ICONS"}>
           <div class="set-note">Give any category or app a different glyph from the console's own icon set. △ in the picker restores the default.</div>
           <div class="set-icon-list">
             <For each={iconTargets()}>
@@ -223,7 +294,7 @@ export default function SettingsApp(props: {
         </Show>
 
         {/* ————— AUDIO ————— */}
-        <Show when={SECTIONS[sec()] === "AUDIO"}>
+        <Show when={!q().trim() && SECTIONS[sec()] === "AUDIO"}>
           <div class="set-rows">
             <div class="set-row" classList={{ focus: row() === 0 }}>
               <div class="set-row-head"><span class="set-row-title">Master Volume</span></div>
@@ -247,7 +318,7 @@ export default function SettingsApp(props: {
         </Show>
 
         {/* ————— LANGUAGE ————— */}
-        <Show when={SECTIONS[sec()] === "LANGUAGE"}>
+        <Show when={!q().trim() && SECTIONS[sec()] === "LANGUAGE"}>
           <div class="set-note">
             Universal Menu translates the crossbar on-device — a small model per language, downloaded once, cached forever.
             <Show when={!labEnabled("translate")}> <b>The Universal Menu Labs flag is off — English only until it's enabled.</b></Show>
@@ -266,8 +337,8 @@ export default function SettingsApp(props: {
         </Show>
 
         {/* ————— LABS ————— */}
-        <Show when={SECTIONS[sec()] === "LABS"}>
-          <div class="set-note">Every feature on the console, switchable. ✓ suits this device · ⚠ heavy here · ✕ can't run — heavy ones ask twice. Full guides live in Settings › Labs on the crossbar.</div>
+        <Show when={!q().trim() && SECTIONS[sec()] === "LABS"}>
+          <div class="set-note">Every feature on the console, switchable. ✓ suits this device · ⚠ heavy here · ✕ can't run — heavy ones ask twice. The ? on a row (or △) opens its guide: what it is, how to try it, and a jump straight there.</div>
           <div class="set-labs">
             <For each={LAB_GROUPS}>
               {(g) => (
@@ -286,6 +357,8 @@ export default function SettingsApp(props: {
                               <span class="set-labs-desc labs-warn-text">⚠ {fit?.notes[0] ?? "heavy for this device"} — press again to enable anyway</span>
                             </Show>
                           </span>
+                          <span class="labs-guide-btn" title="Guide — what it is & how to try it" role="button"
+                            onClick={(e) => { e.stopPropagation(); setRow(my()); setGuide(f.id); sfx.tickH(); }}><Icon name="question" /></span>
                           <span class="labs-switch" classList={{ on: labEnabled(f.id) }}><span class="labs-knob" /></span>
                         </button>
                       );
@@ -298,7 +371,7 @@ export default function SettingsApp(props: {
         </Show>
 
         {/* ————— SYSTEM ————— */}
-        <Show when={SECTIONS[sec()] === "SYSTEM"}>
+        <Show when={!q().trim() && SECTIONS[sec()] === "SYSTEM"}>
           <div class="set-rows">
             <div class="set-sys-card">
               <div class="set-row-title">This Console</div>
@@ -344,6 +417,51 @@ export default function SettingsApp(props: {
             </div>
           </>
         )}
+      </Show>
+
+      {/* feature guide card — same experience the old Labs modal had, now in one home */}
+      <Show when={guide()} keyed>
+        {(gid) => {
+          const g = LAB_GUIDES[gid];
+          const f = labsFlat().find((x) => x.id === gid);
+          const v = rateFeature(gid);
+          return (
+            <>
+              <div class="panel-backdrop" onClick={() => setGuide(null)} />
+              <div class="modal labs-modal">
+                <div class="labs-guide">
+                  <div class="labs-guide-head">
+                    <span class="labs-guide-title">{f?.title ?? gid}</span>
+                    <span class="labs-guide-state" classList={{ on: labEnabled(gid) }}>{labEnabled(gid) ? "● ENABLED" : "○ OFF"}</span>
+                  </div>
+                  <p class="labs-guide-what">{g?.what ?? f?.desc}</p>
+                  <Show when={g?.steps?.length}>
+                    <div class="labs-guide-try">HOW TO TRY IT</div>
+                    <ol class="labs-guide-steps"><For each={g?.steps ?? []}>{(s) => <li>{s}</li>}</For></ol>
+                  </Show>
+                  <Show when={v}>
+                    <div class={`labs-guide-fit ${v!.level}`}>
+                      <div class="labs-guide-fit-head">
+                        {v!.level === "ready" ? "✓ SUITS THIS CONSOLE" : v!.level === "caution" ? "⚠ RUNS HERE — WITH CAUTION" : "✕ NOT BUILT FOR THIS CONSOLE"}
+                      </div>
+                      <For each={v!.notes}>{(note) => <div class="labs-guide-fit-note">· {note}</div>}</For>
+                      <div class="labs-guide-fit-rec">{v!.rec} — this console: {deviceSummary()}</div>
+                    </div>
+                  </Show>
+                  <div class="labs-guide-actions">
+                    <Show when={g?.go && (g.needs !== "webgpu" || hasWebGPU())}>
+                      <button class="labs-go" onClick={() => { setGuide(null); props.onLabGo(gid, g!.go!); }}>▶ {g?.goLabel ?? "TAKE ME THERE"}</button>
+                    </Show>
+                    <button class="labs-go ghost" classList={{ warn: labsWarn() === gid }} onClick={() => tryToggle(gid)}>
+                      {labEnabled(gid) ? "SWITCH OFF" : labsWarn() === gid ? "⚠ ENABLE ANYWAY" : "SWITCH ON"}
+                    </button>
+                  </div>
+                  <div class="modal-hint"><span class="btn-x" /> {g?.go ? (g?.goLabel?.toLowerCase() ?? "take me there") : "toggle"} · △ toggle · <span class="btn-o" /> close</div>
+                </div>
+              </div>
+            </>
+          );
+        }}
       </Show>
 
       <div class="panel-hint guide-hint">←→ sections · ↑↓ rows · <span class="btn-x" /> change · <span class="btn-o" /> back</div>

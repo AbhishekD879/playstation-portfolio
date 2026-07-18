@@ -372,10 +372,8 @@ export const CATEGORIES: XmbCategory[] = [
     label: "Settings",
     icon: "gear",
     items: [
-      { id: "settingshub", title: "Console Settings", sub: "Fonts · icons · audio · language · Labs — tune the whole console", icon: "gear", action: { type: "settings-hub" } },
-      { id: "theme", title: "Theme Settings", sub: "Presets & fully custom colours", icon: "spark", action: { type: "themes" } },
-      { id: "sound", title: "Sound Settings", sub: "Volume, navigation sounds & mute", icon: "speaker", action: { type: "sound-settings" } },
-      { id: "labs", title: "Labs", sub: "Feature flags — toggle every system feature & app", icon: "spark", action: { type: "labs" } },
+      // themes, sound and Labs live INSIDE Console Settings — one home, no dupes
+      { id: "settingshub", title: "Console Settings", sub: "Fonts · icons · themes · audio · language · Labs — everything, searchable", icon: "gear", action: { type: "settings-hub" } },
       { id: "datetime", title: "Date and Time Settings", sub: "12-hour / 24-hour clock", icon: "info", action: { type: "clock-format" } },
       { id: "powersave", title: "Power Save Settings", sub: "Screen saver — start time", icon: "power", action: { type: "saver-cycle" } },
       { id: "rumble", title: "Vibration", sub: "Controller rumble on / off", icon: "gamepad", action: { type: "rumble-toggle" } },

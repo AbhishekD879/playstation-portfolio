@@ -799,12 +799,9 @@ export default function XMB(props: {
         setCustomHsl(loadCustomHsl());
         setThemesOpen(true);
         break;
-      case "labs":
+      case "labs": // legacy deep-link — Labs now lives inside Console Settings
         sfx.confirm();
-        setLabsIdx(0);
-        setLabsQuery("");
-        setLabsOpen(true);
-        setTimeout(() => labsInput?.focus(), 40);
+        setApp("settingshub");
         break;
       case "sound-settings":
         sfx.confirm();
@@ -1924,6 +1921,7 @@ export default function XMB(props: {
           bind={(f) => (appNav = f)}
           onClose={() => setApp(null)}
           onOpenThemes={() => { setApp(null); setThemeIdx(currentThemeIndex()); setThemeRow(0); setCustomHsl(loadCustomHsl()); setThemesOpen(true); }}
+          onLabGo={(id, go) => { setApp(null); runLabGo(id, go); }}
         />
       </Show>
       <Show when={app() === "videoplayer"}>
