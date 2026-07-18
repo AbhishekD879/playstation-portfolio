@@ -4,6 +4,7 @@ import ProfileSelect from "./profileSelect";
 import Wave from "./xmb/Wave";
 import XMB from "./xmb/XMB";
 import Osk from "./xmb/Osk";
+import MobileNudge from "./xmb/MobileNudge";
 import PhonePad from "./xmb/PhonePad";
 import GameSession from "./emulator/GameSession";
 import { createProfile, loadProfiles, updateProfile, type Profile } from "./profiles";
@@ -67,6 +68,8 @@ export default function App() {
       </Show>
       {/* controller users get the PS on-screen keyboard on any text field */}
       <Osk />
+      {/* phone visitors (the WhatsApp crowd) get a one-time nudge to desktop */}
+      <MobileNudge />
     </>
   );
 }

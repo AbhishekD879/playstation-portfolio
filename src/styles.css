@@ -2474,3 +2474,26 @@ img.status-avatar, img.ptile-avatar { object-fit: cover; border: 1px solid rgba(
   box-shadow: 0 0 18px color-mix(in oklab, var(--xmb-tint, #7fb4ff) 55%, transparent);
   border-radius: 6px;
 }
+
+/* ————— Mobile → desktop nudge (phone visitors only, one-time) —————
+   A PS-style band dialog (full-width hairline rules + tint glow, not a web
+   card): steers phone users to open the console on a computer. */
+.deskn-backdrop {
+  position: fixed; inset: 0; z-index: 200; display: grid; place-items: center;
+  padding: 24px; background: rgba(2,4,10,0.74); backdrop-filter: blur(7px);
+  animation: deskn-fade 0.35s ease both;
+}
+@keyframes deskn-fade { from { opacity: 0; } to { opacity: 1; } }
+.deskn {
+  width: min(720px, 94vw); text-align: center; padding: 30px 26px 26px;
+  display: flex; flex-direction: column; align-items: center; gap: 11px;
+  background: linear-gradient(180deg, rgba(10,14,26,0.97), rgba(6,9,18,0.97));
+  border-top: 1px solid color-mix(in oklab, var(--xmb-tint) 55%, rgba(255,255,255,0.15));
+  border-bottom: 1px solid color-mix(in oklab, var(--xmb-tint) 55%, rgba(255,255,255,0.15));
+  box-shadow: 0 0 64px color-mix(in oklab, var(--xmb-tint) 28%, transparent);
+}
+.deskn-tag { font-size: 10.5px; letter-spacing: 0.28em; color: var(--dim); }
+.deskn-title { margin: 0; font-size: 24px; text-wrap: balance; text-shadow: 0 0 26px color-mix(in oklab, var(--xmb-tint) 45%, transparent); }
+.deskn-body { margin: 0; font-size: 14px; line-height: 1.6; color: rgba(255,255,255,0.82); max-width: 46ch; }
+.deskn-go { font-size: 15px; padding: 12px 30px; margin-top: 5px; }
+.deskn-note { margin: 2px 0 0; font-size: 11.5px; color: var(--dim); }
