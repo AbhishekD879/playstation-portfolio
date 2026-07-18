@@ -13,6 +13,7 @@ import {
 } from "../rpgm";
 import RpgHtml5 from "./RpgHtml5";
 import RpgEasyRpg from "./RpgEasyRpg";
+import RpgRenPy from "./RpgRenPy";
 
 export default function RpgMaker(props: { profile: { id: string }; onClose: () => void; bind: (nav: (a: NavAction) => void) => void }) {
   const [games, setGames] = createSignal<RpgGame[]>([]);
@@ -103,9 +104,14 @@ export default function RpgMaker(props: { profile: { id: string }; onClose: () =
         const close = () => { setPlaying(null); hostNav = undefined; };
         if (kind === "html5") return <RpgHtml5 game={g} onClose={close} bind={(f) => (hostNav = f)} />;
         if (kind === "easyrpg") return <RpgEasyRpg game={g} onClose={close} bind={(f) => (hostNav = f)} />;
-        // XP/VX/VX Ace (mkxp) — detected & saved, but its only web build (mruby)
-        // needs per-game script porting + a MIDI synth, so it can't play arbitrary
-        // games; honest state until a CRuby-WASM engine exists.
+        if (kind === "renpy") return <RpgRenPy game={g} onClose={close} bind={(f) => (hostNav = f)} />;
+        // Not playable — detected & saved, but honest about why:
+        //  · Ren'Py DESKTOP build: engine ships as platform-native modules and
+        //    .rpyc is version-locked, so no single runtime plays arbitrary
+        //    games — the author must re-export it "for web".
+        //  · XP/VX/VX Ace (mkxp): only web build is mruby, needs per-game script
+        //    porting + a MIDI synth, so it can't run arbitrary games.
+        const isRenpyDesktop = g.engine === "renpydesktop";
         return (
           <div class="rpgplay">
             <div class="rpgplay-bar">
@@ -113,8 +119,12 @@ export default function RpgMaker(props: { profile: { id: string }; onClose: () =
               <button class="ps-act" onClick={close}><span class="btn-o" /> back</button>
             </div>
             <div class="rpgplay-msg">
-              {ENGINE_LABEL[g.engine]} isn't supported yet.<br />
-              <span class="rpgplay-dim">XP/VX/VX Ace need a Ruby (RGSS) engine that can't run arbitrary games in a browser today. MV, MZ, 2000 &amp; 2003 all play now. Your game is saved in the library.</span>
+              {isRenpyDesktop ? <>This is a Ren'Py <b>desktop</b> build — it can't run in a browser.</> : <>{ENGINE_LABEL[g.engine]} isn't supported yet.</>}<br />
+              <span class="rpgplay-dim">
+                {isRenpyDesktop
+                  ? "Ren'Py's engine ships as platform-native code and its scripts are locked to one engine version, so no single in-browser runtime can play arbitrary desktop games. Open the game in the Ren'Py launcher and Build → Web, then import that zip — web builds play here."
+                  : "XP/VX/VX Ace need a Ruby (RGSS) engine that can't run arbitrary games in a browser today. MV, MZ, 2000 & 2003 all play now. Your game is saved in the library."}
+              </span>
             </div>
             <div class="rpgplay-hint"><span class="btn-o" /> back</div>
           </div>
@@ -145,7 +155,7 @@ export default function RpgMaker(props: { profile: { id: string }; onClose: () =
                   <Show when={g.cover} fallback={<span class="rpg-cover-glyph"><Icon name="gamepad" /></span>}>
                     <img src={g.cover} alt="" />
                   </Show>
-                  <span class="rpg-badge">{ENGINE_LABEL[g.engine].replace("RPG Maker ", "")}</span>
+                  <span class="rpg-badge">{g.engine === "renpydesktop" ? "Ren'Py ⚠" : ENGINE_LABEL[g.engine].replace("RPG Maker ", "")}</span>
                 </div>
                 <div class="rpg-title">{g.title}</div>
                 <button class="rpg-del" classList={{ armed: armDelete() === g.id }}
@@ -175,9 +185,10 @@ export default function RpgMaker(props: { profile: { id: string }; onClose: () =
 
         <Show when={!games().length && !importing()}>
           <p class="rpg-empty-note">
-            Drop in a zip of an RPG Maker game you own. <b>MV, MZ, 2000 &amp; 2003 all play now</b> — MV/MZ natively,
-            2000/2003 through EasyRPG (free RTP bundled). XP/VX/Ace are detected and saved but not yet playable.
-            Nothing is uploaded — the game stays in this browser.
+            Drop in a zip of a game you own. <b>RPG Maker MV, MZ, 2000 &amp; 2003 play now</b> — MV/MZ natively,
+            2000/2003 through EasyRPG (free RTP bundled). <b>Ren'Py web builds play too (experimental)</b> — export
+            your game from the Ren'Py launcher with Build → Web. XP/VX/Ace and Ren'Py <i>desktop</i> builds are
+            detected and saved but can't run in a browser. Nothing is uploaded — the game stays in this browser.
           </p>
         </Show>
 

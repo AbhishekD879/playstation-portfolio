@@ -39,7 +39,14 @@ export default function RpgPlayer(props: {
   const goFullscreen = () => {
     const el = container as unknown as { requestFullscreen?: (o?: object) => Promise<void>; webkitRequestFullscreen?: () => void };
     if (document.fullscreenElement) return;
-    (el.requestFullscreen?.({ navigationUI: "hide" }) ?? el.webkitRequestFullscreen?.() as unknown as Promise<void>)?.catch?.(() => {});
+    const p = el.requestFullscreen?.({ navigationUI: "hide" }) ?? el.webkitRequestFullscreen?.() as unknown as Promise<void>;
+    // Once fullscreen, lock to landscape — RPG Maker/Ren'Py render 16:9, so a
+    // portrait phone otherwise letterboxes to a thin strip ("not full screen").
+    // Android honours this; iOS Safari has no Fullscreen/orientation API for
+    // elements, so it's a no-op there (add-to-home-screen PWA is the fix there).
+    Promise.resolve(p)
+      .then(() => { try { void (screen.orientation as unknown as { lock?: (o: string) => Promise<void> })?.lock?.("landscape"); } catch { /* unsupported */ } })
+      .catch(() => {});
   };
   const exitFullscreen = () => {
     if (document.fullscreenElement) (document.exitFullscreen?.() ?? (document as unknown as { webkitExitFullscreen?: () => void }).webkitExitFullscreen?.() as unknown as Promise<void>)?.catch?.(() => {});

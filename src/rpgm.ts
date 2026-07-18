@@ -12,7 +12,7 @@
 //   · xp / vx / vxace  → mkxp (WASM, RGSS) — RPG Maker XP / VX / VX Ace.
 import { Unzip, UnzipInflate } from "fflate";
 
-export type RpgEngine = "mz" | "mv" | "rm2k3" | "rm2k" | "vxace" | "vx" | "xp" | "unknown";
+export type RpgEngine = "mz" | "mv" | "rm2k3" | "rm2k" | "vxace" | "vx" | "xp" | "renpy" | "renpydesktop" | "unknown";
 
 export interface RpgGame {
   id: string;
@@ -37,7 +37,8 @@ export const DEVICE_MEM_GB: number | undefined = (navigator as any).deviceMemory
  *  approximate, shown to inform, not to gate. */
 export function estimateRuntimeMB(g: RpgGame): number {
   const sizeMB = g.bytes / 1048576;
-  const base = engineKind(g.engine) === "html5" ? 130 : 90; // PixiJS+WebGL vs WASM engine
+  const k = engineKind(g.engine);
+  const base = k === "html5" ? 130 : k === "renpy" ? 160 : 90; // PixiJS+WebGL · CPython+SDL wasm · EasyRPG wasm
   return Math.round(base + Math.min(sizeMB * 0.5, 400));
 }
 /** True when the estimate is a large share of a (Chromium-reported) device
@@ -51,13 +52,15 @@ export const ENGINE_LABEL: Record<RpgEngine, string> = {
   mz: "RPG Maker MZ", mv: "RPG Maker MV",
   rm2k3: "RPG Maker 2003", rm2k: "RPG Maker 2000",
   vxace: "RPG Maker VX Ace", vx: "RPG Maker VX", xp: "RPG Maker XP",
+  renpy: "Ren'Py", renpydesktop: "Ren'Py (desktop build)",
   unknown: "Unknown / unsupported",
 };
 /** Which player surface an engine routes to. */
-export const engineKind = (e: RpgEngine): "html5" | "easyrpg" | "mkxp" | "none" =>
+export const engineKind = (e: RpgEngine): "html5" | "easyrpg" | "mkxp" | "renpy" | "none" =>
   e === "mz" || e === "mv" ? "html5"
   : e === "rm2k" || e === "rm2k3" ? "easyrpg"
   : e === "xp" || e === "vx" || e === "vxace" ? "mkxp"
+  : e === "renpy" ? "renpy"
   : "none";
 
 // —— IndexedDB metadata store ————————————————————————————————————————————————
@@ -166,6 +169,32 @@ function detect(paths: string[]): Detected {
   // Game.ini RGSS library line, as a fallback for decrypted projects
   const ini = find((p) => /(^|\/)game\.ini$/.test(p));
   if (ini) return { engine: "xp", root: dirOf(ini), entry: "" }; // refined after read below
+
+  // Ren'Py WEB build (exported via the launcher's "Web" build) — a wasm engine
+  // (renpy.wasm / index.wasm on 7.x) + the renpy.js loader beside an index.html.
+  // The whole game/ tree is packed inside game.zip, so there are no loose .rpyc.
+  // Web builds use only relative paths, so they run from our /rpgm/renpy/<id>/
+  // subpath with no rewriting and need no cross-origin isolation.
+  const renpyWasm = find((p) => /(^|\/)(renpy|index)\.wasm(\.gz)?$/.test(p));
+  const renpyLoader = find((p) => /(^|\/)renpy\.js$/.test(p)) || find((p) => /(^|\/)game\.zip$/.test(p));
+  if (renpyWasm && renpyLoader) {
+    const root = dirOf(renpyWasm);
+    const idx = find((p) => p.toLowerCase() === `${root}index.html`.toLowerCase()) ?? `${root}index.html`;
+    return { engine: "renpy", root, entry: idx.slice(root.length) };
+  }
+
+  // Ren'Py DESKTOP / project build — detected so we can save it and show an
+  // honest notice. It CAN'T run in a browser: the engine ships as platform
+  // native modules (.so/.pyd) and the .rpyc bytecode is locked to the exact
+  // Ren'Py version, so no single bundled runtime plays arbitrary games. The
+  // author must re-export it "for web" from the Ren'Py launcher.
+  const isRenpy = find((p) => /\.rpa$/.test(p))
+    || find((p) => /(^|\/)game\/.*\.rpyc$/.test(p))
+    || find((p) => /(^|\/)renpy\/__init__\.py$/.test(p))
+    || find((p) => /(^|\/)lib\/py[0-9]/.test(p))
+    || find((p) => /(^|\/)game\/.*\.rpy$/.test(p))
+    || find((p) => /(^|\/)game\/script_version\.txt$/.test(p));
+  if (isRenpy) return { engine: "renpydesktop", root: "", entry: "" };
 
   return { engine: "unknown", root: "", entry: "" };
 }

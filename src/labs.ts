@@ -83,7 +83,7 @@ const APPS: { id: string; title: string; cat: string }[] = [
   { id: "ps1", title: "PlayStation 1 (PSX)", cat: "Games" },
   { id: "insert", title: "Retro Console (cartridge loader)", cat: "Games" },
   { id: "scummvm", title: "Point & Click (ScummVM)", cat: "Games" },
-  { id: "rpgmaker", title: "RPG Maker (bring your own)", cat: "Games" },
+  { id: "rpgmaker", title: "RPG Maker & Ren'Py (bring your own)", cat: "Games" },
   { id: "lichesstv", title: "Lichess TV", cat: "Games" },
   { id: "code", title: "Code Playground", cat: "Extras" },
   { id: "pc", title: "Other OS — x86 PC", cat: "Extras" },
@@ -261,8 +261,8 @@ APP_GUIDES.videoplayer = {
   go: "app:videoplayer", goLabel: "OPEN THE PLAYER",
 };
 APP_GUIDES.rpgmaker = {
-  what: "Bring-your-own RPG Maker games, JoiPlay-style. Drop a .zip of a game you own and the console detects the engine. MV & MZ (2015+) play natively (HTML5); 2000 & 2003 play through the self-hosted EasyRPG engine with a free CC-BY RTP bundled in. XP/VX/VX Ace are detected and saved but not yet playable (they need a Ruby RGSS engine that can't run arbitrary games in-browser today). Nothing is uploaded; the game lives only in this browser.",
-  steps: ["Game › RPG Maker", "Add a game (.zip) — the whole game folder, zipped", "MV/MZ start immediately; older engines note their status"],
+  what: "Bring-your-own RPG Maker & Ren'Py games, JoiPlay-style. Drop a .zip of a game you own and the console detects the engine. MV & MZ (2015+) play natively (HTML5); 2000 & 2003 play through the self-hosted EasyRPG engine with a free CC-BY RTP bundled in. Ren'Py WEB builds play too (experimental) — export your game from the Ren'Py launcher with Build → Web and import that zip. XP/VX/VX Ace and Ren'Py desktop builds are detected and saved but can't run in a browser (their engines are version-locked native code). Nothing is uploaded; the game lives only in this browser.",
+  steps: ["Game › RPG Maker", "Add a game (.zip) — the whole game folder, zipped (Ren'Py: a Web build)", "Supported engines start immediately; others note their status"],
   go: "app:rpgmaker", goLabel: "OPEN RPG MAKER",
 };
 APP_GUIDES.settingshub = {

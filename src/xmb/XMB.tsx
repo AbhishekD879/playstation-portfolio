@@ -244,7 +244,7 @@ export default function XMB(props: {
     { id: "psp", title: "PlayStation Portable", sub: `PSP library & downloads — experimental (PPSSPP)${pspCount() ? ` · ${pspCount()} in your shelf` : ""}`, icon: "disc", action: { type: "psp-home" } },
     { id: "retro", title: "Retro Games", sub: `NES · SNES · GBA · N64 & more — library + downloads${retroCount() ? ` · ${retroCount()} in your shelf` : ""}`, icon: "gamepad", action: { type: "retro-home" } },
     { id: "scummvm", title: "Point & Click", sub: "ScummVM in wasm — classic adventures, free ones included", icon: "folder-open", action: { type: "scummvm" } },
-    { id: "rpgmaker", title: "RPG Maker", sub: `Drop a zip of a game you own — MV/MZ & 2000/2003 play${rpgCount() ? ` · ${rpgCount()} in your library` : ""}`, icon: "folder-open", action: { type: "rpg-maker" } },
+    { id: "rpgmaker", title: "RPG Maker & Ren'Py", sub: `Drop a zip of a game you own — RPG Maker MV/MZ & 2000/2003, Ren'Py web builds (experimental)${rpgCount() ? ` · ${rpgCount()} in your library` : ""}`, icon: "folder-open", action: { type: "rpg-maker" } },
     { id: "lichesstv", title: "Lichess TV", sub: "Spectate · live grandmaster games", icon: "knight", action: { type: "lichess-tv" } },
   ]);
 

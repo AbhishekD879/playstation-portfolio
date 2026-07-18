@@ -138,8 +138,11 @@ const DIAG_SHIM = `<script>(function(){
     var sp=document.getElementById("loadingSpinner"), spinner=!!(sp&&getComputedStyle(sp).display!=="none");
     var scene=(window.SceneManager&&SceneManager._scene&&SceneManager._scene.constructor)?SceneManager._scene.constructor.name:"";
     var canvas=!!document.querySelector("canvas");
+    // booted = a canvas is up and no loading spinner. For RPG Maker we also
+    // require the scene to have advanced past Scene_Boot; Ren'Py has no
+    // SceneManager (scene==="") so canvas+no-spinner is the signal.
     return {source:"rpgm-diag", up:now-T0, scene:scene, spinner:spinner,
-      booted:!!(canvas&&!spinner&&scene&&scene!=="Scene_Boot"), canvas:canvas,
+      booted:!!(canvas&&!spinner&&(scene?scene!=="Scene_Boot":true)), canvas:canvas,
       pending:pend.slice(0,12), recent:recent.slice(0,8), counts:counts, errors:errors.slice(0,6)}; }
   function post(){ try{ parent.postMessage(snap(), "*"); }catch(e){} }
   function addErr(msg, at){ errors.unshift({msg:String(msg).slice(0,280), at:at||""}); if(errors.length>10) errors.pop(); post(); }
@@ -153,6 +156,25 @@ const DIAG_SHIM = `<script>(function(){
   try { var F=window.fetch; if(F) window.fetch=function(inp){ var u=(inp&&inp.url)||inp, id=begin(u);
     return F.apply(this,arguments).then(function(r){ fin(id, r.status|0); return r; }, function(err){ fin(id,0,"network"); throw err; }); }; } catch(e){}
   setInterval(post, 1000); post();
+})();</` + `script>`;
+
+// —— Ren'Py neutraliser (injected into Ren'Py web-build HTML) ——
+// A Ren'Py web export ships its OWN service worker and registers it from
+// index.html (register("./service-worker.js")). If it succeeded it would claim
+// the /rpgm/renpy/<id>/ scope and shadow our OPFS serving on the next load, so
+// we stub that one registration out. Everything else Ren'Py needs is plain
+// relative fetches (renpy.wasm/renpy.data/game.zip) which our SW already serves,
+// and it runs single-threaded (Asyncify) — no SharedArrayBuffer / COOP-COEP.
+const RENPY_SHIM = `<script>(function(){
+  try {
+    if (navigator.serviceWorker && navigator.serviceWorker.register) {
+      var reg = navigator.serviceWorker.register.bind(navigator.serviceWorker);
+      navigator.serviceWorker.register = function(u){
+        if (String(u).indexOf("service-worker") >= 0) return Promise.reject(new Error("host-managed sw"));
+        return reg.apply(null, arguments);
+      };
+    }
+  } catch(e){}
 })();</` + `script>`;
 
 // The extractor doesn't strip the game's wrapper folder; it records the root
@@ -191,6 +213,9 @@ self.addEventListener("fetch", (e) => {
   // MV/MZ route
   let m = p.match(/^\/rpgm\/fs\/([^/]+)\/(.*)$/);
   const isMvMz = !!m;
+  // Ren'Py web-build route (self-contained HTML5/WASM, served like MV/MZ)
+  if (!m) m = p.match(/^\/rpgm\/renpy\/([^/]+)\/(.*)$/);
+  const isRenpy = !isMvMz && !!m;
   // EasyRPG game route (RTP fallback handled inside)
   if (!m) m = p.match(/^\/rpgm\/easyrpg\/games\/([^/]+)\/(.*)$/);
   if (!m) return; // engine statics + anything else → network
@@ -211,7 +236,7 @@ self.addEventListener("fetch", (e) => {
       // doesn't bundle (self-contained games pull zero RTP — the 12MB pack is
       // never a single download). Each fetched asset is cached so replays and
       // offline don't re-download it.
-      if (!isMvMz) {
+      if (!isMvMz && !isRenpy) {
         const rtpUrl = "/rpgm/easyrpg/rtp/" + path;
         try {
           const cache = await caches.open("rpgm-rtp-v1");
@@ -225,12 +250,13 @@ self.addEventListener("fetch", (e) => {
       return new Response("Not found: " + path, { status: 404, headers: ISO_HEADERS });
     }
 
-    if (isMvMz && type === "text/html") {
-      // Inject the NW.js polyfill first (require must exist before any script
-      // runs), then the save-isolation shim. RPG Maker index.html always has a
-      // <head>; if it somehow doesn't, prepend so the shims still run first.
+    if ((isMvMz || isRenpy) && type === "text/html") {
+      // Inject shims into the game HTML before any of its scripts run. RPG Maker
+      // gets the NW.js polyfill (require/process); Ren'Py gets its SW neutraliser.
+      // Both get the diagnostics probe + per-game save isolation. RPG Maker
+      // index.html always has a <head>; if it somehow doesn't, prepend.
       const raw = await file.text();
-      const shims = NW_SHIM + DIAG_SHIM + isolationShim(gameId);
+      const shims = (isRenpy ? RENPY_SHIM : NW_SHIM) + DIAG_SHIM + isolationShim(gameId);
       const html = /<head[^>]*>/i.test(raw)
         ? raw.replace(/<head[^>]*>/i, (m) => m + shims)
         : shims + raw;
