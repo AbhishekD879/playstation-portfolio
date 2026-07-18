@@ -22,7 +22,7 @@ const FEATURE_GROUPS: FlagGroup[] = [
       { id: "tabsync", title: "Tab Sync", desc: "Theme, Labs flags & settings mirror instantly across every open tab" },
       { id: "wakelock", title: "Never-Dim Console", desc: "The screen stays awake while a game, video or karaoke is playing" },
       { id: "translate", title: "Universal Menu", desc: "Crossbar in your language — on-device AI translation, cached after first run" },
-      { id: "battmeter", title: "Battery Meter", desc: "PS-style battery cells in the status bar (with a low-charge pulse)" },
+      { id: "battmeter", title: "Battery Meter", desc: "PS-style battery cells + percentage in the status bar — device and DualSense controller" },
       { id: "restmode", title: "Rest Mode", desc: "Long idle fades the console to a breathing power light — any input resumes exactly where you were" },
       { id: "attract", title: "Attract Mode (first-visit tutor)", desc: "Idle at the home screen and the console demos its own controls — never shown once you've learned them" },
       { id: "photomode", title: "XMB Photo Mode", desc: "Snapshot the living console as a framed picture — share sheet or straight to disk" },

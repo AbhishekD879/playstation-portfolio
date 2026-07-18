@@ -43,6 +43,7 @@ import SettingsApp from "./SettingsApp";
 import VideoPlayer from "./VideoPlayer";
 import RepoRewind from "./RepoRewind";
 import { enterRest, exitRest, resting } from "../rest";
+import { dsBattery } from "../dualsense";
 import { composeSnapshot, downloadSnapshot, shareSnapshot } from "../photomode";
 import { applySetup, readSetupHash } from "../statefiles";
 import ChessApp from "./ChessApp";
@@ -1666,7 +1667,14 @@ export default function XMB(props: {
         <Show when={visitorCount() > 0}>
           <span class="status-online" title="Other visitors browsing this console right now (serverless P2P)">◉ {visitorCount() + 1} on console</span>
         </Show>
-        <Show when={padName()}><span class="status-pad" title={padName()!}><Icon name="gamepad" /></span></Show>
+        <Show when={padName()}>
+          <span class="status-pad" title={`${padName()!}${dsBattery() != null ? ` — battery ${dsBattery()}%` : ""}`}>
+            <Icon name="gamepad" />
+            <Show when={labEnabled("battmeter") && dsBattery() != null}>
+              <span class="batt-pct" classList={{ low: dsBattery()! <= 15 }}>{dsBattery()}%</span>
+            </Show>
+          </span>
+        </Show>
         <Show when={labEnabled("battmeter") && battery()}>
           <span
             class="status-batt"
@@ -1679,6 +1687,7 @@ export default function XMB(props: {
               <span class="batt-cell" classList={{ on: battery()!.level > 0.7 }} />
             </span>
             <span class="batt-cap" />
+            <span class="batt-pct" classList={{ low: battery()!.level <= 0.15 && !battery()!.charging }}>{Math.round(battery()!.level * 100)}%</span>
           </span>
         </Show>
         <div class="status-clock">{clock()}</div>

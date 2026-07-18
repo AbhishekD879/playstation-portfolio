@@ -93,6 +93,9 @@ img.status-avatar, img.ptile-avatar { object-fit: cover; border: 1px solid rgba(
 .batt-cell { width: 5px; height: 9px; border-radius: 1px; background: rgba(255,255,255,0.14); }
 .batt-cell.on { background: #fff; }
 .batt-cap { width: 2px; height: 7px; margin-left: 1px; background: rgba(255,255,255,0.8); border-radius: 0 1px 1px 0; }
+.batt-pct { margin-left: 6px; font-size: 10.5px; letter-spacing: 0.05em; color: rgba(255,255,255,0.78); font-variant-numeric: tabular-nums; }
+.batt-pct.low { color: #e0483e; }
+.status-pad { display: inline-flex; align-items: center; }
 .status-batt.low .batt-body { border-color: #e0483e; }
 .status-batt.low .batt-cell.on { background: #e0483e; animation: battBlink 1s steps(2, jump-none) infinite; }
 .status-batt.charging .batt-cell { animation: battCharge 1.4s infinite; }
