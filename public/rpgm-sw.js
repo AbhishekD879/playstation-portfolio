@@ -84,9 +84,22 @@ const NW_SHIM = `<script>(function(){
     child_process:{execSync:noop,exec:function(){var cb=arguments[arguments.length-1];if(typeof cb==="function")cb(null,"","");},
       spawn:function(){return{on:noop,unref:noop,stdout:{on:noop},stderr:{on:noop}};}}};
   window.require=function(n){return modules[n]||{};};
-  window.process=window.process||{platform:"browser",arch:"x64",argv:[],argv0:"",execPath:"",env:{},
-    versions:{node:"",nw:"",chromium:""},cwd:ret("/"),chdir:noop,on:noop,exit:noop,
-    nextTick:function(f){Promise.resolve().then(f);},stdout:{write:noop},stderr:{write:noop}};
+  // process must be an OBJECT (plugins read process.platform), but two traps:
+  // (1) MZ main.js isPathRandomized() reads process.mainModule.filename
+  //     unconditionally (only gated on typeof process==="object"), so a bare
+  //     process crashes boot → infinite loading spinner. Give it a filename
+  //     that doesn't start with "/private/var".
+  // (2) Emscripten modules (effekseer.wasm) detect Node via
+  //     typeof process.versions.node==="string" and then call process.hrtime /
+  //     require('fs'). Leave versions.node UNDEFINED so they take the web path;
+  //     hrtime is a real-time stub in case anything calls it anyway.
+  var hrtime=function(p){var t=performance.now()*1e-3,s=Math.floor(t),n=Math.floor((t-s)*1e9);
+    if(p){var ds=s-p[0],dn=n-p[1];if(dn<0){ds--;dn+=1e9;}return [ds,dn];}return [s,n];};
+  hrtime.bigint=function(){return typeof BigInt==="function"?BigInt(Math.round(performance.now()*1e6)):Math.round(performance.now()*1e6);};
+  window.process=window.process||{platform:"browser",arch:"x64",argv:[],argv0:"",execPath:"/index.html",
+    version:"",versions:{},env:{},cwd:ret("/"),chdir:noop,on:noop,exit:noop,hrtime:hrtime,
+    mainModule:{filename:"/index.html"},nextTick:function(f){Promise.resolve().then(f);},
+    stdout:{write:noop},stderr:{write:noop}};
   window.global=window.global||window;
   window.nw=nwgui;
   // The engine's core defines Utils AFTER this head script. Once it exists,
