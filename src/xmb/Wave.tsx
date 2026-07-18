@@ -38,12 +38,11 @@ const WAVE_FRAG = /* glsl */ `
   uniform float uAudio;
   uniform float uReact;
   uniform vec3 uColor;
-  uniform float uWhiteMix;
   varying float vGlow;
   void main() {
     float glow = 0.35 + vGlow * 0.65 * uGlow;
     float pulse = 1.0 + uReact * uAudio * 0.9;
-    vec3 col = mix(vec3(1.0), uColor, uWhiteMix);
+    vec3 col = mix(vec3(1.0), uColor, 0.28);
     gl_FragColor = vec4(col, uOpacity * glow * pulse);
   }
 `;
@@ -102,7 +101,7 @@ export default function Wave() {
         uniforms: {
           uTime: { value: Math.random() * 50 }, uOpacity: { value: opacity },
           uAmp: { value: 1 }, uGlow: { value: 0.8 }, uAudio: { value: 0 },
-          uReact: { value: 0 }, uColor: { value: new THREE.Color(0xffffff) }, uWhiteMix: { value: 0.28 },
+          uReact: { value: 0 }, uColor: { value: new THREE.Color(0xffffff) },
         },
         transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide,
       });
@@ -110,7 +109,6 @@ export default function Wave() {
       mesh.rotation.x = -1.15;
       mesh.position.y = y;
       mesh.userData.baseSpeed = speed;
-      mesh.userData.op = opacity;
       scene.add(mesh);
       return mesh;
     };
@@ -211,18 +209,11 @@ export default function Wave() {
       const m = MODE[mode as keyof typeof MODE] ?? MODE.reactive;
       speedMul = m.speed;
       const col = new THREE.Color(tint());
-      // PS5 skin: the wave glows in the pure tint on black (a luminous ribbon)
-      // instead of a pastel wash — drop the white-mix and lift glow + opacity so
-      // it actually reads bright. Reactive to the flag (re-runs on toggle).
-      const skin = labEnabled("ps5ui");
-      for (const w of waves) {
-        const mat = w.material as THREE.ShaderMaterial;
+      for (const mat of mats) {
         mat.uniforms.uAmp.value = m.amp;
-        mat.uniforms.uGlow.value = m.glow * (skin ? 1.8 : 1);
+        mat.uniforms.uGlow.value = m.glow;
         mat.uniforms.uReact.value = m.react;
         mat.uniforms.uColor.value = col;
-        mat.uniforms.uWhiteMix.value = skin ? 0.04 : 0.28;
-        mat.uniforms.uOpacity.value = (w.userData.op as number) * (skin ? 3.2 : 1);
       }
       sparkleMat.size = m.sparkSize;
       sparkleMat.opacity = m.sparkOp;

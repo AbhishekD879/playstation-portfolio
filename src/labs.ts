@@ -43,7 +43,6 @@ const FEATURE_GROUPS: FlagGroup[] = [
       { id: "enhance", title: "Photo Enhance (AI ×2)", desc: "On-device super-resolution — upscale any gallery photo, tile by tile" },
       { id: "cutout", title: "Cutout Cam (AI)", desc: "One-tap background removal — turn any photo into a clean transparent cutout" },
       { id: "clickmask", title: "Click-to-Mask (AI)", desc: "Tap any object in a photo and the console isolates it — Segment Anything, on-device" },
-      { id: "ps5ui", title: "PS5 UI Skin (dark · glass)", desc: "A modern PS5/PS6-style reskin: near-black ground, glassmorphic panels, the theme tint as a luminous accent. Your classic look stays the default — flip this on for the crisp modern feel." },
       { id: "moderncss", title: "Modern CSS Polish", desc: "Self-aware panels, sticky group headers, height-to-auto animations & scroll reveals" },
       { id: "parallaxbg", title: "Pointer Parallax Backdrop", desc: "The living background leans gently with your pointer for real depth" },
       { id: "galaxyboot", title: "Galaxy Boot (WebGPU)", desc: "A 200,000-star spiral galaxy spins up behind the boot sequence" },
@@ -56,7 +55,7 @@ const FEATURE_GROUPS: FlagGroup[] = [
 ];
 
 /** Flags that ship OFF and are opted INTO via Labs (experimental tier). */
-const DEFAULT_OFF = new Set(["crt", "galaxyboot", "ps5ui"]); // opt-in: full-console CRT, GPU galaxy boot, PS5 glass skin
+const DEFAULT_OFF = new Set(["crt", "galaxyboot"]); // opt-in: full-console CRT, GPU galaxy boot
 
 // —— apps (each id matches the XmbItem id it hides on the crossbar) ——
 const APPS: { id: string; title: string; cat: string }[] = [
@@ -125,10 +124,6 @@ export interface LabGuide {
 }
 
 const FEATURE_GUIDES: Record<string, LabGuide> = {
-  ps5ui: {
-    what: "A modern PS5/PS6-style reskin of the whole console. The ground drops to near-black so the theme tint stops washing everything out and becomes a luminous accent — the wave turns into a glowing tinted ribbon, panels go glassmorphic, and text gains contrast. Your classic look stays the default; this is purely an opt-in coat of paint. Every feature and all 16 tints keep working.",
-    steps: ["Flip it on — the whole console reskins live, no reload", "Try a few themes: each tint now reads crisp on the dark ground", "Flip it off any time to return to the classic look"],
-  },
   search: {
     what: "One search box over everything on the console — apps, career sections, settings, games.",
     steps: ["Press / anywhere (or tap ⌕ in the header)", "Type a few letters — “doom”, “résumé”, “theme”…", "↑↓ to pick, ENTER jumps straight there"],
