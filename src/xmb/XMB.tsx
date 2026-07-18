@@ -1388,23 +1388,37 @@ export default function XMB(props: {
         else applyTheme(THEMES[themeIdx()].color);
         awardT("stylist");
       };
+      // rows, matching the modal's visual order: 0 = swatches · 1 = Living
+      // Background modes · 2-4 = custom H/S/L sliders (only when custom is picked)
+      const close = () => { sfx.back(); setThemesOpen(false); setThemeRow(0); };
       if (themeRow() === 0) {
         if (action === "left") { setThemeIdx((themeIdx() + n - 1) % n); sfx.tickH(); applyIdx(); }
         if (action === "right") { setThemeIdx((themeIdx() + 1) % n); sfx.tickH(); applyIdx(); }
-        if (action === "down" && isCustom()) { setThemeRow(1); sfx.tickV(); }
-        if (action === "back" || action === "confirm") { sfx.back(); setThemesOpen(false); setThemeRow(0); }
+        if (action === "down") { setThemeRow(1); sfx.tickV(); } // → Living Background (always present)
+        if (action === "back" || action === "confirm") close();
+      } else if (themeRow() === 1) {
+        // Living Background — ←→ cycle the mode (applies live); the active mode
+        // is the on-screen focus, so no separate cursor state is needed.
+        const modes = BG_MODES.filter((m) => m.id !== "fluid" || hasWebGPU());
+        const cur = Math.max(0, modes.findIndex((m) => m.id === bgMode()));
+        if (action === "left") { setBgMode(modes[(cur - 1 + modes.length) % modes.length].id); sfx.tickH(); }
+        if (action === "right") { setBgMode(modes[(cur + 1) % modes.length].id); sfx.tickH(); }
+        if (action === "up") { setThemeRow(0); sfx.tickV(); }
+        if (action === "down" && isCustom()) { setThemeRow(2); sfx.tickV(); } // → sliders (custom only)
+        if (action === "back" || action === "confirm") close();
       } else {
+        const sliderRow = themeRow() - 2; // 0 = Hue · 1 = Saturation · 2 = Lightness
         const step = action === "left" ? -1 : action === "right" ? 1 : 0;
         if (step) {
           const c = { ...customHsl() };
-          if (themeRow() === 1) c.h = (c.h + step * 6 + 360) % 360;
-          if (themeRow() === 2) c.s = Math.min(90, Math.max(10, c.s + step * 4));
-          if (themeRow() === 3) c.l = Math.min(75, Math.max(30, c.l + step * 3));
+          if (sliderRow === 0) c.h = (c.h + step * 6 + 360) % 360;
+          if (sliderRow === 1) c.s = Math.min(90, Math.max(10, c.s + step * 4));
+          if (sliderRow === 2) c.l = Math.min(75, Math.max(30, c.l + step * 3));
           setCustomHsl(c); applyCustomHsl(c.h, c.s, c.l); sfx.tickH(); awardT("stylist");
         }
         if (action === "up") { setThemeRow(themeRow() - 1); sfx.tickV(); }
-        if (action === "down" && themeRow() < 3) { setThemeRow(themeRow() + 1); sfx.tickV(); }
-        if (action === "back" || action === "confirm") { sfx.back(); setThemesOpen(false); setThemeRow(0); }
+        if (action === "down" && themeRow() < 4) { setThemeRow(themeRow() + 1); sfx.tickV(); }
+        if (action === "back" || action === "confirm") close();
       }
       return;
     }
@@ -2301,8 +2315,8 @@ export default function XMB(props: {
             <div class="bg-modes-row">
               <For each={BG_MODES.filter((m) => m.id !== "fluid" || hasWebGPU())}>
                 {(m) => (
-                  <button class="bg-mode" classList={{ active: bgMode() === m.id }}
-                    onClick={() => { setBgMode(m.id); sfx.tickH(); }}>
+                  <button class="bg-mode" classList={{ active: bgMode() === m.id, cursor: themeRow() === 1 && bgMode() === m.id }}
+                    onClick={() => { setThemeRow(1); setBgMode(m.id); sfx.tickH(); }}>
                     <span class="bg-mode-name">{m.label}</span>
                     <span class="bg-mode-sub">{m.sub}</span>
                   </button>
@@ -2318,7 +2332,7 @@ export default function XMB(props: {
                 { label: "Lightness", key: "l" as const, min: 30, max: 75 },
               ]}>
                 {(s, i) => (
-                  <div class="theme-slider" classList={{ active: themeRow() === i() + 1 }}>
+                  <div class="theme-slider" classList={{ active: themeRow() === i() + 2 }}>
                     <span class="theme-slider-label">{s.label}</span>
                     <input
                       type="range" min={s.min} max={s.max} value={customHsl()[s.key]}

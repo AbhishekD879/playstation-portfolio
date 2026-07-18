@@ -2126,6 +2126,12 @@ img.status-avatar, img.ptile-avatar { object-fit: cover; border: 1px solid rgba(
   border-color: color-mix(in oklab, var(--xmb-tint) 60%, #fff); color: #fff;
   box-shadow: 0 0 16px color-mix(in oklab, var(--xmb-tint) 35%, transparent);
 }
+/* the pad/keyboard cursor is on the Living Background row (theme modal row 1) */
+.bg-mode.cursor {
+  outline: 2px solid color-mix(in oklab, var(--xmb-tint) 90%, #fff);
+  outline-offset: 2px;
+  box-shadow: 0 0 22px color-mix(in oklab, var(--xmb-tint) 55%, transparent);
+}
 .bg-mode-name { font-size: 13px; letter-spacing: 0.03em; }
 .bg-mode-sub { font-size: 10.5px; color: rgba(255,255,255,0.5); }
 .theme-sliders { display: flex; flex-direction: column; gap: 10px; margin: 18px 4px 6px; }
