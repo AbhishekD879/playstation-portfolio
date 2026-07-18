@@ -39,7 +39,6 @@ const FEATURE_GROUPS: FlagGroup[] = [
   {
     group: "Visuals & Feel", icon: "spark", items: [
       { id: "livingbg", title: "Living Background", desc: "Animated, audio-reactive XMB wave (else a calm static backdrop)" },
-      { id: "juice", title: "Launch Effects", desc: "Impact shake + haptic pulse when an app opens" },
       { id: "livephoto", title: "Live Photos (3D)", desc: "On-device AI depth turns gallery photos into parallax 3D" },
       { id: "enhance", title: "Photo Enhance (AI ×2)", desc: "On-device super-resolution — upscale any gallery photo, tile by tile" },
       { id: "cutout", title: "Cutout Cam (AI)", desc: "One-tap background removal — turn any photo into a clean transparent cutout" },
@@ -111,7 +110,7 @@ export interface LabGuide {
   what: string;          // one or two plain sentences
   steps: string[];       // "TRY IT" — concrete, in order
   needs?: "webgpu";      // capability the card should report on
-  go?: string;           // action id XMB executes (e.g. "app:doom", "cc", "juice-demo")
+  go?: string;           // action id XMB executes (e.g. "app:doom", "cc", "search")
   goLabel?: string;      // button label, defaults to TAKE ME THERE
 }
 
@@ -229,11 +228,6 @@ const FEATURE_GUIDES: Record<string, LabGuide> = {
     what: "The backdrop is alive: pick from PS3 waves, fireflies, a starfield, a retro horizon grid — most react to whatever the console is playing.",
     steps: ["Settings › Theme Settings › BACKGROUND", "Pick a backdrop — “Flat 2D” is the original still gradient", "Play the radio: Reactive, Aurora, Fireflies & Horizon pulse to the music", "On WebGPU consoles, “Fluid” is real simulated water — stir it with the pointer"],
     go: "themes", goLabel: "PICK A BACKDROP",
-  },
-  juice: {
-    what: "Launch feedback: a quick impact shake plus a haptic kick on the pad whenever an app opens.",
-    steps: ["Launch anything from the crossbar", "Feel the thump (rumble needs a connected pad)"],
-    go: "juice-demo", goLabel: "SHOW ME",
   },
   livephoto: {
     what: "On-device AI depth turns your photos into parallax 3D — the picture tilts as you move the mouse.",

@@ -188,15 +188,6 @@ img.status-avatar, img.ptile-avatar { object-fit: cover; border: 1px solid rgba(
 }
 /* springy overshoot when an item becomes selected — game-feel "juice" */
 @keyframes iconPop { 0% { transform: scale(0.72); } 58% { transform: scale(1.14); } 100% { transform: scale(1); } }
-/* brief impact shake when an app launches */
-.xmb.shaking { animation: xmbShake 0.3s ease-out; }
-@keyframes xmbShake {
-  0%, 100% { transform: translate(0, 0); }
-  22% { transform: translate(-2.5px, 1.5px); }
-  44% { transform: translate(2.5px, -1.5px); }
-  66% { transform: translate(-1.5px, -1.5px); }
-  84% { transform: translate(1.5px, 1px); }
-}
 .item-icon svg { width: 100%; height: 100%; }
 .item-title {
   font-size: 16px; font-weight: 400; letter-spacing: 0.05em;

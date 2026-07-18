@@ -17,11 +17,6 @@ const pulses: Pulse[] = [];
 export function fluidNavPulse(dir: -1 | 1) {
   pulses.push({ x: 0.5 - dir * 0.18, y: 0.62, dx: dir * 0.55, dy: -0.04, r: 0.12, amt: 0.5 });
 }
-/** App-launch splash — a burst in the middle of the screen. */
-export function fluidLaunchSplash() {
-  pulses.push({ x: 0.5, y: 0.55, dx: 0, dy: -0.35, r: 0.2, amt: 1.2 });
-}
-
 const WGSL_COMMON = /* wgsl */ `
 struct U {
   texelV: vec2f, texelD: vec2f,

@@ -17,7 +17,7 @@ import { startPresence, visitorCount } from "../p2p";
 import { iconOf } from "../prefs";
 import { tr } from "../translate";
 import { startTabSync } from "../sync";
-import { fluidLaunchSplash, fluidNavPulse } from "./FluidBg";
+import { fluidNavPulse } from "./FluidBg";
 import DepthPhoto from "./DepthPhoto";
 import ControlCenter from "./ControlCenter";
 import { asrSupported, record } from "../asr";
@@ -195,7 +195,6 @@ export default function XMB(props: {
   const [ps2Boot, setPs2Boot] = createSignal<GameRecord | null>(null);
   const [ps2Join, setPs2Join] = createSignal(false);
   const [ccOpen, setCcOpen] = createSignal(false);
-  const [shaking, setShaking] = createSignal(false); // brief impact-shake on launch
   let ccNav: ((a: Parameters<Parameters<typeof onNav>[0]>[0]) => void) | undefined;
 
   // route a library record to the right engine: PS2 discs boot the Play! app
@@ -1266,7 +1265,6 @@ export default function XMB(props: {
       case "cc": setCcOpen(true); break;
       case "themes": setThemesOpen(true); break;
       case "saver": setSaver(true); break;
-      case "juice-demo": rumble(0.5, 0.35, 90); setShaking(true); setTimeout(() => setShaking(false), 300); break;
       case "restart-demo": sessionStorage.removeItem("asp.resume"); location.reload(); break;
       case "photo-mode-demo": void takeSnapshot(); break;
       case "photo-cat": {
@@ -1504,19 +1502,6 @@ export default function XMB(props: {
   // game bridge underneath is paused so it doesn't also react to CC navigation
   createEffect(() => { setCcActive(ccOpen()); setBridgePaused(ccOpen()); });
 
-  // —— launch juice: a rumble pulse + a brief impact-shake whenever an app opens ——
-  let prevApp: string | null = null;
-  createEffect(() => {
-    const a = app();
-    if (a && a !== prevApp && labEnabled("juice")) {
-      rumble(0.5, 0.35, 90);
-      setShaking(true);
-      setTimeout(() => setShaking(false), 300);
-      fluidLaunchSplash(); // the fluid background splashes too (no-op otherwise)
-    }
-    prevApp = a;
-  });
-
   // mouse wheel scrolls the item list
   let wheelAcc = 0;
   const onWheel = (e: WheelEvent) => {
@@ -1635,7 +1620,7 @@ export default function XMB(props: {
   };
 
   return (
-    <div class="xmb" classList={{ shaking: shaking() }} onWheel={onWheel} onTouchStart={onTouchStart} onTouchEnd={onTouchEnd}>
+    <div class="xmb" onWheel={onWheel} onTouchStart={onTouchStart} onTouchEnd={onTouchEnd}>
       {/* status bar */}
       <div class="status">
         <div class="status-user">
