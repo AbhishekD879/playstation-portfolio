@@ -62,11 +62,29 @@ const NW_SHIM = `<script>(function(){
     join:function(){return Array.prototype.filter.call(arguments,Boolean).join("/").replace(/\\/+/g,"/");},
     resolve:function(){return ("/"+Array.prototype.filter.call(arguments,Boolean).join("/")).replace(/\\/+/g,"/");},
     normalize:function(p){return String(p).replace(/\\/+/g,"/");}};
-  var fs={existsSync:function(){return false;},readFileSync:function(){throw new Error("fs unavailable in browser");},
+  // fs: sync reads CAN'T work (sync XHR bypasses service workers in Chromium,
+  // and there's no SharedArrayBuffer bridge without page-level isolation), so
+  // existsSync stays FALSE — well-written NW.js plugins existsSync-guard their
+  // fs path and fall back to the engine's XHR loader, which our SW serves.
+  // ASYNC reads are REAL: async fetch goes through the SW, so plugins loading
+  // cutscene/plugin data via fs.readFile(cb) or fs.promises get actual bytes.
+  var fsUrl=function(p){ p=String(p).replace(/^[A-Za-z]:[\\\\/]/,"").replace(/\\\\/g,"/").replace(/^\\.\\//,"").replace(/^\\/+/,"");
+    try{ return new URL(p, location.href).href; }catch(e){ return null; } };
+  var fsRead=function(p, enc){ var u=fsUrl(p);
+    return fetch(u).then(function(r){ if(!r.ok) throw new Error("ENOENT: "+p);
+      return enc ? r.text() : r.arrayBuffer().then(function(ab){
+        var a=new Uint8Array(ab);
+        a.toString=function(){ try{ return new TextDecoder().decode(new Uint8Array(this)); }catch(e){ return ""; } };
+        return a; }); }); };
+  var fs={existsSync:function(){return false;},readFileSync:function(p){throw new Error("fs sync reads unavailable in browser: "+p);},
     writeFileSync:noop,appendFileSync:noop,mkdirSync:noop,rmdirSync:noop,unlinkSync:noop,renameSync:noop,copyFileSync:noop,
     readdirSync:function(){return [];},statSync:function(){return{isDirectory:ret(false),isFile:ret(false),size:0};},
     writeFile:function(){var cb=arguments[arguments.length-1];if(typeof cb==="function")cb(null);},
-    readFile:function(){var cb=arguments[arguments.length-1];if(typeof cb==="function")cb(new Error("fs unavailable"));}};
+    readFile:function(p,opt,cb){ if(typeof opt==="function"){cb=opt;opt=null;}
+      var enc=typeof opt==="string"?opt:(opt&&opt.encoding);
+      fsRead(p,enc).then(function(d){ if(typeof cb==="function")cb(null,d); },
+        function(e){ if(typeof cb==="function")cb(e); }); },
+    promises:{ readFile:function(p,opt){ return fsRead(p, typeof opt==="string"?opt:(opt&&opt.encoding)); } }};
   var win={on:noop,removeAllListeners:noop,show:noop,hide:noop,focus:noop,blur:noop,close:noop,reload:noop,
     maximize:noop,unmaximize:noop,minimize:noop,restore:noop,setProgressBar:noop,setResizable:noop,requestAttention:noop,
     setMaximumSize:noop,setMinimumSize:noop,resizeTo:noop,moveTo:noop,setAlwaysOnTop:noop,setPosition:noop,
@@ -203,14 +221,27 @@ async function gameRootPrefix(gameDir, gameId) {
   rootCache.set(gameId, root);
   return root;
 }
+// Exact-match first; on a miss, retry that segment CASE-INSENSITIVELY (NFKC).
+// Games authored on Windows (case-insensitive fs) routinely reference assets
+// with the wrong case ("Actor1.png" vs "actor1.png") — on real Windows that
+// loads fine, but OPFS is exact-match, so those images/cutscenes 404'd here.
+// Exact hits stay fast; only the offending segment pays a directory scan.
+async function entryCI(dir, name, wantDir) {
+  try { return wantDir ? await dir.getDirectoryHandle(name) : await dir.getFileHandle(name); } catch { /* try CI */ }
+  const lc = name.normalize("NFKC").toLowerCase();
+  for await (const [n, h] of dir.entries()) {
+    if (n.normalize("NFKC").toLowerCase() === lc && (wantDir ? h.kind === "directory" : h.kind === "file")) return h;
+  }
+  throw new Error("noent " + name);
+}
 async function opfsFile(gameId, path) {
   let dir = await (await navigator.storage.getDirectory()).getDirectoryHandle("rpgm");
   dir = await dir.getDirectoryHandle(gameId);
   const root = await gameRootPrefix(dir, gameId);
   const parts = (root + path).split("/").filter(Boolean);
   const name = parts.pop();
-  for (const p of parts) dir = await dir.getDirectoryHandle(p);
-  return (await dir.getFileHandle(name)).getFile();
+  for (const p of parts) dir = await entryCI(dir, p, true);
+  return (await entryCI(dir, name, false)).getFile();
 }
 
 const ISO_HEADERS = {
