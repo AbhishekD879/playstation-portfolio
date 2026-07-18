@@ -39,6 +39,66 @@ function isolationShim(gameId) {
   })();</` + `script>`;
 }
 
+// —— NW.js / Node polyfill (injected into MV/MZ HTML only) ——
+// Desktop RPG Maker builds (the ones packaged with a Game.exe + *.pak) ship
+// plugins that call require('fs')/require('path') at LOAD time assuming NW.js.
+// In a plain browser that throws "Can't find variable: require" and the
+// engine's error screen appears before the title. We stub the Node/NW.js
+// surface so those calls no-op, and force Utils.isNwjs()=false so the engine
+// saves to browser storage (already isolated per game above) instead of a
+// filesystem that doesn't exist here. We deliberately do NOT define
+// module/exports/define — that would flip pixi.js's UMD into its CommonJS
+// branch and break the engine.
+// ponytail: fs is inert (readdir→[], write→noop); browsers have no disk. Games
+// that read bundled data through fs at runtime would need OPFS-backed fs — add
+// only if a real game needs it.
+const NW_SHIM = `<script>(function(){
+  if (typeof window.require === "function") return; // real NW.js — leave it
+  var noop=function(){}, ret=function(v){return function(){return v;};};
+  var path={sep:"/",delimiter:":",
+    dirname:function(p){p=String(p).replace(/\\/+$/,"");var i=p.lastIndexOf("/");return i<=0?(i===0?"/":"."):p.slice(0,i);},
+    basename:function(p,e){var b=(String(p).split("/").pop())||"";if(e&&b.slice(-e.length)===e)b=b.slice(0,-e.length);return b;},
+    extname:function(p){var b=(String(p).split("/").pop())||"",i=b.lastIndexOf(".");return i>0?b.slice(i):"";},
+    join:function(){return Array.prototype.filter.call(arguments,Boolean).join("/").replace(/\\/+/g,"/");},
+    resolve:function(){return ("/"+Array.prototype.filter.call(arguments,Boolean).join("/")).replace(/\\/+/g,"/");},
+    normalize:function(p){return String(p).replace(/\\/+/g,"/");}};
+  var fs={existsSync:function(){return false;},readFileSync:function(){throw new Error("fs unavailable in browser");},
+    writeFileSync:noop,appendFileSync:noop,mkdirSync:noop,rmdirSync:noop,unlinkSync:noop,renameSync:noop,copyFileSync:noop,
+    readdirSync:function(){return [];},statSync:function(){return{isDirectory:ret(false),isFile:ret(false),size:0};},
+    writeFile:function(){var cb=arguments[arguments.length-1];if(typeof cb==="function")cb(null);},
+    readFile:function(){var cb=arguments[arguments.length-1];if(typeof cb==="function")cb(new Error("fs unavailable"));}};
+  var win={on:noop,removeAllListeners:noop,show:noop,hide:noop,focus:noop,blur:noop,close:noop,reload:noop,
+    maximize:noop,unmaximize:noop,minimize:noop,restore:noop,setProgressBar:noop,setResizable:noop,requestAttention:noop,
+    setMaximumSize:noop,setMinimumSize:noop,resizeTo:noop,moveTo:noop,setAlwaysOnTop:noop,setPosition:noop,
+    leaveFullscreen:noop,toggleFullscreen:noop,enterFullscreen:noop,zoomLevel:0,x:0,y:0,width:816,height:624,
+    title:document.title,window:window,menu:null};
+  var nwgui={Window:{get:function(){return win;},open:noop},App:{argv:[],fullArgv:[],filteredArgv:[],dataPath:"/",manifest:{},
+    clearCache:noop,quit:function(){try{window.close();}catch(e){}},closeAllWindows:noop,addOriginAccessWhitelistEntry:noop},
+    Shell:{openExternal:function(u){try{window.open(u,"_blank");}catch(e){}},openItem:noop,showItemInFolder:noop},
+    Menu:function(){return{append:noop,insert:noop,removeAt:noop,items:[]};},MenuItem:function(){return{};},
+    Clipboard:{get:function(){return{set:noop,get:ret("")};}},Screen:{Init:noop,screens:[]}};
+  var modules={fs:fs,path:path,"nw.gui":nwgui,nw:nwgui,
+    os:{platform:ret("browser"),tmpdir:ret("/tmp"),homedir:ret("/"),EOL:"\\n",release:ret(""),arch:ret("x64")},
+    electron:{remote:{app:{getPath:ret("/"),quit:noop},getCurrentWindow:function(){return win;}},
+      ipcRenderer:{on:noop,once:noop,send:noop,removeListener:noop,invoke:function(){return Promise.resolve();}}},
+    child_process:{execSync:noop,exec:function(){var cb=arguments[arguments.length-1];if(typeof cb==="function")cb(null,"","");},
+      spawn:function(){return{on:noop,unref:noop,stdout:{on:noop},stderr:{on:noop}};}}};
+  window.require=function(n){return modules[n]||{};};
+  window.process=window.process||{platform:"browser",arch:"x64",argv:[],argv0:"",execPath:"",env:{},
+    versions:{node:"",nw:"",chromium:""},cwd:ret("/"),chdir:noop,on:noop,exit:noop,
+    nextTick:function(f){Promise.resolve().then(f);},stdout:{write:noop},stderr:{write:noop}};
+  window.global=window.global||window;
+  window.nw=nwgui;
+  // The engine's core defines Utils AFTER this head script. Once it exists,
+  // force browser-storage mode so saves persist (and never hit the fs stub).
+  // ponytail: 5ms poll capped at ~5s; Utils is defined within the first core
+  // script eval, long before any save.
+  var tries=0,t=setInterval(function(){
+    if(window.Utils&&typeof window.Utils.isNwjs==="function"){window.Utils.isNwjs=function(){return false;};clearInterval(t);}
+    else if(++tries>1000){clearInterval(t);}
+  },5);
+})();</` + `script>`;
+
 // The extractor doesn't strip the game's wrapper folder; it records the root
 // prefix in a .rpgmroot marker. We prepend it so URLs (rootless) map to OPFS.
 const rootCache = new Map();
@@ -110,7 +170,14 @@ self.addEventListener("fetch", (e) => {
     }
 
     if (isMvMz && type === "text/html") {
-      const html = (await file.text()).replace(/<head>/i, "<head>" + isolationShim(gameId));
+      // Inject the NW.js polyfill first (require must exist before any script
+      // runs), then the save-isolation shim. RPG Maker index.html always has a
+      // <head>; if it somehow doesn't, prepend so the shims still run first.
+      const raw = await file.text();
+      const shims = NW_SHIM + isolationShim(gameId);
+      const html = /<head[^>]*>/i.test(raw)
+        ? raw.replace(/<head[^>]*>/i, (m) => m + shims)
+        : shims + raw;
       return new Response(html, { headers: base });
     }
     const range = e.request.headers.get("range");
