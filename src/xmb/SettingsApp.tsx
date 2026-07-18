@@ -5,7 +5,7 @@
 // (every flag inline, with fitness badges), SYSTEM (device, AI memory,
 // storage). Everything applies instantly; nothing needs a save button.
 // Controller/keyboard: ←→ sections · ↑↓ rows · ✕ cycles or opens · ◯ back.
-import { For, Show, createSignal, onMount } from "solid-js";
+import { For, Show, createEffect, createSignal, onMount } from "solid-js";
 import * as sfx from "../audio";
 import { SND_PACKS, getSndPack, getVolume, isMuted, setSndPack, setVolume, toggleMute } from "../audio";
 import { CATEGORIES } from "../content";
@@ -114,6 +114,16 @@ export default function SettingsApp(props: {
     return [...cats, ...apps];
   };
   const ICON_NAMES = Object.keys(ICONS);
+
+  // pad/keyboard focus must drag the scroller with it — in every section and
+  // inside the icon-picker grid. (Mouse users never noticed; pad users did.)
+  createEffect(() => {
+    row(); sec(); pickIdx(); picking();
+    queueMicrotask(() => {
+      document.querySelector(".setapp .set-picker .focus, .setapp .set-body .focus")
+        ?.scrollIntoView({ block: "nearest", behavior: "smooth" });
+    });
+  });
 
   const goSec = (d: number) => {
     const n = (sec() + d + SECTIONS.length) % SECTIONS.length;
