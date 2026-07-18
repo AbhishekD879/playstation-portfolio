@@ -1289,8 +1289,9 @@ export default function XMB(props: {
     // a dozen real nav actions = they know the controls; attract retires
     if (!props.profile.onboarded && ++navMastery >= 12) markOnboarded();
     if (saver()) { setSaver(false); return; }
-    if (snapshot()) { // Photo Mode preview owns the pad
-      if (action === "confirm") { downloadSnapshot(snapshot()!.blob); sfx.confirm(); }
+    if (snapshot()) { // Photo Mode preview owns the pad: ✕ share · △ save · ◯ back
+      if (action === "confirm") { void shareSnapshot(snapshot()!.blob).then((ok) => { if (!ok) downloadSnapshot(snapshot()!.blob); }); }
+      if (action === "options") { downloadSnapshot(snapshot()!.blob); sfx.confirm(); }
       if (action === "back") { sfx.back(); closeSnapshot(); }
       return;
     }
@@ -2176,29 +2177,32 @@ export default function XMB(props: {
         </div>
       </Show>
 
-      {/* Photo Mode preview */}
+      {/* Photo Mode preview — full-screen, PS screenshot-viewer style */}
       <Show when={snapshot()}>
-        <div class="panel-backdrop" onClick={closeSnapshot} />
-        <div class="modal snapmodal">
-          <div class="panel-tag">PHOTO MODE — CONSOLE SNAPSHOT</div>
-          <img class="snapmodal-img" src={snapshot()!.url} alt="Console snapshot" />
-          <div class="snapmodal-actions">
-            <button class="labs-go" onClick={() => { void shareSnapshot(snapshot()!.blob).then((ok) => { if (!ok) downloadSnapshot(snapshot()!.blob); }); }}>▶ SHARE</button>
-            <button class="labs-go ghost" onClick={() => { downloadSnapshot(snapshot()!.blob); sfx.confirm(); }}>SAVE PNG</button>
+        <div class="snapview">
+          <div class="snapview-tag">PHOTO MODE</div>
+          <img class="snapview-img" src={snapshot()!.url} alt="Console snapshot" />
+          <div class="snapview-bar">
+            <button class="ps-glyph-act" onClick={() => { void shareSnapshot(snapshot()!.blob).then((ok) => { if (!ok) downloadSnapshot(snapshot()!.blob); }); }}>
+              <span class="btn-x" /> share
+            </button>
+            <button class="ps-glyph-act" onClick={() => { downloadSnapshot(snapshot()!.blob); sfx.confirm(); }}>△ save png</button>
+            <button class="ps-glyph-act" onClick={closeSnapshot}><span class="btn-o" /> back</button>
           </div>
-          <div class="modal-hint"><span class="btn-x" /> save · <span class="btn-o" /> close</div>
         </div>
       </Show>
 
-      {/* shared-setup import confirm — a #setup= link brought settings along */}
+      {/* shared-setup import — the classic PS full-width band dialog */}
       <Show when={setupImport()}>
-        <div class="panel-backdrop" />
-        <div class="modal setupmodal">
-          <div class="panel-tag">SHARED CONSOLE SETUP</div>
-          <p class="setupmodal-what">This link carries someone's console settings — theme, Labs flags, icons, fonts and language ({Object.keys(setupImport()!).length} keys). Apply them to this console? Your games, photos and profiles are untouched.</p>
-          <div class="snapmodal-actions">
-            <button class="labs-go" onClick={() => applySetup(setupImport()!)}>▶ APPLY & RESTART</button>
-            <button class="labs-go ghost" onClick={() => { sfx.back(); setSetupImport(null); history.replaceState(null, "", location.pathname); }}>KEEP MINE</button>
+        <div class="psdialog-scrim">
+          <div class="psdialog">
+            <div class="psdialog-title">SHARED CONSOLE SETUP</div>
+            <p class="psdialog-body">This link carries someone's console settings — theme, Labs flags, icons, fonts and language ({Object.keys(setupImport()!).length} keys). Apply them to this console? Your games, photos and profiles are untouched.</p>
+            <div class="psdialog-acts">
+              <button class="psdialog-btn primary" onClick={() => applySetup(setupImport()!)}>Apply & Restart</button>
+              <button class="psdialog-btn" onClick={() => { sfx.back(); setSetupImport(null); history.replaceState(null, "", location.pathname); }}>Keep Mine</button>
+            </div>
+            <div class="psdialog-hint"><span class="btn-x" /> apply · <span class="btn-o" /> keep mine</div>
           </div>
         </div>
       </Show>

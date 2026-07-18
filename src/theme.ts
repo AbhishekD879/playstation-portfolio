@@ -25,7 +25,10 @@ export const THEMES: { name: string; color: string | null }[] = [
 
 const monthly = () => MONTH_COLORS[new Date().getMonth()];
 
-const stored = localStorage.getItem("asp.theme");
+// trust nothing: a corrupt/legacy stored value (or a garbage shared-setup
+// link) must not poison every tinted surface and canvas gradient
+const storedRaw = localStorage.getItem("asp.theme");
+const stored = storedRaw && (globalThis.CSS?.supports?.("color", storedRaw) ?? true) ? storedRaw : null;
 const [tint, setTintSig] = createSignal(stored || monthly());
 
 export { tint };

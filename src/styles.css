@@ -1062,24 +1062,35 @@ img.status-avatar, img.ptile-avatar { object-fit: cover; border: 1px solid rgba(
 .enhance-strip { position: absolute; top: 0; left: 0; right: 0; height: 3px; background: rgba(255,255,255,0.08); z-index: 3; }
 .enhance-strip-fill { height: 100%; background: linear-gradient(90deg, color-mix(in oklab, var(--xmb-tint) 65%, #fff), var(--xmb-tint)); transition: width 0.35s ease; box-shadow: 0 0 10px color-mix(in oklab, var(--xmb-tint) 80%, #fff); }
 
-/* ————— Console Settings (the PS5-style hub app) ————— */
-.setapp { position: fixed; inset: 0; z-index: 32; background: linear-gradient(200deg, #05060c, color-mix(in oklab, var(--xmb-tint) 14%, #0a0e1c) 55%, #05060c); display: flex; flex-direction: column; padding: 26px min(6vw, 70px) 18px; }
-/* Snap Rail Nav — the section tabs are a real CSS scroll-snap carousel */
+/* ————— Console Settings — PS system-software language: the dimmed wave
+   glows through, sections are text tabs on a hairline, rows are full-width
+   bands separated by hairlines with a glow gradient on focus. ————— */
+.setapp {
+  position: fixed; inset: 0; z-index: 32;
+  background: linear-gradient(200deg, rgba(3, 5, 10, 0.86), rgba(6, 10, 20, 0.93));
+  -webkit-backdrop-filter: blur(20px); backdrop-filter: blur(20px);
+  display: flex; flex-direction: column; padding: 26px min(6vw, 70px) 18px;
+}
+/* Snap Rail Nav — text tabs on a hairline, accent underline on the active one */
 .set-rail {
-  display: flex; gap: 8px; margin: 16px 0 4px;
+  display: flex; gap: 36px; margin: 14px 0 2px;
   overflow-x: auto; scroll-snap-type: x proximity; scrollbar-width: none;
-  padding-bottom: 6px; flex-shrink: 0;
+  border-bottom: 1px solid rgba(255,255,255,0.10); flex-shrink: 0;
 }
 .set-rail::-webkit-scrollbar { display: none; }
 .set-tab {
-  scroll-snap-align: center; flex-shrink: 0;
-  padding: 9px 20px; border-radius: 999px; cursor: pointer; font-family: inherit;
-  font-size: 12px; letter-spacing: 0.16em;
-  background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.12); color: var(--dim);
-  transition: all 0.15s;
+  scroll-snap-align: center; flex-shrink: 0; position: relative;
+  padding: 10px 2px 13px; cursor: pointer; font-family: inherit;
+  font-size: 12px; letter-spacing: 0.24em;
+  background: none; border: none; color: var(--dim);
+  transition: color 0.15s;
 }
-.set-tab.on { background: color-mix(in oklab, var(--xmb-tint) 30%, rgba(255,255,255,0.06)); color: #fff; border-color: color-mix(in oklab, var(--xmb-tint) 60%, rgba(255,255,255,0.2)); }
-.set-tab.focus { box-shadow: 0 0 0 2px color-mix(in oklab, var(--xmb-tint) 70%, #fff), 0 0 16px color-mix(in oklab, var(--xmb-tint) 40%, transparent); }
+.set-tab.on { color: #fff; }
+.set-tab.on::after {
+  content: ""; position: absolute; left: 0; right: 0; bottom: -1px; height: 2px;
+  background: var(--xmb-tint); box-shadow: 0 0 12px var(--xmb-tint);
+}
+.set-tab.focus { color: #fff; text-shadow: 0 0 16px rgba(255,255,255,0.95); }
 .set-body { flex: 1; overflow-y: auto; padding: 14px 4px 20px; min-height: 0; }
 .set-search {
   display: flex; align-items: center; gap: 8px; flex: 1; max-width: 380px; margin: 0 18px;
@@ -1095,76 +1106,104 @@ img.status-avatar, img.ptile-avatar { object-fit: cover; border: 1px solid rgba(
 }
 .set-search-input::placeholder { color: var(--dim); }
 .set-hit {
-  display: flex; align-items: baseline; gap: 12px; text-align: left; cursor: pointer; font-family: inherit;
-  padding: 12px 15px; border-radius: 10px;
-  background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.09); color: #fff;
-  transition: all 0.12s;
+  display: flex; align-items: baseline; gap: 14px; text-align: left; cursor: pointer; font-family: inherit;
+  padding: 13px 14px;
+  background: none; border: none; border-bottom: 1px solid rgba(255,255,255,0.07); color: #fff;
+  transition: background 0.12s;
 }
-.set-hit:hover { border-color: color-mix(in oklab, var(--xmb-tint) 55%, rgba(255,255,255,0.2)); }
+.set-hit:hover { background: linear-gradient(90deg, color-mix(in oklab, var(--xmb-tint) 28%, transparent), transparent 75%); }
 .set-hit-sec { font-size: 9.5px; letter-spacing: 0.16em; color: var(--dim); min-width: 86px; flex-shrink: 0; }
 .set-hit-title { font-size: 14px; }
 .set-hit-sub { font-size: 11.5px; color: var(--dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.set-rows { display: flex; flex-direction: column; gap: 16px; max-width: 860px; }
-.set-row { padding: 14px 16px; border-radius: 12px; background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.09); display: flex; flex-direction: column; gap: 10px; }
-.set-row.focus { border-color: color-mix(in oklab, var(--xmb-tint) 55%, rgba(255,255,255,0.2)); box-shadow: 0 0 18px color-mix(in oklab, var(--xmb-tint) 30%, transparent); }
-.set-row-head { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; }
-.set-row-title { font-size: 15.5px; letter-spacing: 0.04em; }
-.set-row-sub { font-size: 12px; color: var(--dim); }
+.set-rows { display: flex; flex-direction: column; max-width: 920px; }
+.set-row {
+  display: flex; align-items: center; justify-content: space-between; gap: 22px;
+  padding: 15px 16px; cursor: default;
+  background: none; border: none; border-bottom: 1px solid rgba(255,255,255,0.07);
+  font-family: inherit; color: #fff; text-align: left;
+  transition: background 0.15s;
+}
+.set-row.focus {
+  background: linear-gradient(90deg, color-mix(in oklab, var(--xmb-tint) 30%, transparent), rgba(255,255,255,0.05) 55%, transparent);
+}
+.set-row-link { cursor: pointer; }
+.set-row-head { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.set-row-title { font-size: 15px; letter-spacing: 0.04em; }
+.set-row-sub { font-size: 11.5px; color: var(--dim); }
+/* ‹ value › — the PS way to change a setting */
+.set-val { display: flex; align-items: center; gap: 12px; flex-shrink: 0; }
+.set-val-text { font-size: 14px; letter-spacing: 0.04em; min-width: 170px; text-align: center; }
+.set-val-text.dim { color: var(--dim); }
+.set-chev {
+  background: none; border: none; cursor: pointer; font-family: inherit;
+  font-size: 21px; line-height: 1; color: var(--dim); padding: 2px 8px;
+  transition: color 0.12s, text-shadow 0.12s;
+}
+.set-chev:hover { color: #fff; text-shadow: 0 0 10px rgba(255,255,255,0.8); }
+.set-row.focus .set-chev { color: #fff; }
+.set-val-go { font-size: 18px; color: var(--dim); }
+.set-row.focus .set-val-go { color: #fff; text-shadow: 0 0 10px rgba(255,255,255,0.8); }
 .set-choices { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
 .set-pill {
-  padding: 8px 15px; border-radius: 999px; cursor: pointer; font-family: inherit;
-  font-size: 12.5px; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.14); color: rgba(255,255,255,0.8);
+  padding: 8px 18px; border-radius: 999px; cursor: pointer; font-family: inherit;
+  font-size: 11px; letter-spacing: 0.14em;
+  background: none; border: 1px solid rgba(255,255,255,0.22); color: rgba(255,255,255,0.85);
   transition: all 0.13s;
 }
-.set-pill:hover { background: rgba(255,255,255,0.1); }
-.set-pill.on { background: color-mix(in oklab, var(--xmb-tint) 32%, rgba(255,255,255,0.05)); border-color: color-mix(in oklab, var(--xmb-tint) 65%, rgba(255,255,255,0.2)); color: #fff; }
+.set-pill:hover { border-color: #fff; color: #fff; text-shadow: 0 0 8px rgba(255,255,255,0.7); }
+.set-pill.on { border-color: color-mix(in oklab, var(--xmb-tint) 75%, #fff); color: #fff; box-shadow: 0 0 14px color-mix(in oklab, var(--xmb-tint) 40%, transparent); }
 .set-note { font-size: 13px; color: var(--dim); line-height: 1.55; max-width: 760px; margin-bottom: 14px; }
 .set-note b { color: #e8c46a; font-weight: 500; }
 .set-vol { max-width: 420px; }
 .set-vol input[type="range"] { flex: 1; accent-color: var(--xmb-tint); }
 .set-vol-val { font-size: 12px; color: var(--dim); min-width: 40px; font-variant-numeric: tabular-nums; }
-.set-icon-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 8px; max-width: 1100px; }
+.set-icon-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 0 28px; max-width: 1100px; }
 .set-icon-row {
   display: flex; align-items: center; gap: 12px; text-align: left;
-  padding: 10px 13px; border-radius: 10px; cursor: pointer; font-family: inherit;
-  background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.09); color: rgba(255,255,255,0.85);
-  transition: all 0.13s;
+  padding: 11px 12px; cursor: pointer; font-family: inherit;
+  background: none; border: none; border-bottom: 1px solid rgba(255,255,255,0.07);
+  color: rgba(255,255,255,0.85);
+  transition: background 0.13s;
 }
-.set-icon-row:hover, .set-icon-row.focus { border-color: color-mix(in oklab, var(--xmb-tint) 55%, rgba(255,255,255,0.2)); }
-.set-icon-row.changed { background: color-mix(in oklab, var(--xmb-tint) 12%, rgba(255,255,255,0.03)); }
+.set-icon-row:hover, .set-icon-row.focus { background: linear-gradient(90deg, color-mix(in oklab, var(--xmb-tint) 28%, transparent), transparent 75%); color: #fff; }
+.set-icon-row.changed .set-icon-kind { color: color-mix(in oklab, var(--xmb-tint) 70%, #fff); }
 .set-icon-cur { width: 30px; height: 30px; flex-shrink: 0; color: #fff; opacity: 0.9; }
 .set-icon-cur svg { width: 100%; height: 100%; }
 .set-icon-label { flex: 1; font-size: 13.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .set-icon-kind { font-size: 9.5px; letter-spacing: 0.14em; color: var(--dim); flex-shrink: 0; }
-.set-lang-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 10px; max-width: 860px; }
-.set-lang {
-  display: flex; flex-direction: column; gap: 3px; align-items: flex-start; text-align: left;
-  padding: 14px 16px; border-radius: 12px; cursor: pointer; font-family: inherit;
-  background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.1); color: #fff;
-  transition: all 0.13s;
+.set-lrow { cursor: pointer; }
+.set-lrow-right { display: flex; align-items: center; gap: 14px; }
+.set-lrow-check { color: color-mix(in oklab, var(--xmb-tint) 70%, #fff); text-shadow: 0 0 10px var(--xmb-tint); font-size: 11px; }
+.set-lang-native { font-size: 16.5px; }
+.set-lang-en { font-size: 11px; color: var(--dim); letter-spacing: 0.1em; text-transform: uppercase; }
+.set-labs { display: flex; flex-direction: column; gap: 26px; max-width: 920px; }
+.set-labs-group { display: flex; flex-direction: column; }
+.set-labs-head {
+  display: flex; align-items: center; gap: 9px;
+  font-size: 10.5px; letter-spacing: 0.26em; color: var(--dim); text-transform: uppercase;
+  padding: 4px 2px 8px; border-bottom: 1px solid rgba(255,255,255,0.10);
 }
-.set-lang.on { background: color-mix(in oklab, var(--xmb-tint) 26%, rgba(255,255,255,0.04)); border-color: color-mix(in oklab, var(--xmb-tint) 60%, rgba(255,255,255,0.2)); }
-.set-lang.focus { box-shadow: 0 0 16px color-mix(in oklab, var(--xmb-tint) 30%, transparent); }
-.set-lang-native { font-size: 17px; }
-.set-lang-en { font-size: 11px; color: var(--dim); letter-spacing: 0.08em; }
-.set-labs { display: flex; flex-direction: column; gap: 18px; max-width: 860px; }
-.set-labs-group { display: flex; flex-direction: column; gap: 4px; }
-.set-labs-head { display: flex; align-items: center; gap: 9px; font-size: 11px; letter-spacing: 0.18em; color: var(--dim); text-transform: uppercase; padding: 4px 2px 6px; }
-.set-labs-head svg { width: 16px; height: 16px; }
+.set-labs-head svg { width: 15px; height: 15px; }
 .set-labs-row {
   display: flex; align-items: center; gap: 14px; text-align: left;
-  padding: 10px 13px; border-radius: 10px; cursor: pointer; font-family: inherit;
-  background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.07); color: #fff;
-  transition: all 0.12s;
+  padding: 12px 14px; cursor: pointer; font-family: inherit;
+  background: none; border: none; border-bottom: 1px solid rgba(255,255,255,0.07); color: #fff;
+  transition: background 0.12s;
 }
-.set-labs-row:hover, .set-labs-row.focus { border-color: color-mix(in oklab, var(--xmb-tint) 50%, rgba(255,255,255,0.16)); }
+.set-labs-row:hover, .set-labs-row.focus {
+  background: linear-gradient(90deg, color-mix(in oklab, var(--xmb-tint) 28%, transparent), rgba(255,255,255,0.04) 55%, transparent);
+}
 .set-labs-info { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1; }
 /* the ? and the switch sit together at the right edge, evenly spaced by the row gap */
 .set-labs-row .labs-guide-btn { margin-right: 0; }
 .set-labs-row .labs-guide-btn svg { width: 100%; height: 100%; display: block; }
 .set-labs-title { font-size: 13.5px; }
 .set-labs-desc { font-size: 11.5px; color: var(--dim); line-height: 1.4; }
-.set-sys-card { padding: 15px 17px; border-radius: 12px; background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.09); display: flex; flex-direction: column; gap: 7px; max-width: 720px; }
+.set-sys-card {
+  padding: 16px 14px 18px; display: flex; flex-direction: column; gap: 7px; max-width: 760px;
+  background: none; border: none; border-bottom: 1px solid rgba(255,255,255,0.07); border-radius: 0;
+}
+.set-sys-card .set-row-title { font-size: 10.5px; letter-spacing: 0.26em; text-transform: uppercase; color: var(--dim); margin-bottom: 4px; }
 .set-sys-line { font-size: 12.5px; color: rgba(255,255,255,0.78); }
 .set-sys-line.dim { color: var(--dim); }
 .set-picker { width: min(640px, 92vw); }
@@ -1276,12 +1315,48 @@ img.status-avatar, img.ptile-avatar { object-fit: cover; border: 1px solid rgba(
 .attract-text { font-size: 15px; letter-spacing: 0.14em; color: rgba(255,255,255,0.85); text-transform: uppercase; }
 .attract-hint { font-size: 10.5px; letter-spacing: 0.3em; color: var(--dim); animation: restBreathe 2.8s ease-in-out infinite; }
 
-/* ————— Photo Mode preview + shared-setup modals ————— */
-.snapmodal { width: min(860px, 92vw); }
-.snapmodal-img { width: 100%; border-radius: 8px; border: 1px solid rgba(255,255,255,0.15); }
-.snapmodal-actions { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; }
-.setupmodal { width: min(560px, 92vw); }
-.setupmodal-what { font-size: 14px; line-height: 1.6; color: rgba(255,255,255,0.85); max-width: 46ch; }
+/* ————— Photo Mode preview — full-screen PS screenshot viewer ————— */
+.snapview {
+  position: fixed; inset: 0; z-index: 62; background: rgba(2, 3, 8, 0.94);
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 26px;
+  animation: fadeIn 0.3s ease-out;
+}
+.snapview-tag { font-size: 11px; letter-spacing: 0.4em; color: var(--dim); }
+.snapview-img {
+  max-width: min(1100px, 84vw); max-height: 66vh;
+  box-shadow: 0 30px 90px rgba(0,0,0,0.7), 0 0 0 1px rgba(255,255,255,0.12);
+}
+.snapview-bar { display: flex; gap: 38px; align-items: center; }
+.ps-glyph-act {
+  display: flex; align-items: center; gap: 9px;
+  background: none; border: none; cursor: pointer; font-family: inherit;
+  font-size: 12px; letter-spacing: 0.18em; color: rgba(255,255,255,0.85); text-transform: lowercase;
+  transition: color 0.12s, text-shadow 0.12s;
+}
+.ps-glyph-act:hover { color: #fff; text-shadow: 0 0 12px rgba(255,255,255,0.8); }
+
+/* ————— the classic PS full-width band dialog ————— */
+.psdialog-scrim {
+  position: fixed; inset: 0; z-index: 62; background: rgba(0, 2, 8, 0.72);
+  -webkit-backdrop-filter: blur(4px); backdrop-filter: blur(4px);
+  display: flex; align-items: center; animation: fadeIn 0.25s ease-out;
+}
+.psdialog {
+  width: 100%; padding: 40px min(10vw, 140px) 30px;
+  background: linear-gradient(180deg, rgba(10, 15, 28, 0.4), rgba(10, 15, 28, 0.85) 25%, rgba(10, 15, 28, 0.85) 75%, rgba(10, 15, 28, 0.4));
+  border-top: 1px solid rgba(255,255,255,0.22); border-bottom: 1px solid rgba(255,255,255,0.22);
+  display: flex; flex-direction: column; align-items: center; gap: 16px; text-align: center;
+}
+.psdialog-title { font-size: 13px; letter-spacing: 0.34em; color: rgba(255,255,255,0.92); }
+.psdialog-body { font-size: 14px; line-height: 1.65; color: rgba(255,255,255,0.8); max-width: 62ch; }
+.psdialog-acts { display: flex; gap: 44px; margin-top: 6px; }
+.psdialog-btn {
+  background: none; border: none; cursor: pointer; font-family: inherit;
+  font-size: 13.5px; letter-spacing: 0.1em; color: rgba(255,255,255,0.7); padding: 6px 4px;
+  transition: color 0.12s, text-shadow 0.12s;
+}
+.psdialog-btn:hover, .psdialog-btn.primary { color: #fff; text-shadow: 0 0 14px rgba(255,255,255,0.85); }
+.psdialog-hint { font-size: 10.5px; letter-spacing: 0.16em; color: var(--dim); display: flex; align-items: center; gap: 6px; }
 
 /* ————— Repo Rewind — the console's own git history ————— */
 .rewind { position: fixed; inset: 0; z-index: 32; background: radial-gradient(circle at 50% 45%, #0d1322, #05060c 75%); }

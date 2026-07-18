@@ -154,6 +154,7 @@ export default function SettingsApp(props: {
     }
     return false; // LABS/SYSTEM rows have nothing to slide
   };
+  const adjustAt = (r: number, d: number) => { setRow(r); if (adjustRow(d)) sfx.tickH(); };
 
   // Labs inline toggle with the same ⚠ press-again guard as the modal
   const labsFlat = () => LAB_GROUPS.flatMap((g) => g.items.map((f) => ({ ...f, group: g.group })));
@@ -275,7 +276,6 @@ export default function SettingsApp(props: {
     if (a === "back") { sfx.back(); props.onClose(); }
   });
 
-  const pill = (active: boolean) => ({ class: "set-pill", classList: { on: active } });
 
   return (
     <div class="setapp">
@@ -320,35 +320,38 @@ export default function SettingsApp(props: {
           </div>
         </Show>
 
-        {/* ————— APPEARANCE ————— */}
+        {/* ————— APPEARANCE — PS rows: title left, ‹ value › right ————— */}
         <Show when={!q().trim() && SECTIONS[sec()] === "APPEARANCE"}>
           <div class="set-rows">
-            <div class="set-row" classList={{ focus: row() === 0 }}>
+            <div class="set-row" classList={{ focus: row() === 0 }} onClick={() => setRow(0)}>
               <div class="set-row-head"><span class="set-row-title">Console Font</span><span class="set-row-sub">every label, every app — applied live</span></div>
-              <div class="set-choices">
-                <For each={FONT_PRESETS}>
-                  {(f) => (
-                    <button {...pill(fontId() === f.id)} style={{ "font-family": f.stack }}
-                      onClick={() => { setFont(f.id); sfx.tickH(); }}>{f.name}</button>
-                  )}
-                </For>
+              <div class="set-val">
+                <button class="set-chev" onClick={(e) => { e.stopPropagation(); adjustAt(0, -1); }}>‹</button>
+                <span class="set-val-text" style={{ "font-family": (FONT_PRESETS.find((f) => f.id === fontId()) ?? FONT_PRESETS[0]).stack }}>
+                  {(FONT_PRESETS.find((f) => f.id === fontId()) ?? FONT_PRESETS[0]).name}
+                </span>
+                <button class="set-chev" onClick={(e) => { e.stopPropagation(); adjustAt(0, 1); }}>›</button>
               </div>
             </div>
-            <div class="set-row" classList={{ focus: row() === 1 }}>
+            <div class="set-row" classList={{ focus: row() === 1 }} onClick={() => setRow(1)}>
               <div class="set-row-head"><span class="set-row-title">Letter Spacing</span></div>
-              <div class="set-choices">
-                <For each={TRACKINGS}>{(t) => <button {...pill(trackId() === t.id)} onClick={() => { setTracking(t.id); sfx.tickH(); }}>{t.name}</button>}</For>
+              <div class="set-val">
+                <button class="set-chev" onClick={(e) => { e.stopPropagation(); adjustAt(1, -1); }}>‹</button>
+                <span class="set-val-text">{(TRACKINGS.find((t) => t.id === trackId()) ?? TRACKINGS[0]).name}</span>
+                <button class="set-chev" onClick={(e) => { e.stopPropagation(); adjustAt(1, 1); }}>›</button>
               </div>
             </div>
-            <div class="set-row" classList={{ focus: row() === 2 }}>
+            <div class="set-row" classList={{ focus: row() === 2 }} onClick={() => setRow(2)}>
               <div class="set-row-head"><span class="set-row-title">Display Size</span><span class="set-row-sub">scales the whole console, PS display-area style</span></div>
-              <div class="set-choices">
-                <For each={SIZES}>{(t) => <button {...pill(sizeId() === t.id)} onClick={() => { setUiSize(t.id); sfx.tickH(); }}>{t.name}</button>}</For>
+              <div class="set-val">
+                <button class="set-chev" onClick={(e) => { e.stopPropagation(); adjustAt(2, -1); }}>‹</button>
+                <span class="set-val-text">{(SIZES.find((t) => t.id === sizeId()) ?? SIZES[1]).name}</span>
+                <button class="set-chev" onClick={(e) => { e.stopPropagation(); adjustAt(2, 1); }}>›</button>
               </div>
             </div>
-            <div class="set-row" classList={{ focus: row() === 3 }}>
+            <div class="set-row set-row-link" classList={{ focus: row() === 3 }} onClick={() => { setRow(3); sfx.confirm(); props.onOpenThemes(); }}>
               <div class="set-row-head"><span class="set-row-title">Theme & Background</span><span class="set-row-sub">tint presets, custom colour, living backdrops</span></div>
-              <div class="set-choices"><button class="set-pill" onClick={() => { sfx.confirm(); props.onOpenThemes(); }}>OPEN THEME SETTINGS ▸</button></div>
+              <span class="set-val-go">▸</span>
             </div>
           </div>
         </Show>
@@ -373,23 +376,25 @@ export default function SettingsApp(props: {
         {/* ————— AUDIO ————— */}
         <Show when={!q().trim() && SECTIONS[sec()] === "AUDIO"}>
           <div class="set-rows">
-            <div class="set-row" classList={{ focus: row() === 0 }}>
+            <div class="set-row" classList={{ focus: row() === 0 }} onClick={() => setRow(0)}>
               <div class="set-row-head"><span class="set-row-title">Master Volume</span></div>
-              <div class="set-choices set-vol">
+              <div class="set-val set-vol">
                 <input type="range" min="0" max="100" value={Math.round(vol() * 100)}
                   onInput={(e) => { const v = +e.currentTarget.value / 100; setVolume(v); setVol(v); }} />
                 <span class="set-vol-val">{Math.round(vol() * 100)}%</span>
               </div>
             </div>
-            <div class="set-row" classList={{ focus: row() === 1 }}>
+            <div class="set-row" classList={{ focus: row() === 1 }} onClick={() => setRow(1)}>
               <div class="set-row-head"><span class="set-row-title">Navigation Sounds</span></div>
-              <div class="set-choices">
-                <For each={SND_PACKS}>{(p) => <button {...pill(pack() === p.id)} onClick={() => { setSndPack(p.id); setPack(p.id); sfx.confirm(); }}>{p.name}</button>}</For>
+              <div class="set-val">
+                <button class="set-chev" onClick={(e) => { e.stopPropagation(); adjustAt(1, -1); }}>‹</button>
+                <span class="set-val-text">{(SND_PACKS.find((p) => p.id === pack()) ?? SND_PACKS[0]).name}</span>
+                <button class="set-chev" onClick={(e) => { e.stopPropagation(); adjustAt(1, 1); }}>›</button>
               </div>
             </div>
-            <div class="set-row" classList={{ focus: row() === 2 }}>
+            <div class="set-row" classList={{ focus: row() === 2 }} onClick={() => { setRow(2); setMuted(toggleMute()); sfx.tickV(); }}>
               <div class="set-row-head"><span class="set-row-title">Mute Console</span></div>
-              <div class="set-choices"><button {...pill(muted())} onClick={() => { setMuted(toggleMute()); }}>{muted() ? "MUTED" : "SOUND ON"}</button></div>
+              <span class="set-val-text" classList={{ dim: !muted() }}>{muted() ? "MUTED" : "SOUND ON"}</span>
             </div>
           </div>
         </Show>
@@ -409,13 +414,16 @@ export default function SettingsApp(props: {
                 : "◈ warming up…"}
             </div>
           </Show>
-          <div class="set-lang-grid">
+          <div class="set-rows">
             <For each={LANGS}>
               {(l, i) => (
-                <button class="set-lang" classList={{ on: lang() === l.id, focus: row() === i() }}
+                <button class="set-row set-lrow" classList={{ on: lang() === l.id, focus: row() === i() }}
                   onClick={() => { setRow(i()); setLang(l.id); trRetry(); sfx.confirm(); }}>
                   <span class="set-lang-native">{l.native}</span>
-                  <span class="set-lang-en">{l.name}</span>
+                  <span class="set-lrow-right">
+                    <span class="set-lang-en">{l.name}</span>
+                    <Show when={lang() === l.id}><span class="set-lrow-check">●</span></Show>
+                  </span>
                 </button>
               )}
             </For>
