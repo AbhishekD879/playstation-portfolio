@@ -50,6 +50,7 @@ export interface XmbItem {
     | { type: "photo-mode" }
     | { type: "repo-rewind" }
     | { type: "rpg-maker" }
+    | { type: "renpy" }
     | { type: "chess" }
     | { type: "trivia" }
     | { type: "flash" }

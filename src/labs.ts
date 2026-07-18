@@ -83,7 +83,8 @@ const APPS: { id: string; title: string; cat: string }[] = [
   { id: "ps1", title: "PlayStation 1 (PSX)", cat: "Games" },
   { id: "insert", title: "Retro Console (cartridge loader)", cat: "Games" },
   { id: "scummvm", title: "Point & Click (ScummVM)", cat: "Games" },
-  { id: "rpgmaker", title: "RPG Maker & Ren'Py (bring your own)", cat: "Games" },
+  { id: "rpgmaker", title: "RPG Maker (bring your own)", cat: "Games" },
+  { id: "renpy", title: "Ren'Py (bring your own · experimental)", cat: "Games" },
   { id: "lichesstv", title: "Lichess TV", cat: "Games" },
   { id: "code", title: "Code Playground", cat: "Extras" },
   { id: "pc", title: "Other OS — x86 PC", cat: "Extras" },
@@ -261,9 +262,14 @@ APP_GUIDES.videoplayer = {
   go: "app:videoplayer", goLabel: "OPEN THE PLAYER",
 };
 APP_GUIDES.rpgmaker = {
-  what: "Bring-your-own RPG Maker & Ren'Py games, JoiPlay-style. Drop a .zip of a game you own and the console detects the engine. MV & MZ (2015+) play natively (HTML5); 2000 & 2003 play through the self-hosted EasyRPG engine with a free CC-BY RTP bundled in. Ren'Py WEB builds play too (experimental) — export your game from the Ren'Py launcher with Build → Web and import that zip. XP/VX/VX Ace and Ren'Py desktop builds are detected and saved but can't run in a browser (their engines are version-locked native code). Nothing is uploaded; the game lives only in this browser.",
-  steps: ["Game › RPG Maker", "Add a game (.zip) — the whole game folder, zipped (Ren'Py: a Web build)", "Supported engines start immediately; others note their status"],
+  what: "Bring-your-own RPG Maker games, JoiPlay-style. Drop a .zip of a game you own and the console detects the engine. MV & MZ (2015+) play natively (HTML5); 2000 & 2003 play through the self-hosted EasyRPG engine with a free CC-BY RTP bundled in. XP/VX/VX Ace are detected and saved but not yet playable (they need a Ruby RGSS engine that can't run arbitrary games in-browser today). Nothing is uploaded; the game lives only in this browser. (Ren'Py games have their own app.)",
+  steps: ["Game › RPG Maker", "Add a game (.zip) — the whole game folder, zipped", "MV/MZ start immediately; older engines note their status"],
   go: "app:rpgmaker", goLabel: "OPEN RPG MAKER",
+};
+APP_GUIDES.renpy = {
+  what: "Bring-your-own Ren'Py visual novels (experimental). Ren'Py WEB builds play in the browser — self-contained HTML5 + WASM (CPython + the Ren'Py engine), served from this device. To make one: open your game in the Ren'Py launcher and choose Build → Web, then zip and import the result. Desktop Ren'Py builds CAN'T run in a browser (the engine ships as platform-native code and scripts are locked to one engine version) — they're detected and saved with a note to re-export for web. Nothing is uploaded; the game lives only in this browser.",
+  steps: ["Game › Ren'Py", "In the Ren'Py launcher: Build → Web, then zip the output folder", "Add the .zip — web builds boot straight to the title menu"],
+  go: "app:renpy", goLabel: "OPEN REN'PY",
 };
 APP_GUIDES.settingshub = {
   what: "Console Settings — the PS5-style hub: customize the console font and text size, re-icon any category or app from the PS glyph set, tune audio, pick a language, and manage every Labs flag in one place.",

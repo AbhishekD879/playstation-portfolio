@@ -1,21 +1,22 @@
-// RPG Maker cabinet — a bring-your-own-game player, JoiPlay-style. Drop a .zip
-// of a game you own; the console detects which RPG Maker engine built it and
-// routes to the right player: MV/MZ run natively (HTML5), 2000/2003 through
-// EasyRPG, XP/VX/VX Ace through mkxp. Games live in OPFS, per profile, never
-// uploaded — same bring-your-own ethos as the emulator ROM shelf.
+// Bring-your-own-game cabinet, JoiPlay-style. Drop a .zip of a game you own; the
+// console detects the engine and routes to the right player. Two families share
+// this component (separate apps, separate libraries): RPG Maker (MV/MZ native,
+// 2000/2003 via EasyRPG, XP/VX/Ace detected-only) and Ren'Py (web builds play,
+// desktop builds detected-only). Games live in OPFS, per profile, never
+// uploaded — same ethos as the emulator ROM shelf.
 import { For, Show, createSignal, onMount } from "solid-js";
 import * as sfx from "../audio";
 import type { NavAction } from "../input";
 import { Icon } from "./icons";
 import {
-  ENGINE_LABEL, engineKind, estimateRuntimeMB, importRpgZip, listRpgGames, looksHeavy, removeRpgGame,
+  ENGINE_LABEL, engineFamily, engineKind, estimateRuntimeMB, importRpgZip, listRpgGames, looksHeavy, removeRpgGame,
   type ImportProgress, type RpgGame,
 } from "../rpgm";
 import RpgHtml5 from "./RpgHtml5";
 import RpgEasyRpg from "./RpgEasyRpg";
 import RpgRenPy from "./RpgRenPy";
 
-export default function RpgMaker(props: { profile: { id: string }; onClose: () => void; bind: (nav: (a: NavAction) => void) => void }) {
+export default function RpgMaker(props: { profile: { id: string }; family: "rpgmaker" | "renpy"; onClose: () => void; bind: (nav: (a: NavAction) => void) => void }) {
   const [games, setGames] = createSignal<RpgGame[]>([]);
   const [sel, setSel] = createSignal(0); // 0..n-1 games, n = import tile
   const [playing, setPlaying] = createSignal<RpgGame | null>(null);
@@ -26,7 +27,10 @@ export default function RpgMaker(props: { profile: { id: string }; onClose: () =
   let hostNav: ((a: NavAction) => void) | undefined; // the active player's nav
   let disarm: ReturnType<typeof setTimeout> | null = null;
 
-  const refresh = () => listRpgGames(props.profile.id).then(setGames);
+  const isRenpy = () => props.family === "renpy";
+  const otherApp = () => (isRenpy() ? "RPG Maker" : "Ren'Py");
+  // only this family's games (RPG Maker and Ren'Py are separate libraries)
+  const refresh = () => listRpgGames(props.profile.id).then((gs) => setGames(gs.filter((g) => engineFamily(g.engine) === props.family)));
   onMount(refresh);
 
   const cells = () => games().length + 1; // +1 import tile
@@ -41,8 +45,15 @@ export default function RpgMaker(props: { profile: { id: string }; onClose: () =
     try {
       const g = await importRpgZip(f, props.profile.id, setImporting);
       await refresh();
-      setSel(games().findIndex((x) => x.id === g.id));
-      sfx.confirm();
+      // the detector, not the cabinet, decides the family — if you dropped the
+      // wrong kind here, it's saved but lives in the other app, so say so.
+      if (engineFamily(g.engine) !== props.family) {
+        setError(`That's a ${ENGINE_LABEL[g.engine]} game — it's saved in the ${otherApp()} app.`);
+        sfx.tickV();
+      } else {
+        setSel(games().findIndex((x) => x.id === g.id));
+        sfx.confirm();
+      }
     } catch (e: any) {
       setError(e?.message || "Couldn't import that zip");
       sfx.deny();
@@ -133,7 +144,7 @@ export default function RpgMaker(props: { profile: { id: string }; onClose: () =
     >
       <div class="rpgcab">
         <div class="guide-head">
-          <div class="panel-tag">RPG MAKER — YOUR GAMES</div>
+          <div class="panel-tag">{isRenpy() ? "REN'PY — YOUR GAMES · EXPERIMENTAL" : "RPG MAKER — YOUR GAMES"}</div>
           <button class="ps-act" onClick={() => { sfx.back(); props.onClose(); }}><span class="btn-o" /> back</button>
         </div>
 
@@ -185,10 +196,18 @@ export default function RpgMaker(props: { profile: { id: string }; onClose: () =
 
         <Show when={!games().length && !importing()}>
           <p class="rpg-empty-note">
-            Drop in a zip of a game you own. <b>RPG Maker MV, MZ, 2000 &amp; 2003 play now</b> — MV/MZ natively,
-            2000/2003 through EasyRPG (free RTP bundled). <b>Ren'Py web builds play too (experimental)</b> — export
-            your game from the Ren'Py launcher with Build → Web. XP/VX/Ace and Ren'Py <i>desktop</i> builds are
-            detected and saved but can't run in a browser. Nothing is uploaded — the game stays in this browser.
+            <Show
+              when={isRenpy()}
+              fallback={<>
+                Drop in a zip of an RPG Maker game you own. <b>MV, MZ, 2000 &amp; 2003 play now</b> — MV/MZ natively,
+                2000/2003 through EasyRPG (free RTP bundled). XP/VX/Ace are detected and saved but not yet playable.
+                Nothing is uploaded — the game stays in this browser.
+              </>}
+            >
+              Drop in a Ren'Py <b>Web build</b> (open your game in the Ren'Py launcher and choose <b>Build → Web</b>,
+              then zip &amp; import the result). Web builds play right here — engine and all. Desktop builds are
+              detected and saved but can't run in a browser. Nothing is uploaded — the game stays in this browser.
+            </Show>
           </p>
         </Show>
 

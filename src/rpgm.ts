@@ -10,7 +10,7 @@
 //                        service worker serves the files into an iframe.
 //   · rm2k / rm2k3     → EasyRPG (WASM) — RPG Maker 2000 / 2003.
 //   · xp / vx / vxace  → mkxp (WASM, RGSS) — RPG Maker XP / VX / VX Ace.
-import { Unzip, UnzipInflate } from "fflate";
+import { Unzip, UnzipInflate, unzipSync } from "fflate";
 
 export type RpgEngine = "mz" | "mv" | "rm2k3" | "rm2k" | "vxace" | "vx" | "xp" | "renpy" | "renpydesktop" | "unknown";
 
@@ -55,6 +55,10 @@ export const ENGINE_LABEL: Record<RpgEngine, string> = {
   renpy: "Ren'Py", renpydesktop: "Ren'Py (desktop build)",
   unknown: "Unknown / unsupported",
 };
+/** Which cabinet a game belongs to — RPG Maker and Ren'Py are separate apps. */
+export const engineFamily = (e: RpgEngine): "renpy" | "rpgmaker" =>
+  e === "renpy" || e === "renpydesktop" ? "renpy" : "rpgmaker";
+
 /** Which player surface an engine routes to. */
 export const engineKind = (e: RpgEngine): "html5" | "easyrpg" | "mkxp" | "renpy" | "none" =>
   e === "mz" || e === "mv" ? "html5"
@@ -210,6 +214,18 @@ const isRuntimeJunk = (p: string) =>
   /(^|\/)(locales|swiftshader)\//i.test(p) ||
   /(^|\/)(credits\.html|d3dcompiler|libegl|libglesv2|ffmpeg|vk_swiftshader|vulkan-1|chrome_.*\.bin)/i.test(p);
 
+/** Turn fflate's cryptic zip errors into something a person can act on. The
+ *  "unknown compression type N" one means the archive uses a method we can't
+ *  read (only Store + Deflate) or is laid out in a way our parser can't follow —
+ *  usually fixed by re-zipping the folder with a standard tool. */
+function zipReadError(e: unknown): Error {
+  const m = e instanceof Error ? e.message : String(e);
+  if (/unknown compression|invalid zip|compression type/i.test(m)) {
+    return new Error("Couldn't read this zip — it uses a compression method the browser can't unpack (only standard Zip/Deflate works). Re-create it as a plain .zip of the game folder (right-click → Compress, or `zip -r game.zip <folder>`) and try again.");
+  }
+  return e instanceof Error ? e : new Error(m);
+}
+
 /** Parse a zip and extract into OPFS — fully STREAMING. Never loads the whole
  *  archive (or any large slice) into memory, so multi-GB games don't OOM the
  *  tab: the file is read chunk-by-chunk from disk, each entry decompressed and
@@ -237,51 +253,84 @@ export async function importRpgZip(
   const id = crypto.randomUUID();
   const dir = await gameDir(id, true);
   const names: string[] = [];
-  const pending: { path: string; chunks: Uint8Array[] }[] = [];
   let bytes = 0;
 
-  const uz = new Unzip();
-  uz.register(UnzipInflate);
-  uz.onfile = (f) => {
-    names.push(f.name);
-    if (f.name.endsWith("/") || isRuntimeJunk(f.name)) return; // dirs + runtime → skipped (never inflated)
-    const chunks: Uint8Array[] = [];
-    f.ondata = (err, chunk, final) => {
-      if (err) throw err;
-      if (chunk && chunk.length) chunks.push(chunk.slice()); // copy: fflate reuses buffers
-      if (final) pending.push({ path: f.name, chunks });
-    };
-    f.start();
+  const writeEntry = async (path: string, data: Uint8Array) => {
+    const { dir: parent, name } = await ensurePath(dir, path);
+    const fh = await parent.getFileHandle(name, { create: true });
+    const w = await fh.createWritable();
+    await w.write(data as unknown as BufferSource);
+    await w.close();
+    bytes += data.length;
   };
 
-  const flush = async () => {
-    while (pending.length) {
-      const { path, chunks } = pending.shift()!;
-      const { dir: parent, name } = await ensurePath(dir, path);
-      const fh = await parent.getFileHandle(name, { create: true });
-      const w = await fh.createWritable();
-      for (const c of chunks) { await w.write(c as unknown as BufferSource); bytes += c.length; }
-      await w.close();
-    }
-  };
+  // Two extraction paths:
+  //  · Whole-buffer (fflate unzipSync) reads the zip's CENTRAL DIRECTORY, so it
+  //    handles data descriptors / odd layouts that a sequential streaming parser
+  //    trips over ("unknown compression type …"). It holds the archive in
+  //    memory, so it's for reasonably-sized games — which is every Ren'Py web
+  //    build and almost all RPG Maker games.
+  //  · Streaming never buffers the whole file, so it's the ONLY way to handle a
+  //    multi-GB desktop build without OOM, at the cost of a fragile parser.
+  const BUFFER_MAX = 400 * 1048576;
 
   try {
-    const reader = (file.stream() as ReadableStream<Uint8Array>).getReader();
-    let read = 0;
-    for (;;) {
-      const { done, value } = await reader.read();
-      if (value) { uz.push(value, false); read += value.length; }
-      if (done) uz.push(new Uint8Array(0), true);
-      await flush(); // write finished entries to OPFS between reads (backpressure + frees memory)
-      if (file.size) onProgress?.({ phase: "extracting", pct: Math.min(99, Math.round((read / file.size) * 100)) });
-      if (done) break;
+    if (file.size <= BUFFER_MAX) {
+      onProgress?.({ phase: "extracting", pct: 0 });
+      const u8 = new Uint8Array(await file.arrayBuffer());
+      let entries: Record<string, Uint8Array>;
+      try {
+        entries = unzipSync(u8, { filter: (f) => { names.push(f.name); return !f.name.endsWith("/") && !isRuntimeJunk(f.name); } });
+      } catch (e) { throw zipReadError(e); }
+      const keys = Object.keys(entries);
+      let n = 0;
+      for (const p of keys) {
+        await writeEntry(p, entries[p]);
+        onProgress?.({ phase: "extracting", pct: Math.min(99, Math.round((++n / keys.length) * 100)) });
+      }
+    } else {
+      // streaming: read chunk-by-chunk, decompress + write each entry, free
+      const pending: { path: string; chunks: Uint8Array[] }[] = [];
+      const uz = new Unzip();
+      uz.register(UnzipInflate);
+      uz.onfile = (f) => {
+        names.push(f.name);
+        if (f.name.endsWith("/") || isRuntimeJunk(f.name)) return; // dirs + runtime → skipped
+        const chunks: Uint8Array[] = [];
+        f.ondata = (err, chunk, final) => {
+          if (err) throw err;
+          if (chunk && chunk.length) chunks.push(chunk.slice()); // copy: fflate reuses buffers
+          if (final) pending.push({ path: f.name, chunks });
+        };
+        f.start();
+      };
+      // writeEntry truncates per call, so concat a file's chunks then write once
+      const flushStreaming = async () => {
+        while (pending.length) {
+          const { path, chunks } = pending.shift()!;
+          const total = chunks.reduce((s, c) => s + c.length, 0);
+          const buf = new Uint8Array(total);
+          let o = 0; for (const c of chunks) { buf.set(c, o); o += c.length; }
+          await writeEntry(path, buf);
+        }
+      };
+      const reader = (file.stream() as ReadableStream<Uint8Array>).getReader();
+      let read = 0;
+      for (;;) {
+        const { done, value } = await reader.read();
+        if (value) { uz.push(value, false); read += value.length; }
+        if (done) uz.push(new Uint8Array(0), true);
+        await flushStreaming();
+        if (file.size) onProgress?.({ phase: "extracting", pct: Math.min(99, Math.round((read / file.size) * 100)) });
+        if (done) break;
+      }
     }
   } catch (e) {
     await (await rpgmDir()).removeEntry(id, { recursive: true }).catch(() => {});
     if (e instanceof Error && /quota|space|QuotaExceeded/i.test(e.name + e.message)) {
       throw new Error("Ran out of storage while installing — this game is too big for this device.");
     }
-    throw e;
+    throw zipReadError(e);
   }
 
   const paths = names.filter((p) => !p.endsWith("/"));
