@@ -112,6 +112,49 @@ const NW_SHIM = `<script>(function(){
   },5);
 })();</` + `script>`;
 
+// —— diagnostics probe (injected into MV/MZ HTML) ——
+// The user plays on mobile with no console, so when a game hangs we have to
+// surface why on-screen. This runs inside the game frame, watches uncaught
+// errors and XHR/fetch loads (RPG Maker's asset pipeline), and posts a compact
+// snapshot to the host (RpgPlayer) once a second. The host shows errors +
+// stuck/failed assets. We deliberately DON'T wrap Image — hooking its src
+// accessor risks breaking the engine's own bitmap/decrypt path, and a missing
+// image renders blank rather than hanging; XHR+fetch already cover data files,
+// audio buffers, fonts and the effekseer wasm, which are the things that stall.
+const DIAG_SHIM = `<script>(function(){
+  var T0=Date.now(), seq=0, pending={}, recent=[], errors=[], counts={ok:0,fail:0};
+  function rel(u){ try{ var pp=new URL(u, location.href).pathname; var i=pp.indexOf("/rpgm/");
+    if(i<0) return pp; var parts=pp.slice(i+6).split("/");
+    if(parts[0]==="fs") return parts.slice(2).join("/");
+    if(parts[0]==="easyrpg"&&parts[1]==="games") return parts.slice(3).join("/");
+    return pp; }catch(e){ return String(u); } }
+  function begin(u){ var id=++seq; pending[id]={path:rel(u), t0:Date.now()}; return id; }
+  function fin(id, status, emsg){ var e=pending[id]; if(!e) return; delete pending[id];
+    if(status>=200&&status<400){ counts.ok++; }
+    else { counts.fail++; recent.unshift({path:e.path, status: emsg||status||"error"}); if(recent.length>8) recent.pop(); } }
+  function snap(){ var now=Date.now(), pend=[];
+    for(var k in pending){ pend.push({path:pending[k].path, age: now-pending[k].t0}); }
+    pend.sort(function(a,b){return b.age-a.age;});
+    var sp=document.getElementById("loadingSpinner"), spinner=!!(sp&&getComputedStyle(sp).display!=="none");
+    var scene=(window.SceneManager&&SceneManager._scene&&SceneManager._scene.constructor)?SceneManager._scene.constructor.name:"";
+    var canvas=!!document.querySelector("canvas");
+    return {source:"rpgm-diag", up:now-T0, scene:scene, spinner:spinner,
+      booted:!!(canvas&&!spinner&&scene&&scene!=="Scene_Boot"), canvas:canvas,
+      pending:pend.slice(0,12), recent:recent.slice(0,8), counts:counts, errors:errors.slice(0,6)}; }
+  function post(){ try{ parent.postMessage(snap(), "*"); }catch(e){} }
+  function addErr(msg, at){ errors.unshift({msg:String(msg).slice(0,280), at:at||""}); if(errors.length>10) errors.pop(); post(); }
+  window.addEventListener("error", function(ev){ addErr(ev.message||(ev.error&&ev.error.message)||"Script error", (ev.filename?rel(ev.filename):"")+(ev.lineno?(":"+ev.lineno):"")); });
+  window.addEventListener("unhandledrejection", function(ev){ var r=ev&&ev.reason; addErr("Unhandled: "+((r&&r.message)||r), ""); });
+  try { var XO=XMLHttpRequest.prototype.open, XS=XMLHttpRequest.prototype.send;
+    XMLHttpRequest.prototype.open=function(m,u){ this.__du=u; return XO.apply(this,arguments); };
+    XMLHttpRequest.prototype.send=function(){ var x=this,id=begin(x.__du);
+      x.addEventListener("loadend", function(){ fin(id, x.status|0, x.status===0?"network":null); });
+      return XS.apply(this,arguments); }; } catch(e){}
+  try { var F=window.fetch; if(F) window.fetch=function(inp){ var u=(inp&&inp.url)||inp, id=begin(u);
+    return F.apply(this,arguments).then(function(r){ fin(id, r.status|0); return r; }, function(err){ fin(id,0,"network"); throw err; }); }; } catch(e){}
+  setInterval(post, 1000); post();
+})();</` + `script>`;
+
 // The extractor doesn't strip the game's wrapper folder; it records the root
 // prefix in a .rpgmroot marker. We prepend it so URLs (rootless) map to OPFS.
 const rootCache = new Map();
@@ -187,7 +230,7 @@ self.addEventListener("fetch", (e) => {
       // runs), then the save-isolation shim. RPG Maker index.html always has a
       // <head>; if it somehow doesn't, prepend so the shims still run first.
       const raw = await file.text();
-      const shims = NW_SHIM + isolationShim(gameId);
+      const shims = NW_SHIM + DIAG_SHIM + isolationShim(gameId);
       const html = /<head[^>]*>/i.test(raw)
         ? raw.replace(/<head[^>]*>/i, (m) => m + shims)
         : shims + raw;
