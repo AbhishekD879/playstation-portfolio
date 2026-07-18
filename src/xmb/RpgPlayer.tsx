@@ -190,14 +190,16 @@ export default function RpgPlayer(props: {
       </Show>
 
       {/* allow-same-origin so the game reads its own OPFS-served files */}
-      {/* On touch the iframe ignores pointer events (CSS, coarse pointer) so the
-          on-screen controls can't be stolen by the game and stray taps can't
-          collide with it; keys still reach it (dispatched, not hit-tested). On
-          desktop the iframe stays interactive for mouse play. */}
+      {/* ONE input owner at a time (user's model): controls HIDDEN → the game
+          gets direct touch (RPG Maker's native tap-to-move etc. works);
+          controls SHOWN → the iframe ignores touch so the overlay buttons are
+          reliable (mobile WebKit otherwise bleeds touches through into the
+          iframe) and taps can't collide with the game. Keys still reach the
+          game either way (dispatched, not hit-tested). Desktop mouse unaffected. */}
       <iframe
         ref={frame}
         class="rpgplay-frame"
-        classList={{ hidden: phase() !== "ready" }}
+        classList={{ hidden: phase() !== "ready", "pad-open": showPad() }}
         title={props.game.title}
         sandbox="allow-scripts allow-same-origin allow-pointer-lock allow-popups"
         allow="gamepad; fullscreen; autoplay"
