@@ -4,6 +4,7 @@
 // the left, scrollable pages on the right, fully drivable by pad/keyboard.
 import { For, Show, createSignal, onCleanup, onMount, type JSX } from "solid-js";
 import { setNavEnabled } from "../input";
+import { LAB_GROUPS } from "../labs";
 import * as sfx from "../audio";
 
 // —— diagrams: inline SVG, tinted by the console theme ————————————————————
@@ -273,6 +274,31 @@ const CHAPTERS: Chapter[] = [
           · <b>Kokoro</b> synthesizes replies as speech, also on-device.<br />
           · <b>MediaPipe</b> hand-tracking turns webcam waves into XMB navigation (Settings → Camera Navigation).<br />
           Memory: chat history persists in IndexedDB per profile, with a RAG recall over past conversations.</p>
+        <h2>Every model on the console</h2>
+        <p>Everything below runs in <em>your</em> browser — WebGPU when available, wasm otherwise. Weights download
+          once from Hugging Face and live in Cache Storage; nothing you say, type or photograph leaves the device.</p>
+        <table class="man-table">
+          <thead><tr><th>Model</th><th>~Download</th><th>Powers</th></tr></thead>
+          <tbody>
+            <tr><td>Hermes 3 · Llama 3.2 3B (WebLLM)</td><td>1.9 GB</td><td>AI Abhishek — the agent that drives the console</td></tr>
+            <tr><td>Llama 3.2 · 1B (WebLLM)</td><td>700 MB</td><td>AI Abhishek on modest GPUs</td></tr>
+            <tr><td>Whisper</td><td>90 MB</td><td>Voice commands — mic → text</td></tr>
+            <tr><td>Kokoro-82M</td><td>85 MB</td><td>The assistant's spoken voice</td></tr>
+            <tr><td>Swin2SR ×2</td><td>70 MB</td><td>Photo Enhance — tiled super-resolution</td></tr>
+            <tr><td>Depth Anything</td><td>60 MB</td><td>Live Photos — depth-parallax 3D</td></tr>
+            <tr><td>opus-mt (per language)</td><td>50 MB</td><td>Universal Menu — crossbar translation</td></tr>
+            <tr><td>RMBG-1.4</td><td>45 MB</td><td>Cutout Cam — background removal</td></tr>
+            <tr><td>SlimSAM</td><td>40 MB</td><td>Click-to-Mask — point-prompt segmentation</td></tr>
+            <tr><td>MiniLM</td><td>35 MB</td><td>Vibe Search embeddings + AI memory recall</td></tr>
+            <tr><td>MediaPipe Hands</td><td>~12 MB</td><td>Camera Navigation — gesture browsing</td></tr>
+          </tbody>
+        </table>
+        <h2>The memory manager</h2>
+        <p>Every transformers.js pipeline is acquired through <code>models.ts</code>: nothing loads until a feature
+          runs, resident models are capped by a device-scaled budget (110 / 220 / 450 MB by RAM) with LRU eviction,
+          idle pipelines free themselves after 3 minutes, and a hidden tab flushes everything after a grace period.
+          Downloads stay cached on disk, so re-acquiring is seconds, not a re-download. Labs rates each heavy
+          feature against this device before you enable it. WebLLM manages itself and unloads when the chat closes.</p>
       </>
     ),
   },
@@ -347,6 +373,48 @@ const CHAPTERS: Chapter[] = [
         <p>Extras → Repo Rewind plays this repo's own git history as a growing radial file tree
           (<code>scripts/gitlog.mjs</code> bakes <code>commits.json</code> at build time). The console documents
           its own construction, commit by commit.</p>
+      </>
+    ),
+  },
+  {
+    id: "inventory", title: "Feature Inventory & Heavy Machinery", src: [{ label: "labs.ts", path: "src/labs.ts" }, { label: "package.json", path: "package.json" }],
+    body: () => (
+      <>
+        <h2>Every feature on the console — live from the registry</h2>
+        <p>This list renders straight out of <code>labs.ts</code>, the same registry Labs uses — it can't go stale.
+          Right now the console ships <b>{LAB_GROUPS.reduce((s, g) => s + g.items.length, 0)} switchable features and apps</b>,
+          every one of them toggleable in Console Settings → LABS.</p>
+        <For each={LAB_GROUPS}>
+          {(g) => (
+            <>
+              <h2>{g.group} ({g.items.length})</h2>
+              <p><For each={g.items}>{(f, i) => <>{i() > 0 ? " · " : ""}<b>{f.title}</b></>}</For></p>
+            </>
+          )}
+        </For>
+        <h2>Heavy machinery</h2>
+        <p>The engines under the shell — all client-side, loaded lazily by the feature that needs them.</p>
+        <table class="man-table">
+          <thead><tr><th>Engine</th><th>What it is</th><th>Powers</th></tr></thead>
+          <tbody>
+            <tr><td>three.js (WebGL + WebGPU/TSL)</td><td>3D renderer</td><td>the Wave, backdrops, galaxy boot, particle bursts, live photos</td></tr>
+            <tr><td>@huggingface/transformers</td><td>on-device ML runtime (ONNX)</td><td>every model in the AI chapter's table</td></tr>
+            <tr><td>@mlc-ai/web-llm</td><td>LLM inference on WebGPU</td><td>AI Abhishek</td></tr>
+            <tr><td>EmulatorJS (CDN)</td><td>RetroArch cores in wasm</td><td>GBA · GB/GBC · NES · SNES · Mega Drive · N64 · NDS · PSX · PSP</td></tr>
+            <tr><td>Play!</td><td>PS2 emulator, wasm</td><td>the PS2 home + online multiplayer</td></tr>
+            <tr><td>ScummVM</td><td>adventure-game engine, wasm</td><td>the point-and-click shelf</td></tr>
+            <tr><td>stockfish</td><td>chess engine, wasm</td><td>Chess vs Stockfish</td></tr>
+            <tr><td>@ruffle-rs/ruffle</td><td>Flash Player, wasm</td><td>Flash Arcade</td></tr>
+            <tr><td>cesium</td><td>3D globe engine</td><td>Planet Earth + Vibe Search</td></tr>
+            <tr><td>webamp</td><td>Winamp 2 reimplementation</td><td>the Winamp deck</td></tr>
+            <tr><td>trystero</td><td>serverless WebRTC P2P</td><td>presence, P2P chess, phone controller</td></tr>
+            <tr><td>kokoro-js</td><td>TTS runtime</td><td>the assistant's voice</td></tr>
+            <tr><td>@mediapipe/tasks-vision</td><td>vision models, wasm/SIMD</td><td>camera navigation</td></tr>
+            <tr><td>gsap · hls.js · leaflet · chess.js</td><td>motion, streams, maps, rules</td><td>boot choreography, TV, the map, chess legality</td></tr>
+          </tbody>
+        </table>
+        <p>Nothing above loads at boot. The shell itself is SolidJS + one CSS file; each engine arrives the first
+          time its cabinet is opened, and the AI weights obey the memory manager's budget.</p>
       </>
     ),
   },
