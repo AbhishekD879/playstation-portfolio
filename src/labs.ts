@@ -261,7 +261,7 @@ APP_GUIDES.videoplayer = {
   go: "app:videoplayer", goLabel: "OPEN THE PLAYER",
 };
 APP_GUIDES.rpgmaker = {
-  what: "Bring-your-own RPG Maker games, JoiPlay-style. Drop a .zip of a game you own and the console detects the engine. MV & MZ (2015+) play natively right now — no emulation, they're HTML5. Older engines — 2000/2003 (EasyRPG) and XP/VX/VX Ace (mkxp) — are detected and saved, with their WASM engines being wired in next. Nothing is uploaded; the game lives only in this browser.",
+  what: "Bring-your-own RPG Maker games, JoiPlay-style. Drop a .zip of a game you own and the console detects the engine. MV & MZ (2015+) play natively (HTML5); 2000 & 2003 play through the self-hosted EasyRPG engine with a free CC-BY RTP bundled in. XP/VX/VX Ace are detected and saved but not yet playable (they need a Ruby RGSS engine that can't run arbitrary games in-browser today). Nothing is uploaded; the game lives only in this browser.",
   steps: ["Game › RPG Maker", "Add a game (.zip) — the whole game folder, zipped", "MV/MZ start immediately; older engines note their status"],
   go: "app:rpgmaker", goLabel: "OPEN RPG MAKER",
 };

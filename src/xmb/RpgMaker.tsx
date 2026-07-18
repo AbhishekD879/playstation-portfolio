@@ -12,6 +12,7 @@ import {
   type ImportProgress, type RpgGame,
 } from "../rpgm";
 import RpgHtml5 from "./RpgHtml5";
+import RpgEasyRpg from "./RpgEasyRpg";
 
 export default function RpgMaker(props: { profile: { id: string }; onClose: () => void; bind: (nav: (a: NavAction) => void) => void }) {
   const [games, setGames] = createSignal<RpgGame[]>([]);
@@ -101,9 +102,10 @@ export default function RpgMaker(props: { profile: { id: string }; onClose: () =
         const kind = engineKind(g.engine);
         const close = () => { setPlaying(null); hostNav = undefined; };
         if (kind === "html5") return <RpgHtml5 game={g} onClose={close} bind={(f) => (hostNav = f)} />;
-        // 2000/2003 (EasyRPG) and XP/VX/VX Ace (mkxp) — detected & saved, but the
-        // WASM engines need a self-hosted build to run in-browser; honest state.
-        const engineName = kind === "easyrpg" ? "EasyRPG" : "mkxp";
+        if (kind === "easyrpg") return <RpgEasyRpg game={g} onClose={close} bind={(f) => (hostNav = f)} />;
+        // XP/VX/VX Ace (mkxp) — detected & saved, but its only web build (mruby)
+        // needs per-game script porting + a MIDI synth, so it can't play arbitrary
+        // games; honest state until a CRuby-WASM engine exists.
         return (
           <div class="rpgplay">
             <div class="rpgplay-bar">
@@ -111,8 +113,8 @@ export default function RpgMaker(props: { profile: { id: string }; onClose: () =
               <button class="ps-act" onClick={close}><span class="btn-o" /> back</button>
             </div>
             <div class="rpgplay-msg">
-              {ENGINE_LABEL[g.engine]} runs on the <b>{engineName}</b> engine — not wired in yet.<br />
-              <span class="rpgplay-dim">MV &amp; MZ games play now; the older engines are next. Your game is saved in the library and will play once its engine lands.</span>
+              {ENGINE_LABEL[g.engine]} isn't supported yet.<br />
+              <span class="rpgplay-dim">XP/VX/VX Ace need a Ruby (RGSS) engine that can't run arbitrary games in a browser today. MV, MZ, 2000 &amp; 2003 all play now. Your game is saved in the library.</span>
             </div>
             <div class="rpgplay-hint"><span class="btn-o" /> back</div>
           </div>
@@ -173,8 +175,8 @@ export default function RpgMaker(props: { profile: { id: string }; onClose: () =
 
         <Show when={!games().length && !importing()}>
           <p class="rpg-empty-note">
-            Drop in a zip of an RPG Maker game you own. <b>MV &amp; MZ play now</b>, natively in the console;
-            2000/2003 and XP/VX/Ace are detected and saved, with their engines coming next.
+            Drop in a zip of an RPG Maker game you own. <b>MV, MZ, 2000 &amp; 2003 all play now</b> — MV/MZ natively,
+            2000/2003 through EasyRPG (free RTP bundled). XP/VX/Ace are detected and saved but not yet playable.
             Nothing is uploaded — the game stays in this browser.
           </p>
         </Show>

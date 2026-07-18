@@ -1,0 +1,16 @@
+RPG Maker 2000/2003 support in this console is powered by EasyRPG.
+
+EasyRPG Player (index.js, index.wasm)
+  © the EasyRPG authors — https://easyrpg.org
+  Licensed under the GNU General Public License v3 or later (GPLv3+).
+  Source: https://github.com/EasyRPG/Player
+  The WebAssembly build vendored here is redistributed unmodified.
+
+EasyRPG RTP (rtp/)
+  A free replacement for the proprietary RPG Maker 2000/2003 Run-Time Package.
+  © the EasyRPG RTP contributors (see rtp/AUTHORS.md)
+  Licensed under the Creative Commons Attribution 4.0 International (CC-BY-4.0).
+  Source: https://github.com/EasyRPG/RTP
+
+The original Enterbrain RPG Maker RTP is proprietary and is NOT bundled.
+Games you import are your own and stay in your browser — nothing is uploaded.

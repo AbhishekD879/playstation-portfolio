@@ -14,6 +14,7 @@ const raw = execSync('git log --reverse --date=unix --pretty=format:"@%h|%ad|%s"
 // the tree long ago; keep them out of the replay too.
 const junk = (p) =>
   p.startsWith(".playwright-cli/") ||
+  p.startsWith("public/rpgm/easyrpg/") || // vendored EasyRPG engine + RTP (not our code)
   (/\.(png|jpe?g|webm)$/i.test(p) && !p.includes("/"));
 
 const commits = [];

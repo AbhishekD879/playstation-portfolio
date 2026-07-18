@@ -17,7 +17,7 @@ export default function RpgHtml5(props: { game: RpgGame; onClose: () => void; bi
     ensureRpgSw()
       .then(() => {
         const entry = props.game.entry || "index.html";
-        frame.src = `/rpgm-fs/${props.game.id}/${entry}`;
+        frame.src = `/rpgm/fs/${props.game.id}/${entry}`;
         setStatus("ready");
       })
       .catch(() => setStatus("failed"));

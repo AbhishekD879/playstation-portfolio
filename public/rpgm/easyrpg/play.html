@@ -1,0 +1,45 @@
+<!doctype html>
+<!-- EasyRPG Player host page (self-hosted). The engine (index.js/index.wasm)
+     is served from this same directory, so its game fetches resolve to
+     /rpgm/easyrpg/games/<id>/* — which our service worker serves out of OPFS.
+     The console loads this in a sandboxed iframe with ?game=<id>. -->
+<html>
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no" />
+  <title>EasyRPG</title>
+  <style>
+    html, body { margin: 0; height: 100%; background: #000; overflow: hidden; }
+    #viewport { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; }
+    #canvas { max-width: 100%; max-height: 100%; image-rendering: pixelated; outline: none; background: #000; }
+    #status { position: fixed; left: 0; right: 0; bottom: 10px; text-align: center;
+      font: 13px/1.4 system-ui, sans-serif; color: rgba(255,255,255,0.7); pointer-events: none; }
+  </style>
+</head>
+<body>
+  <div id="viewport">
+    <canvas id="canvas" tabindex="-1" oncontextmenu="event.preventDefault()"></canvas>
+  </div>
+  <div id="status">Loading…</div>
+
+  <script async type="text/javascript" src="index.js"></script>
+  <script>
+    // parseArgs() inside the factory reads ?game=<id> from our URL.
+    const canvas = document.getElementById("canvas");
+    window.addEventListener("load", () => {
+      if (typeof createEasyRpgPlayer !== "function") {
+        document.getElementById("status").textContent = "Engine failed to load.";
+        return;
+      }
+      createEasyRpgPlayer({ game: undefined, saveFs: undefined }).then((Module) => {
+        Module.initApi();
+        canvas.focus();
+      }).catch((e) => {
+        document.getElementById("status").textContent = "Couldn't start: " + e;
+      });
+    });
+    canvas.addEventListener("mouseenter", () => canvas.focus());
+    canvas.addEventListener("click", () => canvas.focus());
+  </script>
+</body>
+</html>

@@ -217,9 +217,70 @@ export async function importRpgZip(
   const title = file.name.replace(/\.zip$/i, "").replace(/[._]+/g, " ").trim() || "RPG Maker Game";
   const cover = await bestCover(id, det.engine).catch(() => undefined);
   const bytes = entries.reduce((s, p) => s + (files[p]?.length ?? 0), 0);
+
+  // EasyRPG needs a case-insensitive directory manifest (index.json) — the
+  // engine fetches it first and can't find any asset without it. We generate
+  // it here (mirroring EasyRPG's `gencache` v2 rules) so no external tool runs.
+  if (engineKind(det.engine) === "easyrpg") await buildEasyRpgIndex(id);
+
   const game: RpgGame = { id, profileId, title, engine: det.engine, entry: det.entry, addedAt: Date.now(), fileCount: entries.length, bytes, cover };
   await putGame(game);
   return game;
+}
+
+// —— EasyRPG index.json (v2) generator ————————————————————————————————————————
+// Rules (from EasyRPG/Tools gencache): keys are NFKC-lowercased, values keep
+// real case. Root files keep their extension in the key; files inside a
+// subdirectory strip the extension (except .ini/.po); a subdir is an object
+// carrying "_dirname" = real folder name; root ExFont.* → key "exfont".
+type Cache = { [k: string]: string | Cache };
+const lc = (s: string) => s.normalize("NFKC").toLowerCase();
+const stripExt = (n: string) => (/\.(ini|po)$/i.test(n) ? n : n.replace(/\.[^.]+$/, ""));
+
+async function buildCache(dir: FileSystemDirectoryHandle, depth: number): Promise<Cache> {
+  const out: Cache = {};
+  for await (const [name, handle] of (dir as any).entries()) {
+    if (name === "_dirname" || name === "index.json") continue;
+    if (handle.kind === "directory") {
+      const sub = await buildCache(handle, depth + 1);
+      sub._dirname = name;
+      out[lc(name)] = sub;
+    } else {
+      if (depth === 0) {
+        const key = /^exfont(\.|$)/i.test(name) ? "exfont" : lc(name); // root keeps ext (ExFont special-cased)
+        out[key] = name;
+      } else {
+        out[lc(stripExt(name))] = name;
+      }
+    }
+  }
+  return out;
+}
+/** Deep-merge (game entries win) so the shared RTP fills only the gaps. */
+function mergeCache(base: Cache, over: Cache): Cache {
+  const out: Cache = { ...base };
+  for (const [k, v] of Object.entries(over)) {
+    const b = out[k];
+    if (b && typeof b === "object" && typeof v === "object") out[k] = mergeCache(b as Cache, v as Cache);
+    else out[k] = v;
+  }
+  return out;
+}
+async function buildEasyRpgIndex(id: string): Promise<void> {
+  const dir = await gameDir(id);
+  const gameCache = await buildCache(dir, 0);
+  // merge the bundled RTP manifest so RTP-dependent games find shared assets
+  let cache = gameCache;
+  try {
+    const res = await fetch("/rpgm/easyrpg/rtp/rtp-cache.json");
+    if (res.ok) cache = mergeCache((await res.json()) as Cache, gameCache);
+  } catch { /* no RTP pack — self-contained games still work */ }
+  const index = { cache, metadata: { version: 2, date: new Date().toISOString().slice(0, 10) } };
+  const { dir: parent, name } = await ensurePath(dir, "index.json");
+  const fh = await parent.getFileHandle(name, { create: true });
+  const w = await fh.createWritable();
+  await w.write(new Blob([JSON.stringify(index)]));
+  await w.close();
 }
 
 /** Best-effort cover: MV/MZ title screen, or the 2k/2k3/RGSS Title graphic. */
@@ -262,10 +323,11 @@ export const SAVE_LS_PREFIX = (id: string) => `__rpgmls_${id}__:`;
 
 async function purgeGameStorage(id: string): Promise<void> {
   const idbPrefix = SAVE_IDB_PREFIX(id);
+  const easyrpgSave = `/easyrpg/${id}/Save`; // EasyRPG's IDBFS DB is named by its mount path
   try {
     const dbs = await (indexedDB.databases?.() ?? Promise.resolve([]));
     await Promise.all(dbs
-      .filter((d) => d.name && d.name.startsWith(idbPrefix))
+      .filter((d) => d.name && (d.name.startsWith(idbPrefix) || d.name === easyrpgSave))
       .map((d) => new Promise<void>((res) => { const r = indexedDB.deleteDatabase(d.name!); r.onsuccess = r.onerror = r.onblocked = () => res(); })));
   } catch { /* databases() unsupported — leaves them, harmless & tiny */ }
   const lsPrefix = SAVE_LS_PREFIX(id);
@@ -280,7 +342,7 @@ export function ensureRpgSw(): Promise<void> {
   if (swReady) return swReady;
   swReady = (async () => {
     if (!("serviceWorker" in navigator)) throw new Error("no service worker");
-    const reg = await navigator.serviceWorker.register("/rpgm-sw.js", { scope: "/rpgm-fs/" });
+    const reg = await navigator.serviceWorker.register("/rpgm-sw.js", { scope: "/rpgm/" });
     // Wait on THIS registration's own activation — not navigator.serviceWorker.ready,
     // which tracks the page's scope ("/") and never resolves for our /rpgm-fs/ worker.
     if (reg.active) return;
