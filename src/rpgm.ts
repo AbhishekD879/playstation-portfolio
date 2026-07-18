@@ -274,6 +274,32 @@ function zipReadError(e: unknown): Error {
 export async function importRpgZip(
   file: File, profileId: string, onProgress?: (p: ImportProgress) => void,
 ): Promise<RpgGame> {
+  return doImport(file, profileId, crypto.randomUUID(), null, onProgress);
+}
+
+/** RE-IMPORT an existing game IN PLACE — same id, so its saves survive.
+ *  Saves are namespaced by game id (SAVE_IDB_PREFIX / SAVE_LS_PREFIX /
+ *  EasyRPG's /easyrpg/<id>/Save), so replacing the FILES under the same id
+ *  updates the game without touching progress. Used to repair games imported
+ *  before a fix (e.g. the .dat/.bin skip) without losing save data. */
+export async function reimportRpgZip(
+  file: File, game: RpgGame, onProgress?: (p: ImportProgress) => void,
+): Promise<RpgGame> {
+  await (await rpgmDir()).removeEntry(game.id, { recursive: true }).catch(() => {});
+  bustSwRootCache(game.id); // the SW caches .rpgmroot per id — the root may change
+  return doImport(file, game.profileId, game.id, game, onProgress);
+}
+
+/** The running SW memoises each game's root prefix; after a re-import the root
+ *  can differ, so tell it to forget (harmless if no SW / not yet active). */
+function bustSwRootCache(id: string): void {
+  try { navigator.serviceWorker.getRegistration("/rpgm/").then((reg) => reg?.active?.postMessage({ type: "rpgm-root-bust", id })); } catch { /* no sw */ }
+}
+
+async function doImport(
+  file: File, profileId: string, id: string, existing: RpgGame | null,
+  onProgress?: (p: ImportProgress) => void,
+): Promise<RpgGame> {
   onProgress?.({ phase: "reading", pct: 0 });
 
   // fail EARLY (with a clear message, not a crash) if it can't possibly fit —
@@ -289,7 +315,6 @@ export async function importRpgZip(
     }
   } catch (e) { if (e instanceof Error && e.message.startsWith("Not enough")) throw e; }
 
-  const id = crypto.randomUUID();
   const dir = await gameDir(id, true);
   const names: string[] = [];
   let bytes = 0;
@@ -400,7 +425,11 @@ export async function importRpgZip(
   // first — generated here (EasyRPG's gencache v2 rules), rooted at det.root.
   if (engineKind(det.engine) === "easyrpg") await buildEasyRpgIndex(id, det.root);
 
-  const game: RpgGame = { id, profileId, title, engine: det.engine, entry: det.entry, root: det.root, addedAt: Date.now(), fileCount: paths.length, bytes, cover };
+  // re-import keeps identity (title/addedAt) and refreshes the file-derived
+  // fields; a fresh import records everything new.
+  const game: RpgGame = existing
+    ? { ...existing, engine: det.engine, entry: det.entry, root: det.root, fileCount: paths.length, bytes, cover: cover ?? existing.cover }
+    : { id, profileId, title, engine: det.engine, entry: det.entry, root: det.root, addedAt: Date.now(), fileCount: paths.length, bytes, cover };
   await putGame(game);
   return game;
 }

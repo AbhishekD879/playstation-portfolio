@@ -9,7 +9,7 @@ import * as sfx from "../audio";
 import type { NavAction } from "../input";
 import { Icon } from "./icons";
 import {
-  ENGINE_LABEL, engineFamily, engineKind, estimateRuntimeMB, importRpgZip, listRpgGames, looksHeavy, removeRpgGame,
+  ENGINE_LABEL, engineFamily, engineKind, estimateRuntimeMB, importRpgZip, listRpgGames, looksHeavy, reimportRpgZip, removeRpgGame,
   type ImportProgress, type RpgGame,
 } from "../rpgm";
 import RpgHtml5 from "./RpgHtml5";
@@ -28,6 +28,8 @@ export default function RpgMaker(props: { profile: { id: string }; family: Famil
   const [error, setError] = createSignal("");
   const [armDelete, setArmDelete] = createSignal<string | null>(null);
   let fileInput!: HTMLInputElement;
+  let reimportInput!: HTMLInputElement;
+  let reimportGame: RpgGame | null = null; // which game the re-import picker targets
   let hostNav: ((a: NavAction) => void) | undefined; // the active player's nav
   let disarm: ReturnType<typeof setTimeout> | null = null;
 
@@ -60,6 +62,28 @@ export default function RpgMaker(props: { profile: { id: string }; family: Famil
       }
     } catch (e: any) {
       setError(e?.message || "Couldn't import that zip");
+      sfx.deny();
+    } finally {
+      setImporting(null);
+    }
+  }
+
+  // replace a game's FILES in place (same id → saves survive) — the repair
+  // path for zips imported before an importer fix, or updated game versions
+  async function pickAndReimport() {
+    const f = reimportInput.files?.[0];
+    const g = reimportGame;
+    reimportInput.value = "";
+    reimportGame = null;
+    if (!f || !g) return;
+    setError("");
+    setImporting({ phase: "reading", pct: 0 });
+    try {
+      await reimportRpgZip(f, g, setImporting);
+      await refresh();
+      sfx.confirm();
+    } catch (e: any) {
+      setError(e?.message || "Couldn't re-import that zip");
       sfx.deny();
     } finally {
       setImporting(null);
@@ -174,10 +198,16 @@ export default function RpgMaker(props: { profile: { id: string }; family: Famil
                   <span class="rpg-badge">{g.engine === "renpydesktop" ? "Ren'Py ⚠" : ENGINE_LABEL[g.engine].replace("RPG Maker ", "")}</span>
                 </div>
                 <div class="rpg-title">{g.title}</div>
-                <button class="rpg-del" classList={{ armed: armDelete() === g.id }}
-                  onClick={(e) => { e.stopPropagation(); setSel(i()); void del(g); }}>
-                  {armDelete() === g.id ? "sure?" : "△ delete"}
-                </button>
+                <div class="rpg-cellacts">
+                  <button class="rpg-del rpg-reimp" title="Replace the game files with a new zip — saves are kept"
+                    onClick={(e) => { e.stopPropagation(); reimportGame = g; reimportInput.click(); }}>
+                    ↻ re-import
+                  </button>
+                  <button class="rpg-del" classList={{ armed: armDelete() === g.id }}
+                    onClick={(e) => { e.stopPropagation(); setSel(i()); void del(g); }}>
+                    {armDelete() === g.id ? "sure?" : "△ delete"}
+                  </button>
+                </div>
               </div>
             )}
           </For>
@@ -225,6 +255,7 @@ export default function RpgMaker(props: { profile: { id: string }; family: Famil
 
         <div class="panel-hint guide-hint">←→↑↓ browse · <span class="btn-x" /> play · △ delete · <span class="btn-o" /> back</div>
         <input type="file" ref={fileInput} hidden accept=".zip,application/zip" onChange={() => void pickAndImport()} />
+        <input type="file" ref={reimportInput} hidden accept=".zip,application/zip" onChange={() => void pickAndReimport()} />
       </div>
     </Show>
   );

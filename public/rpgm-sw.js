@@ -21,6 +21,10 @@ const mimeOf = (p) => MIME[(p.split(".").pop() || "").toLowerCase()] || "applica
 
 self.addEventListener("install", () => self.skipWaiting());
 self.addEventListener("activate", (e) => e.waitUntil(self.clients.claim()));
+// a re-import can change a game's root prefix — the page tells us to forget it
+self.addEventListener("message", (e) => {
+  if (e.data && e.data.type === "rpgm-root-bust") rootCache.delete(e.data.id);
+});
 
 // —— MV/MZ save isolation shim (injected into that route's HTML only) ——
 // Namespaces indexedDB/localStorage per game so same-origin games don't collide
