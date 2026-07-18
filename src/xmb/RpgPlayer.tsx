@@ -11,6 +11,7 @@ import type { NavAction } from "../input";
 import { holdWakeLock } from "../wakelock";
 import { ENGINE_LABEL, ensureRpgSw, estimateRuntimeMB, looksHeavy, type RpgGame } from "../rpgm";
 import { installable, isIOS, isStandalone, promptInstall } from "../pwa";
+import TouchControls, { type KeyDef } from "./TouchControls";
 
 type Snap = {
   source: string; up: number; scene: string; spinner: boolean; booted: boolean; canvas: boolean;
@@ -27,6 +28,7 @@ export default function RpgPlayer(props: {
   const [phase, setPhase] = createSignal<"prelaunch" | "booting" | "ready" | "failed">("prelaunch");
   const [diag, setDiag] = createSignal<Snap | null>(null);
   const [showDiag, setShowDiag] = createSignal(false);
+  const [showPad, setShowPad] = createSignal(false);
   const [barShown, setBarShown] = createSignal(true);
   let frame!: HTMLIFrameElement;
   let container!: HTMLDivElement;
@@ -76,6 +78,22 @@ export default function RpgPlayer(props: {
     exitFullscreen();
     props.onClose();
   }
+
+  // Send a real key event INTO the same-origin game iframe — its own key
+  // listeners fire on synthetic events. Built with the IFRAME's KeyboardEvent
+  // (so engines that check `instanceof` still match) and dispatched to both its
+  // document and window; keyCode/which are set for engines that read them.
+  const fireKey = (def: KeyDef, down: boolean) => {
+    const win = frame?.contentWindow as (Window & { KeyboardEvent?: typeof KeyboardEvent }) | null;
+    const doc = frame?.contentDocument;
+    if (!win || !doc) return;
+    const Ctor = win.KeyboardEvent ?? KeyboardEvent;
+    for (const target of [doc, win] as (Document | Window)[]) {
+      const ev = new Ctor(down ? "keydown" : "keyup", { key: def.key, code: def.code, location: def.loc ?? 0, bubbles: true, cancelable: true, composed: true });
+      try { Object.defineProperty(ev, "keyCode", { get: () => def.keyCode }); Object.defineProperty(ev, "which", { get: () => def.keyCode }); } catch { /* older engines */ }
+      target.dispatchEvent(ev);
+    }
+  };
 
   onMount(() => {
     const onMsg = (e: MessageEvent) => {
@@ -175,11 +193,17 @@ export default function RpgPlayer(props: {
         <div class="rpgplay-bar" classList={{ show: barShown() }}>
           <div class="panel-tag">{props.game.title.toUpperCase()}{props.sublabel ? ` · ${props.sublabel}` : ""}</div>
           <div class="rpgplay-actions">
+            <button class="ps-act" classList={{ on: showPad() }} onClick={() => { setShowPad((v) => !v); flashBar(); }}>⌨ controls</button>
             <button class="ps-act" onClick={() => { setShowDiag((v) => !v); flashBar(); }}>diagnostics</button>
             <button class="ps-act" onClick={goFullscreen}>full screen</button>
             <button class="ps-act" onClick={quit}><span class="btn-o" /> quit</button>
           </div>
         </div>
+      </Show>
+
+      {/* on-screen controls — send keys into games that expect a keyboard */}
+      <Show when={showPad() && phase() === "ready"}>
+        <TouchControls send={fireKey} onClose={() => setShowPad(false)} />
       </Show>
 
       <Show when={showDiag() && phase() !== "prelaunch"}>
