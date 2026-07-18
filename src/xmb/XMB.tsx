@@ -306,7 +306,7 @@ export default function XMB(props: {
 
   const photoItems = createMemo<XmbItem[]>(() => [
     ...(photos().length
-      ? [{ id: "slideshow", title: "Slideshow", sub: `${photos().length} photo${photos().length > 1 ? "s" : ""} · Ken Burns drift`, icon: "camera", action: { type: "photos-view" as const } }]
+      ? [{ id: "slideshow", title: "Photo Library", sub: `${photos().length} photo${photos().length > 1 ? "s" : ""} · browse — slideshow on demand`, icon: "camera", action: { type: "photos-view" as const } }]
       : []),
     { id: "photos-add", title: "Add Photos…", sub: "Stored in this browser only — never uploaded", icon: "plus", action: { type: "photos-add" } },
     { id: "art", title: "Art Gallery", sub: "Masterpieces · The Met, New York", icon: "spark", action: { type: "art" } },
@@ -1246,7 +1246,7 @@ export default function XMB(props: {
       case "photo-cat": {
         const pi = CATEGORIES.findIndex((c) => c.id === "photo");
         if (pi >= 0) setCat(pi);
-        pushToast("Live Photos", "Add Photos… → open the Slideshow → wait for the ◈ 3D badge");
+        pushToast("Live Photos", "Add Photos… → open the Photo Library → wait for the ◈ 3D badge");
         break;
       }
     }

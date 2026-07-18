@@ -1,8 +1,8 @@
-// Photo Gallery slideshow — the classic XMB photo viewer: auto-advance with a
-// slow Ken Burns drift, arrows to navigate, Esc to leave. ◈ Enhance runs
-// on-device ×2 super-resolution; ◈ Cutout lifts the subject off the
-// background (RMBG); ◈ Isolate keeps only what you click (SlimSAM). All three
-// save results as new photos. △ (pressed twice) deletes a photo for good.
+// Photo Library — the classic XMB photo viewer. Browse manually (⏴⏵, arrows,
+// or click the photo); ▷ starts a slideshow that auto-advances until stopped.
+// ◈ Enhance runs on-device ×2 super-resolution; ◈ Cutout lifts the subject
+// off the background (RMBG); ◈ Isolate keeps only what you click (SlimSAM).
+// All three save results as new photos. △ (pressed twice) deletes for good.
 import { Show, createSignal, onCleanup, onMount } from "solid-js";
 import { addPhoto, removePhoto, type PhotoRecord } from "../gamesdb";
 import { labEnabled } from "../labs";
@@ -21,7 +21,7 @@ export default function Photos(props: {
   // the slideshow owns its list so deletions take effect instantly
   const [slides, setSlides] = createSignal(props.photos.map((p) => ({ p, url: URL.createObjectURL(p.blob) })));
   const [idx, setIdx] = createSignal(0);
-  const [paused, setPaused] = createSignal(false);
+  const [slideshow, setSlideshow] = createSignal(false); // off until the ▷ button
   const [enhancing, setEnhancing] = createSignal<"" | "working" | "done" | "failed">("");
   const [prog, setProg] = createSignal<EnhanceProgress | null>(null);
   const [job, setJob] = createSignal<"" | "working" | "done" | "failed">(""); // cutout/isolate
@@ -42,7 +42,7 @@ export default function Photos(props: {
     sfx.confirm();
     setEnhancing("working");
     setProg(null);
-    setPaused(true); // hold the slide while the model works
+    setSlideshow(false); // hold the slide while the model works
     try {
       const out = await upscale(s.p.blob, setProg);
       await addPhoto({
@@ -70,7 +70,7 @@ export default function Photos(props: {
     setJobKind(kind);
     setJob("working");
     setJprog(null);
-    setPaused(true);
+    setSlideshow(false);
     try {
       const out = kind === "cutout" ? await cutout(s.p.blob, setJprog) : await isolate(s.p.blob, pt!, setJprog);
       await addPhoto({
@@ -161,7 +161,7 @@ export default function Photos(props: {
 
   let timer: ReturnType<typeof setInterval>;
   onMount(() => {
-    timer = setInterval(() => { if (!paused() && n()) setIdx((i) => (i + 1) % n()); }, 5200);
+    timer = setInterval(() => { if (slideshow() && n()) setIdx((i) => (i + 1) % n()); }, 5200);
     onCleanup(() => { clearInterval(timer); if (disarm) clearTimeout(disarm); });
   });
 
@@ -169,7 +169,7 @@ export default function Photos(props: {
     if (picking()) { if (a === "back") { setPicking(false); sfx.back(); } return; }
     if (a === "left") move(-1);
     if (a === "right") move(1);
-    if (a === "confirm") { setPaused(!paused()); sfx.tickV(); }
+    if (a === "confirm") { setSlideshow(!slideshow()); sfx.tickV(); }
     if (a === "options") void del();
     if (a === "back") { sfx.back(); props.onClose(); }
   });
@@ -191,8 +191,13 @@ export default function Photos(props: {
         </div>
       </Show>
       <div class="photos-chrome">
-        <span>{idx() + 1} / {n()}{paused() ? " · paused" : ""}</span>
+        <span>{idx() + 1} / {n()}{slideshow() ? " · slideshow" : ""}</span>
         <span>
+          <button class="ghost-btn photos-enhance" onClick={(e) => { e.stopPropagation(); move(-1); }}>⏴ prev</button>
+          <button class="ghost-btn photos-enhance" onClick={(e) => { e.stopPropagation(); move(1); }}>next ⏵</button>
+          <button class="ghost-btn photos-enhance" onClick={(e) => { e.stopPropagation(); setSlideshow(!slideshow()); sfx.tickV(); }}>
+            {slideshow() ? "❚❚ stop slideshow" : "▷ slideshow"}
+          </button>
           <Show when={labEnabled("enhance")}>
           <button class="ghost-btn photos-enhance" disabled={enhancing() === "working"}
             onClick={(e) => { e.stopPropagation(); enhance(); }}>
@@ -213,7 +218,7 @@ export default function Photos(props: {
           </Show>
           <Show when={labEnabled("clickmask")}>
           <button class="ghost-btn photos-enhance" disabled={busy()}
-            onClick={(e) => { e.stopPropagation(); setPicking(true); setPaused(true); sfx.tickV(); }}>
+            onClick={(e) => { e.stopPropagation(); setPicking(true); setSlideshow(false); sfx.tickV(); }}>
             {picking() ? "◈ click the subject…" : jobText("isolate", "◈ isolate")}
           </button>
           </Show>
@@ -221,7 +226,7 @@ export default function Photos(props: {
             onClick={(e) => { e.stopPropagation(); void del(); }}>
             {armDelete() ? "△ sure? press again" : "△ delete"}
           </button>
-          {" "}←→ browse · <span class="btn-x" /> pause · △ delete · <span class="btn-o" /> back
+          {" "}←→ browse · <span class="btn-x" /> slideshow · △ delete · <span class="btn-o" /> back
         </span>
       </div>
     </div>
