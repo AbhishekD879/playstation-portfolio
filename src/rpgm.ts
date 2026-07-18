@@ -241,12 +241,38 @@ function detect(paths: string[]): Detected {
 // —— import ————————————————————————————————————————————————————————————————————
 export interface ImportProgress { phase: "reading" | "detecting" | "extracting"; pct: number }
 
-// The zip is imported EXACTLY as-is — every file. There used to be a "runtime
-// junk" skip-list (NW.js/Chromium files) to save space on desktop builds, but
-// name-based guessing silently broke games twice (*.dat cutscene data, and any
-// asset that happened to match a runtime name). Disk is cheaper than a broken
-// scene; the quota pre-check below still keeps oversized games honest.
-const isRuntimeJunk = (_p: string) => false;
+// Desktop-runtime skipping — by EXACT LAYOUT, never by guessing names in game
+// data (extension guessing broke real games twice: *.dat cutscene data, then
+// anything matching a runtime name). A directory is the NW.js runtime only if
+// it literally contains package.json beside Game.exe / nw.pak / icudtl.dat.
+// Within THAT directory level only, native binaries and the Chromium resource
+// files are skipped (they cannot run in a browser, and writing hundreds of MB
+// of them is what pushed phone imports over the edge). Everything under the
+// game's own folders (www/, data/, img/, movies/, …) is always kept.
+const RUNTIME_ROOT_FILE = /^(icudtl\.dat|natives_blob\.bin|snapshot_blob\.bin|v8_context_snapshot\.bin|debug\.log|credits\.html|vk_swiftshader_icd\.json|(nw|chrome)[^/]*\.pak|resources\.pak|[^/]*\.(exe|dll))$/;
+function runtimeSkipper(paths: string[]): (p: string) => boolean {
+  const lower = new Set(paths.map((p) => p.toLowerCase()));
+  const dirs = new Set<string>([""]);
+  for (const p of lower) {
+    let d = "";
+    for (const part of p.split("/").slice(0, -1)) { d += part + "/"; dirs.add(d); }
+  }
+  let root: string | null = null;
+  for (const d of dirs) {
+    const hasExeHere = [...lower].some((p) => p.startsWith(d) && !p.slice(d.length).includes("/") && p.endsWith(".exe"));
+    if (lower.has(d + "package.json") && (lower.has(d + "icudtl.dat") || lower.has(d + "nw.pak") || hasExeHere)) { root = d; break; }
+  }
+  if (root === null) return () => false; // no desktop runtime in this zip
+  const r = root;
+  return (p: string) => {
+    const lp = p.toLowerCase();
+    if (!lp.startsWith(r)) return false;
+    const rest = lp.slice(r.length);
+    if (/^(locales|swiftshader)\//.test(rest)) return true; // runtime subtrees
+    if (rest.includes("/")) return false;                    // game folders — never touched
+    return RUNTIME_ROOT_FILE.test(rest);
+  };
+}
 
 /** Turn cryptic zip errors into something a person can act on. */
 function zipReadError(e: unknown): Error {
@@ -362,11 +388,13 @@ async function doImport(
   // entry is sliced off the File and streamed through the decompressor straight
   // into OPFS in small chunks. Peak memory is a few chunk buffers (~16MB)
   // whether the game is 50MB or 6GB.
+  let ctx = ""; // where a failure happened — shown so errors are diagnosable
   try {
     const entries = await zipEntries(file);
     if (!entries.length) throw new Error("Couldn't read this zip — it looks empty or isn't a standard .zip archive.");
     names.push(...entries.map((e) => e.name));
-    const files = entries.filter((e) => !e.name.endsWith("/") && !isRuntimeJunk(e.name));
+    const skipRt = runtimeSkipper(names.filter((p) => !p.endsWith("/")));
+    const files = entries.filter((e) => !e.name.endsWith("/") && !skipRt(e.name));
 
     // the UNPACKED total is what OPFS must hold — fail clearly before writing
     const totalOut = files.reduce((s, f) => s + f.uncompSize, 0);
@@ -381,8 +409,10 @@ async function doImport(
     onProgress?.({ phase: "extracting", pct: 0 });
     const totalComp = files.reduce((s, f) => s + f.compSize, 0) || 1;
     let readComp = 0;
+    let fileNo = 0;
     const U16L = (d: DataView, o: number) => d.getUint16(o, true);
     for (const ent of files) {
+      ctx = ` (at file ${++fileNo}/${files.length}: ${ent.name.split("/").pop()}, ${(bytes / 1048576).toFixed(0)} MB written)`;
       if (ent.flag & 1) throw new Error("This zip is password-protected — export it without a password and try again.");
       if (ent.method !== 0 && ent.method !== 8) throw new Error("Couldn't read this zip — it uses a compression method the browser can't unpack (only standard Zip/Deflate works). Re-create it as a plain .zip of the game folder and try again.");
       // the local header's name/extra lengths tell us where the data starts
@@ -420,11 +450,17 @@ async function doImport(
     }
   } catch (e) {
     await (await rpgmDir()).removeEntry(id, { recursive: true }).catch(() => {});
+    // keep the ORIGINAL error visible — a blanket "out of memory" label hid the
+    // real cause (Safari reports storage trouble as UnknownError too)
+    const orig = e instanceof Error ? `${e.name}: ${e.message}` : String(e);
     if (e instanceof Error && /quota|space|QuotaExceeded/i.test(e.name + e.message)) {
-      throw new Error("Ran out of storage while installing — this game is too big for this device.");
+      throw new Error(`Ran out of storage while installing${ctx}. Free up space on this device and try again — details: ${orig}`);
     }
     if (e instanceof Error && /transient|out of memory|UnknownError/i.test(e.name + " " + e.message)) {
-      throw new Error("The browser ran out of memory while installing. Close other tabs and apps and try again — for very large games, a desktop browser handles this best.");
+      throw new Error(`The browser couldn't finish installing${ctx} — this is usually memory or storage pressure. Close other tabs/apps or free up space and try again; a desktop browser handles very large games best. Details: ${orig}`);
+    }
+    if (e instanceof Error && !/Couldn't read this zip|Not enough room|password-protected/.test(e.message)) {
+      throw new Error(`${e.message}${ctx}`);
     }
     throw zipReadError(e);
   }
