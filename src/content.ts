@@ -49,6 +49,7 @@ export interface XmbItem {
     | { type: "video-player" }
     | { type: "photo-mode" }
     | { type: "repo-rewind" }
+    | { type: "rpg-maker" }
     | { type: "chess" }
     | { type: "trivia" }
     | { type: "flash" }

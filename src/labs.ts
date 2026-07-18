@@ -83,6 +83,7 @@ const APPS: { id: string; title: string; cat: string }[] = [
   { id: "ps1", title: "PlayStation 1 (PSX)", cat: "Games" },
   { id: "insert", title: "Retro Console (cartridge loader)", cat: "Games" },
   { id: "scummvm", title: "Point & Click (ScummVM)", cat: "Games" },
+  { id: "rpgmaker", title: "RPG Maker (bring your own)", cat: "Games" },
   { id: "lichesstv", title: "Lichess TV", cat: "Games" },
   { id: "code", title: "Code Playground", cat: "Extras" },
   { id: "pc", title: "Other OS — x86 PC", cat: "Extras" },
@@ -258,6 +259,11 @@ APP_GUIDES.videoplayer = {
   what: "A PS-style local video player: drop in any video file you own — it plays full-bleed with console controls, and its audio rides the master bus so the reactive backdrops dance to your movie.",
   steps: ["Video › Video Player", "Pick a video file", "✕ play/pause · ←→ seek · △ fullscreen"],
   go: "app:videoplayer", goLabel: "OPEN THE PLAYER",
+};
+APP_GUIDES.rpgmaker = {
+  what: "Bring-your-own RPG Maker games, JoiPlay-style. Drop a .zip of a game you own and the console detects the engine. MV & MZ (2015+) play natively right now — no emulation, they're HTML5. Older engines — 2000/2003 (EasyRPG) and XP/VX/VX Ace (mkxp) — are detected and saved, with their WASM engines being wired in next. Nothing is uploaded; the game lives only in this browser.",
+  steps: ["Game › RPG Maker", "Add a game (.zip) — the whole game folder, zipped", "MV/MZ start immediately; older engines note their status"],
+  go: "app:rpgmaker", goLabel: "OPEN RPG MAKER",
 };
 APP_GUIDES.settingshub = {
   what: "Console Settings — the PS5-style hub: customize the console font and text size, re-icon any category or app from the PS glyph set, tune audio, pick a language, and manage every Labs flag in one place.",

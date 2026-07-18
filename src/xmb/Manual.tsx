@@ -403,6 +403,7 @@ const CHAPTERS: Chapter[] = [
             <tr><td>EmulatorJS (CDN)</td><td>RetroArch cores in wasm</td><td>GBA · GB/GBC · NES · SNES · Mega Drive · N64 · NDS · PSX · PSP</td></tr>
             <tr><td>Play!</td><td>PS2 emulator, wasm</td><td>the PS2 home + online multiplayer</td></tr>
             <tr><td>ScummVM</td><td>adventure-game engine, wasm</td><td>the point-and-click shelf</td></tr>
+            <tr><td>RPG Maker (bring-your-own)</td><td>MV/MZ native HTML5 (live) · EasyRPG &amp; mkxp for older engines (wiring)</td><td>drop a .zip → detect engine → OPFS + scoped SW → play</td></tr>
             <tr><td>stockfish</td><td>chess engine, wasm</td><td>Chess vs Stockfish</td></tr>
             <tr><td>@ruffle-rs/ruffle</td><td>Flash Player, wasm</td><td>Flash Arcade</td></tr>
             <tr><td>cesium</td><td>3D globe engine</td><td>Planet Earth + Vibe Search</td></tr>

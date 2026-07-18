@@ -7,3 +7,6 @@ dist/
 # large 3D controller models — CC-BY deploy assets, served via Cloudflare, not
 # tracked in git (too big to push). See public/models/README.md to re-fetch.
 public/models/*.glb
+
+# stray test screenshots at repo root (public/ pngs are fine)
+/*.png
