@@ -1125,13 +1125,16 @@ img.status-avatar, img.ptile-avatar { object-fit: cover; border: 1px solid rgba(
 .set-labs-head { display: flex; align-items: center; gap: 9px; font-size: 11px; letter-spacing: 0.18em; color: var(--dim); text-transform: uppercase; padding: 4px 2px 6px; }
 .set-labs-head svg { width: 16px; height: 16px; }
 .set-labs-row {
-  display: flex; align-items: center; justify-content: space-between; gap: 14px; text-align: left;
+  display: flex; align-items: center; gap: 14px; text-align: left;
   padding: 10px 13px; border-radius: 10px; cursor: pointer; font-family: inherit;
   background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.07); color: #fff;
   transition: all 0.12s;
 }
 .set-labs-row:hover, .set-labs-row.focus { border-color: color-mix(in oklab, var(--xmb-tint) 50%, rgba(255,255,255,0.16)); }
-.set-labs-info { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.set-labs-info { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1; }
+/* the ? and the switch sit together at the right edge, evenly spaced by the row gap */
+.set-labs-row .labs-guide-btn { margin-right: 0; }
+.set-labs-row .labs-guide-btn svg { width: 100%; height: 100%; display: block; }
 .set-labs-title { font-size: 13.5px; }
 .set-labs-desc { font-size: 11.5px; color: var(--dim); line-height: 1.4; }
 .set-sys-card { padding: 15px 17px; border-radius: 12px; background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.09); display: flex; flex-direction: column; gap: 7px; max-width: 720px; }

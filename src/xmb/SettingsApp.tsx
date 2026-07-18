@@ -456,7 +456,7 @@ export default function SettingsApp(props: {
                       {labEnabled(gid) ? "SWITCH OFF" : labsWarn() === gid ? "⚠ ENABLE ANYWAY" : "SWITCH ON"}
                     </button>
                   </div>
-                  <div class="modal-hint"><span class="btn-x" /> {g?.go ? (g?.goLabel?.toLowerCase() ?? "take me there") : "toggle"} · △ toggle · <span class="btn-o" /> close</div>
+                  <div class="modal-hint"><span class="btn-x" /> {g?.go ? (g?.goLabel?.toLowerCase() ?? "take me there") : "toggle"}{g?.go && <> · △ toggle</>} · <span class="btn-o" /> close</div>
                 </div>
               </div>
             </>
