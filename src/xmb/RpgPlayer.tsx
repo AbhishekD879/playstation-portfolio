@@ -81,18 +81,20 @@ export default function RpgPlayer(props: {
 
   // Send a real key event INTO the same-origin game iframe — its own key
   // listeners fire on synthetic events. Built with the IFRAME's KeyboardEvent
-  // (so engines that check `instanceof` still match) and dispatched to both its
-  // document and window; keyCode/which are set for engines that read them.
+  // (so engines that check `instanceof` still match); keyCode/which are set for
+  // engines that read them. Dispatched on the iframe's DOCUMENT only: a bubbling
+  // event on document also reaches window-level listeners, so a game that listens
+  // on either fires EXACTLY ONCE — dispatching to both document AND window makes
+  // window listeners fire twice (double-input; masked in RPG Maker by its
+  // per-frame input poll, but real for raw web/HTML5 games).
   const fireKey = (def: KeyDef, down: boolean) => {
     const win = frame?.contentWindow as (Window & { KeyboardEvent?: typeof KeyboardEvent }) | null;
     const doc = frame?.contentDocument;
     if (!win || !doc) return;
     const Ctor = win.KeyboardEvent ?? KeyboardEvent;
-    for (const target of [doc, win] as (Document | Window)[]) {
-      const ev = new Ctor(down ? "keydown" : "keyup", { key: def.key, code: def.code, location: def.loc ?? 0, bubbles: true, cancelable: true, composed: true });
-      try { Object.defineProperty(ev, "keyCode", { get: () => def.keyCode }); Object.defineProperty(ev, "which", { get: () => def.keyCode }); } catch { /* older engines */ }
-      target.dispatchEvent(ev);
-    }
+    const ev = new Ctor(down ? "keydown" : "keyup", { key: def.key, code: def.code, location: def.loc ?? 0, bubbles: true, cancelable: true, composed: true });
+    try { Object.defineProperty(ev, "keyCode", { get: () => def.keyCode }); Object.defineProperty(ev, "which", { get: () => def.keyCode }); } catch { /* older engines */ }
+    doc.dispatchEvent(ev);
   };
 
   onMount(() => {

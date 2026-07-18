@@ -177,6 +177,19 @@ const RENPY_SHIM = `<script>(function(){
   } catch(e){}
 })();</` + `script>`;
 
+// —— generic web-game neutraliser (injected into web-build HTML) ——
+// Godot/Unity/HTML5 web exports may register their OWN service worker (Godot's
+// coi-serviceworker.js to fake cross-origin isolation, PWA workers, etc.). We
+// already serve every file with COOP/COEP headers and own the /rpgm/web/ scope,
+// so any game SW is unnecessary and would fight us — block all registrations.
+const WEB_SHIM = `<script>(function(){
+  try {
+    if (navigator.serviceWorker && navigator.serviceWorker.register) {
+      navigator.serviceWorker.register = function(){ return Promise.reject(new Error("host-managed sw")); };
+    }
+  } catch(e){}
+})();</` + `script>`;
+
 // The extractor doesn't strip the game's wrapper folder; it records the root
 // prefix in a .rpgmroot marker. We prepend it so URLs (rootless) map to OPFS.
 const rootCache = new Map();
@@ -210,15 +223,13 @@ self.addEventListener("fetch", (e) => {
   const url = new URL(e.request.url);
   const p = url.pathname;
 
-  // MV/MZ route
-  let m = p.match(/^\/rpgm\/fs\/([^/]+)\/(.*)$/);
-  const isMvMz = !!m;
-  // Ren'Py web-build route (self-contained HTML5/WASM, served like MV/MZ)
-  if (!m) m = p.match(/^\/rpgm\/renpy\/([^/]+)\/(.*)$/);
-  const isRenpy = !isMvMz && !!m;
-  // EasyRPG game route (RTP fallback handled inside)
-  if (!m) m = p.match(/^\/rpgm\/easyrpg\/games\/([^/]+)\/(.*)$/);
-  if (!m) return; // engine statics + anything else → network
+  // Routes (all serve OPFS; the flags pick which HTML shims get injected):
+  let m, isMvMz = false, isRenpy = false, isWeb = false, isEasy = false;
+  if ((m = p.match(/^\/rpgm\/fs\/([^/]+)\/(.*)$/))) isMvMz = true;              // MV/MZ
+  else if ((m = p.match(/^\/rpgm\/renpy\/([^/]+)\/(.*)$/))) isRenpy = true;      // Ren'Py web build
+  else if ((m = p.match(/^\/rpgm\/web\/([^/]+)\/(.*)$/))) isWeb = true;          // Godot/Unity/HTML5/WebGL export
+  else if ((m = p.match(/^\/rpgm\/easyrpg\/games\/([^/]+)\/(.*)$/))) isEasy = true; // EasyRPG (RTP fallback)
+  else return; // engine statics + anything else → network
 
   const gameId = m[1];
   let path = decodeURIComponent(m[2] || "");
@@ -236,7 +247,7 @@ self.addEventListener("fetch", (e) => {
       // doesn't bundle (self-contained games pull zero RTP — the 12MB pack is
       // never a single download). Each fetched asset is cached so replays and
       // offline don't re-download it.
-      if (!isMvMz && !isRenpy) {
+      if (isEasy) {
         const rtpUrl = "/rpgm/easyrpg/rtp/" + path;
         try {
           const cache = await caches.open("rpgm-rtp-v1");
@@ -250,17 +261,27 @@ self.addEventListener("fetch", (e) => {
       return new Response("Not found: " + path, { status: 404, headers: ISO_HEADERS });
     }
 
-    if ((isMvMz || isRenpy) && type === "text/html") {
+    if ((isMvMz || isRenpy || isWeb) && type === "text/html") {
       // Inject shims into the game HTML before any of its scripts run. RPG Maker
-      // gets the NW.js polyfill (require/process); Ren'Py gets its SW neutraliser.
-      // Both get the diagnostics probe + per-game save isolation. RPG Maker
-      // index.html always has a <head>; if it somehow doesn't, prepend.
+      // gets the NW.js polyfill (require/process); Ren'Py and web builds get a
+      // service-worker neutraliser so their bundled SW can't hijack our scope.
+      // All get the diagnostics probe + per-game save isolation. index.html
+      // usually has a <head>; if it somehow doesn't, prepend.
       const raw = await file.text();
-      const shims = (isRenpy ? RENPY_SHIM : NW_SHIM) + DIAG_SHIM + isolationShim(gameId);
+      const headShim = isRenpy ? RENPY_SHIM : isWeb ? WEB_SHIM : NW_SHIM;
+      const shims = headShim + DIAG_SHIM + isolationShim(gameId);
       const html = /<head[^>]*>/i.test(raw)
         ? raw.replace(/<head[^>]*>/i, (m) => m + shims)
         : shims + raw;
       return new Response(html, { headers: base });
+    }
+    // Unity Brotli/Gzip WebGL builds ship pre-compressed assets (.wasm.br,
+    // .data.gz, …). The file on disk IS the compressed bytes — tell the browser
+    // to decompress natively (Content-Encoding) and label it with the DECODED
+    // type, or Unity's loader rejects it. (.unityweb is JS-side, served as-is.)
+    const enc = path.endsWith(".br") ? "br" : path.endsWith(".gz") ? "gzip" : null;
+    if (enc) {
+      return new Response(file, { headers: { "Content-Type": mimeOf(path.slice(0, -3)), "Content-Encoding": enc, ...ISO_HEADERS } });
     }
     const range = e.request.headers.get("range");
     const mr = range && range.match(/bytes=(\d*)-(\d*)/);

@@ -4,7 +4,7 @@
 // 2000/2003 via EasyRPG, XP/VX/Ace detected-only) and Ren'Py (web builds play,
 // desktop builds detected-only). Games live in OPFS, per profile, never
 // uploaded — same ethos as the emulator ROM shelf.
-import { For, Show, createSignal, onMount } from "solid-js";
+import { For, Match, Show, Switch, createSignal, onMount } from "solid-js";
 import * as sfx from "../audio";
 import type { NavAction } from "../input";
 import { Icon } from "./icons";
@@ -15,8 +15,12 @@ import {
 import RpgHtml5 from "./RpgHtml5";
 import RpgEasyRpg from "./RpgEasyRpg";
 import RpgRenPy from "./RpgRenPy";
+import RpgWeb from "./RpgWeb";
 
-export default function RpgMaker(props: { profile: { id: string }; family: "rpgmaker" | "renpy"; onClose: () => void; bind: (nav: (a: NavAction) => void) => void }) {
+type Family = "rpgmaker" | "renpy" | "web";
+const FAMILY_NAME: Record<Family, string> = { rpgmaker: "RPG Maker", renpy: "Ren'Py", web: "Web Games" };
+
+export default function RpgMaker(props: { profile: { id: string }; family: Family; onClose: () => void; bind: (nav: (a: NavAction) => void) => void }) {
   const [games, setGames] = createSignal<RpgGame[]>([]);
   const [sel, setSel] = createSignal(0); // 0..n-1 games, n = import tile
   const [playing, setPlaying] = createSignal<RpgGame | null>(null);
@@ -28,8 +32,8 @@ export default function RpgMaker(props: { profile: { id: string }; family: "rpgm
   let disarm: ReturnType<typeof setTimeout> | null = null;
 
   const isRenpy = () => props.family === "renpy";
-  const otherApp = () => (isRenpy() ? "RPG Maker" : "Ren'Py");
-  // only this family's games (RPG Maker and Ren'Py are separate libraries)
+  const isWeb = () => props.family === "web";
+  // only this family's games (RPG Maker / Ren'Py / Web are separate libraries)
   const refresh = () => listRpgGames(props.profile.id).then((gs) => setGames(gs.filter((g) => engineFamily(g.engine) === props.family)));
   onMount(refresh);
 
@@ -48,7 +52,7 @@ export default function RpgMaker(props: { profile: { id: string }; family: "rpgm
       // the detector, not the cabinet, decides the family — if you dropped the
       // wrong kind here, it's saved but lives in the other app, so say so.
       if (engineFamily(g.engine) !== props.family) {
-        setError(`That's a ${ENGINE_LABEL[g.engine]} game — it's saved in the ${otherApp()} app.`);
+        setError(`That's a ${ENGINE_LABEL[g.engine]} game — it's saved in the ${FAMILY_NAME[engineFamily(g.engine)]} app.`);
         sfx.tickV();
       } else {
         setSel(games().findIndex((x) => x.id === g.id));
@@ -116,6 +120,7 @@ export default function RpgMaker(props: { profile: { id: string }; family: "rpgm
         if (kind === "html5") return <RpgHtml5 game={g} onClose={close} bind={(f) => (hostNav = f)} />;
         if (kind === "easyrpg") return <RpgEasyRpg game={g} onClose={close} bind={(f) => (hostNav = f)} />;
         if (kind === "renpy") return <RpgRenPy game={g} onClose={close} bind={(f) => (hostNav = f)} />;
+        if (kind === "web") return <RpgWeb game={g} onClose={close} bind={(f) => (hostNav = f)} />;
         // Not playable — detected & saved, but honest about why:
         //  · Ren'Py DESKTOP build: engine ships as platform-native modules and
         //    .rpyc is version-locked, so no single runtime plays arbitrary
@@ -144,7 +149,7 @@ export default function RpgMaker(props: { profile: { id: string }; family: "rpgm
     >
       <div class="rpgcab">
         <div class="guide-head">
-          <div class="panel-tag">{isRenpy() ? "REN'PY — YOUR GAMES · EXPERIMENTAL" : "RPG MAKER — YOUR GAMES"}</div>
+          <div class="panel-tag">{isRenpy() ? "REN'PY — YOUR GAMES · EXPERIMENTAL" : isWeb() ? "WEB GAMES — YOUR GAMES" : "RPG MAKER — YOUR GAMES"}</div>
           <button class="ps-act" onClick={() => { sfx.back(); props.onClose(); }}><span class="btn-o" /> back</button>
         </div>
 
@@ -196,18 +201,25 @@ export default function RpgMaker(props: { profile: { id: string }; family: "rpgm
 
         <Show when={!games().length && !importing()}>
           <p class="rpg-empty-note">
-            <Show
-              when={isRenpy()}
-              fallback={<>
+            <Switch>
+              <Match when={isWeb()}>
+                Drop in a zip of a game <b>already exported for the web</b> — a <b>Godot</b> HTML5 export, a
+                <b> Unity</b> WebGL build, a <b>Wolf RPG</b> "Browser-Woditor" build, or any plain HTML5/WebGL
+                game (a folder with an <code>index.html</code>). These run <b>natively</b> in the browser — no
+                emulation. Desktop binaries (.exe) can't run here; export the game for web first. Nothing is
+                uploaded — the game stays in this browser.
+              </Match>
+              <Match when={isRenpy()}>
+                Drop in a Ren'Py <b>Web build</b> (open your game in the Ren'Py launcher and choose <b>Build → Web</b>,
+                then zip &amp; import the result). Web builds play right here — engine and all. Desktop builds are
+                detected and saved but can't run in a browser. Nothing is uploaded — the game stays in this browser.
+              </Match>
+              <Match when={true}>
                 Drop in a zip of an RPG Maker game you own. <b>MV, MZ, 2000 &amp; 2003 play now</b> — MV/MZ natively,
                 2000/2003 through EasyRPG (free RTP bundled). XP/VX/Ace are detected and saved but not yet playable.
                 Nothing is uploaded — the game stays in this browser.
-              </>}
-            >
-              Drop in a Ren'Py <b>Web build</b> (open your game in the Ren'Py launcher and choose <b>Build → Web</b>,
-              then zip &amp; import the result). Web builds play right here — engine and all. Desktop builds are
-              detected and saved but can't run in a browser. Nothing is uploaded — the game stays in this browser.
-            </Show>
+              </Match>
+            </Switch>
           </p>
         </Show>
 

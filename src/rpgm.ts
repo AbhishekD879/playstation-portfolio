@@ -12,7 +12,13 @@
 //   · xp / vx / vxace  → mkxp (WASM, RGSS) — RPG Maker XP / VX / VX Ace.
 import { Unzip, UnzipInflate, unzipSync } from "fflate";
 
-export type RpgEngine = "mz" | "mv" | "rm2k3" | "rm2k" | "vxace" | "vx" | "xp" | "renpy" | "renpydesktop" | "unknown";
+export type RpgEngine =
+  | "mz" | "mv" | "rm2k3" | "rm2k" | "vxace" | "vx" | "xp"
+  | "renpy" | "renpydesktop"
+  // web-exported engine games — these RUN in a browser natively (no emulation),
+  // we just serve the exported build. A user brings the game's own web export.
+  | "godot" | "unity" | "html5"
+  | "unknown";
 
 export interface RpgGame {
   id: string;
@@ -38,7 +44,8 @@ export const DEVICE_MEM_GB: number | undefined = (navigator as any).deviceMemory
 export function estimateRuntimeMB(g: RpgGame): number {
   const sizeMB = g.bytes / 1048576;
   const k = engineKind(g.engine);
-  const base = k === "html5" ? 130 : k === "renpy" ? 160 : 90; // PixiJS+WebGL · CPython+SDL wasm · EasyRPG wasm
+  // PixiJS+WebGL · CPython+SDL wasm · EasyRPG wasm · engine wasm (Godot/Unity/…)
+  const base = k === "html5" ? 130 : k === "renpy" ? 160 : k === "web" ? 150 : 90;
   return Math.round(base + Math.min(sizeMB * 0.5, 400));
 }
 /** True when the estimate is a large share of a (Chromium-reported) device
@@ -53,18 +60,24 @@ export const ENGINE_LABEL: Record<RpgEngine, string> = {
   rm2k3: "RPG Maker 2003", rm2k: "RPG Maker 2000",
   vxace: "RPG Maker VX Ace", vx: "RPG Maker VX", xp: "RPG Maker XP",
   renpy: "Ren'Py", renpydesktop: "Ren'Py (desktop build)",
+  godot: "Godot (Web export)", unity: "Unity (WebGL)", html5: "HTML5 / WebGL",
   unknown: "Unknown / unsupported",
 };
-/** Which cabinet a game belongs to — RPG Maker and Ren'Py are separate apps. */
-export const engineFamily = (e: RpgEngine): "renpy" | "rpgmaker" =>
-  e === "renpy" || e === "renpydesktop" ? "renpy" : "rpgmaker";
+/** Which cabinet a game belongs to — RPG Maker, Ren'Py and Web games are
+ *  separate apps (a web-exported Godot/Unity/HTML5 game is its own family). */
+export const engineFamily = (e: RpgEngine): "renpy" | "rpgmaker" | "web" =>
+  e === "renpy" || e === "renpydesktop" ? "renpy"
+  : e === "godot" || e === "unity" || e === "html5" ? "web"
+  : "rpgmaker";
 
-/** Which player surface an engine routes to. */
-export const engineKind = (e: RpgEngine): "html5" | "easyrpg" | "mkxp" | "renpy" | "none" =>
+/** Which player surface an engine routes to. ("web" = serve the exported build
+ *  in an iframe, like Ren'Py; the browser runs it natively — no emulation.) */
+export const engineKind = (e: RpgEngine): "html5" | "easyrpg" | "mkxp" | "renpy" | "web" | "none" =>
   e === "mz" || e === "mv" ? "html5"
   : e === "rm2k" || e === "rm2k3" ? "easyrpg"
   : e === "xp" || e === "vx" || e === "vxace" ? "mkxp"
   : e === "renpy" ? "renpy"
+  : e === "godot" || e === "unity" || e === "html5" ? "web"
   : "none";
 
 // —— IndexedDB metadata store ————————————————————————————————————————————————
@@ -199,6 +212,28 @@ function detect(paths: string[]): Detected {
     || find((p) => /(^|\/)game\/.*\.rpy$/.test(p))
     || find((p) => /(^|\/)game\/script_version\.txt$/.test(p));
   if (isRenpy) return { engine: "renpydesktop", root: "", entry: "" };
+
+  // —— Web-exported ENGINE games ——————————————————————————————————————————————
+  // These RUN natively in the browser — no emulation, we just serve the build a
+  // user already exported "for web". Covers Godot (HTML5), Unity (WebGL), Wolf
+  // RPG (Browser-Woditor build), and any plain HTML5/WebGL game. The tell is an
+  // index.html that ISN'T an RPG Maker / Ren'Py one (those returned above).
+  const indexes = paths.filter((p) => /(^|\/)index\.html?$/i.test(p));
+  if (indexes.length) {
+    // shallowest index.html is the entry (build folders may nest helper pages)
+    const idx = indexes.slice().sort((a, b) => a.split("/").length - b.split("/").length)[0];
+    const root = dirOf(idx);
+    const rootLc = root.toLowerCase();
+    const inRoot = (re: RegExp) => lower.some((p) => p.startsWith(rootLc) && re.test(p));
+    // Godot: a .pck data pack (unique to Godot) beside the engine .wasm.
+    // Unity: a Build/ dir with the loader/framework glue (+ .data/.wasm, maybe
+    //        .br/.gz/.unityweb compressed). Else a generic HTML5/WebGL game.
+    const engine: RpgEngine =
+      inRoot(/\.pck$/) ? "godot"
+      : inRoot(/(^|\/)build\/[^/]*\.(loader|framework)\.js$/) || inRoot(/(^|\/)build\/[^/]*\.(data|wasm)(\.(br|gz|unityweb))?$/) ? "unity"
+      : "html5";
+    return { engine, root, entry: idx.slice(root.length) };
+  }
 
   return { engine: "unknown", root: "", entry: "" };
 }
@@ -337,7 +372,7 @@ export async function importRpgZip(
   let det = detect(paths);
   if (det.engine === "unknown") {
     await (await rpgmDir()).removeEntry(id, { recursive: true }).catch(() => {});
-    throw new Error("Not a recognised RPG Maker game (no index.html / RPG_RT / RGSS data found).");
+    throw new Error("Couldn't recognise a game in this zip — no index.html (web build), RPG_RT (RPG Maker 2000/2003), RGSS data (XP/VX/Ace) or Ren'Py files found. Desktop binaries (.exe) can't run in a browser; export the game for web first.");
   }
 
   // refine XP/VX/VXAce from Game.ini's Library= line (read the one small file)

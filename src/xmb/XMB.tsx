@@ -193,7 +193,7 @@ export default function XMB(props: {
   const [ytQuery, setYtQuery] = createSignal(""); // AI agent → YouTube search handoff
   const [vListening, setVListening] = createSignal(false); // XMB voice command
   const [padTest, setPadTest] = createSignal(false);
-  const [app, setApp] = createSignal<null | "doom" | "doomrtx" | "chess" | "trivia" | "flash" | "cinema" | "podcasts" | "library" | "map" | "ai" | "webamp" | "youtube" | "timemachine" | "art" | "wiki" | "lichess" | "ps2" | "pc" | "guestbook" | "browser" | "visualizer" | "studio" | "code" | "manual" | "ps2home" | "ps1home" | "psphome" | "retrohome" | "scummvm" | "karaoke" | "strudel" | "settingshub" | "videoplayer" | "reporewind" | "rpgmaker" | "renpy">(null);
+  const [app, setApp] = createSignal<null | "doom" | "doomrtx" | "chess" | "trivia" | "flash" | "cinema" | "podcasts" | "library" | "map" | "ai" | "webamp" | "youtube" | "timemachine" | "art" | "wiki" | "lichess" | "ps2" | "pc" | "guestbook" | "browser" | "visualizer" | "studio" | "code" | "manual" | "ps2home" | "ps1home" | "psphome" | "retrohome" | "scummvm" | "karaoke" | "strudel" | "settingshub" | "videoplayer" | "reporewind" | "rpgmaker" | "renpy" | "web">(null);
   const [ps2Boot, setPs2Boot] = createSignal<GameRecord | null>(null);
   const [ps2Join, setPs2Join] = createSignal(false);
   const [ccOpen, setCcOpen] = createSignal(false);
@@ -234,6 +234,7 @@ export default function XMB(props: {
   const retroCount = () => games().filter((g) => g.sys !== "ps2" && g.core !== "psp" && g.core !== "psx").length;
   const [rpgCount, setRpgCount] = createSignal(0);
   const [renpyCount, setRenpyCount] = createSignal(0);
+  const [webCount, setWebCount] = createSignal(0);
   const gameItems = createMemo<XmbItem[]>(() => [
     { id: "doom", title: "DOOM", sub: "Built-in game · the 1993 shareware, playable now", icon: "skull", action: { type: "doom" } },
     ...(hasWebGPU() ? [{ id: "doomrtx", title: "DOOM RTX", sub: "E1M1 path-traced in real time — WebGPU ray tracing", icon: "lightning", action: { type: "doom-rtx" as const } }] : []),
@@ -247,6 +248,7 @@ export default function XMB(props: {
     { id: "scummvm", title: "Point & Click", sub: "ScummVM in wasm — classic adventures, free ones included", icon: "cursor", action: { type: "scummvm" } },
     { id: "rpgmaker", title: "RPG Maker", sub: `Drop a zip of a game you own — MV/MZ play natively, 2000/2003 via EasyRPG${rpgCount() ? ` · ${rpgCount()} in your library` : ""}`, icon: "rpgmaker", action: { type: "rpg-maker" } },
     { id: "renpy", title: "Ren'Py", sub: `Drop a Ren'Py Web build — visual novels, experimental${renpyCount() ? ` · ${renpyCount()} in your library` : ""}`, icon: "renpy", action: { type: "renpy" as const } },
+    { id: "webgames", title: "Web & Engine Games", sub: `Drop a web-exported game — Godot · Unity · WebGL · Wolf RPG${webCount() ? ` · ${webCount()} in your library` : ""}`, icon: "gamepad", action: { type: "web-games" as const } },
     { id: "lichesstv", title: "Lichess TV", sub: "Spectate · live grandmaster games", icon: "knight", action: { type: "lichess-tv" } },
   ]);
 
@@ -339,6 +341,7 @@ export default function XMB(props: {
   const refreshRpgCounts = () => listRpgGames(props.profile.id).then((g) => {
     setRpgCount(g.filter((x) => engineFamily(x.engine) === "rpgmaker").length);
     setRenpyCount(g.filter((x) => engineFamily(x.engine) === "renpy").length);
+    setWebCount(g.filter((x) => engineFamily(x.engine) === "web").length);
   });
   onMount(() => {
     refreshGames();
@@ -683,6 +686,10 @@ export default function XMB(props: {
       case "renpy":
         sfx.confirm();
         setApp("renpy");
+        break;
+      case "web-games":
+        sfx.confirm();
+        setApp("web");
         break;
       case "karaoke":
         sfx.confirm();
@@ -1327,7 +1334,7 @@ export default function XMB(props: {
     if (padTest()) { if (action === "back") setPadTest(false); return; }
     if (app()) {
       // bound apps route their own nav; the rest are keyboard-driven owner apps
-      if (["chess", "trivia", "flash", "cinema", "podcasts", "library", "youtube", "art", "wiki", "ps2home", "ps1home", "psphome", "retrohome", "karaoke", "settingshub", "videoplayer", "reporewind", "rpgmaker", "renpy"].includes(app()!)) appNav?.(action);
+      if (["chess", "trivia", "flash", "cinema", "podcasts", "library", "youtube", "art", "wiki", "ps2home", "ps1home", "psphome", "retrohome", "karaoke", "settingshub", "videoplayer", "reporewind", "rpgmaker", "renpy", "web"].includes(app()!)) appNav?.(action);
       else if (app() === "lichess" && action === "back") { sfx.back(); setApp(null); }
       else if (src === "pad" || src === "gesture") {
         // owner apps (map/globe, lichess…) listen to the KEYBOARD — turn pad
@@ -2038,6 +2045,9 @@ export default function XMB(props: {
       </Show>
       <Show when={app() === "renpy"}>
         <RpgMaker family="renpy" profile={props.profile} bind={(f) => (appNav = f)} onClose={() => { setApp(null); void refreshRpgCounts(); }} />
+      </Show>
+      <Show when={app() === "web"}>
+        <RpgMaker family="web" profile={props.profile} bind={(f) => (appNav = f)} onClose={() => { setApp(null); void refreshRpgCounts(); }} />
       </Show>
       <Show when={app() === "reporewind"}>
         <RepoRewind bind={(f) => (appNav = f)} onClose={() => setApp(null)} />

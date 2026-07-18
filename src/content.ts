@@ -51,6 +51,7 @@ export interface XmbItem {
     | { type: "repo-rewind" }
     | { type: "rpg-maker" }
     | { type: "renpy" }
+    | { type: "web-games" }
     | { type: "chess" }
     | { type: "trivia" }
     | { type: "flash" }
