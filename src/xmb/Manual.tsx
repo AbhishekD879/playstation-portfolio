@@ -397,7 +397,7 @@ const CHAPTERS: Chapter[] = [
         <table class="man-table">
           <thead><tr><th>Engine</th><th>What it is</th><th>Powers</th></tr></thead>
           <tbody>
-            <tr><td>three.js (WebGL + WebGPU/TSL)</td><td>3D renderer</td><td>the Wave, backdrops, galaxy boot, particle bursts, live photos</td></tr>
+            <tr><td>three.js (WebGL + WebGPU/TSL)</td><td>3D renderer</td><td>the Wave, backdrops, galaxy boot, live photos</td></tr>
             <tr><td>@huggingface/transformers</td><td>on-device ML runtime (ONNX)</td><td>every model in the AI chapter's table</td></tr>
             <tr><td>@mlc-ai/web-llm</td><td>LLM inference on WebGPU</td><td>AI Abhishek</td></tr>
             <tr><td>EmulatorJS (CDN)</td><td>RetroArch cores in wasm</td><td>GBA · GB/GBC · NES · SNES · Mega Drive · N64 · NDS · PSX · PSP</td></tr>

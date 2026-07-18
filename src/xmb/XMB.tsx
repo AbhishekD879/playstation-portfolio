@@ -436,7 +436,6 @@ export default function XMB(props: {
       sfx.trophy();
       rumble(0.9, 0.7, 320); // celebratory buzz on unlock
       pushToast(`Trophy earned — ${def.name}`, def.desc, def.tier);
-      if (labEnabled("gpujuice")) import("../particles").then((m) => m.burst({ gold: true, x: innerWidth - 180, y: 90 })).catch(() => {});
       if (!hadPlat && props.profile.trophies["platinum"]) {
         setTimeout(() => { sfx.trophy(); rumble(1, 0.9, 600); pushToast(`PLATINUM — ${PLATINUM.name}`, PLATINUM.desc, "platinum"); }, 1400);
       }
@@ -1268,7 +1267,6 @@ export default function XMB(props: {
       case "themes": setThemesOpen(true); break;
       case "saver": setSaver(true); break;
       case "juice-demo": rumble(0.5, 0.35, 90); setShaking(true); setTimeout(() => setShaking(false), 300); break;
-      case "burst-demo": import("../particles").then((m) => m.burst({ x: innerWidth / 2, y: innerHeight * 0.45, count: 131072 })).catch(() => {}); break;
       case "restart-demo": sessionStorage.removeItem("asp.resume"); location.reload(); break;
       case "photo-mode-demo": void takeSnapshot(); break;
       case "photo-cat": {
@@ -1515,7 +1513,6 @@ export default function XMB(props: {
       setShaking(true);
       setTimeout(() => setShaking(false), 300);
       fluidLaunchSplash(); // the fluid background splashes too (no-op otherwise)
-      if (labEnabled("gpujuice")) import("../particles").then((m) => m.burst()).catch(() => {});
     }
     prevApp = a;
   });

@@ -40,7 +40,6 @@ const FEATURE_GROUPS: FlagGroup[] = [
     group: "Visuals & Feel", icon: "spark", items: [
       { id: "livingbg", title: "Living Background", desc: "Animated, audio-reactive XMB wave (else a calm static backdrop)" },
       { id: "juice", title: "Launch Effects", desc: "Impact shake + haptic pulse when an app opens" },
-      { id: "gpujuice", title: "Particle Bursts (WebGPU)", desc: "Compute-shader particle storms on app launch & trophies" },
       { id: "livephoto", title: "Live Photos (3D)", desc: "On-device AI depth turns gallery photos into parallax 3D" },
       { id: "enhance", title: "Photo Enhance (AI ×2)", desc: "On-device super-resolution — upscale any gallery photo, tile by tile" },
       { id: "cutout", title: "Cutout Cam (AI)", desc: "One-tap background removal — turn any photo into a clean transparent cutout" },
@@ -112,7 +111,7 @@ export interface LabGuide {
   what: string;          // one or two plain sentences
   steps: string[];       // "TRY IT" — concrete, in order
   needs?: "webgpu";      // capability the card should report on
-  go?: string;           // action id XMB executes (e.g. "app:doom", "cc", "burst-demo")
+  go?: string;           // action id XMB executes (e.g. "app:doom", "cc", "juice-demo")
   goLabel?: string;      // button label, defaults to TAKE ME THERE
 }
 
@@ -236,12 +235,6 @@ const FEATURE_GUIDES: Record<string, LabGuide> = {
     steps: ["Launch anything from the crossbar", "Feel the thump (rumble needs a connected pad)"],
     go: "juice-demo", goLabel: "SHOW ME",
   },
-  gpujuice: {
-    what: "A million-particle GPU pool (WebGPU compute). Launching an app detonates a spark storm from the item you picked; trophies rain gold.",
-    steps: ["Launch any app and watch the item explode into sparks", "Earn a trophy for the gold shower"],
-    needs: "webgpu",
-    go: "burst-demo", goLabel: "FIRE A TEST BURST",
-  },
   livephoto: {
     what: "On-device AI depth turns your photos into parallax 3D — the picture tilts as you move the mouse.",
     steps: ["Photo › Add Photos… and pick a real photo of yours", "Open the Slideshow — the badge shows the 3D model warming up (first time downloads ~50 MB)", "When it reads ◈ 3D, move the mouse — depth!", "Museum & NASA photos stay 2D: their servers block pixel access"],
@@ -323,7 +316,6 @@ interface SpecReq {
 
 const FEATURE_SPECS: Record<string, SpecReq> = {
   // system features
-  gpujuice: { webgpu: "required", gpuHeavy: true, minMemGB: 4 },
   galaxyboot: { webgpu: "required", gpuHeavy: true, minMemGB: 4 },
   cutout: { webgpu: "boost", downloadMB: 45, minMemGB: 4, cpuHeavy: true },
   clickmask: { webgpu: "boost", downloadMB: 40, minMemGB: 4, cpuHeavy: true },
