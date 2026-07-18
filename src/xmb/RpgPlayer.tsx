@@ -10,6 +10,7 @@ import * as sfx from "../audio";
 import type { NavAction } from "../input";
 import { holdWakeLock } from "../wakelock";
 import { ENGINE_LABEL, ensureRpgSw, estimateRuntimeMB, looksHeavy, type RpgGame } from "../rpgm";
+import { installable, isIOS, isStandalone, promptInstall } from "../pwa";
 
 type Snap = {
   source: string; up: number; scene: string; spinner: boolean; booted: boolean; canvas: boolean;
@@ -131,6 +132,21 @@ export default function RpgPlayer(props: {
           </div>
           <button class="ps-act rpg-launch-play" onClick={launch}><span class="btn-x" /> play</button>
           <div class="rpg-launch-note">plays full screen · <span class="btn-o" /> or Esc to quit</div>
+          {/* True device fullscreen on a phone needs the console installed to the
+              home screen (no browser chrome). Offer it here, where it matters. */}
+          <Show when={!isStandalone()}>
+            <Show
+              when={installable()}
+              fallback={
+                <div class="rpg-launch-install">
+                  For real fullscreen on a phone, add this console to your Home Screen
+                  {isIOS() ? " — tap Share, then “Add to Home Screen”." : " from your browser menu."}
+                </div>
+              }
+            >
+              <button class="ps-act rpg-launch-install-btn" onClick={() => void promptInstall()}>install as app</button>
+            </Show>
+          </Show>
         </div>
       </Show>
 

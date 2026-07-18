@@ -4,6 +4,7 @@ import App from "./App";
 import "./styles.css";
 import { labEnabled } from "./labs";
 import { startCrt } from "./crt";
+import "./pwa"; // capture the install prompt early (before beforeinstallprompt fires)
 
 const root = document.getElementById("root")!;
 // CRT Console (Labs, experimental): the whole app moves inside a
