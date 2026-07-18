@@ -128,13 +128,32 @@ export default function SettingsApp(props: {
   const goSec = (d: number) => {
     const n = (sec() + d + SECTIONS.length) % SECTIONS.length;
     setSec(n);
-    setRow(0);
+    setRow(row() < 0 ? -1 : 0); // switching from the rail keeps rail focus
     setLabsWarn(null);
     sfx.tickH();
     rail?.children[n]?.scrollIntoView({ behavior: "smooth", inline: "center", block: "nearest" });
   };
 
   const cycle = <T,>(list: T[], curIdx: number, d = 1) => list[(curIdx + d + list.length) % list.length];
+
+  // ←→ on a focused row ADJUSTS the value — the pad is a first-class citizen,
+  // not a ✕-only cycler. (Sections switch from the rail: press ↑ past row 0.)
+  const adjustRow = (d: number): boolean => {
+    const s = SECTIONS[sec()], r = row();
+    if (s === "APPEARANCE") {
+      if (r === 0) { setFont(cycle(FONT_PRESETS, FONT_PRESETS.findIndex((f) => f.id === fontId()), d).id); return true; }
+      if (r === 1) { setTracking(cycle(TRACKINGS, TRACKINGS.findIndex((t) => t.id === trackId()), d).id); return true; }
+      if (r === 2) { setUiSize(cycle(SIZES, SIZES.findIndex((t) => t.id === sizeId()), d).id); return true; }
+    } else if (s === "AUDIO") {
+      if (r === 0) { const nv = Math.min(1, Math.max(0, Math.round((vol() + d * 0.05) * 20) / 20)); setVolume(nv); setVol(nv); return true; }
+      if (r === 1) { const np = cycle(SND_PACKS, SND_PACKS.findIndex((p) => p.id === pack()), d); setSndPack(np.id); setPack(np.id); return true; }
+      if (r === 2) { setMuted(toggleMute()); return true; }
+    } else if (s === "ICONS" || s === "LANGUAGE") {
+      setRow(Math.max(0, Math.min(rowCount()! - 1, r + d))); // move across the grid
+      return true;
+    }
+    return false; // LABS/SYSTEM rows have nothing to slide
+  };
 
   // Labs inline toggle with the same ⚠ press-again guard as the modal
   const labsFlat = () => LAB_GROUPS.flatMap((g) => g.items.map((f) => ({ ...f, group: g.group })));
@@ -242,12 +261,17 @@ export default function SettingsApp(props: {
       if (a === "back") { setPicking(null); sfx.back(); }
       return;
     }
-    if (a === "left") goSec(-1);
-    if (a === "right") goSec(1);
-    if (a === "up") { setRow(Math.max(0, row() - 1)); sfx.tickV(); }
-    if (a === "down") { setRow(Math.min(rowCount()! - 1, row() + 1)); sfx.tickV(); }
-    if (a === "confirm") confirmRow();
-    if (a === "options" && SECTIONS[sec()] === "LABS") { const f = labsFlat()[row()]; if (f) { setGuide(f.id); sfx.tickH(); } }
+    const onRail = row() < 0; // ↑ past the first row focuses the section rail
+    if (a === "left" || a === "right") {
+      const d = a === "left" ? -1 : 1;
+      if (onRail) goSec(d);
+      else if (adjustRow(d)) sfx.tickH();
+      else goSec(d); // rows with nothing to slide fall back to section switching
+    }
+    if (a === "up") { setRow(onRail ? -1 : row() - 1); sfx.tickV(); }
+    if (a === "down") { setRow(onRail ? 0 : Math.min(rowCount()! - 1, row() + 1)); sfx.tickV(); }
+    if (a === "confirm") { if (onRail) setRow(0); else confirmRow(); }
+    if (a === "options" && !onRail && SECTIONS[sec()] === "LABS") { const f = labsFlat()[row()]; if (f) { setGuide(f.id); sfx.tickH(); } }
     if (a === "back") { sfx.back(); props.onClose(); }
   });
 
@@ -274,7 +298,7 @@ export default function SettingsApp(props: {
       <div class="set-rail" ref={rail}>
         <For each={[...SECTIONS]}>
           {(s, i) => (
-            <button class="set-tab" classList={{ on: sec() === i() }}
+            <button class="set-tab" classList={{ on: sec() === i(), focus: row() < 0 && sec() === i() }}
               onClick={() => { setSec(i()); setRow(0); sfx.tickH(); }}>{s}</button>
           )}
         </For>
@@ -575,7 +599,7 @@ export default function SettingsApp(props: {
         }}
       </Show>
 
-      <div class="panel-hint guide-hint">←→ sections · ↑↓ rows · <span class="btn-x" /> change · <span class="btn-o" /> back</div>
+      <div class="panel-hint guide-hint">↑↓ rows · ←→ adjust the value (sections from the top rail) · <span class="btn-x" /> select · <span class="btn-o" /> back</div>
     </div>
   );
 }

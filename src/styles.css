@@ -292,6 +292,7 @@ img.status-avatar, img.ptile-avatar { object-fit: cover; border: 1px solid rgba(
 .spotify-panel {
   position: absolute; top: 50%; left: 50%;
   transform: translate(-50%, -50%);
+  z-index: 61; /* above its own backdrop — same layer as every other modal */
   width: min(640px, 92vw);
   background: linear-gradient(200deg, rgba(10, 16, 30, 0.96), rgba(4, 8, 18, 0.98));
   border: 1px solid rgba(255,255,255,0.14);
@@ -301,6 +302,21 @@ img.status-avatar, img.ptile-avatar { object-fit: cover; border: 1px solid rgba(
   animation: panelIn 0.32s cubic-bezier(0.2, 0.9, 0.3, 1);
 }
 .spotify-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
+/* hidden ≠ stopped: the iframe stays mounted so the audio keeps flowing */
+.spotify-panel.bg-play { visibility: hidden; pointer-events: none; }
+.spotify-acts { display: flex; gap: 8px; }
+.spotify-mini {
+  position: fixed; left: 18px; bottom: 54px; z-index: 21;
+  display: flex; align-items: center; gap: 9px;
+  padding: 9px 16px; border-radius: 999px; cursor: pointer; font-family: inherit;
+  font-size: 10.5px; letter-spacing: 0.14em; color: #fff;
+  background: rgba(8, 12, 22, 0.88);
+  border: 1px solid color-mix(in oklab, var(--xmb-tint) 50%, rgba(255,255,255,0.2));
+  box-shadow: 0 8px 24px rgba(0,0,0,0.45);
+  animation: fadeIn 0.3s ease-out;
+}
+.spotify-mini svg { width: 14px; height: 14px; animation: miniPulse 2.2s ease-in-out infinite; }
+@keyframes miniPulse { 0%, 100% { opacity: 0.55; } 50% { opacity: 1; } }
 .ghost-btn {
   background: none; border: 1px solid rgba(255,255,255,0.3); border-radius: 6px;
   color: var(--text); font-family: inherit; font-size: 13px;
@@ -1056,6 +1072,7 @@ img.status-avatar, img.ptile-avatar { object-fit: cover; border: 1px solid rgba(
   transition: all 0.15s;
 }
 .set-tab.on { background: color-mix(in oklab, var(--xmb-tint) 30%, rgba(255,255,255,0.06)); color: #fff; border-color: color-mix(in oklab, var(--xmb-tint) 60%, rgba(255,255,255,0.2)); }
+.set-tab.focus { box-shadow: 0 0 0 2px color-mix(in oklab, var(--xmb-tint) 70%, #fff), 0 0 16px color-mix(in oklab, var(--xmb-tint) 40%, transparent); }
 .set-body { flex: 1; overflow-y: auto; padding: 14px 4px 20px; min-height: 0; }
 .set-search {
   display: flex; align-items: center; gap: 8px; flex: 1; max-width: 380px; margin: 0 18px;

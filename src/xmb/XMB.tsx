@@ -80,6 +80,7 @@ export default function XMB(props: {
   const [games, setGames] = createSignal<GameRecord[]>([]);
   const [clock, setClock] = createSignal("");
   const [spotify, setSpotify] = createSignal<{ url: string; label: string } | null>(null);
+  const [spotifyOpen, setSpotifyOpen] = createSignal(false); // panel hidden ≠ music stopped
   const [inputMode, setInputMode] = createSignal<null | "spotify" | "tv" | "rss" | "yt">(null);
   const [themesOpen, setThemesOpen] = createSignal(false);
   const [themeIdx, setThemeIdx] = createSignal(0);
@@ -553,6 +554,7 @@ export default function XMB(props: {
         sfx.confirm();
         awardT("dj");
         setSpotify({ url: a.url, label: a.label });
+        setSpotifyOpen(true);
         break;
       case "spotify-link":
       case "tv-add":
@@ -1003,6 +1005,7 @@ export default function XMB(props: {
       closeInput();
       sfx.confirm();
       setSpotify(entry);
+      setSpotifyOpen(true);
       awardT("dj");
     } else if (mode === "tv") {
       if (!/^https?:\/\/.+/.test(raw)) { sfx.deny(); pushToast("Not a stream URL", "Paste a full http(s) HLS link"); return; }
@@ -1444,8 +1447,8 @@ export default function XMB(props: {
       if (action === "back" || action === "confirm") { sfx.back(); setWeather(null); }
       return;
     }
-    if (spotify()) {
-      if (action === "back") { sfx.back(); setSpotify(null); }
+    if (spotify() && spotifyOpen()) {
+      if (action === "back") { sfx.back(); setSpotifyOpen(false); } // hide — keeps playing
       return;
     }
     if (inputMode()) {
@@ -1550,7 +1553,7 @@ export default function XMB(props: {
   addEventListener("pointerdown", poke);
   addEventListener("keydown", poke);
   const saverId = setInterval(() => {
-    const busy = tv() || guideOpen() || spotify() || news() || inputMode() || viewerOpen() || app() || yt() || apod() || dict();
+    const busy = tv() || guideOpen() || spotifyOpen() || news() || inputMode() || viewerOpen() || app() || yt() || apod() || dict();
     if (busy) return;
     const idle = Date.now() - lastActive;
     const saverMs = saverMins() > 0 ? saverMins() * 60_000 : Infinity;
@@ -1608,7 +1611,7 @@ export default function XMB(props: {
   const itemY = (d: number) => (d < 0 ? -92 + d * 52 : d === 0 ? 118 : 118 + 92 + (d - 1) * 80);
 
   // is any app / modal / overlay open? (crossbar is "home" when this is false)
-  const overlayOpen = () => !!(app() || panel() || tv() || guideOpen() || spotify() || news() || inputMode() || viewerOpen() || yt() || apod() || dict() || ccOpen() || searchOpen() || labsOpen() || soundOpen() || themesOpen() || trophiesOpen() || padTest() || saver());
+  const overlayOpen = () => !!(app() || panel() || tv() || guideOpen() || spotifyOpen() || news() || inputMode() || viewerOpen() || yt() || apod() || dict() || ccOpen() || searchOpen() || labsOpen() || soundOpen() || themesOpen() || trophiesOpen() || padTest() || saver());
   // touch: on the bare crossbar, a swipe navigates natively (horizontal =
   // categories, vertical = items) and a tap opens — no virtual d-pad needed.
   // Inside an app/modal the swipe is off (that surface handles its own touch).
@@ -1783,13 +1786,19 @@ export default function XMB(props: {
         </div>
       </Show>
 
-      {/* spotify player */}
+      {/* spotify player — the iframe stays mounted while hidden, so the music
+          keeps playing anywhere on the console; the pill brings it back */}
       <Show when={spotify()}>
-        <div class="panel-backdrop" onClick={() => setSpotify(null)} />
-        <div class="spotify-panel">
+        <Show when={spotifyOpen()}>
+          <div class="panel-backdrop" onClick={() => setSpotifyOpen(false)} />
+        </Show>
+        <div class="spotify-panel" classList={{ "bg-play": !spotifyOpen() }}>
           <div class="spotify-head">
             <div class="panel-tag">SPOTIFY — {spotify()!.label.toUpperCase()}</div>
-            <button class="ghost-btn" onClick={() => { sfx.back(); setSpotify(null); }}>✕</button>
+            <span class="spotify-acts">
+              <button class="ghost-btn" onClick={() => { sfx.back(); setSpotifyOpen(false); }}>hide — keep playing</button>
+              <button class="ghost-btn" onClick={() => { sfx.back(); setSpotifyOpen(false); setSpotify(null); }}>⏏ stop</button>
+            </span>
           </div>
           <iframe credentialless={true}
             src={`${spotify()!.url}?theme=0`}
@@ -1800,8 +1809,14 @@ export default function XMB(props: {
             loading="lazy"
             title="Spotify player"
           />
-          <div class="panel-hint"><span class="btn-o" /> Esc — close · keeps playing? open in a tab for background play</div>
+          <div class="panel-hint"><span class="btn-o" /> Esc — hide, the music keeps playing · ⏏ stops it</div>
         </div>
+        <Show when={!spotifyOpen()}>
+          <button class="spotify-mini" onClick={() => { sfx.confirm(); setSpotifyOpen(true); }} title="Open the Spotify player">
+            <Icon name="note" />
+            <span>{spotify()!.label.toUpperCase()}</span>
+          </button>
+        </Show>
       </Show>
 
       {/* link input (spotify / tv channel / rss feed) */}
