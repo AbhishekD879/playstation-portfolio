@@ -1,4 +1,5 @@
-import { Match, Show, Switch, createSignal } from "solid-js";
+import { Match, Show, Switch, createEffect, createSignal } from "solid-js";
+import { labEnabled } from "./labs";
 import Boot from "./boot/Boot";
 import ProfileSelect from "./profileSelect";
 import Wave from "./xmb/Wave";
@@ -38,6 +39,10 @@ export default function App() {
   const [stage, setStage] = createSignal<Stage>(resumed ? "xmb" : "boot");
   const [profile, setProfile] = createSignal<Profile | null>(resumed ?? null);
   const [session, setSession] = createSignal<GameRecord | null>(null);
+
+  // PS5 UI Skin (Labs, default off) — a modern dark/glass reskin on a root class.
+  // Reactive to the Labs signal, so flipping it in Settings applies live, console-wide.
+  createEffect(() => document.documentElement.classList.toggle("ps5ui", labEnabled("ps5ui")));
 
   return (
     <>

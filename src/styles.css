@@ -2497,3 +2497,65 @@ img.status-avatar, img.ptile-avatar { object-fit: cover; border: 1px solid rgba(
 .deskn-body { margin: 0; font-size: 14px; line-height: 1.6; color: rgba(255,255,255,0.82); max-width: 46ch; }
 .deskn-go { font-size: 15px; padding: 12px 30px; margin-top: 5px; }
 .deskn-note { margin: 2px 0 0; font-size: 11.5px; color: var(--dim); }
+
+/* ═══════════════════ PS5 UI SKIN (Labs: ps5ui, default off) ═══════════════════
+   A modern PS5/PS6-style reskin toggled by a root class. The classic look stays
+   the default; this flips the ground to near-black so the theme tint stops
+   washing everything out and becomes a luminous accent, deepens the frosted
+   glass, and lifts contrast — the crisp, high-contrast feel of a modern console
+   dashboard, while keeping every feature and all 16 tints. */
+html.ps5ui { --text: #ffffff; --dim: rgba(228, 236, 252, 0.55); }
+
+/* the ground: deep near-black navy, NOT a tint wash — the wave's light ribbons
+   now read as luminous streaks on black (the whole reason the reference is crisp) */
+html.ps5ui .wave-bg {
+  background:
+    radial-gradient(120% 90% at 72% 8%, color-mix(in oklab, var(--xmb-tint) 14%, transparent), transparent 55%),
+    radial-gradient(140% 120% at 50% 120%, #05070f 0%, #02030a 60%, #000106 100%) !important;
+}
+
+/* frosted app panels — deepen on the dark ground + a crisp hairline tint edge */
+html.ps5ui .ai, html.ps5ui .gbook, html.ps5ui .chess, html.ps5ui .guide, html.ps5ui .trivia,
+html.ps5ui .fullapp, html.ps5ui .mapapp, html.ps5ui .studio, html.ps5ui .codeapp,
+html.ps5ui .viz, html.ps5ui .browser, html.ps5ui .pcapp, html.ps5ui .winamp,
+html.ps5ui .apod, html.ps5ui .tm, html.ps5ui .gptest, html.ps5ui .manual, html.ps5ui .rpgcab {
+  background:
+    radial-gradient(130% 80% at 50% -15%, color-mix(in oklab, var(--xmb-tint) 20%, transparent), transparent 60%),
+    linear-gradient(180deg, rgba(9,13,24,0.60) 0%, rgba(3,6,13,0.82) 100%) !important;
+  -webkit-backdrop-filter: blur(34px) saturate(1.35);
+  backdrop-filter: blur(34px) saturate(1.35);
+  border: 1px solid color-mix(in oklab, var(--xmb-tint) 20%, rgba(255,255,255,0.06));
+}
+
+/* dialogs / cabinets / overlays → glass */
+html.ps5ui .modal, html.ps5ui .cc, html.ps5ui .deskn, html.ps5ui .set-hub, html.ps5ui .labs-modal {
+  background: linear-gradient(180deg, rgba(12,16,28,0.86), rgba(5,8,16,0.92)) !important;
+  -webkit-backdrop-filter: blur(26px) saturate(1.3);
+  backdrop-filter: blur(26px) saturate(1.3);
+  border: 1px solid color-mix(in oklab, var(--xmb-tint) 26%, rgba(255,255,255,0.1));
+  box-shadow: 0 24px 80px rgba(0,0,0,0.6), 0 0 60px color-mix(in oklab, var(--xmb-tint) 16%, transparent);
+}
+
+/* pill buttons → subtle glass; selected/hover picks up the tint */
+html.ps5ui .ghost-btn, html.ps5ui .ps-act, html.ps5ui .bg-mode {
+  background: rgba(255,255,255,0.05);
+  -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px);
+  border: 1px solid rgba(255,255,255,0.12);
+}
+html.ps5ui .ghost-btn:hover, html.ps5ui .ps-act:hover, html.ps5ui .ghost-btn.on {
+  background: color-mix(in oklab, var(--xmb-tint) 22%, rgba(255,255,255,0.05));
+  border-color: color-mix(in oklab, var(--xmb-tint) 55%, #fff);
+}
+
+/* top status bar + section rows: a touch more contrast/crispness on the dark ground */
+html.ps5ui .status-bar { background: linear-gradient(180deg, rgba(3,6,13,0.55), transparent); }
+html.ps5ui .xmb-item .xmb-title, html.ps5ui .panel-tag { text-shadow: 0 1px 12px rgba(0,0,0,0.5); }
+
+/* the toast stack: keep it inside the viewport (it overflowed the right edge) */
+html.ps5ui .toasts { max-width: min(360px, 42vw); right: 16px; }
+/* the toast PILL itself (scope to .toast — never its text children) → glass */
+html.ps5ui .toast {
+  background: linear-gradient(180deg, rgba(10,14,26,0.9), rgba(5,8,16,0.94)) !important;
+  border: 1px solid color-mix(in oklab, var(--xmb-tint) 20%, rgba(255,255,255,0.1)) !important;
+  -webkit-backdrop-filter: blur(18px); backdrop-filter: blur(18px);
+}
