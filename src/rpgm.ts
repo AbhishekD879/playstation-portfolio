@@ -10,7 +10,7 @@
 //                        service worker serves the files into an iframe.
 //   · rm2k / rm2k3     → EasyRPG (WASM) — RPG Maker 2000 / 2003.
 //   · xp / vx / vxace  → mkxp (WASM, RGSS) — RPG Maker XP / VX / VX Ace.
-import { unzip } from "fflate";
+import { Unzip, UnzipInflate } from "fflate";
 
 export type RpgEngine = "mz" | "mv" | "rm2k3" | "rm2k" | "vxace" | "vx" | "xp" | "unknown";
 
@@ -19,7 +19,8 @@ export interface RpgGame {
   profileId: string;
   title: string;
   engine: RpgEngine;
-  entry: string;      // MV/MZ: path to index.html within the OPFS game root
+  entry: string;      // MV/MZ: path to index.html, relative to the game root
+  root: string;       // prefix inside OPFS where the game tree lives (SW prepends it)
   addedAt: number;
   fileCount: number;
   bytes: number;      // total on-disk size, for the storage + runtime readouts
@@ -172,60 +173,126 @@ function detect(paths: string[]): Detected {
 // —— import ————————————————————————————————————————————————————————————————————
 export interface ImportProgress { phase: "reading" | "detecting" | "extracting"; pct: number }
 
-/** Parse a zip, detect the engine, extract into OPFS, and record it. */
+// runtime/OS files useless in the browser — never extracted (a desktop NW.js
+// build ships a huge Chromium runtime — Game.exe, *.pak, *.dll, icudtl.dat,
+// locales/ — around the www/ game; inflating that would waste space/time)
+const isRuntimeJunk = (p: string) =>
+  /\.(exe|pak|dll|dat|bin|so|dylib|nro|elf|msi|lib|node)$/i.test(p) ||
+  /(^|\/)(locales|swiftshader)\//i.test(p) ||
+  /(^|\/)(credits\.html|d3dcompiler|libegl|libglesv2|ffmpeg|vk_swiftshader|vulkan-1|chrome_.*\.bin)/i.test(p);
+
+/** Parse a zip and extract into OPFS — fully STREAMING. Never loads the whole
+ *  archive (or any large slice) into memory, so multi-GB games don't OOM the
+ *  tab: the file is read chunk-by-chunk from disk, each entry decompressed and
+ *  written straight to OPFS, and the huge NW.js runtime is skipped entirely.
+ *  The game root is NOT stripped — its prefix is recorded and the service
+ *  worker prepends it, so detection can happen after the (single) stream. */
 export async function importRpgZip(
   file: File, profileId: string, onProgress?: (p: ImportProgress) => void,
 ): Promise<RpgGame> {
   onProgress?.({ phase: "reading", pct: 0 });
-  const buf = new Uint8Array(await file.arrayBuffer());
-  const files = await new Promise<Record<string, Uint8Array>>((res, rej) =>
-    unzip(buf, (err, out) => (err ? rej(err) : res(out))));
 
-  onProgress?.({ phase: "detecting", pct: 0 });
-  const paths = Object.keys(files).filter((p) => !p.endsWith("/")); // drop dir entries
+  // fail EARLY (with a clear message, not a crash) if it can't possibly fit —
+  // the compressed size is already a floor for what OPFS must hold
+  try {
+    const est = await navigator.storage?.estimate?.();
+    if (est && est.quota != null && est.usage != null) {
+      const free = est.quota - est.usage;
+      if (file.size > free) {
+        const gb = (n: number) => (n / 1073741824).toFixed(1);
+        throw new Error(`Not enough room: this game is ${gb(file.size)} GB but only ${gb(free)} GB is free on this device.`);
+      }
+    }
+  } catch (e) { if (e instanceof Error && e.message.startsWith("Not enough")) throw e; }
+
+  const id = crypto.randomUUID();
+  const dir = await gameDir(id, true);
+  const names: string[] = [];
+  const pending: { path: string; chunks: Uint8Array[] }[] = [];
+  let bytes = 0;
+
+  const uz = new Unzip();
+  uz.register(UnzipInflate);
+  uz.onfile = (f) => {
+    names.push(f.name);
+    if (f.name.endsWith("/") || isRuntimeJunk(f.name)) return; // dirs + runtime → skipped (never inflated)
+    const chunks: Uint8Array[] = [];
+    f.ondata = (err, chunk, final) => {
+      if (err) throw err;
+      if (chunk && chunk.length) chunks.push(chunk.slice()); // copy: fflate reuses buffers
+      if (final) pending.push({ path: f.name, chunks });
+    };
+    f.start();
+  };
+
+  const flush = async () => {
+    while (pending.length) {
+      const { path, chunks } = pending.shift()!;
+      const { dir: parent, name } = await ensurePath(dir, path);
+      const fh = await parent.getFileHandle(name, { create: true });
+      const w = await fh.createWritable();
+      for (const c of chunks) { await w.write(c as unknown as BufferSource); bytes += c.length; }
+      await w.close();
+    }
+  };
+
+  try {
+    const reader = (file.stream() as ReadableStream<Uint8Array>).getReader();
+    let read = 0;
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (value) { uz.push(value, false); read += value.length; }
+      if (done) uz.push(new Uint8Array(0), true);
+      await flush(); // write finished entries to OPFS between reads (backpressure + frees memory)
+      if (file.size) onProgress?.({ phase: "extracting", pct: Math.min(99, Math.round((read / file.size) * 100)) });
+      if (done) break;
+    }
+  } catch (e) {
+    await (await rpgmDir()).removeEntry(id, { recursive: true }).catch(() => {});
+    if (e instanceof Error && /quota|space|QuotaExceeded/i.test(e.name + e.message)) {
+      throw new Error("Ran out of storage while installing — this game is too big for this device.");
+    }
+    throw e;
+  }
+
+  const paths = names.filter((p) => !p.endsWith("/"));
   let det = detect(paths);
+  if (det.engine === "unknown") {
+    await (await rpgmDir()).removeEntry(id, { recursive: true }).catch(() => {});
+    throw new Error("Not a recognised RPG Maker game (no index.html / RPG_RT / RGSS data found).");
+  }
 
-  // refine XP/VX/VXAce from Game.ini's Library= line when available
+  // refine XP/VX/VXAce from Game.ini's Library= line (read the one small file)
   if (det.engine === "xp") {
-    const iniPath = paths.find((p) => p.toLowerCase() === `${det.root}game.ini`.toLowerCase());
-    if (iniPath) {
-      const ini = new TextDecoder().decode(files[iniPath]).toLowerCase();
+    const f = await readGameFile(id, `${det.root}Game.ini`).catch(() => null)
+      ?? await readGameFile(id, paths.find((p) => p.toLowerCase() === `${det.root}game.ini`.toLowerCase()) ?? "").catch(() => null);
+    if (f) {
+      const ini = (await f.text()).toLowerCase();
       if (/rgss3|rvdata2/.test(ini)) det = { ...det, engine: "vxace" };
       else if (/rgss2|rvdata\b/.test(ini)) det = { ...det, engine: "vx" };
     }
   }
-  if (det.engine === "unknown") throw new Error("Not a recognised RPG Maker game (no index.html/RPG_RT/RGSS data found)");
 
-  const id = crypto.randomUUID();
-  const dir = await gameDir(id, true);
-
-  // strip the detected root prefix so OPFS <id>/ is the game root
-  const entries = paths.filter((p) => p.startsWith(det.root));
-  let done = 0;
-  for (const full of entries) {
-    const rel = full.slice(det.root.length);
-    if (!rel) continue;
-    const { dir: parent, name } = await ensurePath(dir, rel);
-    const fh = await parent.getFileHandle(name, { create: true });
-    const w = await fh.createWritable();
-    await w.write(files[full] as unknown as BufferSource);
-    await w.close();
-    done++;
-    if (done % 25 === 0 || done === entries.length) onProgress?.({ phase: "extracting", pct: Math.round((done / entries.length) * 100) });
-  }
+  // record the game root so the SW can prepend it (we didn't strip the tree)
+  await writeMarker(dir, ".rpgmroot", det.root);
 
   const title = file.name.replace(/\.zip$/i, "").replace(/[._]+/g, " ").trim() || "RPG Maker Game";
-  const cover = await bestCover(id, det.engine).catch(() => undefined);
-  const bytes = entries.reduce((s, p) => s + (files[p]?.length ?? 0), 0);
+  const cover = await bestCover(id, det.engine, det.root).catch(() => undefined);
 
-  // EasyRPG needs a case-insensitive directory manifest (index.json) — the
-  // engine fetches it first and can't find any asset without it. We generate
-  // it here (mirroring EasyRPG's `gencache` v2 rules) so no external tool runs.
-  if (engineKind(det.engine) === "easyrpg") await buildEasyRpgIndex(id);
+  // EasyRPG needs a case-insensitive directory manifest (index.json) it fetches
+  // first — generated here (EasyRPG's gencache v2 rules), rooted at det.root.
+  if (engineKind(det.engine) === "easyrpg") await buildEasyRpgIndex(id, det.root);
 
-  const game: RpgGame = { id, profileId, title, engine: det.engine, entry: det.entry, addedAt: Date.now(), fileCount: entries.length, bytes, cover };
+  const game: RpgGame = { id, profileId, title, engine: det.engine, entry: det.entry, root: det.root, addedAt: Date.now(), fileCount: paths.length, bytes, cover };
   await putGame(game);
   return game;
+}
+
+async function writeMarker(dir: FileSystemDirectoryHandle, name: string, text: string): Promise<void> {
+  const fh = await dir.getFileHandle(name, { create: true });
+  const w = await fh.createWritable();
+  await w.write(new Blob([text]));
+  await w.close();
 }
 
 // —— EasyRPG index.json (v2) generator ————————————————————————————————————————
@@ -266,9 +333,15 @@ function mergeCache(base: Cache, over: Cache): Cache {
   }
   return out;
 }
-async function buildEasyRpgIndex(id: string): Promise<void> {
-  const dir = await gameDir(id);
-  const gameCache = await buildCache(dir, 0);
+/** Navigate into a slash-prefix subdirectory (""=the dir itself). */
+async function intoDir(dir: FileSystemDirectoryHandle, prefix: string): Promise<FileSystemDirectoryHandle> {
+  let d = dir;
+  for (const p of prefix.split("/").filter(Boolean)) d = await d.getDirectoryHandle(p);
+  return d;
+}
+async function buildEasyRpgIndex(id: string, root: string): Promise<void> {
+  const gameRoot = await intoDir(await gameDir(id), root);
+  const gameCache = await buildCache(gameRoot, 0);
   // merge the bundled RTP manifest so RTP-dependent games find shared assets
   let cache = gameCache;
   try {
@@ -276,27 +349,26 @@ async function buildEasyRpgIndex(id: string): Promise<void> {
     if (res.ok) cache = mergeCache((await res.json()) as Cache, gameCache);
   } catch { /* no RTP pack — self-contained games still work */ }
   const index = { cache, metadata: { version: 2, date: new Date().toISOString().slice(0, 10) } };
-  const { dir: parent, name } = await ensurePath(dir, "index.json");
-  const fh = await parent.getFileHandle(name, { create: true });
+  const fh = await gameRoot.getFileHandle("index.json", { create: true });
   const w = await fh.createWritable();
   await w.write(new Blob([JSON.stringify(index)]));
   await w.close();
 }
 
 /** Best-effort cover: MV/MZ title screen, or the 2k/2k3/RGSS Title graphic. */
-async function bestCover(id: string, engine: RpgEngine): Promise<string | undefined> {
+async function bestCover(id: string, engine: RpgEngine, root: string): Promise<string | undefined> {
   const candidates = engineKind(engine) === "html5"
     ? ["img/titles1/", "img/titles/"]
     : ["Title/", "Graphics/Titles/", "Graphics/System/"];
   for (const base of candidates) {
-    const f = await firstImageIn(id, base);
+    const f = await firstImageIn(id, root + base);
     if (f) return await blobToDataUrl(f);
   }
   return undefined;
 }
 async function firstImageIn(id: string, base: string): Promise<File | null> {
   try {
-    const { dir } = await ensurePath(await gameDir(id), `${base}x`); // resolve to the dir
+    const dir = await intoDir(await gameDir(id), base);
     for await (const [name, handle] of (dir as any).entries()) {
       if (handle.kind === "file" && /\.(png|jpe?g|webp)$/i.test(name)) return await handle.getFile();
     }

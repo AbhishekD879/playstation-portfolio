@@ -39,10 +39,24 @@ function isolationShim(gameId) {
   })();</` + `script>`;
 }
 
+// The extractor doesn't strip the game's wrapper folder; it records the root
+// prefix in a .rpgmroot marker. We prepend it so URLs (rootless) map to OPFS.
+const rootCache = new Map();
+async function gameRootPrefix(gameDir, gameId) {
+  if (rootCache.has(gameId)) return rootCache.get(gameId);
+  let root = "";
+  try {
+    const fh = await gameDir.getFileHandle(".rpgmroot");
+    root = await (await fh.getFile()).text();
+  } catch { root = ""; }
+  rootCache.set(gameId, root);
+  return root;
+}
 async function opfsFile(gameId, path) {
   let dir = await (await navigator.storage.getDirectory()).getDirectoryHandle("rpgm");
   dir = await dir.getDirectoryHandle(gameId);
-  const parts = path.split("/").filter(Boolean);
+  const root = await gameRootPrefix(dir, gameId);
+  const parts = (root + path).split("/").filter(Boolean);
   const name = parts.pop();
   for (const p of parts) dir = await dir.getDirectoryHandle(p);
   return (await dir.getFileHandle(name)).getFile();
