@@ -1460,6 +1460,24 @@ img.status-avatar, img.ptile-avatar { object-fit: cover; border: 1px solid rgba(
 }
 .rpgplay-reveal::after { content: "⌄"; display: block; text-align: center; line-height: 20px; font-size: 15px; color: var(--dim); }
 
+/* TOUCH devices: the auto-hiding bar + tiny handle is unreachable in landscape —
+   the game fills the screen and swallows the tap (portrait only worked because
+   the game letterboxes and frees the top). So on a touch device the bar becomes
+   a PERMANENT slim strip laid out ABOVE the game (in-flow, so it never overlaps
+   the iframe and can't be stolen) — the ⌨ controls / quit toggles are always
+   one reliable tap away, in any orientation. Fine-pointer (desktop) keeps the
+   immersive auto-hide. */
+@media (pointer: coarse) {
+  .rpgplay-bar, .rpgplay-bar:not(.show) {
+    position: relative; order: -1; opacity: 1; transform: none; pointer-events: auto;
+    padding: 7px 12px; background: rgba(6,10,20,0.94); border-bottom: 1px solid rgba(255,255,255,0.1);
+  }
+  .rpgplay-bar .panel-tag { display: none; }            /* free width for the buttons */
+  .rpgplay-actions { gap: 6px; margin-left: auto; flex-wrap: wrap; justify-content: flex-end; }
+  .rpgplay-reveal { display: none; }                    /* no handle needed — bar is always up */
+  .rpg-touch-close { display: none; }                   /* the bar's ⌨ toggle handles hide */
+}
+
 /* pre-launch card — review engine + memory, then Play (the fullscreen gesture) */
 .rpg-launch {
   position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center;
