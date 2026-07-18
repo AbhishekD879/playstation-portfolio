@@ -179,10 +179,14 @@ export default function RpgPlayer(props: {
       </Show>
 
       {/* allow-same-origin so the game reads its own OPFS-served files */}
+      {/* pad-open drops the iframe's pointer-events: on mobile WebKit a touch on
+          an element overlaying an iframe bleeds THROUGH to the iframe, so the
+          on-screen buttons never get it. With hit-testing off here, the overlay
+          captures the touch; keys still reach the game (dispatched, not hit-tested). */}
       <iframe
         ref={frame}
         class="rpgplay-frame"
-        classList={{ hidden: phase() !== "ready" }}
+        classList={{ hidden: phase() !== "ready", "pad-open": showPad() }}
         title={props.game.title}
         sandbox="allow-scripts allow-same-origin allow-pointer-lock allow-popups"
         allow="gamepad; fullscreen; autoplay"
