@@ -1170,8 +1170,10 @@ img.status-avatar, img.ptile-avatar { object-fit: cover; border: 1px solid rgba(
 
 /* ————— Modern CSS Polish (Labs "moderncss" — root class gated) ————— */
 .moderncss { interpolate-size: allow-keywords; } /* height:auto becomes animatable */
-/* self-aware panels — reflow to their own width, not the viewport */
-.moderncss .panel, .moderncss .modal { container-type: inline-size; }
+/* self-aware panels — reflow to their own width, not the viewport.
+   Panels only: they have an explicit width. Modals shrink-wrap to their
+   content, and inline-size containment collapses a shrink-wrapped box. */
+.moderncss .panel { container-type: inline-size; }
 @container (max-width: 540px) {
   .panel-heading { font-size: 20px; }
   .panel-body { font-size: 13px; }
