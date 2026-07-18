@@ -45,6 +45,8 @@ export interface XmbItem {
     | { type: "scummvm" }
     | { type: "karaoke" }
     | { type: "strudel" }
+    | { type: "settings-hub" }
+    | { type: "video-player" }
     | { type: "chess" }
     | { type: "trivia" }
     | { type: "flash" }
@@ -308,6 +310,7 @@ export const CATEGORIES: XmbCategory[] = [
     label: "Video",
     icon: "film",
     items: [
+      { id: "videoplayer", title: "Video Player", sub: "Play any video file from this device — backdrops react to it", icon: "film", action: { type: "video-player" } },
       { id: "yt", title: "YouTube", sub: "Trending, search & play — no account", icon: "play", action: { type: "youtube" } },
       { id: "ia-video", title: "Archive Cinema", sub: "Public-domain films from archive.org", icon: "film", action: { type: "video-ia" } },
     ],
@@ -369,6 +372,7 @@ export const CATEGORIES: XmbCategory[] = [
     label: "Settings",
     icon: "gear",
     items: [
+      { id: "settingshub", title: "Console Settings", sub: "Fonts · icons · audio · language · Labs — tune the whole console", icon: "gear", action: { type: "settings-hub" } },
       { id: "theme", title: "Theme Settings", sub: "Presets & fully custom colours", icon: "spark", action: { type: "themes" } },
       { id: "sound", title: "Sound Settings", sub: "Volume, navigation sounds & mute", icon: "speaker", action: { type: "sound-settings" } },
       { id: "labs", title: "Labs", sub: "Feature flags — toggle every system feature & app", icon: "spark", action: { type: "labs" } },

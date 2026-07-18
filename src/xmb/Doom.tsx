@@ -2,6 +2,7 @@
 // The js-dos runtime loads from its CDN; the bundle is the official shareware WAD.
 import { createSignal, onCleanup, onMount } from "solid-js";
 import { setNavEnabled } from "../input";
+import { holdWakeLock } from "../wakelock";
 import { startBridge, stopBridge, touchKey, DOOM_CONFIG } from "../gamepadBridge";
 import TouchPad from "./TouchPad";
 
@@ -19,6 +20,8 @@ export default function Doom(props: { onClose: () => void }) {
 
   onMount(() => {
     setNavEnabled(false); // WASD belongs to the marine now
+    const releaseLock = holdWakeLock();
+    onCleanup(releaseLock);
     const css = document.createElement("link");
     css.rel = "stylesheet";
     css.href = JSDOS + "js-dos.css";

@@ -5,6 +5,7 @@ import { Show, createSignal, onCleanup, onMount } from "solid-js";
 import gsap from "gsap";
 import { bumpPlays, isLinked, resolveGameFile, type GameRecord } from "../gamesdb";
 import { setNavEnabled } from "../input";
+import { holdWakeLock } from "../wakelock";
 import { EJS_CONFIG, PSP_CONFIG, startBridge, stopBridge } from "../gamepadBridge";
 
 declare global {
@@ -68,6 +69,8 @@ export default function GameSession(props: { game: GameRecord; profileId: string
 
   onMount(() => {
     setNavEnabled(false);
+    const releaseLock = holdWakeLock(); // the screen stays on while the disc spins
+    onCleanup(releaseLock);
     gsap.to(disc, { rotation: 720, duration: 2.2, ease: "power2.inOut", repeat: -1 });
     // brief spin, then boot. For a granted/copied game this is seamless; a
     // lapsed link falls through to the grant button (needs a user gesture).

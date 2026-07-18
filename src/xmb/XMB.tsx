@@ -1,7 +1,7 @@
 // The cross-media bar. Horizontal categories, vertical items, info panels,
 // trophies, disc drive. Navigation: arrows/WASD + Enter/Esc, or a gamepad.
 import { For, Show, createEffect, createMemo, createSignal, onCleanup, onMount } from "solid-js";
-import { CATEGORIES, TROPHIES, type XmbItem } from "../content";
+import { CAREER, CATEGORIES, PROJECTS, TROPHIES, type XmbItem } from "../content";
 import { AVATARS, PLATINUM, award, resizePhoto, updateProfile, type Profile } from "../profiles";
 import { CORES, PS2_EXTS, PSP_ONLY_EXTS, PSX_ONLY_EXTS, addGame, listGames, addPhoto, listPhotos, fsAccessSupported, type GameRecord, type PhotoRecord } from "../gamesdb";
 import { BG_MODES, THEMES, applyCustomHsl, applyTheme, bgMode, currentThemeIndex, loadCustomHsl, setBgMode } from "../theme";
@@ -14,6 +14,9 @@ import { setBridgePaused } from "../gamepadBridge";
 import { hasWebGPU } from "../gpu";
 import { MODEL_BUDGET_MB, residentModels } from "../models";
 import { startPresence, visitorCount } from "../p2p";
+import { iconOf } from "../prefs";
+import { tr } from "../translate";
+import { startTabSync } from "../sync";
 import { fluidLaunchSplash, fluidNavPulse } from "./FluidBg";
 import DepthPhoto from "./DepthPhoto";
 import ControlCenter from "./ControlCenter";
@@ -36,6 +39,8 @@ import GameShelf from "./GameShelf";
 import Doom from "./Doom";
 import DoomRtx from "./DoomRtx";
 import Karaoke from "./Karaoke";
+import SettingsApp from "./SettingsApp";
+import VideoPlayer from "./VideoPlayer";
 import ChessApp from "./ChessApp";
 import Trivia from "./Trivia";
 import Flash from "./Flash";
@@ -124,6 +129,37 @@ export default function XMB(props: {
   // keep the focused search result in view; reset selection when the query changes
   createEffect(() => { searchQuery(); setSearchSel(0); });
   createEffect(() => { searchSel(); searchOpen() && document.querySelector(".search-result.active")?.scrollIntoView({ block: "nearest" }); });
+
+  // Modern CSS Polish rides a root class (container queries, sticky-stuck
+  // headers, height:auto animations, scroll reveals — all in styles.css)
+  createEffect(() => document.documentElement.classList.toggle("moderncss", labEnabled("moderncss")));
+
+  // Search-match highlighting via the CSS Custom Highlight API — the query
+  // lights up inside result titles without wrapping a single span
+  createEffect(() => {
+    const q = searchQuery().trim().toLowerCase();
+    searchResults(); // re-run when the list changes
+    const HL = (CSS as any).highlights;
+    if (!HL || !labEnabled("moderncss")) return;
+    queueMicrotask(() => {
+      HL.delete("search-hit");
+      if (!q || !searchOpen()) return;
+      const ranges: Range[] = [];
+      document.querySelectorAll(".search-result-title").forEach((el) => {
+        const node = el.firstChild;
+        if (!node || node.nodeType !== Node.TEXT_NODE) return;
+        const text = (node.textContent ?? "").toLowerCase();
+        let at = text.indexOf(q);
+        while (at !== -1) {
+          const r = new Range();
+          r.setStart(node, at); r.setEnd(node, at + q.length);
+          ranges.push(r);
+          at = text.indexOf(q, at + q.length);
+        }
+      });
+      if (ranges.length) HL.set("search-hit", new (window as any).Highlight(...ranges));
+    });
+  });
   const [links, setLinks] = createSignal<{ url: string; label: string }[]>(
     JSON.parse(localStorage.getItem("asp.spotify") ?? "[]"),
   );
@@ -149,7 +185,14 @@ export default function XMB(props: {
   const [ytQuery, setYtQuery] = createSignal(""); // AI agent → YouTube search handoff
   const [vListening, setVListening] = createSignal(false); // XMB voice command
   const [padTest, setPadTest] = createSignal(false);
-  const [app, setApp] = createSignal<null | "doom" | "doomrtx" | "chess" | "trivia" | "flash" | "cinema" | "podcasts" | "library" | "map" | "ai" | "webamp" | "youtube" | "timemachine" | "art" | "wiki" | "lichess" | "ps2" | "pc" | "guestbook" | "browser" | "visualizer" | "studio" | "code" | "manual" | "ps2home" | "ps1home" | "psphome" | "retrohome" | "scummvm" | "karaoke" | "strudel">(null);
+  const [app, setAppRaw] = createSignal<null | "doom" | "doomrtx" | "chess" | "trivia" | "flash" | "cinema" | "podcasts" | "library" | "map" | "ai" | "webamp" | "youtube" | "timemachine" | "art" | "wiki" | "lichess" | "ps2" | "pc" | "guestbook" | "browser" | "visualizer" | "studio" | "code" | "manual" | "ps2home" | "ps1home" | "psphome" | "retrohome" | "scummvm" | "karaoke" | "strudel" | "settingshub" | "videoplayer">(null);
+  // XMB Launch Wipe — app opens/closes ride the native View Transitions API
+  const withTransition = (mutate: () => void) => {
+    const vt = (document as any).startViewTransition?.bind(document);
+    if (vt && labEnabled("transitions") && !matchMedia("(prefers-reduced-motion: reduce)").matches) vt(mutate);
+    else mutate();
+  };
+  const setApp: typeof setAppRaw = ((v: any) => { withTransition(() => setAppRaw(v)); return app(); }) as any;
   const [ps2Boot, setPs2Boot] = createSignal<GameRecord | null>(null);
   const [ps2Join, setPs2Join] = createSignal(false);
   const [ccOpen, setCcOpen] = createSignal(false);
@@ -291,8 +334,23 @@ export default function XMB(props: {
   onMount(() => {
     refreshGames();
     refreshPhotos();
+    localStorage.setItem("asp.lastProfile", props.profile.id); // tab-sync reload resumes here
+    startTabSync();
     // presence joins a P2P lobby — deferred so boot stays snappy
     if (labEnabled("presence")) setTimeout(() => { if (labEnabled("presence")) void startPresence(); }, 6000);
+  });
+
+  // Career Trophy Stats — first landing on Career/Projects each session pops
+  // the headline numbers, PSN style
+  createEffect(() => {
+    if (!labEnabled("statspop")) return;
+    const id = CATEGORIES[cat()]?.id;
+    if ((id !== "career" && id !== "projects") || sessionStorage.getItem("asp.stats." + id)) return;
+    sessionStorage.setItem("asp.stats." + id, "1");
+    setTimeout(() => {
+      if (id === "career") pushToast(`Career — ${CAREER.length} roles shipped`, "Slide down to walk the timeline", "gold");
+      else pushToast(`Projects — ${PROJECTS.length} builds on the shelf`, "Every one opens — press ✕", "gold");
+    }, 600);
   });
 
   // —— radio playback: persists while you browse, PS3-music style ——
@@ -597,6 +655,14 @@ export default function XMB(props: {
       case "strudel":
         sfx.confirm();
         setApp("strudel");
+        break;
+      case "settings-hub":
+        sfx.confirm();
+        setApp("settingshub");
+        break;
+      case "video-player":
+        sfx.confirm();
+        setApp("videoplayer");
         break;
       case "dictionary":
         sfx.confirm();
@@ -1179,6 +1245,7 @@ export default function XMB(props: {
       case "saver": setSaver(true); break;
       case "juice-demo": rumble(0.5, 0.35, 90); setShaking(true); setTimeout(() => setShaking(false), 300); break;
       case "burst-demo": import("../particles").then((m) => m.burst({ x: innerWidth / 2, y: innerHeight * 0.45, count: 131072 })).catch(() => {}); break;
+      case "restart-demo": sessionStorage.removeItem("asp.resume"); location.reload(); break;
       case "photo-cat": {
         const pi = CATEGORIES.findIndex((c) => c.id === "photo");
         if (pi >= 0) setCat(pi);
@@ -1204,7 +1271,7 @@ export default function XMB(props: {
     if (padTest()) { if (action === "back") setPadTest(false); return; }
     if (app()) {
       // bound apps route their own nav; the rest are keyboard-driven owner apps
-      if (["chess", "trivia", "flash", "cinema", "podcasts", "library", "youtube", "art", "wiki", "ps2home", "ps1home", "psphome", "retrohome", "karaoke"].includes(app()!)) appNav?.(action);
+      if (["chess", "trivia", "flash", "cinema", "podcasts", "library", "youtube", "art", "wiki", "ps2home", "ps1home", "psphome", "retrohome", "karaoke", "settingshub", "videoplayer"].includes(app()!)) appNav?.(action);
       else if (app() === "lichess" && action === "back") { sfx.back(); setApp(null); }
       else if (src === "pad" || src === "gesture") {
         // owner apps (map/globe, lichess…) listen to the KEYBOARD — turn pad
@@ -1360,12 +1427,12 @@ export default function XMB(props: {
     switch (action) {
       case "left": {
         const vs = visCats(), p = vs.indexOf(cat());
-        if (p > 0) { setCat(vs[p - 1]); sfx.tickH(); fluidNavPulse(-1); }
+        if (p > 0) { withTransition(() => setCat(vs[p - 1])); sfx.tickH(); fluidNavPulse(-1); }
         break;
       }
       case "right": {
         const vs = visCats(), p = vs.indexOf(cat());
-        if (p >= 0 && p < vs.length - 1) { setCat(vs[p + 1]); sfx.tickH(); fluidNavPulse(1); }
+        if (p >= 0 && p < vs.length - 1) { withTransition(() => setCat(vs[p + 1])); sfx.tickH(); fluidNavPulse(1); }
         break;
       }
       case "up": {
@@ -1537,7 +1604,7 @@ export default function XMB(props: {
           <span class="status-online" title="Other visitors browsing this console right now (serverless P2P)">◉ {visitorCount() + 1} on console</span>
         </Show>
         <Show when={padName()}><span class="status-pad" title={padName()!}><Icon name="gamepad" /></span></Show>
-        <Show when={battery()}>
+        <Show when={labEnabled("battmeter") && battery()}>
           <span
             class="status-batt"
             classList={{ low: battery()!.level <= 0.15 && !battery()!.charging, charging: battery()!.charging }}
@@ -1572,8 +1639,8 @@ export default function XMB(props: {
                 style={{ left: `${visPos(i()) * CAT_SPACING}px` }}
                 onClick={() => { if (i() !== cat()) { setCat(i()); sfx.tickH(); } }}
               >
-                <div class="cat-icon"><Icon name={c.icon} /></div>
-                <div class="cat-label">{c.label}</div>
+                <div class="cat-icon"><Icon name={iconOf(c.id, c.icon)} /></div>
+                <div class="cat-label">{tr(c.label)}</div>
               </div>
             </Show>
           )}
@@ -1597,10 +1664,10 @@ export default function XMB(props: {
                 style={{ transform: `translateY(${itemY(d())}px)` }}
                 onClick={onClick}
               >
-                <div class="item-icon"><Icon name={item.icon} /></div>
+                <div class="item-icon"><Icon name={iconOf(item.id, item.icon)} /></div>
                 <div class="item-text">
-                  <div class="item-title">{item.title}</div>
-                  <Show when={d() === 0 && item.sub}><div class="item-sub">{item.sub}</div></Show>
+                  <div class="item-title">{tr(item.title)}</div>
+                  <Show when={d() === 0 && item.sub}><div class="item-sub">{tr(item.sub!)}</div></Show>
                 </div>
               </div>
             );
@@ -1851,6 +1918,16 @@ export default function XMB(props: {
       </Show>
       <Show when={app() === "karaoke"}>
         <Karaoke bind={(f) => (appNav = f)} onClose={() => setApp(null)} />
+      </Show>
+      <Show when={app() === "settingshub"}>
+        <SettingsApp
+          bind={(f) => (appNav = f)}
+          onClose={() => setApp(null)}
+          onOpenThemes={() => { setApp(null); setThemeIdx(currentThemeIndex()); setThemeRow(0); setCustomHsl(loadCustomHsl()); setThemesOpen(true); }}
+        />
+      </Show>
+      <Show when={app() === "videoplayer"}>
+        <VideoPlayer bind={(f) => (appNav = f)} onClose={() => setApp(null)} />
       </Show>
       <Show when={app() === "strudel"}>
         {/* Strudel (TidalCycles for the web) with a lo-fi starter pattern baked

@@ -19,6 +19,10 @@ const FEATURE_GROUPS: FlagGroup[] = [
       { id: "voice", title: "Voice Commands", desc: "The header mic — click, or hold N / R2, and say “open doom”" },
       { id: "saver", title: "Screen Saver", desc: "Idle clock screen after a few minutes of no input" },
       { id: "presence", title: "Visitor Presence & P2P Play", desc: "See who else is on the console + play them at Chess — serverless P2P, nothing shared but moves" },
+      { id: "tabsync", title: "Tab Sync", desc: "Theme, Labs flags & settings mirror instantly across every open tab" },
+      { id: "wakelock", title: "Never-Dim Console", desc: "The screen stays awake while a game, video or karaoke is playing" },
+      { id: "translate", title: "Universal Menu", desc: "Crossbar in your language — on-device AI translation, cached after first run" },
+      { id: "battmeter", title: "Battery Meter", desc: "PS-style battery cells in the status bar (with a low-charge pulse)" },
     ],
   },
   {
@@ -34,6 +38,13 @@ const FEATURE_GROUPS: FlagGroup[] = [
       { id: "gpujuice", title: "Particle Bursts (WebGPU)", desc: "Compute-shader particle storms on app launch & trophies" },
       { id: "livephoto", title: "Live Photos (3D)", desc: "On-device AI depth turns gallery photos into parallax 3D" },
       { id: "enhance", title: "Photo Enhance (AI ×2)", desc: "On-device super-resolution — upscale any gallery photo, tile by tile" },
+      { id: "cutout", title: "Cutout Cam (AI)", desc: "One-tap background removal — turn any photo into a clean transparent cutout" },
+      { id: "clickmask", title: "Click-to-Mask (AI)", desc: "Tap any object in a photo and the console isolates it — Segment Anything, on-device" },
+      { id: "transitions", title: "Motion Transitions", desc: "App launches morph and category swaps crossfade via the native View Transitions API" },
+      { id: "moderncss", title: "Modern CSS Polish", desc: "Self-aware panels, sticky group headers, height-to-auto animations & scroll reveals" },
+      { id: "parallaxbg", title: "Pointer Parallax Backdrop", desc: "The living background leans gently with your pointer for real depth" },
+      { id: "galaxyboot", title: "Galaxy Boot (WebGPU)", desc: "A 200,000-star spiral galaxy spins up behind the boot sequence" },
+      { id: "statspop", title: "Career Trophy Stats", desc: "First visit to Career/Projects pops PSN-style stat toasts" },
       { id: "vibe", title: "Vibe Search (Planet Earth)", desc: "Type a feeling — on-device embeddings fly the globe there" },
       // only browsers with the HTML-in-Canvas trial even see this switch
       ...(hasHtmlInCanvas() ? [{ id: "crt", title: "CRT Console (experimental)", desc: "The ENTIRE console on a curved phosphor tube — restarts the console" }] : []),
@@ -59,6 +70,7 @@ const APPS: { id: string; title: string; cat: string }[] = [
   { id: "strudel", title: "Live Code (Strudel)", cat: "Music" },
   { id: "sp-default", title: "Spotify — lofi beats playlist", cat: "Music" },
   { id: "yt", title: "YouTube", cat: "Video" },
+  { id: "videoplayer", title: "Video Player (local files)", cat: "Video" },
   { id: "ia-video", title: "Archive Cinema", cat: "Video" },
   { id: "doom", title: "DOOM", cat: "Games" },
   { id: "doomrtx", title: "DOOM RTX (path-traced)", cat: "Games" },
@@ -73,6 +85,7 @@ const APPS: { id: string; title: string; cat: string }[] = [
   { id: "code", title: "Code Playground", cat: "Extras" },
   { id: "pc", title: "Other OS — x86 PC", cat: "Extras" },
   { id: "manual", title: "System Manual", cat: "Extras" },
+  { id: "settingshub", title: "Console Settings (hub app)", cat: "Settings" },
   { id: "browser", title: "Browser", cat: "Web" },
   { id: "wiki", title: "Wikipedia", cat: "Web" },
   { id: "dict", title: "Dictionary", cat: "Web" },
@@ -82,7 +95,7 @@ const APPS: { id: string; title: string; cat: string }[] = [
   { id: "art", title: "Art Gallery", cat: "Photo" },
   { id: "apod", title: "Astronomy Photo of the Day", cat: "Photo" },
 ];
-const APP_CAT_ICON: Record<string, string> = { Personal: "user", Music: "note", Video: "film", Games: "disc", Extras: "chip", Web: "globe", Photo: "camera" };
+const APP_CAT_ICON: Record<string, string> = { Personal: "user", Music: "note", Video: "film", Games: "disc", Extras: "chip", Web: "globe", Photo: "camera", Settings: "gear" };
 const APP_GROUPS: FlagGroup[] = [...new Set(APPS.map((a) => a.cat))].map((cat) => ({
   group: cat, icon: APP_CAT_ICON[cat] ?? "folder",
   items: APPS.filter((a) => a.cat === cat).map((a) => ({ id: a.id, title: a.title, desc: "" })),
@@ -131,6 +144,55 @@ const FEATURE_GUIDES: Record<string, LabGuide> = {
     what: "On-device ×2 super-resolution (Swin2SR). The photo is upscaled tile by tile with a live progress strip — nothing leaves the browser; the result is saved as a new photo.",
     steps: ["Photo › Slideshow", "Tap ◈ enhance ×2 on any photo you added", "Watch the strip — the enhanced copy lands in your gallery"],
     go: "photo-cat", goLabel: "GO TO PHOTOS",
+  },
+  cutout: {
+    what: "AI background removal (RMBG), fully on-device: any photo becomes a clean transparent cutout — perfect for a profile avatar that isn't a rectangle.",
+    steps: ["Photo › Slideshow › ◈ cutout on any photo", "Or Users › Profile Photo — the cutout option appears after you pick a picture", "The subject is lifted off its background and saved"],
+    go: "photo-cat", goLabel: "GO TO PHOTOS",
+  },
+  clickmask: {
+    what: "Segment Anything (SlimSAM), on-device: tap any object in a photo and the console masks it out into its own transparent image.",
+    steps: ["Photo › Slideshow", "Tap ◈ isolate, then tap the object you want", "The isolated cutout is saved as a new photo"],
+    go: "photo-cat", goLabel: "GO TO PHOTOS",
+  },
+  transitions: {
+    what: "The native View Transitions API drives the console's motion: launching an app morphs out of the crossbar, and category swaps crossfade — no animation library, the browser does it.",
+    steps: ["Launch any app and watch the wipe", "Slide ← → across categories for the crossfade", "Automatically off when your system asks for reduced motion"],
+  },
+  moderncss: {
+    what: "A pack of 2026 CSS upgrades: panels that reflow to their own width (container queries), Labs group headers that shadow when stuck, height-to-auto animations, and scroll-in reveals — all zero JavaScript.",
+    steps: ["Open Labs and scroll — group headers pin and pick up a shadow", "Watch list rows and tiles fade in as they scroll into view", "Everything falls back gracefully on older browsers"],
+  },
+  parallaxbg: {
+    what: "The living background gains depth: waves and sparkles lean subtly toward your pointer, like tilting a diorama.",
+    steps: ["Sit on the crossbar and glide the mouse around", "The backdrop follows a beat behind — depth, not distraction"],
+    go: "themes", goLabel: "PICK A BACKDROP",
+  },
+  galaxyboot: {
+    what: "A 200,000-star spiral galaxy — pure WebGPU, spun by shader math — turns slowly behind the boot sequence while the console starts.",
+    steps: ["Settings › Restart Console", "Watch the boot screen: the galaxy rotates behind the wordmark"],
+    go: "restart-demo", goLabel: "RESTART & WATCH",
+  },
+  statspop: {
+    what: "PSN-style stat toasts: the first time each session you land on Career or Projects, the console pops the headline numbers like trophies.",
+    steps: ["Slide to the Career category", "Watch the corner — years shipped and project counts pop in"],
+  },
+  battmeter: {
+    what: "The status-bar battery: PS-style cells for your device's charge, a charging shimmer, and a red pulse under 15%.",
+    steps: ["Look at the top-right status bar (browsers that report battery)", "Unplug — the cells drain; below 15% they pulse"],
+  },
+  tabsync: {
+    what: "Open the console in two tabs and change the theme in one — the other follows within a second. Labs flags, backgrounds, fonts and icons all mirror over a BroadcastChannel.",
+    steps: ["Open AbhishekStation in a second tab", "Switch the theme or toggle a Labs flag", "Watch the first tab catch up (it waits politely if a game is running)"],
+  },
+  wakelock: {
+    what: "A screen Wake Lock while anything is actually playing — emulator sessions, DOOM, video, karaoke — released the moment you stop.",
+    steps: ["Start any game or the Video Player", "Your OS screen-dimming holds off until you quit"],
+  },
+  translate: {
+    what: "Universal Menu: pick a language in Console Settings and the crossbar translates itself on-device (small opus-mt model per language, cached forever after the first pass).",
+    steps: ["Extras › Console Settings › Language", "Pick Español, Français, Deutsch, हिन्दी or Italiano", "Watch the crossbar titles re-render as translations land"],
+    go: "app:settingshub", goLabel: "OPEN SETTINGS",
   },
   phonepad: {
     what: "Your phone becomes the controller — scan a QR, get a touch gamepad driving this screen.",
@@ -182,6 +244,16 @@ const APP_GUIDES: Record<string, LabGuide> = Object.fromEntries(
   } satisfies LabGuide]),
 );
 // richer words for the headliners
+APP_GUIDES.videoplayer = {
+  what: "A PS-style local video player: drop in any video file you own — it plays full-bleed with console controls, and its audio rides the master bus so the reactive backdrops dance to your movie.",
+  steps: ["Video › Video Player", "Pick a video file", "✕ play/pause · ←→ seek · △ fullscreen"],
+  go: "app:videoplayer", goLabel: "OPEN THE PLAYER",
+};
+APP_GUIDES.settingshub = {
+  what: "Console Settings — the PS5-style hub: customize the console font and text size, re-icon any category or app from the PS glyph set, tune audio, pick a language, and manage every Labs flag in one place.",
+  steps: ["Extras › Console Settings", "←→ moves between sections, ↑↓ within one", "Changes apply live — no reload, no save button"],
+  go: "app:settingshub", goLabel: "OPEN SETTINGS",
+};
 APP_GUIDES.ps1 = {
   what: "The original PlayStation, emulated on-device (pcsx_rearmed). Bring your own disc images — the built-in HLE BIOS boots most titles with no BIOS file at all.",
   steps: ["Game › PlayStation", "Insert or link a .chd or .pbp disc you own (single-file formats work best)", "Box art appears automatically; press ✕ to boot"],
@@ -229,6 +301,10 @@ interface SpecReq {
 const FEATURE_SPECS: Record<string, SpecReq> = {
   // system features
   gpujuice: { webgpu: "required", gpuHeavy: true, minMemGB: 4 },
+  galaxyboot: { webgpu: "required", gpuHeavy: true, minMemGB: 4 },
+  cutout: { webgpu: "boost", downloadMB: 45, minMemGB: 4, cpuHeavy: true },
+  clickmask: { webgpu: "boost", downloadMB: 40, minMemGB: 4, cpuHeavy: true },
+  translate: { webgpu: "boost", downloadMB: 50, cpuHeavy: true },
   livephoto: { webgpu: "boost", minMemGB: 4, downloadMB: 50, cpuHeavy: true },
   enhance: { webgpu: "boost", minMemGB: 4, downloadMB: 45, cpuHeavy: true },
   voice: { webgpu: "boost", downloadMB: 80, cpuHeavy: true },

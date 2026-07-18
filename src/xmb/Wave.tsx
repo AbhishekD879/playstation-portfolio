@@ -185,6 +185,15 @@ export default function Wave() {
     grid.visible = false;
     scene.add(grid);
 
+    // —— pointer parallax: the whole backdrop leans toward the cursor ——
+    let parX = 0, parY = 0, parTX = 0, parTY = 0;
+    const onPar = (e: PointerEvent) => {
+      parTX = (e.clientX / innerWidth) * 2 - 1;
+      parTY = (e.clientY / innerHeight) * 2 - 1;
+    };
+    addEventListener("pointermove", onPar);
+    onCleanup(() => removeEventListener("pointermove", onPar));
+
     // —— live audio level from the console's master bus (0 when silent) ——
     let analyser: AnalyserNode | null = null;
     let freq: Uint8Array | null = null;
@@ -239,6 +248,17 @@ export default function Wave() {
         for (let i = lo; i < hi; i++) sum += freq[i];
         const target = Math.min(1, sum / (hi - lo) / 165); // normalize bass energy
         audioLevel += (target - audioLevel) * 0.16; // smooth
+      }
+      // parallax — a beat behind the pointer, so it reads as depth not jitter
+      if (labEnabled("parallaxbg")) {
+        parX += (parTX - parX) * 0.04;
+        parY += (parTY - parY) * 0.04;
+        camera.position.x = parX * 1.1;
+        camera.position.y = -parY * 0.7;
+        camera.lookAt(0, 0, 0);
+      } else if (camera.position.x !== 0 || camera.position.y !== 0) {
+        camera.position.set(0, 0, 20);
+        camera.lookAt(0, 0, 0);
       }
       const mode = bgMode();
       if (isWaveMode(mode)) {

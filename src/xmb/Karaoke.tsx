@@ -9,6 +9,7 @@ import { Show, createSignal, onCleanup, onMount } from "solid-js";
 import { audioContext, masterBus } from "../audio";
 import * as sfx from "../audio";
 import type { NavAction } from "../input";
+import { holdWakeLock } from "../wakelock";
 import { Icon } from "./icons";
 
 export default function Karaoke(props: { onClose: () => void; bind: (nav: (a: NavAction) => void) => void }) {
@@ -97,7 +98,10 @@ export default function Karaoke(props: { onClose: () => void; bind: (nav: (a: Na
     setPlaying(false); setPos(0); setDur(0);
   }
 
-  onMount(() => onCleanup(stop));
+  onMount(() => {
+    const releaseLock = holdWakeLock(); // singers don't want the screen dimming mid-verse
+    onCleanup(() => { releaseLock(); stop(); });
+  });
 
   props.bind((a) => {
     if (a === "confirm") toggle();

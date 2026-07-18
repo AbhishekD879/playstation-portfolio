@@ -1,5 +1,6 @@
 // Monochrome line icons in the XMB style — thin strokes, soft glow via CSS.
 import type { JSX } from "solid-js";
+import { Dynamic } from "solid-js/web";
 
 const S = (d: JSX.Element) => (
   <svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">{d}</svg>
@@ -55,6 +56,6 @@ export const ICONS: Record<string, () => JSX.Element> = {
 };
 
 export function Icon(props: { name: string }) {
-  const C = ICONS[props.name] ?? ICONS.cube;
-  return <C />;
+  // Dynamic keeps it reactive — icon overrides from Settings apply live
+  return <Dynamic component={ICONS[props.name] ?? ICONS.cube} />;
 }

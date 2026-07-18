@@ -6,6 +6,7 @@ import { Show, createSignal, onCleanup, onMount } from "solid-js";
 import * as sfx from "../audio";
 import { setNavEnabled } from "../input";
 import { startBridge, stopBridge, touchKey, PS2_CONFIG } from "../gamepadBridge";
+import { holdWakeLock } from "../wakelock";
 import TouchPad, { type TB } from "./TouchPad";
 import { Icon } from "./icons";
 import { startHost, startJoiner, type HostHandle, type JoinerHandle } from "../ps2mp/webrtc";
@@ -30,6 +31,7 @@ export default function Ps2(props: { onClose: () => void; profileId: string; ini
   let ready = false;
   let saveTimer: ReturnType<typeof setInterval> | null = null;
   let onSaved: ((count: number) => void) | null = null;
+  let releaseLock: (() => void) | null = null;
   const requestSave = () => frame?.contentWindow?.postMessage({ type: "play-save", saveKey }, location.origin);
   const [saveNote, setSaveNote] = createSignal("");
 
@@ -149,6 +151,7 @@ export default function Ps2(props: { onClose: () => void; profileId: string; ini
       if (e.data.type === "play-booted") {
         setStage("playing");
         setNavEnabled(false); // keyboard belongs to the PS2 now
+        releaseLock ??= holdWakeLock();
         // Play! registers its key listeners ON the canvas element (not the
         // document), so the bridge must dispatch straight onto it.
         startBridge(frame.contentDocument?.getElementById("outputCanvas") ?? frame.contentDocument, () => {}, PS2_CONFIG);
@@ -180,6 +183,7 @@ export default function Ps2(props: { onClose: () => void; profileId: string; ini
       removeEventListener("visibilitychange", onHide);
       if (saveTimer) clearInterval(saveTimer);
       stopBridge();
+      releaseLock?.();
       stopCapture?.();
       hostHandle?.stop();
       joinerHandle?.stop();
