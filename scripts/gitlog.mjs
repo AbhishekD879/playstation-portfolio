@@ -9,6 +9,13 @@ const raw = execSync('git log --reverse --date=unix --pretty=format:"@%h|%ad|%s"
   maxBuffer: 64 * 1024 * 1024,
 });
 
+// debris that slipped into history before .gitignore caught up — test-runner
+// artifacts and stray root-level debug screenshots. They were deleted from
+// the tree long ago; keep them out of the replay too.
+const junk = (p) =>
+  p.startsWith(".playwright-cli/") ||
+  (/\.(png|jpe?g|webm)$/i.test(p) && !p.includes("/"));
+
 const commits = [];
 let cur = null;
 for (const line of raw.split("\n")) {
@@ -22,6 +29,7 @@ for (const line of raw.split("\n")) {
     if (!p) continue;
     // renames show as "old => new" — keep the new path
     const clean = p.includes("=>") ? p.replace(/^.*=>\s*/, "").replace(/[{}]/g, "") : p;
+    if (junk(clean)) continue;
     cur.f.push([clean, add === "-" ? 0 : Number(add), del === "-" ? 0 : Number(del)]);
   }
 }
