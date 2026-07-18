@@ -23,7 +23,9 @@ self.addEventListener("fetch", (e) => {
   const url = new URL(req.url);
   if (url.origin !== location.origin) return; // cross-origin (models/tiles/APIs) → network
   // don't touch the huge self-hosted payloads or API calls
-  if (/^\/(cesium|play|pc|rpgm-fs|assets\/.*(cesium|kokoro|transformers|CesiumGlobe))/.test(url.pathname) || url.pathname.startsWith("/api/")) return;
+  // /rpgm/ is owned by rpgm-sw + static (engine wasm, on-demand RTP); the app
+  // shell SW must never precache the heavy RPG Maker payloads.
+  if (/^\/(cesium|play|pc|rpgm|assets\/.*(cesium|kokoro|transformers|CesiumGlobe))/.test(url.pathname) || url.pathname.startsWith("/api/")) return;
 
   // network-first: always try the network so a new deploy shows immediately;
   // fall back to the cache only when offline.

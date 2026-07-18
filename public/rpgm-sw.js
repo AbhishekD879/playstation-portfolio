@@ -76,9 +76,21 @@ self.addEventListener("fetch", (e) => {
     try {
       file = await opfsFile(gameId, path);
     } catch {
-      // EasyRPG: fall back to the bundled RTP for assets the game itself omits
+      // EasyRPG: fall back to the bundled RTP for assets the game itself omits.
+      // LAZY: RTP files are only fetched when a game actually references one it
+      // doesn't bundle (self-contained games pull zero RTP — the 12MB pack is
+      // never a single download). Each fetched asset is cached so replays and
+      // offline don't re-download it.
       if (!isMvMz) {
-        try { return await fetch("/rpgm/easyrpg/rtp/" + path); } catch { /* fall through */ }
+        const rtpUrl = "/rpgm/easyrpg/rtp/" + path;
+        try {
+          const cache = await caches.open("rpgm-rtp-v1");
+          const hit = await cache.match(rtpUrl);
+          if (hit) return hit;
+          const res = await fetch(rtpUrl);
+          if (res.ok) { cache.put(rtpUrl, res.clone()); return res; }
+          // fall through to 404 (missing RTP asset renders blank, never crashes)
+        } catch { /* offline + not cached */ }
       }
       return new Response("Not found: " + path, { status: 404, headers: ISO_HEADERS });
     }
