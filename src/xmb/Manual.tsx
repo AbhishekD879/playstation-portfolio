@@ -311,6 +311,46 @@ const CHAPTERS: Chapter[] = [
     ),
   },
   {
+    id: "system", title: "Console Settings & System", src: [{ label: "SettingsApp.tsx", path: "src/xmb/SettingsApp.tsx" }, { label: "prefs.ts", path: "src/prefs.ts" }, { label: "labs.ts", path: "src/labs.ts" }],
+    body: () => (
+      <>
+        <h2>One home for every setting</h2>
+        <p><b>Console Settings</b> (Settings → first item) is the PS5-style hub: a snap-rail of sections with a
+          search box over every row. <b>APPEARANCE</b> swaps the console font live (Google Fonts lazy-load on pick),
+          letter spacing and display scale, and links into Themes. <b>ICONS</b> re-glyphs any category or app from
+          the console's own icon set. <b>AUDIO</b> is volume, sound packs and mute. <b>LANGUAGE</b> drives the
+          Universal Menu — a small opus-mt model per language translates the crossbar on-device, with live download
+          progress. <b>LABS</b> hosts every feature flag inline, with device-fitness badges and per-feature guide
+          cards (the ? on a row). <b>SYSTEM</b> shows the device profile, the AI memory manager, storage, portable
+          save data and the privacy label.</p>
+        <h2>The idle ladder</h2>
+        <p>Idle at the home screen climbs three rungs: <b>Attract Mode</b> (only until a profile has learned the
+          controls — a dozen real inputs or one dismissal retires it forever, stored on the profile so it rides
+          backups), then the <b>screensaver</b> clock, then <b>Rest Mode</b> — near-black, a breathing amber power
+          light, audio context suspended, the wave's render loop parked. Nothing unmounts; any input resumes the
+          exact prior state, and the waking press is swallowed so it never navigates.</p>
+        <h2>Data that travels — and data that doesn't</h2>
+        <p>· <b>Setup links</b>: theme, Labs flags, icons, fonts & language gzip (Compression Streams) into a
+          <code>#setup=</code> URL; the receiving console asks before applying.<br />
+          · <b>Save folders</b>: emulator save databases + a settings snapshot export to a user-picked directory
+          (File System Access) and import back. Photos, videos and the game library are deliberately excluded —
+          media never leaves the browser it was added to.<br />
+          · The <b>Privacy Nutrition Label</b> (SYSTEM) lists every localStorage/IndexedDB key with sizes and every
+          external domain contacted this session, plus an ask-twice full wipe.</p>
+        <h2>Photos, video & snapshots</h2>
+        <p>The <b>Photo Library</b> browses manually (slideshow on demand) with three on-device AI tools — Enhance
+          ×2 (Swin2SR, tiled), Cutout (RMBG) and Isolate (SlimSAM point-prompt) — all through the model memory
+          manager; results appear in the open library instantly. The <b>Video Player</b> plays local files on the
+          master audio bus so backdrops react. <b>XMB Photo Mode</b> freezes the living background into a framed
+          1920×1080 card for the OS share sheet.</p>
+        <h2>Repo Rewind</h2>
+        <p>Extras → Repo Rewind plays this repo's own git history as a growing radial file tree
+          (<code>scripts/gitlog.mjs</code> bakes <code>commits.json</code> at build time). The console documents
+          its own construction, commit by commit.</p>
+      </>
+    ),
+  },
+  {
     id: "credits", title: "Credits & Licenses", src: [{ label: "the repo", path: "" }],
     body: () => (
       <>

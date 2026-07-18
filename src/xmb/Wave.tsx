@@ -9,6 +9,8 @@ import { bgMode, tint } from "../theme";
 import { getAnalyser } from "../audio";
 import { labEnabled } from "../labs";
 import { hasWebGPU } from "../gpu";
+import { resting } from "../rest";
+import { registerWaveCapture } from "../snapshot";
 import FluidBg from "./FluidBg";
 
 const WAVE_VERT = /* glsl */ `
@@ -233,6 +235,7 @@ export default function Wave() {
     const render = (now: number) => {
       if (disposed) return;
       requestAnimationFrame(render); // keep polling so a Labs toggle re-animates live
+      if (resting()) { last = now; return; } // Rest Mode — the scene sleeps, state intact
       // Labs "Living Background" off — or the "Flat 2D" mode — fades everything
       // out, leaving the original still gradient (the .wave-bg CSS). Fluid mode
       // renders on its own WebGPU canvas — the three scene sleeps under it.
@@ -309,8 +312,16 @@ export default function Wave() {
       renderer.setSize(innerWidth, innerHeight);
     };
     addEventListener("resize", onResize);
+
+    // Photo Mode reads the scene back — render a fresh frame in the same task
+    registerWaveCapture(() => {
+      renderer.render(scene, camera);
+      return canvas.toDataURL("image/png");
+    });
+
     onCleanup(() => {
       disposed = true;
+      registerWaveCapture(null);
       removeEventListener("resize", onResize);
       renderer.dispose();
     });

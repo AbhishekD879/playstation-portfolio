@@ -23,6 +23,11 @@ const FEATURE_GROUPS: FlagGroup[] = [
       { id: "wakelock", title: "Never-Dim Console", desc: "The screen stays awake while a game, video or karaoke is playing" },
       { id: "translate", title: "Universal Menu", desc: "Crossbar in your language — on-device AI translation, cached after first run" },
       { id: "battmeter", title: "Battery Meter", desc: "PS-style battery cells in the status bar (with a low-charge pulse)" },
+      { id: "restmode", title: "Rest Mode", desc: "Long idle fades the console to a breathing power light — any input resumes exactly where you were" },
+      { id: "attract", title: "Attract Mode (first-visit tutor)", desc: "Idle at the home screen and the console demos its own controls — never shown once you've learned them" },
+      { id: "photomode", title: "XMB Photo Mode", desc: "Snapshot the living console as a framed picture — share sheet or straight to disk" },
+      { id: "portstate", title: "Portable Save Data", desc: "Export game saves & settings to a folder, or share your setup as a link — photos never leave this device" },
+      { id: "privacylabel", title: "Privacy Nutrition Label", desc: "See every byte the console stores and every domain it talked to — plus a full wipe button" },
     ],
   },
   {
@@ -85,6 +90,7 @@ const APPS: { id: string; title: string; cat: string }[] = [
   { id: "code", title: "Code Playground", cat: "Extras" },
   { id: "pc", title: "Other OS — x86 PC", cat: "Extras" },
   { id: "manual", title: "System Manual", cat: "Extras" },
+  { id: "reporewind", title: "Repo Rewind (git history)", cat: "Extras" },
   { id: "browser", title: "Browser", cat: "Web" },
   { id: "wiki", title: "Wikipedia", cat: "Web" },
   { id: "dict", title: "Dictionary", cat: "Web" },
@@ -179,6 +185,29 @@ const FEATURE_GUIDES: Record<string, LabGuide> = {
   battmeter: {
     what: "The status-bar battery: PS-style cells for your device's charge, a charging shimmer, and a red pulse under 15%.",
     steps: ["Look at the top-right status bar (browsers that report battery)", "Unplug — the cells drain; below 15% they pulse"],
+  },
+  restmode: {
+    what: "PS-style Rest Mode: after a long idle the screen fades to near-black with a breathing power light, audio suspends and the living background stops rendering. Nothing is torn down — any input resumes the exact prior state instantly.",
+    steps: ["Leave the console alone for a while (past the screensaver)", "Watch it sink into the dark with a slow amber pulse", "Press anything — you're back exactly where you were"],
+  },
+  attract: {
+    what: "The arcade attract loop as onboarding: if you idle at the home screen before you've learned the controls, the console demos them itself — animated key glyphs, one hint at a time. Learned the nav (or dismissed it once)? It never appears again for your profile.",
+    steps: ["On a fresh profile, don't touch anything for ~45 seconds", "Watch the control demo cycle", "Press any key — it vanishes and stays gone"],
+  },
+  photomode: {
+    what: "Photo Mode for the console itself: freeze the living background into a framed 1920×1080 snapshot — wordmark, profile, category and timestamp composed in — then share it through the OS share sheet or save the PNG.",
+    steps: ["Photo › Photo Mode", "The console frames the current scene", "SHARE for the OS sheet, SAVE for a PNG"],
+    go: "photo-mode-demo", goLabel: "TAKE A SNAPSHOT",
+  },
+  portstate: {
+    what: "Your save data, portable: export emulator saves + console settings to a real folder on disk (File System Access), import them on another machine, or share just your settings as a compressed link. Photos and videos are never included — media stays on this device.",
+    steps: ["Console Settings › SYSTEM › Portable Save Data", "COPY SETUP LINK shares your theme/flags/fonts as a URL", "EXPORT writes save databases + settings to a folder you pick"],
+    go: "app:settingshub", goLabel: "OPEN SETTINGS",
+  },
+  privacylabel: {
+    what: "A live nutrition label for your data: every localStorage key and database the console holds (with sizes), every external domain contacted this session, and a one-button full wipe. Real-time truth, not a policy page.",
+    steps: ["Console Settings › SYSTEM", "Read the DATA ON THIS CONSOLE and NETWORK cards", "The wipe button asks twice — then everything local is gone"],
+    go: "app:settingshub", goLabel: "OPEN SETTINGS",
   },
   tabsync: {
     what: "Open the console in two tabs and change the theme in one — the other follows within a second. Labs flags, backgrounds, fonts and icons all mirror over a BroadcastChannel.",

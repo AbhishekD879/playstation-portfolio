@@ -47,6 +47,8 @@ export interface XmbItem {
     | { type: "strudel" }
     | { type: "settings-hub" }
     | { type: "video-player" }
+    | { type: "photo-mode" }
+    | { type: "repo-rewind" }
     | { type: "chess" }
     | { type: "trivia" }
     | { type: "flash" }
@@ -336,6 +338,7 @@ export const CATEGORIES: XmbCategory[] = [
       { id: "code", title: "Code Playground", sub: "Write & run JavaScript / Python — sandboxed on this console", icon: "chip", action: { type: "code" } },
       { id: "pc", title: "Other OS", sub: "Boot a whole x86 PC (KolibriOS) inside the console", icon: "monitor", action: { type: "pc" } },
       { id: "manual", title: "System Manual", sub: "How this console is built — architecture, APIs, diagrams", icon: "book", action: { type: "manual" } },
+      { id: "reporewind", title: "Repo Rewind", sub: "Watch this console build itself — every commit, animated", icon: "clock", action: { type: "repo-rewind" } },
     ],
   },
   {

@@ -1208,6 +1208,75 @@ img.status-avatar, img.ptile-avatar { object-fit: cover; border: 1px solid rgba(
   ::view-transition-old(root), ::view-transition-new(root) { animation: none; }
 }
 
+/* ————— Rest Mode — the console breathes in the dark ————— */
+.rest {
+  position: fixed; inset: 0; z-index: 80; background: #000; cursor: none;
+  display: flex; flex-direction: column; align-items: center; justify-content: flex-end;
+  padding-bottom: 12vh; gap: 18px;
+  animation: restIn 2.2s ease both;
+}
+@keyframes restIn { from { opacity: 0; } to { opacity: 0.965; } }
+.rest-led {
+  width: 84px; height: 5px; border-radius: 999px;
+  background: #ff9d2e; box-shadow: 0 0 22px rgba(255, 157, 46, 0.55);
+  animation: restBreathe 3.6s ease-in-out infinite;
+}
+@keyframes restBreathe { 0%, 100% { opacity: 0.22; } 50% { opacity: 1; } }
+.rest-word { font-size: 10px; letter-spacing: 0.5em; color: rgba(255,255,255,0.28); }
+
+/* ————— Attract Mode — the console demos its own controls ————— */
+.attract {
+  position: fixed; inset: 0; z-index: 78;
+  background: rgba(3, 5, 10, 0.8); backdrop-filter: blur(6px);
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 34px;
+  animation: fadeIn 1s ease both;
+}
+.attract-mark { font-size: 22px; letter-spacing: 0.42em; color: #fff; opacity: 0.92; }
+.attract-card { position: relative; height: 96px; width: min(560px, 90vw); }
+.attract-step {
+  position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; gap: 15px;
+  opacity: 0; animation: attractCycle 16s linear infinite;
+}
+@keyframes attractCycle {
+  0% { opacity: 0; transform: translateY(8px); }
+  3% { opacity: 1; transform: none; }
+  17% { opacity: 1; }
+  20% { opacity: 0; transform: translateY(-8px); }
+  100% { opacity: 0; }
+}
+.attract-keys { display: flex; gap: 10px; }
+.attract-key {
+  min-width: 46px; padding: 10px 14px; text-align: center;
+  border-radius: 10px; border: 1px solid rgba(255,255,255,0.35);
+  background: rgba(255,255,255,0.06); color: #fff; font-family: inherit; font-size: 16px;
+  animation: attractKey 1.4s ease-in-out infinite;
+}
+@keyframes attractKey {
+  0%, 100% { background: rgba(255,255,255,0.06); transform: none; }
+  50% { background: color-mix(in oklab, var(--xmb-tint) 45%, rgba(255,255,255,0.1)); transform: translateY(2px); }
+}
+.attract-text { font-size: 15px; letter-spacing: 0.14em; color: rgba(255,255,255,0.85); text-transform: uppercase; }
+.attract-hint { font-size: 10.5px; letter-spacing: 0.3em; color: var(--dim); animation: restBreathe 2.8s ease-in-out infinite; }
+
+/* ————— Photo Mode preview + shared-setup modals ————— */
+.snapmodal { width: min(860px, 92vw); }
+.snapmodal-img { width: 100%; border-radius: 8px; border: 1px solid rgba(255,255,255,0.15); }
+.snapmodal-actions { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; }
+.setupmodal { width: min(560px, 92vw); }
+.setupmodal-what { font-size: 14px; line-height: 1.6; color: rgba(255,255,255,0.85); max-width: 46ch; }
+
+/* ————— Repo Rewind — the console's own git history ————— */
+.rewind { position: fixed; inset: 0; z-index: 32; background: radial-gradient(circle at 50% 45%, #0d1322, #05060c 75%); }
+.rewind-canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
+.rewind-ticker { position: absolute; left: 0; right: 0; bottom: 48px; display: flex; flex-direction: column; gap: 9px; padding: 0 min(6vw, 70px); }
+.rewind-bar { height: 3px; border-radius: 999px; background: rgba(255,255,255,0.12); overflow: hidden; }
+.rewind-bar-fill { height: 100%; background: var(--xmb-tint); transition: width 0.3s; }
+.rewind-meta { display: flex; gap: 18px; align-items: baseline; flex-wrap: wrap; }
+.rewind-hash { font-size: 11px; letter-spacing: 0.14em; color: var(--dim); font-variant-numeric: tabular-nums; }
+.rewind-msg { font-size: 14px; color: rgba(255,255,255,0.9); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 56vw; }
+.rewind-controls { display: flex; gap: 8px; }
+.rewind-done { position: absolute; top: 96px; left: 50%; transform: translateX(-50%); font-size: 11px; letter-spacing: 0.26em; color: var(--dim); white-space: nowrap; }
+
 /* Karaoke — vocal-cut singalong */
 .karaoke { position: fixed; inset: 0; z-index: 32; background: linear-gradient(200deg, #05060c, color-mix(in oklab, var(--xmb-tint) 16%, #0a0e1c) 55%, #05060c); display: flex; flex-direction: column; padding: 26px min(7vw, 80px); }
 .karaoke-stage { flex: 1; display: grid; place-items: center; }

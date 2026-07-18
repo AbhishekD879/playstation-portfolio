@@ -19,6 +19,7 @@ import {
 } from "../prefs";
 import { ICONS, Icon } from "./icons";
 import { trPct, trRetry, trStatus } from "../translate";
+import { canUseFolders, exportSavesToFolder, importSavesFromFolder, makeSetupLink } from "../statefiles";
 
 const SECTIONS = ["APPEARANCE", "ICONS", "AUDIO", "LANGUAGE", "LABS", "SYSTEM"] as const;
 
@@ -50,13 +51,54 @@ export default function SettingsApp(props: {
   const [pack, setPack] = createSignal(getSndPack());
   const [labsWarn, setLabsWarn] = createSignal<string | null>(null);
   const [storage, setStorage] = createSignal("");
+  const [dataKeys, setDataKeys] = createSignal<{ k: string; bytes: number }[]>([]);
+  const [dbNames, setDbNames] = createSignal<string[]>([]);
+  const [netHosts, setNetHosts] = createSignal<{ host: string; n: number }[]>([]);
+  const [wipeArmed, setWipeArmed] = createSignal(false);
+  const [portMsg, setPortMsg] = createSignal("");
   let rail!: HTMLDivElement;
 
   onMount(() => {
     navigator.storage?.estimate?.().then((e) => {
       if (e.usage != null) setStorage(`${(e.usage / 1048576).toFixed(0)} MB used${e.quota ? ` of ~${(e.quota / 1073741824).toFixed(0)} GB available` : ""}`);
     }).catch(() => {});
+    // —— the nutrition label reads the truth live, not a policy page ——
+    setDataKeys(Object.keys(localStorage)
+      .filter((k) => localStorage.getItem(k) != null) // skip the tab-sync setItem patch
+      .map((k) => ({ k, bytes: (localStorage.getItem(k) ?? "").length * 2 }))
+      .sort((a, b) => b.bytes - a.bytes));
+    void (indexedDB.databases?.() ?? Promise.resolve([])).then((dbs) =>
+      setDbNames(dbs.map((d) => d.name ?? "?").filter(Boolean).sort()));
+    const hosts = new Map<string, number>();
+    for (const e of performance.getEntriesByType("resource")) {
+      try {
+        const h = new URL(e.name).host;
+        if (h && h !== location.host) hosts.set(h, (hosts.get(h) ?? 0) + 1);
+      } catch { /* opaque entry */ }
+    }
+    setNetHosts([...hosts].map(([host, n]) => ({ host, n })).sort((a, b) => b.n - a.n));
   });
+
+  const fmtBytes = (b: number) => (b >= 1048576 ? `${(b / 1048576).toFixed(1)} MB` : b >= 1024 ? `${(b / 1024).toFixed(1)} KB` : `${b} B`);
+
+  async function wipeConsole() {
+    if (!wipeArmed()) { setWipeArmed(true); sfx.deny(); setTimeout(() => setWipeArmed(false), 5000); return; }
+    try {
+      localStorage.clear();
+      sessionStorage.clear();
+      const dbs = await (indexedDB.databases?.() ?? Promise.resolve([]));
+      await Promise.all(dbs.map((d) => d.name && new Promise((res) => { const r = indexedDB.deleteDatabase(d.name!); r.onsuccess = r.onerror = r.onblocked = res; })));
+      if ("caches" in window) for (const k of await caches.keys()) await caches.delete(k);
+      const opfs = await navigator.storage?.getDirectory?.().catch(() => null);
+      if (opfs) for await (const [name] of (opfs as any).entries()) await opfs.removeEntry(name, { recursive: true }).catch(() => {});
+    } finally { location.reload(); }
+  }
+
+  const runPort = (job: Promise<string>) => {
+    setPortMsg("working…");
+    job.then((m) => { setPortMsg(m); sfx.confirm(); })
+      .catch((e) => setPortMsg(e?.name === "AbortError" ? "" : "couldn't access that folder"));
+  };
 
   // —— icon targets: categories first (the headline ask), then every app ——
   const iconTargets = (): IconTarget[] => {
@@ -401,6 +443,55 @@ export default function SettingsApp(props: {
               <div class="set-sys-line">{storage() || "not reported by this browser"}</div>
               <div class="set-sys-line dim">profiles, trophies, saves & your game library live only in this browser</div>
             </div>
+
+            {/* —— Portable Save Data (Labs "portstate") —— */}
+            <Show when={labEnabled("portstate")}>
+              <div class="set-sys-card">
+                <div class="set-row-title">Portable Save Data</div>
+                <div class="set-sys-line dim">game saves & settings only — photos and videos never leave this device</div>
+                <div class="set-choices">
+                  <button class="set-pill" onClick={() => { void makeSetupLink().then((url) => { void navigator.clipboard.writeText(url); setPortMsg("setup link copied — theme, Labs, fonts & language"); sfx.confirm(); }); }}>COPY SETUP LINK</button>
+                  <Show when={canUseFolders()} fallback={<span class="set-sys-line dim">folder export needs a Chromium browser</span>}>
+                    <button class="set-pill" onClick={() => runPort(exportSavesToFolder())}>EXPORT SAVES TO FOLDER</button>
+                    <button class="set-pill" onClick={() => runPort(importSavesFromFolder())}>IMPORT SAVES FROM FOLDER</button>
+                  </Show>
+                </div>
+                <Show when={portMsg()}><div class="set-sys-line">{portMsg()}</div></Show>
+              </div>
+            </Show>
+
+            {/* —— Privacy Nutrition Label (Labs "privacylabel") —— */}
+            <Show when={labEnabled("privacylabel")}>
+              <div class="set-sys-card">
+                <div class="set-row-title">Data On This Console</div>
+                <div class="set-sys-line dim">every key this site holds in your browser, right now — nothing is stored anywhere else</div>
+                <For each={dataKeys().slice(0, 10)}>
+                  {(e) => <div class="set-sys-line">▸ {e.k} — {fmtBytes(e.bytes)}</div>}
+                </For>
+                <Show when={dataKeys().length > 10}><div class="set-sys-line dim">+ {dataKeys().length - 10} smaller keys</div></Show>
+                <Show when={dbNames().length}>
+                  <div class="set-sys-line dim">databases: {dbNames().join(" · ")}</div>
+                </Show>
+              </div>
+              <div class="set-sys-card">
+                <div class="set-row-title">Network This Session</div>
+                <Show when={netHosts().length} fallback={<div class="set-sys-line">no external domains contacted yet</div>}>
+                  <For each={netHosts().slice(0, 8)}>
+                    {(h) => <div class="set-sys-line">▸ {h.host} — {h.n} request{h.n === 1 ? "" : "s"}</div>}
+                  </For>
+                </Show>
+                <div class="set-sys-line dim">fonts, models & game data come from CDNs when a feature asks; the AI itself runs on-device</div>
+              </div>
+              <div class="set-sys-card">
+                <div class="set-row-title">Wipe This Console</div>
+                <div class="set-sys-line dim">deletes every profile, save, photo and setting from this browser — there is no server copy to recover</div>
+                <div class="set-choices">
+                  <button class="set-pill" classList={{ on: wipeArmed() }} onClick={() => void wipeConsole()}>
+                    {wipeArmed() ? "⚠ PRESS AGAIN TO ERASE EVERYTHING" : "WIPE ALL LOCAL DATA"}
+                  </button>
+                </div>
+              </div>
+            </Show>
           </div>
         </Show>
       </div>

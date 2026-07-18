@@ -41,6 +41,10 @@ import DoomRtx from "./DoomRtx";
 import Karaoke from "./Karaoke";
 import SettingsApp from "./SettingsApp";
 import VideoPlayer from "./VideoPlayer";
+import RepoRewind from "./RepoRewind";
+import { enterRest, exitRest, resting } from "../rest";
+import { composeSnapshot, downloadSnapshot, shareSnapshot } from "../photomode";
+import { applySetup, readSetupHash } from "../statefiles";
 import ChessApp from "./ChessApp";
 import Trivia from "./Trivia";
 import Flash from "./Flash";
@@ -185,7 +189,7 @@ export default function XMB(props: {
   const [ytQuery, setYtQuery] = createSignal(""); // AI agent → YouTube search handoff
   const [vListening, setVListening] = createSignal(false); // XMB voice command
   const [padTest, setPadTest] = createSignal(false);
-  const [app, setAppRaw] = createSignal<null | "doom" | "doomrtx" | "chess" | "trivia" | "flash" | "cinema" | "podcasts" | "library" | "map" | "ai" | "webamp" | "youtube" | "timemachine" | "art" | "wiki" | "lichess" | "ps2" | "pc" | "guestbook" | "browser" | "visualizer" | "studio" | "code" | "manual" | "ps2home" | "ps1home" | "psphome" | "retrohome" | "scummvm" | "karaoke" | "strudel" | "settingshub" | "videoplayer">(null);
+  const [app, setAppRaw] = createSignal<null | "doom" | "doomrtx" | "chess" | "trivia" | "flash" | "cinema" | "podcasts" | "library" | "map" | "ai" | "webamp" | "youtube" | "timemachine" | "art" | "wiki" | "lichess" | "ps2" | "pc" | "guestbook" | "browser" | "visualizer" | "studio" | "code" | "manual" | "ps2home" | "ps1home" | "psphome" | "retrohome" | "scummvm" | "karaoke" | "strudel" | "settingshub" | "videoplayer" | "reporewind">(null);
   // XMB Launch Wipe — app opens/closes ride the native View Transitions API
   const withTransition = (mutate: () => void) => {
     const vt = (document as any).startViewTransition?.bind(document);
@@ -309,6 +313,7 @@ export default function XMB(props: {
       ? [{ id: "slideshow", title: "Photo Library", sub: `${photos().length} photo${photos().length > 1 ? "s" : ""} · browse — slideshow on demand`, icon: "camera", action: { type: "photos-view" as const } }]
       : []),
     { id: "photos-add", title: "Add Photos…", sub: "Stored in this browser only — never uploaded", icon: "plus", action: { type: "photos-add" } },
+    { id: "photomode", title: "Photo Mode", sub: "Snapshot the living console — framed, shareable, on-device", icon: "camera", action: { type: "photo-mode" } },
     { id: "art", title: "Art Gallery", sub: "Masterpieces · The Met, New York", icon: "spark", action: { type: "art" } },
     { id: "apod", title: "Astronomy Photo of the Day", sub: "Live from NASA", icon: "spark", action: { type: "apod" } },
   ]);
@@ -338,7 +343,25 @@ export default function XMB(props: {
     startTabSync();
     // presence joins a P2P lobby — deferred so boot stays snappy
     if (labEnabled("presence")) setTimeout(() => { if (labEnabled("presence")) void startPresence(); }, 6000);
+    // a shared #setup= link landed here — offer to apply it (never silently)
+    const checkSetupHash = () => void readSetupHash().then((s) => { if (s && Object.keys(s).length) setSetupImport(s); });
+    checkSetupHash();
+    addEventListener("hashchange", checkSetupHash);
+    onCleanup(() => removeEventListener("hashchange", checkSetupHash));
   });
+
+  // —— XMB Photo Mode: freeze the scene into a framed, shareable card ————————
+  const [snapshot, setSnapshot] = createSignal<{ blob: Blob; url: string } | null>(null);
+  async function takeSnapshot() {
+    sfx.confirm();
+    const blob = await composeSnapshot({ profile: props.profile.name, category: CATEGORIES[cat()].label });
+    if (!blob) { pushToast("Photo Mode", "Couldn't capture the scene on this device"); return; }
+    setSnapshot({ blob, url: URL.createObjectURL(blob) });
+  }
+  const closeSnapshot = () => { const s = snapshot(); if (s) URL.revokeObjectURL(s.url); setSnapshot(null); };
+
+  // —— shared-setup import confirm ————————————————————————————————————————————
+  const [setupImport, setSetupImport] = createSignal<Record<string, string> | null>(null);
 
   // Career Trophy Stats — first landing on Career/Projects each session pops
   // the headline numbers, PSN style
@@ -663,6 +686,13 @@ export default function XMB(props: {
       case "video-player":
         sfx.confirm();
         setApp("videoplayer");
+        break;
+      case "repo-rewind":
+        sfx.confirm();
+        setApp("reporewind");
+        break;
+      case "photo-mode":
+        void takeSnapshot();
         break;
       case "dictionary":
         sfx.confirm();
@@ -1243,6 +1273,7 @@ export default function XMB(props: {
       case "juice-demo": rumble(0.5, 0.35, 90); setShaking(true); setTimeout(() => setShaking(false), 300); break;
       case "burst-demo": import("../particles").then((m) => m.burst({ x: innerWidth / 2, y: innerHeight * 0.45, count: 131072 })).catch(() => {}); break;
       case "restart-demo": sessionStorage.removeItem("asp.resume"); location.reload(); break;
+      case "photo-mode-demo": void takeSnapshot(); break;
       case "photo-cat": {
         const pi = CATEGORIES.findIndex((c) => c.id === "photo");
         if (pi >= 0) setCat(pi);
@@ -1255,7 +1286,22 @@ export default function XMB(props: {
   // —— navigation (keyboard + gamepad via onNav; mouse clicks & wheel reuse it) ——
   const handleNav = (action: Parameters<Parameters<typeof onNav>[0]>[0], src?: import("../input").NavSource) => {
     lastActive = Date.now();
+    if (resting()) { exitRest(); return; }
+    if (attractOn()) { setAttractOn(false); markOnboarded(); return; }
+    if (Date.now() - wokeAt < 350) return; // the wake press only wakes
+    // a dozen real nav actions = they know the controls; attract retires
+    if (!props.profile.onboarded && ++navMastery >= 12) markOnboarded();
     if (saver()) { setSaver(false); return; }
+    if (snapshot()) { // Photo Mode preview owns the pad
+      if (action === "confirm") { downloadSnapshot(snapshot()!.blob); sfx.confirm(); }
+      if (action === "back") { sfx.back(); closeSnapshot(); }
+      return;
+    }
+    if (setupImport()) {
+      if (action === "confirm") applySetup(setupImport()!);
+      if (action === "back") { sfx.back(); setSetupImport(null); history.replaceState(null, "", location.pathname); }
+      return;
+    }
     if (searchOpen()) { // pad drives the search list (keyboard uses the input's own keys)
       const rs = searchResults();
       if (action === "up") { setSearchSel(Math.max(0, searchSel() - 1)); sfx.tickV(); }
@@ -1268,7 +1314,7 @@ export default function XMB(props: {
     if (padTest()) { if (action === "back") setPadTest(false); return; }
     if (app()) {
       // bound apps route their own nav; the rest are keyboard-driven owner apps
-      if (["chess", "trivia", "flash", "cinema", "podcasts", "library", "youtube", "art", "wiki", "ps2home", "ps1home", "psphome", "retrohome", "karaoke", "settingshub", "videoplayer"].includes(app()!)) appNav?.(action);
+      if (["chess", "trivia", "flash", "cinema", "podcasts", "library", "youtube", "art", "wiki", "ps2home", "ps1home", "psphome", "retrohome", "karaoke", "settingshub", "videoplayer", "reporewind"].includes(app()!)) appNav?.(action);
       else if (app() === "lichess" && action === "back") { sfx.back(); setApp(null); }
       else if (src === "pad" || src === "gesture") {
         // owner apps (map/globe, lichess…) listen to the KEYBOARD — turn pad
@@ -1486,15 +1532,42 @@ export default function XMB(props: {
     }
   };
 
-  // —— screensaver: PS-style drifting clock after idle (Power Save Settings) ——
+  // —— idle ladder: attract (untaught) → screensaver → Rest Mode ————————————
   const [saverMins, setSaverMins] = createSignal(Number(localStorage.getItem("asp.saver") ?? 1.5));
-  const poke = () => { lastActive = Date.now(); if (saver()) setSaver(false); };
+  const [attractOn, setAttractOn] = createSignal(false);
+  let wokeAt = 0; // the input that wakes rest/attract must not also navigate
+  // Attract is gated on BEHAVIOR, not a fragile storage flag: it can only ever
+  // appear during true idle at the home screen, and the moment the player
+  // proves they know the controls (or dismisses it once) the profile is
+  // marked onboarded — which rides profile backups, not just this browser.
+  let navMastery = 0;
+  const markOnboarded = () => {
+    if (props.profile.onboarded) return;
+    props.profile.onboarded = Date.now();
+    updateProfile(props.profile);
+  };
+  const poke = () => {
+    lastActive = Date.now();
+    if (saver()) setSaver(false);
+    if (resting()) { exitRest(); wokeAt = Date.now(); }
+    if (attractOn()) { setAttractOn(false); markOnboarded(); wokeAt = Date.now(); }
+  };
   addEventListener("pointermove", poke);
   addEventListener("pointerdown", poke);
   addEventListener("keydown", poke);
   const saverId = setInterval(() => {
     const busy = tv() || guideOpen() || spotify() || news() || inputMode() || viewerOpen() || app() || yt() || apod() || dict();
-    if (!busy && labEnabled("saver") && saverMins() > 0 && Date.now() - lastActive > saverMins() * 60_000) setSaver(true);
+    if (busy) return;
+    const idle = Date.now() - lastActive;
+    const saverMs = saverMins() > 0 ? saverMins() * 60_000 : Infinity;
+    if (labEnabled("restmode") && idle > Math.min(saverMs, 3 * 60_000) + 2 * 60_000) {
+      // deepest state: dim to the breathing power light, suspend audio
+      if (!resting()) { setAttractOn(false); setSaver(false); enterRest(); }
+    } else if (!resting() && labEnabled("attract") && !props.profile.onboarded && idle > 45_000) {
+      if (!attractOn()) { setSaver(false); setAttractOn(true); }
+    } else if (!resting() && !attractOn() && labEnabled("saver") && saverMins() > 0 && idle > saverMs) {
+      setSaver(true);
+    }
   }, 5000);
   onCleanup(() => {
     if (gesturesOn()) stopGestures();
@@ -1927,6 +2000,9 @@ export default function XMB(props: {
       <Show when={app() === "videoplayer"}>
         <VideoPlayer bind={(f) => (appNav = f)} onClose={() => setApp(null)} />
       </Show>
+      <Show when={app() === "reporewind"}>
+        <RepoRewind bind={(f) => (appNav = f)} onClose={() => setApp(null)} />
+      </Show>
       <Show when={app() === "strudel"}>
         {/* Strudel (TidalCycles for the web) with a lo-fi starter pattern baked
             into the hash — edit anything, ctrl+enter re-evaluates live */}
@@ -2047,6 +2123,65 @@ export default function XMB(props: {
           <div class="saver-clock">
             <div class="saver-time">{clock().split("  ")[1]}</div>
             <div class="saver-date">{new Date().toLocaleDateString(undefined, { weekday: "long", day: "numeric", month: "long" })}</div>
+          </div>
+        </div>
+      </Show>
+
+      {/* Rest Mode — the console breathes in the dark; any input resumes */}
+      <Show when={resting()}>
+        <div class="rest">
+          <div class="rest-led" />
+          <div class="rest-word">REST MODE</div>
+        </div>
+      </Show>
+
+      {/* Attract Mode — the console demos its own controls to the untaught */}
+      <Show when={attractOn()}>
+        <div class="attract">
+          <div class="attract-mark">A B H I S H E K S T A T I O N</div>
+          <div class="attract-card">
+            <For each={[
+              { keys: ["←", "→"], text: "browse the categories" },
+              { keys: ["↑", "↓"], text: "pick an app" },
+              { keys: ["ENTER"], text: "launch it" },
+              { keys: ["/"], text: "search everything" },
+              { keys: ["`"], text: "control center" },
+            ]}>
+              {(s, i) => (
+                <div class="attract-step" style={{ "animation-delay": `${i() * 3.2}s` }}>
+                  <span class="attract-keys"><For each={s.keys}>{(k) => <kbd class="attract-key">{k}</kbd>}</For></span>
+                  <span class="attract-text">{s.text}</span>
+                </div>
+              )}
+            </For>
+          </div>
+          <div class="attract-hint">PRESS ANYTHING TO TAKE OVER</div>
+        </div>
+      </Show>
+
+      {/* Photo Mode preview */}
+      <Show when={snapshot()}>
+        <div class="panel-backdrop" onClick={closeSnapshot} />
+        <div class="modal snapmodal">
+          <div class="panel-tag">PHOTO MODE — CONSOLE SNAPSHOT</div>
+          <img class="snapmodal-img" src={snapshot()!.url} alt="Console snapshot" />
+          <div class="snapmodal-actions">
+            <button class="labs-go" onClick={() => { void shareSnapshot(snapshot()!.blob).then((ok) => { if (!ok) downloadSnapshot(snapshot()!.blob); }); }}>▶ SHARE</button>
+            <button class="labs-go ghost" onClick={() => { downloadSnapshot(snapshot()!.blob); sfx.confirm(); }}>SAVE PNG</button>
+          </div>
+          <div class="modal-hint"><span class="btn-x" /> save · <span class="btn-o" /> close</div>
+        </div>
+      </Show>
+
+      {/* shared-setup import confirm — a #setup= link brought settings along */}
+      <Show when={setupImport()}>
+        <div class="panel-backdrop" />
+        <div class="modal setupmodal">
+          <div class="panel-tag">SHARED CONSOLE SETUP</div>
+          <p class="setupmodal-what">This link carries someone's console settings — theme, Labs flags, icons, fonts and language ({Object.keys(setupImport()!).length} keys). Apply them to this console? Your games, photos and profiles are untouched.</p>
+          <div class="snapmodal-actions">
+            <button class="labs-go" onClick={() => applySetup(setupImport()!)}>▶ APPLY & RESTART</button>
+            <button class="labs-go ghost" onClick={() => { sfx.back(); setSetupImport(null); history.replaceState(null, "", location.pathname); }}>KEEP MINE</button>
           </div>
         </div>
       </Show>

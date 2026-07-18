@@ -10,6 +10,9 @@ export interface Profile {
   playtime?: number; // seconds on the console
   trophies: Record<string, number>; // trophy id -> earned timestamp
   seen: Record<string, true>; // per-item view tracking for meta-trophies
+  /** set once the player has demonstrably learned the nav (or dismissed the
+   *  attract loop) — lives on the profile, so it rides console backups too */
+  onboarded?: number;
 }
 
 /** Downscale an image file to a 128px data URL (fits comfortably in localStorage). */
