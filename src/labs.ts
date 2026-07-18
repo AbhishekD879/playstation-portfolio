@@ -45,7 +45,6 @@ const FEATURE_GROUPS: FlagGroup[] = [
       { id: "enhance", title: "Photo Enhance (AI ×2)", desc: "On-device super-resolution — upscale any gallery photo, tile by tile" },
       { id: "cutout", title: "Cutout Cam (AI)", desc: "One-tap background removal — turn any photo into a clean transparent cutout" },
       { id: "clickmask", title: "Click-to-Mask (AI)", desc: "Tap any object in a photo and the console isolates it — Segment Anything, on-device" },
-      { id: "transitions", title: "Motion Transitions", desc: "App launches morph and category swaps crossfade via the native View Transitions API" },
       { id: "moderncss", title: "Modern CSS Polish", desc: "Self-aware panels, sticky group headers, height-to-auto animations & scroll reveals" },
       { id: "parallaxbg", title: "Pointer Parallax Backdrop", desc: "The living background leans gently with your pointer for real depth" },
       { id: "galaxyboot", title: "Galaxy Boot (WebGPU)", desc: "A 200,000-star spiral galaxy spins up behind the boot sequence" },
@@ -159,10 +158,6 @@ const FEATURE_GUIDES: Record<string, LabGuide> = {
     what: "Segment Anything (SlimSAM), on-device: tap any object in a photo and the console masks it out into its own transparent image.",
     steps: ["Photo › Slideshow", "Tap ◈ isolate, then tap the object you want", "The isolated cutout is saved as a new photo"],
     go: "photo-cat", goLabel: "GO TO PHOTOS",
-  },
-  transitions: {
-    what: "The native View Transitions API drives the console's motion: launching an app morphs out of the crossbar, and category swaps crossfade — no animation library, the browser does it.",
-    steps: ["Launch any app and watch the wipe", "Slide ← → across categories for the crossfade", "Automatically off when your system asks for reduced motion"],
   },
   moderncss: {
     what: "A pack of 2026 CSS upgrades: panels that reflow to their own width (container queries), Labs group headers that shadow when stuck, height-to-auto animations, and scroll-in reveals — all zero JavaScript.",

@@ -189,14 +189,7 @@ export default function XMB(props: {
   const [ytQuery, setYtQuery] = createSignal(""); // AI agent → YouTube search handoff
   const [vListening, setVListening] = createSignal(false); // XMB voice command
   const [padTest, setPadTest] = createSignal(false);
-  const [app, setAppRaw] = createSignal<null | "doom" | "doomrtx" | "chess" | "trivia" | "flash" | "cinema" | "podcasts" | "library" | "map" | "ai" | "webamp" | "youtube" | "timemachine" | "art" | "wiki" | "lichess" | "ps2" | "pc" | "guestbook" | "browser" | "visualizer" | "studio" | "code" | "manual" | "ps2home" | "ps1home" | "psphome" | "retrohome" | "scummvm" | "karaoke" | "strudel" | "settingshub" | "videoplayer" | "reporewind">(null);
-  // XMB Launch Wipe — app opens/closes ride the native View Transitions API
-  const withTransition = (mutate: () => void) => {
-    const vt = (document as any).startViewTransition?.bind(document);
-    if (vt && labEnabled("transitions") && !matchMedia("(prefers-reduced-motion: reduce)").matches) vt(mutate);
-    else mutate();
-  };
-  const setApp: typeof setAppRaw = ((v: any) => { withTransition(() => setAppRaw(v)); return app(); }) as any;
+  const [app, setApp] = createSignal<null | "doom" | "doomrtx" | "chess" | "trivia" | "flash" | "cinema" | "podcasts" | "library" | "map" | "ai" | "webamp" | "youtube" | "timemachine" | "art" | "wiki" | "lichess" | "ps2" | "pc" | "guestbook" | "browser" | "visualizer" | "studio" | "code" | "manual" | "ps2home" | "ps1home" | "psphome" | "retrohome" | "scummvm" | "karaoke" | "strudel" | "settingshub" | "videoplayer" | "reporewind">(null);
   const [ps2Boot, setPs2Boot] = createSignal<GameRecord | null>(null);
   const [ps2Join, setPs2Join] = createSignal(false);
   const [ccOpen, setCcOpen] = createSignal(false);
@@ -1470,12 +1463,12 @@ export default function XMB(props: {
     switch (action) {
       case "left": {
         const vs = visCats(), p = vs.indexOf(cat());
-        if (p > 0) { withTransition(() => setCat(vs[p - 1])); sfx.tickH(); fluidNavPulse(-1); }
+        if (p > 0) { setCat(vs[p - 1]); sfx.tickH(); fluidNavPulse(-1); }
         break;
       }
       case "right": {
         const vs = visCats(), p = vs.indexOf(cat());
-        if (p >= 0 && p < vs.length - 1) { withTransition(() => setCat(vs[p + 1])); sfx.tickH(); fluidNavPulse(1); }
+        if (p >= 0 && p < vs.length - 1) { setCat(vs[p + 1]); sfx.tickH(); fluidNavPulse(1); }
         break;
       }
       case "up": {
