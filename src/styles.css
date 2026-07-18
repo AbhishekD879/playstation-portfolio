@@ -63,7 +63,14 @@ html, body {
       var(--xmb-tint) 46%,
       color-mix(in oklab, var(--xmb-tint) 45%, #000) 100%);
 }
-.wave-bg canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
+/* Full-viewport canvases must track the viewport, not the pixel size three
+   wrote inline — under Display Size zoom those disagree and leave dead bands
+   on the right/bottom. !important beats renderer.setSize's inline style. */
+.wave-bg canvas, .boot-canvas, .fluid-canvas, .rewind-host canvas, #crt-screen {
+  width: 100% !important;
+  height: 100% !important;
+}
+.wave-bg canvas { position: absolute; inset: 0; }
 
 /* ———— status bar ———— */
 .xmb { position: fixed; inset: 0; z-index: 1; }
