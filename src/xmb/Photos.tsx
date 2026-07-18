@@ -36,6 +36,12 @@ export default function Photos(props: {
   const current = () => slides()[idx()];
   const busy = () => enhancing() === "working" || job() === "working";
 
+  // an AI result appears in the open library immediately — and we jump to it
+  const showNew = (rec: PhotoRecord) => {
+    setSlides([...slides(), { p: rec, url: URL.createObjectURL(rec.blob) }]);
+    setIdx(n() - 1);
+  };
+
   async function enhance() {
     const s = current();
     if (!s || busy()) return;
@@ -45,13 +51,15 @@ export default function Photos(props: {
     setSlideshow(false); // hold the slide while the model works
     try {
       const out = await upscale(s.p.blob, setProg);
-      await addPhoto({
+      const rec: PhotoRecord = {
         id: crypto.randomUUID(),
         profileId: s.p.profileId,
         name: s.p.name.replace(/(\.[^.]+)?$/, " (enhanced)$1"),
         addedAt: Date.now(),
         blob: out,
-      });
+      };
+      await addPhoto(rec);
+      showNew(rec);
       setEnhancing("done");
       props.onChanged?.();
       setTimeout(() => setEnhancing(""), 3500);
@@ -73,13 +81,15 @@ export default function Photos(props: {
     setSlideshow(false);
     try {
       const out = kind === "cutout" ? await cutout(s.p.blob, setJprog) : await isolate(s.p.blob, pt!, setJprog);
-      await addPhoto({
+      const rec: PhotoRecord = {
         id: crypto.randomUUID(),
         profileId: s.p.profileId,
         name: s.p.name.replace(/(\.[^.]+)?$/, kind === "cutout" ? " (cutout)$1" : " (isolated)$1"),
         addedAt: Date.now(),
         blob: out,
-      });
+      };
+      await addPhoto(rec);
+      showNew(rec);
       setJob("done");
       props.onChanged?.();
       setTimeout(() => setJob(""), 3500);
