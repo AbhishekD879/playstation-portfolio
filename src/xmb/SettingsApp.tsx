@@ -18,6 +18,7 @@ import {
   fontId, iconOf, iconOverrides, lang, setFont, setIconOverride, setLang, setTracking, setUiSize, sizeId, trackId,
 } from "../prefs";
 import { ICONS, Icon } from "./icons";
+import { trPct, trRetry, trStatus } from "../translate";
 
 const SECTIONS = ["APPEARANCE", "ICONS", "AUDIO", "LANGUAGE", "LABS", "SYSTEM"] as const;
 
@@ -158,7 +159,7 @@ export default function SettingsApp(props: {
       if (r === 2) { setMuted(toggleMute()); sfx.tickV(); }
     } else if (s === "LANGUAGE") {
       const l = LANGS[r];
-      if (l) { setLang(l.id); sfx.confirm(); }
+      if (l) { setLang(l.id); trRetry(); sfx.confirm(); }
     } else if (s === "LABS") {
       const f = labsFlat()[r];
       if (f) tryToggle(f.id);
@@ -323,11 +324,20 @@ export default function SettingsApp(props: {
             Universal Menu translates the crossbar on-device — a small model per language, downloaded once, cached forever.
             <Show when={!labEnabled("translate")}> <b>The Universal Menu Labs flag is off — English only until it's enabled.</b></Show>
           </div>
+          <Show when={lang() !== "en" && labEnabled("translate")}>
+            <div class="set-note">
+              {trStatus() === "downloading" ? `◈ fetching the ${lang().toUpperCase()} translator · ${trPct()}% — labels switch as soon as it lands`
+                : trStatus() === "translating" ? "◈ translating the console…"
+                : trStatus() === "ready" ? "◈ translator ready — labels update as you browse"
+                : trStatus() === "failed" ? "⚠ the translator couldn't load — check the connection and pick the language again"
+                : "◈ warming up…"}
+            </div>
+          </Show>
           <div class="set-lang-grid">
             <For each={LANGS}>
               {(l, i) => (
                 <button class="set-lang" classList={{ on: lang() === l.id, focus: row() === i() }}
-                  onClick={() => { setRow(i()); setLang(l.id); sfx.confirm(); }}>
+                  onClick={() => { setRow(i()); setLang(l.id); trRetry(); sfx.confirm(); }}>
                   <span class="set-lang-native">{l.native}</span>
                   <span class="set-lang-en">{l.name}</span>
                 </button>

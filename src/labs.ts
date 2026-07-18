@@ -85,7 +85,6 @@ const APPS: { id: string; title: string; cat: string }[] = [
   { id: "code", title: "Code Playground", cat: "Extras" },
   { id: "pc", title: "Other OS — x86 PC", cat: "Extras" },
   { id: "manual", title: "System Manual", cat: "Extras" },
-  { id: "settingshub", title: "Console Settings (hub app)", cat: "Settings" },
   { id: "browser", title: "Browser", cat: "Web" },
   { id: "wiki", title: "Wikipedia", cat: "Web" },
   { id: "dict", title: "Dictionary", cat: "Web" },
@@ -368,8 +367,10 @@ const load = (): Set<string> => {
 // overrides for default-off (experimental) flags
 const [toggled, setToggled] = createSignal<Set<string>>(load());
 
-/** Is this flag on? Default-on unless toggled; DEFAULT_OFF flags invert. */
-export const labEnabled = (id: string) => DEFAULT_OFF.has(id) ? toggled().has(id) : !toggled().has(id);
+/** Is this flag on? Default-on unless toggled; DEFAULT_OFF flags invert.
+ *  Console Settings is where Labs lives — it can never be switched off, or
+ *  there'd be no way back in (also heals anyone who toggled it off before). */
+export const labEnabled = (id: string) => id === "settingshub" ? true : DEFAULT_OFF.has(id) ? toggled().has(id) : !toggled().has(id);
 export const labsOffCount = () => [...toggled()].filter((id) => !DEFAULT_OFF.has(id)).length;
 export const isFeature = (id: string) => FEATURE_IDS.has(id);
 export function toggleLab(id: string) {

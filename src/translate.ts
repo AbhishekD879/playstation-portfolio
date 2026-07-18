@@ -23,6 +23,19 @@ const pending = new Set<string>();
 let queue: string[] = [];
 let draining = false;
 
+// —— visible status, so picking a language never looks dead ————————————————
+export type TrStatus = "idle" | "downloading" | "translating" | "ready" | "failed";
+const [trStatus, setTrStatus] = createSignal<TrStatus>("idle");
+const [trPct, setTrPct] = createSignal(0); // model download %
+export { trStatus, trPct };
+
+/** After a failure: re-arm and re-render labels so they re-enqueue. */
+export function trRetry() {
+  if (trStatus() !== "failed") return;
+  setTrStatus("idle");
+  setTick(tick() + 1);
+}
+
 function cacheFor(l: string): Map<string, string> {
   let c = caches.get(l);
   if (!c) {
@@ -44,11 +57,22 @@ async function drain(l: string) {
   if (draining) return;
   draining = true;
   try {
+    setTrStatus("downloading");
+    setTrPct(0);
     const pipe = await acquireModel<any>("opus-" + l, `Translator (${l.toUpperCase()})`, 50, async () => {
       const { pipeline } = await import("@huggingface/transformers");
       const device = typeof (navigator as any).gpu !== "undefined" ? "webgpu" : "wasm";
-      return pipeline("translation", MODELS[l], { device, session_options: { logSeverityLevel: 3 } } as any);
+      return pipeline("translation", MODELS[l], {
+        device,
+        session_options: { logSeverityLevel: 3 },
+        progress_callback: (p: any) => {
+          if (p?.status === "progress" && typeof p.progress === "number" && String(p.file ?? "").includes("onnx")) {
+            setTrPct(Math.min(99, Math.round(p.progress)));
+          }
+        },
+      } as any);
     });
+    setTrStatus("translating");
     while (queue.length && lang() === l) {
       const batch = queue.splice(0, 8);
       const out = await pipe(batch);
@@ -61,9 +85,12 @@ async function drain(l: string) {
       persist(l);
       setTick(tick() + 1); // labels re-render with fresh strings
     }
-  } catch {
+    setTrStatus("ready");
+  } catch (e) {
+    console.warn("[translate] translator failed:", e);
     queue = []; // model unavailable — leave English in place
     pending.clear();
+    setTrStatus("failed");
   } finally {
     draining = false;
   }
