@@ -250,17 +250,23 @@ function pollPad(now: number) {
     confirm: b(0), // "A"/cross is index 0 across virtually all layouts
     back: b(1),    // "B"/circle
   };
-  // —— L1/R1 (shoulders): walk DOM focus inside an owner app so click-only
-  // toolbar controls are reachable by pad. PURELY ADDITIVE — arrows/✕/◯ are
-  // untouched, and this only acts in synth mode within a ".pad-focus-scope"
-  // container (apps opt in), so nothing else can regress. (PS convention:
-  // shoulders move between regions; here they cycle the focusable controls.)
+  // —— shoulders: walk DOM focus inside an owner app so click-only toolbar
+  // controls are reachable by pad. PURELY ADDITIVE — arrows/✕/◯ untouched, and
+  // this only acts in synth mode within a ".pad-focus-scope" container.
+  // Both shoulder pairs work, so it doesn't matter which the player reaches for
+  // or which controller they hold (the Gamepad API uses the SAME indices for
+  // both: bumpers 4/5 = L1/R1 on PlayStation = LB/RB on Xbox; triggers 6/7 =
+  // L2/R2 = LT/RT). Left = previous, right = next. Exception: RT (7) is
+  // push-to-talk in the AI chat, so it stays talk-only there.
   if (synthMode && !typing) {
-    const l1 = b(4), r1 = b(5);
-    if (r1 && !padPrev.__r1) padFocusWalk(1);
-    if (l1 && !padPrev.__l1) padFocusWalk(-1);
-    padPrev.__r1 = r1; padPrev.__l1 = l1;
-  } else { padPrev.__r1 = false; padPrev.__l1 = false; }
+    const lb = b(4), rb = b(5), lt = b(6), rt = b(7);
+    const aiScope = !!document.querySelector(".ai.pad-focus-scope");
+    const prev = (lb && !padPrev.__lb) || (lt && !padPrev.__lt);
+    const next = (rb && !padPrev.__rb) || (rt && !aiScope && !padPrev.__rt);
+    if (next) padFocusWalk(1);
+    else if (prev) padFocusWalk(-1);
+    padPrev.__lb = lb; padPrev.__rb = rb; padPrev.__lt = lt; padPrev.__rt = rt;
+  } else { padPrev.__lb = padPrev.__rb = padPrev.__lt = padPrev.__rt = false; }
 
   for (const k of Object.keys(dir) as NavAction[]) {
     const on = !!dir[k];
