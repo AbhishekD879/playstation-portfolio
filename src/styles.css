@@ -1437,8 +1437,16 @@ img.status-avatar, img.ptile-avatar { object-fit: cover; border: 1px solid rgba(
 .rpgplay-frame, .rpgplay-canvas { flex: 1; width: 100%; height: 100%; border: 0; display: block; background: #000; }
 .rpgplay-canvas { image-rendering: pixelated; }
 .rpgplay-frame.hidden, .rpgplay-canvas.hidden { display: none; }
-/* controls open → stop mobile touches bleeding through the overlay to the game */
-.rpgplay-frame.pad-open { pointer-events: none; }
+/* TOUCH devices: the game iframe never receives touches. On mobile WebKit a
+   touch on an element overlaying an iframe BLEEDS THROUGH to the iframe, which
+   made every on-screen control unreliable AND collided with the game. With
+   hit-testing off here, the controls FAB, the bar and the pad all capture
+   cleanly, the game stays FULL SCREEN (no reserved strip), and stray taps can't
+   reach the game — it's driven entirely by the on-screen controls, the way a
+   mobile emulator overlay works. (Desktop keeps mouse input — no bleed there.) */
+@media (pointer: coarse) {
+  .rpgplay-frame:not(.hidden), .rpgplay-canvas:not(.hidden) { pointer-events: none; }
+}
 .rpgplay-msg {
   position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center;
   gap: 8px; text-align: center; padding: 0 8vw; font-size: 15px; line-height: 1.7; color: rgba(255,255,255,0.9);
@@ -1460,22 +1468,28 @@ img.status-avatar, img.ptile-avatar { object-fit: cover; border: 1px solid rgba(
 }
 .rpgplay-reveal::after { content: "⌄"; display: block; text-align: center; line-height: 20px; font-size: 15px; color: var(--dim); }
 
-/* TOUCH devices: the auto-hiding bar + tiny handle is unreachable in landscape —
-   the game fills the screen and swallows the tap (portrait only worked because
-   the game letterboxes and frees the top). So on a touch device the bar becomes
-   a PERMANENT slim strip laid out ABOVE the game (in-flow, so it never overlaps
-   the iframe and can't be stolen) — the ⌨ controls / quit toggles are always
-   one reliable tap away, in any orientation. Fine-pointer (desktop) keeps the
-   immersive auto-hide. */
+/* TOUCH devices get a clear, always-visible floating "controls" button (a FAB)
+   instead of a tiny reveal handle or a screen-eating bar — one obvious tap to
+   show/hide the on-screen pad, over a FULL-SCREEN game. Reliable because the
+   iframe ignores touches on mobile (rule above), so it can't be stolen. Sits
+   bottom-centre, in the thumb zone, between the D-pad (left) and buttons
+   (right). Hidden on desktop (fine pointer) — there the bar's ⌨ button is used. */
+.rpgplay-padfab { display: none; }
 @media (pointer: coarse) {
-  .rpgplay-bar, .rpgplay-bar:not(.show) {
-    position: relative; order: -1; opacity: 1; transform: none; pointer-events: auto;
-    padding: 7px 12px; background: rgba(6,10,20,0.94); border-bottom: 1px solid rgba(255,255,255,0.1);
+  .rpgplay-padfab {
+    display: flex; align-items: center; gap: 7px;
+    position: absolute; left: 50%; bottom: 14px; transform: translateX(-50%);
+    z-index: 6; padding: 9px 16px; border-radius: 999px; cursor: pointer;
+    font-family: inherit; font-size: 13px; letter-spacing: 0.04em; color: #fff;
+    background: rgba(6,10,20,0.6); border: 1px solid rgba(255,255,255,0.18);
+    -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px);
+    box-shadow: 0 4px 20px rgba(0,0,0,0.45); text-shadow: 0 1px 3px rgba(0,0,0,0.6);
+    -webkit-user-select: none; user-select: none; touch-action: none;
   }
-  .rpgplay-bar .panel-tag { display: none; }            /* free width for the buttons */
-  .rpgplay-actions { gap: 6px; margin-left: auto; flex-wrap: wrap; justify-content: flex-end; }
-  .rpgplay-reveal { display: none; }                    /* no handle needed — bar is always up */
-  .rpg-touch-close { display: none; }                   /* the bar's ⌨ toggle handles hide */
+  .rpgplay-padfab .padfab-ico { font-size: 17px; line-height: 1; }
+  .rpgplay-padfab.on { background: color-mix(in oklab, var(--xmb-tint) 42%, rgba(6,10,20,0.65)); border-color: color-mix(in oklab, var(--xmb-tint) 60%, #fff); }
+  .rpgplay-padfab:active { transform: translateX(-50%) scale(0.95); }
+  .rpg-touch-close { display: none; } /* the FAB is the show/hide toggle here */
 }
 
 /* pre-launch card — review engine + memory, then Play (the fullscreen gesture) */

@@ -181,14 +181,14 @@ export default function RpgPlayer(props: {
       </Show>
 
       {/* allow-same-origin so the game reads its own OPFS-served files */}
-      {/* pad-open drops the iframe's pointer-events: on mobile WebKit a touch on
-          an element overlaying an iframe bleeds THROUGH to the iframe, so the
-          on-screen buttons never get it. With hit-testing off here, the overlay
-          captures the touch; keys still reach the game (dispatched, not hit-tested). */}
+      {/* On touch the iframe ignores pointer events (CSS, coarse pointer) so the
+          on-screen controls can't be stolen by the game and stray taps can't
+          collide with it; keys still reach it (dispatched, not hit-tested). On
+          desktop the iframe stays interactive for mouse play. */}
       <iframe
         ref={frame}
         class="rpgplay-frame"
-        classList={{ hidden: phase() !== "ready", "pad-open": showPad() }}
+        classList={{ hidden: phase() !== "ready" }}
         title={props.game.title}
         sandbox="allow-scripts allow-same-origin allow-pointer-lock allow-popups"
         allow="gamepad; fullscreen; autoplay"
@@ -205,6 +205,17 @@ export default function RpgPlayer(props: {
             <button class="ps-act" onClick={quit}><span class="btn-o" /> quit</button>
           </div>
         </div>
+      </Show>
+
+      {/* touch: a clear, always-there floating toggle for the on-screen controls
+          (one tap, over a full-screen game — no reserved bar, no tiny handle).
+          Hidden on desktop via CSS, where the bar's ⌨ button is used instead. */}
+      <Show when={phase() === "ready"}>
+        <button class="rpgplay-padfab" classList={{ on: showPad() }}
+          onClick={() => { setShowPad((v) => !v); sfx.tickV(); }}
+          aria-label="Show or hide the on-screen controls">
+          <span class="padfab-ico">🎮</span>{showPad() ? "hide" : "controls"}
+        </button>
       </Show>
 
       {/* on-screen controls — send keys into games that expect a keyboard */}
