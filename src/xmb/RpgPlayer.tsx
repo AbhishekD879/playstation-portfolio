@@ -38,6 +38,15 @@ export default function RpgPlayer(props: {
 
   const mem = estimateRuntimeMB(props.game);
   const heavy = looksHeavy(props.game);
+  // "Has touch?" by actual capability — NOT @media (pointer: coarse), which is
+  // false when the PRIMARY pointer is fine (a connected controller/mouse, or a
+  // hybrid/stylus phone), and would leave the game eating touches so the
+  // on-screen controls never fire. maxTouchPoints + any-pointer:coarse both stay
+  // true when a touchscreen exists, regardless of what else is plugged in.
+  const touch =
+    "ontouchstart" in window ||
+    (typeof navigator !== "undefined" && navigator.maxTouchPoints > 0) ||
+    (typeof matchMedia === "function" && matchMedia("(any-pointer: coarse)").matches);
 
   const goFullscreen = () => {
     const el = container as unknown as { requestFullscreen?: (o?: object) => Promise<void>; webkitRequestFullscreen?: () => void };
@@ -141,7 +150,7 @@ export default function RpgPlayer(props: {
   const clean = () => { const d = diag(); return d && d.errors.length === 0 && stuck().length === 0 && d.recent.length === 0; };
 
   return (
-    <div class="rpgplay" ref={container}>
+    <div class="rpgplay" ref={container} classList={{ touch }}>
       <Show when={phase() === "prelaunch"}>
         <div class="rpg-launch">
           <div class="rpg-launch-tag">{(props.sublabel || ENGINE_LABEL[props.game.engine]).toUpperCase()}</div>
