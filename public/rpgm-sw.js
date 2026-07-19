@@ -144,32 +144,51 @@ const NW_SHIM = `<script>(function(){
 // image renders blank rather than hanging; XHR+fetch already cover data files,
 // audio buffers, fonts and the effekseer wasm, which are the things that stall.
 const DIAG_SHIM = `<script>(function(){
-  var T0=Date.now(), seq=0, pending={}, recent=[], errors=[], counts={ok:0,fail:0};
+  var T0=Date.now(), seq=0, pending={}, recent=[], errors=[], counts={ok:0,fail:0}, activity=[];
   function rel(u){ try{ var pp=new URL(u, location.href).pathname; var i=pp.indexOf("/rpgm/");
     if(i<0) return pp; var parts=pp.slice(i+6).split("/");
     if(parts[0]==="fs") return parts.slice(2).join("/");
     if(parts[0]==="easyrpg"&&parts[1]==="games") return parts.slice(3).join("/");
     return pp; }catch(e){ return String(u); } }
+  // every asset load (image/video/audio/xhr/fetch) funnels through here — this
+  // is what makes a failed CUTSCENE asset visible. Keeps a rolling activity log
+  // so you can see exactly what the game just tried to load when a scene broke.
+  function logAct(path, ok, reason){
+    activity.unshift({path:path, ok:!!ok, reason:reason||"", t:Date.now()-T0}); if(activity.length>30) activity.pop();
+    if(ok){ counts.ok++; } else { counts.fail++; recent.unshift({path:path, status:reason||"failed"}); if(recent.length>12) recent.pop(); post(); }
+  }
   function begin(u){ var id=++seq; pending[id]={path:rel(u), t0:Date.now()}; return id; }
   function fin(id, status, emsg){ var e=pending[id]; if(!e) return; delete pending[id];
-    if(status>=200&&status<400){ counts.ok++; }
-    else { counts.fail++; recent.unshift({path:e.path, status: emsg||status||"error"}); if(recent.length>8) recent.pop(); } }
+    var ok=status>=200&&status<400; logAct(e.path, ok, ok?"":(emsg||status||"error")); }
   function snap(){ var now=Date.now(), pend=[];
     for(var k in pending){ pend.push({path:pending[k].path, age: now-pending[k].t0}); }
     pend.sort(function(a,b){return b.age-a.age;});
     var sp=document.getElementById("loadingSpinner"), spinner=!!(sp&&getComputedStyle(sp).display!=="none");
     var scene=(window.SceneManager&&SceneManager._scene&&SceneManager._scene.constructor)?SceneManager._scene.constructor.name:"";
     var canvas=!!document.querySelector("canvas");
-    // booted = a canvas is up and no loading spinner. For RPG Maker we also
-    // require the scene to have advanced past Scene_Boot; Ren'Py has no
-    // SceneManager (scene==="") so canvas+no-spinner is the signal.
     return {source:"rpgm-diag", up:now-T0, scene:scene, spinner:spinner,
       booted:!!(canvas&&!spinner&&(scene?scene!=="Scene_Boot":true)), canvas:canvas,
-      pending:pend.slice(0,12), recent:recent.slice(0,8), counts:counts, errors:errors.slice(0,6)}; }
+      pending:pend.slice(0,12), recent:recent.slice(0,12), counts:counts, errors:errors.slice(0,6), activity:activity.slice(0,30)}; }
   function post(){ try{ parent.postMessage(snap(), "*"); }catch(e){} }
   function addErr(msg, at){ errors.unshift({msg:String(msg).slice(0,280), at:at||""}); if(errors.length>10) errors.pop(); post(); }
-  window.addEventListener("error", function(ev){ addErr(ev.message||(ev.error&&ev.error.message)||"Script error", (ev.filename?rel(ev.filename):"")+(ev.lineno?(":"+ev.lineno):"")); });
   window.addEventListener("unhandledrejection", function(ev){ var r=ev&&ev.reason; addErr("Unhandled: "+((r&&r.message)||r), ""); });
+  // ONE capture-phase error listener catches BOTH script errors AND resource
+  // (img/video/audio/script/link) load failures — the latter don't bubble, so
+  // capture is required. This is the piece that was missing: RPG Maker loads
+  // images with new Image(), whose failures never touched fetch/XHR.
+  window.addEventListener("error", function(ev){ var t=ev.target;
+    if(t&&t.tagName&&/^(IMG|VIDEO|AUDIO|SOURCE|SCRIPT|LINK)$/.test(t.tagName)){
+      logAct(rel(t.currentSrc||t.src||t.href||("("+t.tagName+")")), false, t.tagName.toLowerCase()+" load failed"); return; }
+    addErr(ev.message||(ev.error&&ev.error.message)||"Script error", (ev.filename?rel(ev.filename):"")+(ev.lineno?(":"+ev.lineno):"")); }, true);
+  // wrap new Image()/new Audio() to catch DETACHED elements (not in the DOM, so
+  // the window listener above never sees them) — the common RPG Maker path.
+  function wrapMediaCtor(Native){ var W=function(a,b){ var el=new Native(a,b);
+    el.addEventListener("load", function(){ logAct(rel(el.currentSrc||el.src), true); }, false);
+    el.addEventListener("loadeddata", function(){ logAct(rel(el.currentSrc||el.src), true); }, false);
+    el.addEventListener("error", function(){ logAct(rel(el.currentSrc||el.src||"(media)"), false, "load failed"); }, false);
+    return el; }; W.prototype=Native.prototype; return W; }
+  try{ window.Image=wrapMediaCtor(window.Image); }catch(e){}
+  try{ if(window.Audio) window.Audio=wrapMediaCtor(window.Audio); }catch(e){}
   try { var XO=XMLHttpRequest.prototype.open, XS=XMLHttpRequest.prototype.send;
     XMLHttpRequest.prototype.open=function(m,u){ this.__du=u; return XO.apply(this,arguments); };
     XMLHttpRequest.prototype.send=function(){ var x=this,id=begin(x.__du);

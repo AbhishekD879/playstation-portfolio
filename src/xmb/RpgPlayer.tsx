@@ -19,6 +19,7 @@ type Snap = {
   recent: { path: string; status: unknown }[];
   counts: { ok: number; fail: number };
   errors: { msg: string; at: string }[];
+  activity?: { path: string; ok: boolean; reason: string; t: number }[];
 };
 
 export default function RpgPlayer(props: {
@@ -150,12 +151,20 @@ export default function RpgPlayer(props: {
     });
   });
 
-  // auto-reveal diagnostics when something's clearly wrong (an error, or boot
-  // never completes) — once only, so we never fight a user who closed it.
+  // auto-reveal diagnostics when something's wrong: a boot stall (once), OR a
+  // NEW failure appears (so a broken cutscene surfaces the panel the moment it
+  // fails) — throttled + only when closed, so we don't fight the user.
+  let lastFailTotal = 0;
+  let lastAutoOpen = -1e9;
   createEffect(() => {
     const d = diag();
-    if (!d || autoRevealed) return;
-    if (d.errors.length > 0 || (!d.booted && d.up > 10000)) { autoRevealed = true; setShowDiag(true); }
+    if (!d) return;
+    if (!autoRevealed && !d.booted && d.up > 10000) { autoRevealed = true; setShowDiag(true); }
+    const failTotal = d.errors.length + d.recent.length;
+    if (failTotal > lastFailTotal && !showDiag() && d.up - lastAutoOpen > 8000) {
+      lastAutoOpen = d.up; setShowDiag(true);
+    }
+    lastFailTotal = failTotal;
   });
 
   props.bind((a) => {
@@ -285,11 +294,17 @@ export default function RpgPlayer(props: {
             <For each={stuck()}>{(p) => <div class="rpg-diag-row warn">{p.path} · {Math.round(p.age / 1000)}s</div>}</For>
           </Show>
           <Show when={(diag()?.recent.length ?? 0) > 0}>
-            <div class="rpg-diag-sec">Failed to load</div>
-            <For each={diag()!.recent}>{(r) => <div class="rpg-diag-row dim">{r.path} · {String(r.status)}</div>}</For>
+            <div class="rpg-diag-sec">Failed to load (likely the broken cutscene/asset)</div>
+            <For each={diag()!.recent}>{(r) => <div class="rpg-diag-row err">{r.path} · {String(r.status)}</div>}</For>
           </Show>
-          <Show when={clean()}>
-            <div class="rpg-diag-row dim">No errors or failed assets reported.</div>
+          <Show when={(diag()?.activity?.length ?? 0) > 0}>
+            <div class="rpg-diag-sec">Recent asset activity (newest first)</div>
+            <For each={diag()!.activity}>{(a) => (
+              <div class="rpg-diag-row" classList={{ err: !a.ok, dim: a.ok }}>{a.ok ? "✓" : "✗"} {a.path}{a.reason ? ` · ${a.reason}` : ""}</div>
+            )}</For>
+          </Show>
+          <Show when={clean() && !(diag()?.activity?.length)}>
+            <div class="rpg-diag-row dim">No errors or failed assets reported yet — trigger the cutscene, then check here.</div>
           </Show>
         </div>
       </Show>
