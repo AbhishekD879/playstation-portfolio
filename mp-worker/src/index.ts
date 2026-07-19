@@ -10,9 +10,16 @@
 
 interface Env {
   SIGNAL_ROOM: any; // DurableObjectNamespace
+  LOG_STORE: any;   // DurableObjectNamespace (shared debug-log store)
   TURN_KEY_ID?: string;
   TURN_API_TOKEN?: string;
   ALLOWED_ORIGINS?: string; // comma-separated override; defaults below
+}
+
+// short share code for uploaded debug logs (base36, 6 chars)
+function shortCode(): string {
+  const a = new Uint8Array(6); crypto.getRandomValues(a);
+  return Array.from(a, (b) => "0123456789abcdefghijklmnopqrstuvwxyz"[b % 36]).join("");
 }
 
 const DEFAULT_ORIGINS = [
@@ -83,6 +90,27 @@ export default {
       });
     }
 
+    // —— debug-log sharing ————————————————————————————————————————————————
+    // The RPG Maker player uploads its verbose trace here and shows the user a
+    // short code; the maintainer fetches GET /log/<code> to read it — no
+    // copy-paste. Temporary (pruned after 24h), non-sensitive debug text only.
+    if (url.pathname === "/log") {
+      if (request.method === "OPTIONS") return new Response(null, { headers: cors(origin, allowed) });
+      if (request.method !== "POST") return new Response("method not allowed", { status: 405, headers: cors(origin, allowed) });
+      if (!originAllowed(origin, allowed)) return new Response("forbidden origin", { status: 403, headers: cors(origin, allowed) });
+      const text = (await request.text()).slice(0, 1024 * 1024); // 1MB cap
+      const code = shortCode();
+      const stub = env.LOG_STORE.get(env.LOG_STORE.idFromName("logs"));
+      await stub.fetch(`https://do/put?code=${code}`, { method: "PUT", body: text });
+      return new Response(JSON.stringify({ code }), { headers: { ...cors(origin, allowed), "content-type": "application/json" } });
+    }
+    const logGet = url.pathname.match(/^\/log\/([a-z0-9]{1,16})$/);
+    if (logGet) { // OPEN GET (no origin check) so the maintainer can curl it
+      const stub = env.LOG_STORE.get(env.LOG_STORE.idFromName("logs"));
+      const r = await stub.fetch(`https://do/get?code=${logGet[1]}`);
+      return new Response(await r.text(), { status: r.status, headers: { "content-type": "text/plain; charset=utf-8", "Access-Control-Allow-Origin": "*" } });
+    }
+
     if (url.pathname === "/") return new Response("abhishekstation-mp: ok", { status: 200 });
     return new Response("not found", { status: 404 });
   },
@@ -147,5 +175,30 @@ export class SignalRoom {
     };
     ws.addEventListener("close", cleanup);
     ws.addEventListener("error", cleanup);
+  }
+}
+
+// —— shared debug-log store ————————————————————————————————————————————————
+// One singleton DO (idFromName("logs")) keyed by short code. SQLite-backed
+// storage, pruned to the last 24h on each write so it stays tiny + temporary.
+export class LogStore {
+  storage: any;
+  constructor(state: any) { this.storage = state.storage; }
+  async fetch(request: Request): Promise<Response> {
+    const url = new URL(request.url);
+    const code = url.searchParams.get("code") || "";
+    if (url.pathname === "/put") {
+      const text = await request.text();
+      await this.storage.put("log:" + code, { text, ts: Date.now() });
+      try {
+        const all: Map<string, any> = await this.storage.list({ prefix: "log:" });
+        const cutoff = Date.now() - 24 * 3600 * 1000;
+        for (const [k, v] of all) if (!v || (v.ts || 0) < cutoff) await this.storage.delete(k);
+      } catch { /* prune best-effort */ }
+      return new Response("ok");
+    }
+    const rec: any = await this.storage.get("log:" + code);
+    if (!rec) return new Response("log not found — it expired (24h) or the code is wrong", { status: 404 });
+    return new Response(rec.text, { headers: { "content-type": "text/plain; charset=utf-8" } });
   }
 }

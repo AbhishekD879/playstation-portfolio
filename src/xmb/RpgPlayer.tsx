@@ -38,6 +38,10 @@ export default function RpgPlayer(props: {
   let mediaHintTimer: ReturnType<typeof setTimeout> | undefined;
   const [dumpText, setDumpText] = createSignal(""); // full exportable trace
   const [verbose, setVerbose] = createSignal(false); // log EVERY event command
+  const [shareCode, setShareCode] = createSignal(""); // code after uploading the log
+  const [shareState, setShareState] = createSignal<"" | "busy" | "error">("");
+  let pendingShare = false; // next dump should be uploaded, not just shown
+  const LOG_HOST = "https://abhishekstation-mp.abhishekdiwate879.workers.dev";
   let frame!: HTMLIFrameElement;
   let container!: HTMLDivElement;
   let release: (() => void) | undefined;
@@ -121,8 +125,11 @@ export default function RpgPlayer(props: {
       if (d && d.source === "rpgm-diag") setDiag(d as Snap);
       if (d && (d as { source?: string }).source === "rpgm-diag-dump") {
         const t = (d as { text?: string }).text ?? "";
-        setDumpText(t);
-        try { void navigator.clipboard?.writeText?.(t); } catch { /* clipboard blocked — the textarea is the fallback */ }
+        if (pendingShare) { pendingShare = false; void uploadLog(t); }
+        else {
+          setDumpText(t);
+          try { void navigator.clipboard?.writeText?.(t); } catch { /* clipboard blocked — the textarea is the fallback */ }
+        }
       }
       if (d && (d as { source?: string }).source === "rpgm-media") {
         clearTimeout(mediaHintTimer);
@@ -186,9 +193,20 @@ export default function RpgPlayer(props: {
   // the cutscene) shows a clean sequence of exactly what the engine did.
   const clearDiag = () => {
     try { (frame?.contentWindow as Window | null)?.postMessage({ __rpgmDiagClear: true }, "*"); } catch { /* frame gone */ }
-    setDiag(null); setDumpText("");
+    setDiag(null); setDumpText(""); setShareCode(""); setShareState("");
   };
   const copyLog = () => { try { (frame?.contentWindow as Window | null)?.postMessage({ __rpgmDiagDump: true }, "*"); } catch { /* frame gone */ } };
+  // upload the trace to our worker and show a short code — no copy-paste; the
+  // maintainer fetches it at LOG_HOST/log/<code>.
+  async function uploadLog(text: string) {
+    setShareState("busy"); setShareCode("");
+    try {
+      const r = await fetch(`${LOG_HOST}/log`, { method: "POST", headers: { "content-type": "text/plain" }, body: text });
+      const j = await r.json() as { code?: string };
+      if (j.code) { setShareCode(j.code); setShareState(""); } else throw new Error("no code");
+    } catch { setShareState("error"); setDumpText(text); } // fall back to the copy box on failure
+  }
+  const shareLog = () => { pendingShare = true; try { (frame?.contentWindow as Window | null)?.postMessage({ __rpgmDiagDump: true }, "*"); } catch { pendingShare = false; } };
   const toggleVerbose = () => { const v = !verbose(); setVerbose(v); try { (frame?.contentWindow as Window | null)?.postMessage({ __rpgmDiagVerbose: v }, "*"); } catch { /* frame gone */ } };
 
   return (
@@ -292,12 +310,19 @@ export default function RpgPlayer(props: {
             <span>DIAGNOSTICS · engine trace</span>
             <span class="rpg-diag-btns">
               <button class="ps-act" classList={{ on: verbose() }} onClick={toggleVerbose}>verbose: {verbose() ? "on" : "off"}</button>
-              <button class="ps-act" onClick={copyLog}>copy log</button>
+              <button class="ps-act" onClick={shareLog}>{shareState() === "busy" ? "sharing…" : "share log"}</button>
+              <button class="ps-act" onClick={copyLog}>copy</button>
               <button class="ps-act" onClick={clearDiag}>clear</button>
               <button class="ps-act" onClick={() => setShowDiag(false)}>close</button>
             </span>
           </div>
-          <div class="rpg-diag-tip">Turn on <b>verbose</b> → tap <b>clear</b> → trigger the scene → tap <b>copy log</b>, then paste it to share with me. Newest first below.</div>
+          <div class="rpg-diag-tip">Turn on <b>verbose</b> → tap <b>clear</b> → trigger the scene → tap <b>share log</b>, then tell me the code. Newest first below.</div>
+          <Show when={shareCode()}>
+            <div class="rpg-diag-share">✓ Log shared — tell me this code: <b class="rpg-diag-code">{shareCode()}</b></div>
+          </Show>
+          <Show when={shareState() === "error"}>
+            <div class="rpg-diag-share err">Couldn't upload (offline?) — use the box below and paste it instead.</div>
+          </Show>
           <Show when={dumpText()}>
             <div class="rpg-diag-dump">
               <div class="rpg-diag-dumphd"><span>Log copied to clipboard — paste it to share (or select all in the box).</span>

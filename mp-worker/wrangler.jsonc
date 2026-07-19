@@ -8,11 +8,14 @@
   "compatibility_date": "2026-07-01",
   "observability": { "enabled": true },
   "durable_objects": {
-    "bindings": [{ "name": "SIGNAL_ROOM", "class_name": "SignalRoom" }]
+    "bindings": [
+      { "name": "SIGNAL_ROOM", "class_name": "SignalRoom" },
+      { "name": "LOG_STORE", "class_name": "LogStore" }
+    ]
   },
-  // sqlite-backed class so it runs on the free Workers plan (we keep no state,
-  // but the free tier requires the sqlite backend).
+  // sqlite-backed classes so they run on the free Workers plan.
   "migrations": [
-    { "tag": "v1", "new_sqlite_classes": ["SignalRoom"] }
+    { "tag": "v1", "new_sqlite_classes": ["SignalRoom"] },
+    { "tag": "v2", "new_sqlite_classes": ["LogStore"] }
   ]
 }

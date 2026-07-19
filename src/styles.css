@@ -1529,6 +1529,9 @@ img.status-avatar, img.ptile-avatar { object-fit: cover; border: 1px solid rgba(
 .rpg-diag-head { display: flex; justify-content: space-between; align-items: center; font-size: 11px; letter-spacing: 0.24em; color: var(--dim); margin-bottom: 8px; }
 .rpg-diag-btns { display: flex; gap: 8px; flex-wrap: wrap; }
 .rpg-diag-tip { font-size: 11px; line-height: 1.5; color: var(--dim); margin-bottom: 8px; }
+.rpg-diag-share { font-size: 13px; line-height: 1.5; color: #9fe0a0; background: rgba(60,180,90,0.12); border: 1px solid rgba(120,220,140,0.4); border-radius: 8px; padding: 8px 12px; margin: 4px 0 10px; }
+.rpg-diag-share.err { color: #e8c46a; background: rgba(224,180,60,0.1); border-color: rgba(224,180,60,0.4); }
+.rpg-diag-code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 18px; letter-spacing: 0.18em; color: #fff; user-select: all; -webkit-user-select: all; }
 .rpg-diag-dump { margin: 4px 0 10px; }
 .rpg-diag-dumphd { display: flex; justify-content: space-between; align-items: center; gap: 8px; font-size: 11px; color: color-mix(in oklab, var(--xmb-tint) 75%, #fff); margin-bottom: 4px; }
 .rpg-diag-dumptext { width: 100%; height: 130px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11px; line-height: 1.45; background: rgba(0,0,0,0.55); color: #cde3ff; border: 1px solid rgba(255,255,255,0.16); border-radius: 8px; padding: 7px; resize: vertical; white-space: pre; }
