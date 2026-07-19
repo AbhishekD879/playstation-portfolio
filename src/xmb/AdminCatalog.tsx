@@ -132,10 +132,24 @@ export default function AdminCatalog() {
 
   const shown = () => { const f = q().toLowerCase().trim(); return f ? cands().filter((c) => (c.name + " " + c.url + " " + c.source + " " + c.note).toLowerCase().includes(f)) : cands(); };
   const byCat = () => { const m = new Map<string, Entry[]>(); for (const e of entries()) { const c = e.category || "Added by owner"; if (!m.has(c)) m.set(c, []); m.get(c)!.push(e); } return [...m]; };
+  const candGroups = (): [string, Cand[]][] => { const m = new Map<string, Cand[]>(); for (const c of cands()) { if (!m.has(c.source)) m.set(c.source, []); m.get(c.source)!.push(c); } return [...m].sort((a, b) => a[0].localeCompare(b[0])); };
+
+  const CandRow = (p: { c: Cand }) => (
+    <div class="adm-item">
+      <button class="adm-btn tiny primary adm-approve" onClick={() => approve(p.c)}>+ approve</button>
+      <div class="adm-item-main"><span class="adm-item-name">{p.c.name}</span><span class="adm-item-host">{hostOf(p.c.url)}</span></div>
+      <Show when={p.c.note}><div class="adm-item-note">{p.c.note}</div></Show>
+      <div class="adm-item-acts">
+        <a class="adm-btn tiny" href={p.c.url} target="_blank" rel="noopener noreferrer">open ↗</a>
+        <a class="adm-btn tiny" href={`https://urlscan.io/domain/${hostOf(p.c.url)}`} target="_blank" rel="noopener noreferrer">urlscan</a>
+        <a class="adm-btn tiny" href={`https://www.virustotal.com/gui/domain/${hostOf(p.c.url)}`} target="_blank" rel="noopener noreferrer">virustotal</a>
+      </div>
+    </div>
+  );
 
   return (
     <Show when={authed()} fallback={
-      <div class="adm adm-login">
+      <div class="adm-login">
         <div class="adm-login-box">
           <div class="adm-login-title">🔒 Admin</div>
           <div class="adm-login-sub">Only you get in here. The public site has no login and is unaffected.</div>
@@ -147,81 +161,80 @@ export default function AdminCatalog() {
         </div>
       </div>
     }>
-    <div class="adm">
-      <div class="adm-bar">
-        <b>ADMIN · FREE &amp; OPEN CMS</b>
-        <span class="adm-actions">
-          <button class="adm-btn primary" classList={{ dirty: dirty() }} onClick={publish}>{dirty() ? "● publish changes" : "publish"}</button>
-          <span class="adm-status">{pub()}</span>
-          <button class="adm-btn" onClick={logout}>lock</button>
-        </span>
-      </div>
-      <div class="adm-warn">
-        Publishing is authorized by <b>Cloudflare Access</b> on <code>/admin</code> (no env vars, no tokens to manage). Entries publish live to the public app.
-        Bulk scrape-sources are the whitelisted tool files only — edit <code>freecatalog.ts</code> to change them.
-      </div>
+      <div class="adm">
+        <header class="adm-bar">
+          <b class="adm-title">FREE &amp; OPEN · CMS</b>
+          <div class="adm-actions">
+            <Show when={pub()}><span class="adm-status">{pub()}</span></Show>
+            <button class="adm-btn primary" classList={{ dirty: dirty() }} onClick={publish}>{dirty() ? "● Publish" : "Publish"}</button>
+            <button class="adm-btn ghost" onClick={logout}>Lock</button>
+          </div>
+        </header>
 
-      {/* —— published entries (your CMS) —— */}
-      <div class="adm-section">Published entries — add your own, publishes live</div>
-      <div class="adm-form">
-        <input class="adm-search" placeholder="name" value={fName()} onInput={(e) => setFName(e.currentTarget.value)} />
-        <input class="adm-search adm-grow" placeholder="https://…" value={fUrl()} onInput={(e) => setFUrl(e.currentTarget.value)} />
-        <input class="adm-search" placeholder="short note" value={fNote()} onInput={(e) => setFNote(e.currentTarget.value)} />
-        <select class="adm-search" value={fCat()} onChange={(e) => setFCat(e.currentTarget.value)}>
-          <For each={CATEGORIES}>{(c) => <option value={c}>{c}</option>}</For>
-          <option value="Added by owner">Added by owner</option>
-        </select>
-        <button class="adm-btn" onClick={addEntry}>+ add</button>
-      </div>
-      <Show when={entries().length} fallback={<div class="adm-empty">No custom entries yet. Add one above, or approve candidates below.</div>}>
-        <div class="adm-entries">
-          <For each={byCat()}>{([cat, list]) => (
-            <div class="adm-entry-cat">
-              <div class="adm-entry-cattitle">{cat} <span class="adm-src">{list.length}</span></div>
-              <For each={list}>{(e) => (
-                <div class="adm-entry">
-                  <span class="adm-entry-name">{e.name}</span>
-                  <span class="adm-entry-url">{hostOf(e.url)}</span>
-                  <a class="adm-btn" href={e.url} target="_blank" rel="noopener noreferrer">open ↗</a>
-                  <button class="adm-btn danger" onClick={() => removeEntry(e.id)}>remove</button>
-                </div>
+        <main class="adm-main">
+          <p class="adm-note-line">Your admin password authorizes publishing. Added/approved entries go live on the public site instantly. Candidate sources are the whitelisted tool files — edit <code>freecatalog.ts</code> to change them.</p>
+
+          <section class="adm-sec">
+            <h2 class="adm-h2">Published entries <span class="adm-count">{entries().length}</span></h2>
+            <div class="adm-form">
+              <input class="adm-search" placeholder="name" value={fName()} onInput={(e) => setFName(e.currentTarget.value)} />
+              <input class="adm-search" placeholder="https://…" value={fUrl()} onInput={(e) => setFUrl(e.currentTarget.value)} onKeyDown={(e) => { if (e.key === "Enter") addEntry(); }} />
+              <input class="adm-search" placeholder="short note" value={fNote()} onInput={(e) => setFNote(e.currentTarget.value)} />
+              <select class="adm-search" value={fCat()} onChange={(e) => setFCat(e.currentTarget.value)}>
+                <For each={CATEGORIES}>{(c) => <option value={c}>{c}</option>}</For>
+                <option value="Added by owner">Added by owner</option>
+              </select>
+              <button class="adm-btn primary" onClick={addEntry}>+ add</button>
+            </div>
+            <Show when={entries().length} fallback={<div class="adm-empty">Nothing published yet — add one above, or approve a candidate below.</div>}>
+              <For each={byCat()}>{([cat, list]) => (
+                <details class="adm-group" open>
+                  <summary class="adm-summary"><span class="adm-chev" /> {cat} <span class="adm-count">{list.length}</span></summary>
+                  <div class="adm-group-body">
+                    <For each={list}>{(e) => (
+                      <div class="adm-item">
+                        <div class="adm-item-main"><span class="adm-item-name">{e.name}</span><span class="adm-item-host">{hostOf(e.url)}</span></div>
+                        <Show when={e.note}><div class="adm-item-note">{e.note}</div></Show>
+                        <div class="adm-item-acts">
+                          <a class="adm-btn tiny" href={e.url} target="_blank" rel="noopener noreferrer">open ↗</a>
+                          <button class="adm-btn tiny danger" onClick={() => removeEntry(e.id)}>remove</button>
+                        </div>
+                      </div>
+                    )}</For>
+                  </div>
+                </details>
+              )}</For>
+            </Show>
+          </section>
+
+          <section class="adm-sec">
+            <h2 class="adm-h2">Candidate queue <span class="adm-count">{cands().length}</span></h2>
+            <div class="adm-sub">{status()}</div>
+            <div class="adm-sources">
+              <For each={SOURCES}>{(s) => (
+                <button class="adm-chip" classList={{ off: !srcOn(s.file) }} onClick={() => toggleSrc(s.file)} title={s.file}>{srcOn(s.file) ? "☑" : "☐"} {s.label}</button>
               )}</For>
             </div>
-          )}</For>
-        </div>
-      </Show>
-
-      {/* —— candidate queue —— */}
-      <div class="adm-section">Candidate queue — {status()}</div>
-      <div class="adm-sources">
-        <span class="adm-sources-label">Sources (untick to skip one, e.g. if compromised):</span>
-        <For each={SOURCES}>{(s) => (
-          <button class="adm-src-chip" classList={{ off: !srcOn(s.file) }} onClick={() => toggleSrc(s.file)} title={s.file}>
-            {srcOn(s.file) ? "☑" : "☐"} {s.label}
-          </button>
-        )}</For>
-        <input class="adm-search" placeholder="filter…" value={q()} onInput={(e) => setQ(e.currentTarget.value)} />
-        <button class="adm-btn" onClick={loadCands}>reload</button>
-      </div>
-      <div class="adm-list">
-        <For each={shown()}>{(c) => (
-          <div class="adm-row">
-            <button class="adm-approve" onClick={() => approve(c)}>+ approve</button>
-            <div class="adm-info">
-              <div class="adm-name">{c.name} <span class="adm-src">{c.source}</span></div>
-              <Show when={c.note}><div class="adm-note">{c.note}</div></Show>
-              <div class="adm-url">{c.url}</div>
+            <div class="adm-toolbar">
+              <input class="adm-search" placeholder="filter candidates…" value={q()} onInput={(e) => setQ(e.currentTarget.value)} />
+              <button class="adm-btn ghost" onClick={loadCands}>reload</button>
             </div>
-            <div class="adm-validate">
-              <a class="adm-btn" href={c.url} target="_blank" rel="noopener noreferrer">open ↗</a>
-              <a class="adm-btn" href={`https://urlscan.io/domain/${hostOf(c.url)}`} target="_blank" rel="noopener noreferrer">urlscan</a>
-              <a class="adm-btn" href={`https://www.virustotal.com/gui/domain/${hostOf(c.url)}`} target="_blank" rel="noopener noreferrer">virustotal</a>
-            </div>
-          </div>
-        )}</For>
-        <Show when={shown().length === 0}><div class="adm-empty">{status()}</div></Show>
+            <Show when={q().trim()} fallback={
+              <For each={candGroups()}>{([src, list]) => (
+                <details class="adm-group">
+                  <summary class="adm-summary"><span class="adm-chev" /> {src} <span class="adm-count">{list.length}</span></summary>
+                  <div class="adm-group-body"><For each={list}>{(c) => <CandRow c={c} />}</For></div>
+                </details>
+              )}</For>
+            }>
+              <div class="adm-group"><div class="adm-group-body">
+                <For each={shown()}>{(c) => <CandRow c={c} />}</For>
+                <Show when={shown().length === 0}><div class="adm-empty">no matches</div></Show>
+              </div></div>
+            </Show>
+          </section>
+        </main>
       </div>
-    </div>
     </Show>
   );
 }
