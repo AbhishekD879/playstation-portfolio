@@ -67,14 +67,18 @@ const NW_SHIM = `<script>(function(){
     resolve:function(){return ("/"+Array.prototype.filter.call(arguments,Boolean).join("/")).replace(/\\/+/g,"/");},
     normalize:function(p){return String(p).replace(/\\/+/g,"/");}};
   path.posix=path; path.win32=path; // plugins reach for require('path').posix — JoiPlay's NWJSAPI clones it
-  // fs: sync reads CAN'T work (sync XHR bypasses service workers in Chromium,
-  // and there's no SharedArrayBuffer bridge without page-level isolation), so
-  // existsSync stays FALSE — well-written NW.js plugins existsSync-guard their
-  // fs path and fall back to the engine's XHR loader, which our SW serves.
+  // fs: sync BYTE reads can't work (sync XHR bypasses the SW), so readFileSync
+  // throws. But existsSync only needs a BOOLEAN — and we inject window.__rpgmFS,
+  // a Set of every real game file (built from the pack index / OPFS walk), so it
+  // answers TRUTHFULLY and synchronously. This matters: many cutscene/CG plugins
+  // guard show-picture behind existsSync(cg) — a blanket false made the event
+  // find no images and end instantly (the "cutscene blinks and vanishes" bug).
   // ASYNC reads are REAL: async fetch goes through the SW, so plugins loading
-  // cutscene/plugin data via fs.readFile(cb) or fs.promises get actual bytes.
-  var fsUrl=function(p){ p=String(p).replace(/^[A-Za-z]:[\\\\/]/,"").replace(/\\\\/g,"/").replace(/^\\.\\//,"").replace(/^\\/+/,"");
-    try{ return new URL(p, location.href).href; }catch(e){ return null; } };
+  // data via fs.readFile(cb) or fs.promises get actual bytes.
+  var relPath=function(p){ return String(p).replace(/^[A-Za-z]:[\\\\/]/,"").replace(/\\\\/g,"/").replace(/^\\.\\//,"").replace(/^\\/+/,""); };
+  var fsUrl=function(p){ p=relPath(p); try{ return new URL(p, location.href).href; }catch(e){ return null; } };
+  var fsHas=function(p){ var n=relPath(p); try{n=n.normalize("NFKC");}catch(e){} n=n.toLowerCase();
+    return !!(window.__rpgmFS && window.__rpgmFS.has(n)); };
   var fsRead=function(p, enc){ var u=fsUrl(p);
     return fetch(u).then(function(r){ if(!r.ok) throw new Error("ENOENT: "+p);
       return enc ? r.text() : r.arrayBuffer().then(function(ab){
@@ -82,7 +86,7 @@ const NW_SHIM = `<script>(function(){
         a.toString=function(){ try{ return new TextDecoder().decode(new Uint8Array(this)); }catch(e){ return ""; } };
         return a; }); }); };
   var dl=function(p,r){ try{ if(window.__diaglog) window.__diaglog(p,r); }catch(e){} };
-  var fs={existsSync:function(p){dl("fs.existsSync "+p,"scaffold →false");return false;},readFileSync:function(p){dl("fs.readFileSync "+p,"scaffold sync-unavailable");throw new Error("fs sync reads unavailable in browser: "+p);},
+  var fs={existsSync:function(p){var ok=fsHas(p);dl("fs.existsSync "+p,ok?"scaffold →true (in manifest)":(window.__rpgmFS?"scaffold →false (not in manifest)":"scaffold →false (no manifest)"));return ok;},readFileSync:function(p){dl("fs.readFileSync "+p,"scaffold sync-unavailable");throw new Error("fs sync reads unavailable in browser: "+p);},
     writeFileSync:noop,appendFileSync:noop,mkdirSync:noop,rmdirSync:noop,unlinkSync:noop,renameSync:noop,copyFileSync:noop,
     readdirSync:function(){return [];},statSync:function(){return{isDirectory:ret(false),isFile:ret(false),size:0};},
     writeFile:function(){var cb=arguments[arguments.length-1];if(typeof cb==="function")cb(null);},
@@ -156,6 +160,10 @@ const NW_SHIM = `<script>(function(){
 // audio buffers, fonts and the effekseer wasm, which are the things that stall.
 const DIAG_SHIM = `<script>(function(){
   var T0=Date.now(), seq=0, pending={}, recent=[], errors=[], counts={ok:0,fail:0}, activity=[];
+  // startup: record the fs manifest so a still-failing existsSync can be compared
+  // against the REAL stored picture paths (case/prefix/naming mismatches show here).
+  try{ var _fs=window.__rpgmFS, _s=[]; if(_fs){ var _it=_fs.values(), _v; while(_s.length<6){ _v=_it.next(); if(_v.done) break; if(/pictures/.test(_v.value)) _s.push(_v.value); } }
+    activity.push({path:"manifest: "+(_fs?_fs.size+" files":"MISSING — existsSync will be false")+(_s.length?" · sample: "+_s.join(" | "):""), ok:!!_fs, reason:"startup", t:0}); }catch(e){}
   function rel(u){ try{ var pp=new URL(u, location.href).pathname; var i=pp.indexOf("/rpgm/");
     if(i<0) return pp; var parts=pp.slice(i+6).split("/");
     if(parts[0]==="fs") return parts.slice(2).join("/");
@@ -165,7 +173,7 @@ const DIAG_SHIM = `<script>(function(){
   // is what makes a failed CUTSCENE asset visible. Keeps a rolling activity log
   // so you can see exactly what the game just tried to load when a scene broke.
   function logAct(path, ok, reason){
-    activity.unshift({path:path, ok:!!ok, reason:reason||"", t:Date.now()-T0}); if(activity.length>30) activity.pop();
+    activity.unshift({path:path, ok:!!ok, reason:reason||"", t:Date.now()-T0}); if(activity.length>200) activity.pop();
     if(ok){ counts.ok++; } else { counts.fail++; recent.unshift({path:path, status:reason||"failed"}); if(recent.length>12) recent.pop(); post(); }
   }
   function begin(u){ var id=++seq; pending[id]={path:rel(u), t0:Date.now()}; return id; }
@@ -417,6 +425,44 @@ async function gameDirOf(gameId) {
   return (await r.getDirectoryHandle("rpgm")).getDirectoryHandle(gameId);
 }
 
+// Manifest of every real game file, game-root-relative + NFKC-lowercased, so the
+// injected fs.existsSync can answer truthfully (see NW_SHIM). Packed installs
+// read it straight from the pack central directory; loose installs walk OPFS.
+// Cached per game — it's built once, when the game HTML is served.
+const manifestCache = new Map();
+function manifestFor(gameId) {
+  let mp = manifestCache.get(gameId);
+  if (!mp) {
+    mp = (async () => {
+      const out = [];
+      const pack = await packFor(gameId);
+      if (pack) {
+        let root = "";
+        try { root = await gameRootPrefix(await gameDirOf(gameId), gameId); } catch { /* no dir */ }
+        const rl = root.normalize("NFKC").toLowerCase();
+        for (const k of pack.map.keys()) out.push(rl && k.startsWith(rl) ? k.slice(rl.length) : k);
+        return out;
+      }
+      try {
+        let base = await gameDirOf(gameId);
+        const root = await gameRootPrefix(base, gameId);
+        for (const seg of root.split("/").filter(Boolean)) base = await base.getDirectoryHandle(seg);
+        await walkDir(base, "", out);
+      } catch { /* nothing to list */ }
+      return out;
+    })();
+    manifestCache.set(gameId, mp);
+  }
+  return mp;
+}
+async function walkDir(dir, prefix, out) {
+  for await (const [name, h] of dir.entries()) {
+    const rel = prefix + name;
+    if (h.kind === "directory") await walkDir(h, rel + "/", out);
+    else out.push(rel.normalize("NFKC").toLowerCase());
+  }
+}
+
 // —— packed installs ————————————————————————————————————————————————————————
 // New installs are ONE compact zip (.rpgmpack): files stay compressed on disk
 // and are inflated lazily, per request, with the browser's native streaming
@@ -580,7 +626,10 @@ self.addEventListener("fetch", (e) => {
         : await new Response(packStream(packFile, packEnt, await packDataStart(packFile, packEnt))).text();
       const headShim = isRenpy ? RENPY_SHIM : isWeb ? WEB_SHIM : NW_SHIM;
       const audioStub = isMvMz && (await gameIsLite(gameId)) ? AUDIO_STUB : "";
-      const shims = headShim + audioStub + DIAG_SHIM + MEDIA_SHIM + isolationShim(gameId);
+      // RPG Maker: hand the fs shim the real file list so existsSync is truthful.
+      let manifest = "";
+      if (isMvMz) { try { manifest = "<script>window.__rpgmFS=new Set(" + JSON.stringify(await manifestFor(gameId)) + ")</script>"; } catch { /* existsSync stays false */ } }
+      const shims = manifest + headShim + audioStub + DIAG_SHIM + MEDIA_SHIM + isolationShim(gameId);
       const html = /<head[^>]*>/i.test(raw)
         ? raw.replace(/<head[^>]*>/i, (m) => m + shims)
         : shims + raw;
