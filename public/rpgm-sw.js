@@ -301,6 +301,13 @@ const DIAG_SHIM = `<script>(function(){
       return XS.apply(this,arguments); }; } catch(e){}
   try { var F=window.fetch; if(F) window.fetch=function(inp){ var u=(inp&&inp.url)||inp, id=begin(u);
     return F.apply(this,arguments).then(function(r){ fin(id, r.status|0); return r; }, function(err){ fin(id,0,"network"); throw err; }); }; } catch(e){}
+  // console capture: many engines/plugins report the real failure ONLY to the
+  // console. Surface warn/error always; console.log only in verbose (chatty).
+  try { var cfmt=function(x){ try{ return (x&&x.stack)?String(x.stack):(x&&typeof x==="object"?JSON.stringify(x):String(x)); }catch(_){ return String(x); } };
+    ["log","warn","error"].forEach(function(m){ var o=console[m]; if(typeof o!=="function") return;
+      console[m]=function(){ try{ var s=Array.prototype.map.call(arguments,cfmt).join(" ").slice(0,300);
+        if(m==="error") addErr("console.error: "+s,""); else if(m==="warn") elog("console.warn: "+s,"console"); else if(VERBOSE) elog("console: "+s,"console"); }catch(_){}
+        return o.apply(this,arguments); }; }); } catch(e){}
   setInterval(post, 1000); post();
 })();</` + `script>`;
 

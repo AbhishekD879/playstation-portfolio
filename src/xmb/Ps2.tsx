@@ -8,6 +8,7 @@ import { setNavEnabled } from "../input";
 import { startBridge, stopBridge, touchKey, PS2_CONFIG } from "../gamepadBridge";
 import { holdWakeLock } from "../wakelock";
 import TouchPad, { type TB } from "./TouchPad";
+import DiagOverlay from "./DiagOverlay";
 import { Icon } from "./icons";
 import { startHost, startJoiner, type HostHandle, type JoinerHandle } from "../ps2mp/webrtc";
 import { captureLocalInput, makeInjector, type PadState } from "../ps2mp/input";
@@ -34,6 +35,7 @@ export default function Ps2(props: { onClose: () => void; profileId: string; ini
   let releaseLock: (() => void) | null = null;
   const requestSave = () => frame?.contentWindow?.postMessage({ type: "play-save", saveKey }, location.origin);
   const [saveNote, setSaveNote] = createSignal("");
+  const [showDiag, setShowDiag] = createSignal(false); // diagnostics/share-log panel
 
   // —— multiplayer (host-authoritative WebRTC streaming) ————————————————————
   // Host: streams the emulator canvas to a joiner and injects the joiner's
@@ -330,6 +332,7 @@ export default function Ps2(props: { onClose: () => void; profileId: string; ini
                 <button class="ghost-btn" onClick={stopHost}>✕ stop hosting</button>
               </Show>
               <button class="ghost-btn" onClick={() => requestSave()}>▪ save card</button>
+              <button class="ghost-btn" classList={{ on: showDiag() }} onClick={() => setShowDiag((v) => !v)}>🩺 diagnostics</button>
               <button class="ghost-btn" onClick={goFullscreen}>⛶ full screen</button>
               <button class="ghost-btn" onClick={eject}>⏏ eject</button>
             </span>
@@ -430,6 +433,10 @@ export default function Ps2(props: { onClose: () => void; profileId: string; ini
             </Show>
           </div>
         </Show>
+
+        {/* diagnostics + share-log for the local emulator (Play! traces via
+            /diag-core.js in /play/index.html — console aborts, failed loads) */}
+        <DiagOverlay frame={() => frame} label="PlayStation 2 · Play!" open={showDiag()} onClose={() => setShowDiag(false)} />
 
         <input
           type="file"

@@ -5,29 +5,20 @@
 // A diagnostics overlay listens for the diag shim the service worker injects
 // into the game (errors + stuck/failed asset loads) so a hang is legible even
 // on mobile where there's no console.
-import { For, Show, createSignal, onCleanup, onMount } from "solid-js";
+import { Show, createSignal, onCleanup, onMount } from "solid-js";
 import * as sfx from "../audio";
 import type { NavAction } from "../input";
 import { holdWakeLock } from "../wakelock";
 import { ENGINE_LABEL, ensureRpgSw, estimateRuntimeMB, looksHeavy, type RpgGame } from "../rpgm";
 import { installable, isIOS, isStandalone, promptInstall } from "../pwa";
 import TouchControls, { type KeyDef } from "./TouchControls";
-
-type Snap = {
-  source: string; up: number; scene: string; spinner: boolean; booted: boolean; canvas: boolean;
-  pending: { path: string; age: number }[];
-  recent: { path: string; status: unknown }[];
-  counts: { ok: number; fail: number };
-  errors: { msg: string; at: string }[];
-  activity?: { path: string; ok: boolean; reason: string; t: number }[];
-};
+import DiagOverlay from "./DiagOverlay";
 
 export default function RpgPlayer(props: {
   game: RpgGame; src: string; sublabel?: string; bootNote?: string;
   onClose: () => void; bind: (nav: (a: NavAction) => void) => void;
 }) {
   const [phase, setPhase] = createSignal<"prelaunch" | "booting" | "ready" | "failed">("prelaunch");
-  const [diag, setDiag] = createSignal<Snap | null>(null);
   const [showDiag, setShowDiag] = createSignal(false);
   const [showPad, setShowPad] = createSignal(false);
   const [barShown, setBarShown] = createSignal(true);
@@ -36,11 +27,6 @@ export default function RpgPlayer(props: {
   // error string to show (e.g. Safari can't decode .webm movies)
   const [mediaHint, setMediaHint] = createSignal("");
   let mediaHintTimer: ReturnType<typeof setTimeout> | undefined;
-  const [dumpText, setDumpText] = createSignal(""); // full exportable trace
-  const [verbose, setVerbose] = createSignal(false); // log EVERY event command
-  const [shareCode, setShareCode] = createSignal(""); // code after uploading the log
-  const [shareState, setShareState] = createSignal<"" | "busy" | "error">("");
-  const LOG_HOST = "https://abhishekstation-mp.abhishekdiwate879.workers.dev";
   let frame!: HTMLIFrameElement;
   let container!: HTMLDivElement;
   let release: (() => void) | undefined;
@@ -119,9 +105,8 @@ export default function RpgPlayer(props: {
   onMount(() => {
     const onMsg = (e: MessageEvent) => {
       if (e.origin !== location.origin) return;
-      const d = e.data as Snap & { kind?: string; msg?: string };
-      if (d && d.source === "rpgm-diag") setDiag(d as Snap);
-      if (d && (d as { source?: string }).source === "rpgm-media") {
+      const d = e.data as { source?: string; kind?: string; msg?: string };
+      if (d && d.source === "rpgm-media") {
         clearTimeout(mediaHintTimer);
         if (d.kind === "gesture") setMediaHint("gesture");
         else if (d.kind === "unlocked") setMediaHint("");
@@ -164,51 +149,6 @@ export default function RpgPlayer(props: {
     if (a === "back") quit();
     else if (a === "options") { setShowDiag((v) => !v); flashBar(); }
   });
-
-  const stuck = () => (diag()?.pending ?? []).filter((p) => p.age > 4000);
-  const clean = () => { const d = diag(); return d && d.errors.length === 0 && stuck().length === 0 && d.recent.length === 0; };
-  // debugger: wipe the in-game trace buffers so the next thing you do (trigger
-  // the cutscene) shows a clean sequence of exactly what the engine did.
-  const clearDiag = () => {
-    try { (frame?.contentWindow as Window | null)?.postMessage({ __rpgmDiagClear: true }, "*"); } catch { /* frame gone */ }
-    setDiag(null); setDumpText(""); setShareCode(""); setShareState("");
-  };
-  // Build the log from the data the app ALREADY has (the live diag snapshots) —
-  // no message round-trip to the game frame, which was silently failing. The
-  // snapshot carries the full activity trace, errors and failed loads.
-  const buildLog = (): string => {
-    const d = diag();
-    if (!d) return "";
-    const L: string[] = ["=== RPGM DIAG ==="];
-    L.push(`game: ${props.game.title} · engine ${props.game.engine}`);
-    L.push(`scene ${d.scene || "?"} · up ${Math.round(d.up / 1000)}s · ok ${d.counts.ok} / fail ${d.counts.fail} · booted ${d.booted}`);
-    L.push(`ua: ${navigator.userAgent}`);
-    if (d.errors.length) { L.push("", "-- ERRORS --"); d.errors.forEach((e) => L.push(`  ! ${e.msg}${e.at ? ` (${e.at})` : ""}`)); }
-    if (d.recent.length) { L.push("", "-- FAILED LOADS --"); d.recent.forEach((r) => L.push(`  x ${r.path} · ${String(r.status)}`)); }
-    const act = d.activity ?? [];
-    L.push("", `-- ACTIVITY (oldest first, ${act.length}) --`);
-    act.slice().reverse().forEach((a) => L.push(`  ${a.ok ? "+" : "x"} [${Math.round(a.t)}ms] ${a.path}${a.reason ? ` · ${a.reason}` : ""}`));
-    return L.join("\n");
-  };
-  const copyLog = () => {
-    const t = buildLog();
-    if (!t) { setShareState("error"); return; }
-    setDumpText(t);
-    try { void navigator.clipboard?.writeText?.(t); } catch { /* textarea fallback shows it */ }
-  };
-  // upload the trace to our worker and show a short code — the maintainer
-  // fetches it at LOG_HOST/log/<code>.
-  const shareLog = async () => {
-    const t = buildLog();
-    if (!t) { setShareState("error"); return; }
-    setShareState("busy"); setShareCode("");
-    try {
-      const r = await fetch(`${LOG_HOST}/log`, { method: "POST", headers: { "content-type": "text/plain" }, body: t });
-      const j = await r.json() as { code?: string };
-      if (j.code) { setShareCode(j.code); setShareState(""); } else throw new Error("no code");
-    } catch { setShareState("error"); setDumpText(t); } // offline → fall back to the copy box
-  };
-  const toggleVerbose = () => { const v = !verbose(); setVerbose(v); try { (frame?.contentWindow as Window | null)?.postMessage({ __rpgmDiagVerbose: v }, "*"); } catch { /* frame gone */ } };
 
   return (
     <div class="rpgplay" ref={container} classList={{ touch }}>
@@ -305,63 +245,12 @@ export default function RpgPlayer(props: {
         <TouchControls send={fireKey} onClose={() => setShowPad(false)} />
       </Show>
 
-      <Show when={showDiag() && phase() !== "prelaunch"}>
-        <div class="rpg-diag">
-          <div class="rpg-diag-head">
-            <span>DIAGNOSTICS · engine trace</span>
-            <span class="rpg-diag-btns">
-              <button class="ps-act" classList={{ on: verbose() }} onClick={toggleVerbose}>verbose: {verbose() ? "on" : "off"}</button>
-              <button class="ps-act" onClick={shareLog}>{shareState() === "busy" ? "sharing…" : "share log"}</button>
-              <button class="ps-act" onClick={copyLog}>copy</button>
-              <button class="ps-act" onClick={clearDiag}>clear</button>
-              <button class="ps-act" onClick={() => setShowDiag(false)}>close</button>
-            </span>
-          </div>
-          <div class="rpg-diag-tip">Turn on <b>verbose</b> → tap <b>clear</b> → trigger the scene → tap <b>share log</b>, then tell me the code. Newest first below.</div>
-          <Show when={shareCode()}>
-            <div class="rpg-diag-share">✓ Log shared — tell me this code: <b class="rpg-diag-code">{shareCode()}</b></div>
-          </Show>
-          <Show when={shareState() === "error"}>
-            <div class="rpg-diag-share err">Couldn't upload (offline?) — use the box below and paste it instead.</div>
-          </Show>
-          <Show when={dumpText()}>
-            <div class="rpg-diag-dump">
-              <div class="rpg-diag-dumphd"><span>Tap the box to select all, then copy. (Also copied to clipboard if the browser allowed it.)</span>
-                <button class="ps-act" onClick={() => setDumpText("")}>✕</button></div>
-              <textarea class="rpg-diag-dumptext" readonly value={dumpText()} onClick={(e) => (e.currentTarget as HTMLTextAreaElement).select()} />
-            </div>
-          </Show>
-          <div class="rpg-diag-state">
-            {(() => {
-              const d = diag();
-              if (!d) return "waiting for the game to report…";
-              const st = d.booted ? "running" : d.spinner ? "loading" : "starting";
-              return `${st}${d.scene ? " · " + d.scene : ""} · ${Math.round(d.up / 1000)}s · ${d.counts.ok} ok / ${d.counts.fail} failed`;
-            })()}
-          </div>
-          <Show when={(diag()?.errors.length ?? 0) > 0}>
-            <div class="rpg-diag-sec">Errors</div>
-            <For each={diag()!.errors}>{(e) => <div class="rpg-diag-row err">{e.msg}{e.at ? ` (${e.at})` : ""}</div>}</For>
-          </Show>
-          <Show when={stuck().length > 0}>
-            <div class="rpg-diag-sec">Stuck loading (&gt;4s)</div>
-            <For each={stuck()}>{(p) => <div class="rpg-diag-row warn">{p.path} · {Math.round(p.age / 1000)}s</div>}</For>
-          </Show>
-          <Show when={(diag()?.recent.length ?? 0) > 0}>
-            <div class="rpg-diag-sec">Failed to load (likely the broken cutscene/asset)</div>
-            <For each={diag()!.recent}>{(r) => <div class="rpg-diag-row err">{r.path} · {String(r.status)}</div>}</For>
-          </Show>
-          <Show when={(diag()?.activity?.length ?? 0) > 0}>
-            <div class="rpg-diag-sec">Recent asset activity (newest first)</div>
-            <For each={diag()!.activity}>{(a) => (
-              <div class="rpg-diag-row" classList={{ err: !a.ok, dim: a.ok }}>{a.ok ? "✓" : "✗"} {a.path}{a.reason ? ` · ${a.reason}` : ""}</div>
-            )}</For>
-          </Show>
-          <Show when={clean() && !(diag()?.activity?.length)}>
-            <div class="rpg-diag-row dim">No errors or failed assets reported yet — trigger the cutscene, then check here.</div>
-          </Show>
-        </div>
-      </Show>
+      <DiagOverlay
+        frame={() => frame}
+        label={`${props.game.title} · engine ${props.game.engine}`}
+        open={showDiag() && phase() !== "prelaunch"}
+        onClose={() => setShowDiag(false)}
+      />
     </div>
   );
 }

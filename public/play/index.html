@@ -5,6 +5,10 @@
 <html>
 <head>
 <meta charset="utf-8" />
+<!-- diagnostics tracer: posts a live trace to the parent console (Ps2.tsx shows
+     it via the shared DiagOverlay). Loads first so it hooks console/errors
+     before the emulator boots. -->
+<script src="/diag-core.js"></script>
 <style>
   html, body { margin: 0; height: 100%; background: #000; overflow: hidden; }
   canvas { width: 100%; height: 100%; display: block; object-fit: contain; outline: none; }

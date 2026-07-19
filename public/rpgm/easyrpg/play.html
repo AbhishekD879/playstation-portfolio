@@ -7,6 +7,9 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no" />
+  <!-- diagnostics tracer (loads before the engine so it hooks console/errors
+       early); RpgPlayer shows it via the shared DiagOverlay. -->
+  <script src="/diag-core.js"></script>
   <title>EasyRPG</title>
   <style>
     html, body { margin: 0; height: 100%; background: #000; overflow: hidden; }
