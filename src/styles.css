@@ -1542,6 +1542,21 @@ img.status-avatar, img.ptile-avatar { object-fit: cover; border: 1px solid rgba(
 .rpg-diag-row.warn { color: #e8c46a; }
 .rpg-diag-row.dim { color: var(--dim); }
 
+/* RPG Maker trainer — reuses the .rpg-diag bottom-band shell */
+.rpg-tr-msg { font-size: 12.5px; color: #9fe0a0; background: rgba(60,180,90,0.12); border: 1px solid rgba(120,220,140,0.4); border-radius: 8px; padding: 6px 11px; margin: 4px 0 6px; }
+.rpg-tr-row { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin: 4px 0 2px; }
+.rpg-tr-num, .rpg-tr-txt { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 13px; color: #eaf1ff; background: rgba(0,0,0,0.4); border: 1px solid rgba(255,255,255,0.16); border-radius: 7px; padding: 5px 8px; }
+.rpg-tr-num { width: 92px; }
+.rpg-tr-amt { width: 58px; margin-left: 4px; }
+.rpg-tr-txt { flex: 1; min-width: 140px; }
+.rpg-tr-items { display: flex; flex-wrap: wrap; gap: 5px; margin: 4px 0 2px; max-height: 190px; overflow-y: auto; }
+.rpg-tr-item { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; color: #eaf1ff; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.12); border-radius: 999px; padding: 4px 10px; cursor: pointer; }
+.rpg-tr-item:hover, .rpg-tr-item:focus-visible { background: rgba(255,255,255,0.14); border-color: rgba(255,255,255,0.3); }
+.rpg-tr-kind { font-size: 9px; font-weight: 700; width: 15px; height: 15px; display: inline-flex; align-items: center; justify-content: center; border-radius: 4px; }
+.rpg-tr-kind.k-item { background: rgba(90,170,255,0.25); color: #bcdcff; }
+.rpg-tr-kind.k-weapon { background: rgba(255,140,120,0.25); color: #ffc7bb; }
+.rpg-tr-kind.k-armor { background: rgba(150,220,150,0.25); color: #c4ecc4; }
+
 @media (max-width: 900px) { .rpg-grid { grid-template-columns: repeat(2, 1fr); } }
 
 /* Karaoke — vocal-cut singalong */

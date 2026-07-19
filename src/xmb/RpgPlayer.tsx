@@ -9,10 +9,11 @@ import { Show, createSignal, onCleanup, onMount } from "solid-js";
 import * as sfx from "../audio";
 import type { NavAction } from "../input";
 import { holdWakeLock } from "../wakelock";
-import { ENGINE_LABEL, ensureRpgSw, estimateRuntimeMB, looksHeavy, type RpgGame } from "../rpgm";
+import { ENGINE_LABEL, engineKind, ensureRpgSw, estimateRuntimeMB, looksHeavy, type RpgGame } from "../rpgm";
 import { installable, isIOS, isStandalone, promptInstall } from "../pwa";
 import TouchControls, { type KeyDef } from "./TouchControls";
 import DiagOverlay from "./DiagOverlay";
+import RpgTrainer from "./RpgTrainer";
 
 export default function RpgPlayer(props: {
   game: RpgGame; src: string; sublabel?: string; bootNote?: string;
@@ -20,6 +21,10 @@ export default function RpgPlayer(props: {
 }) {
   const [phase, setPhase] = createSignal<"prelaunch" | "booting" | "ready" | "failed">("prelaunch");
   const [showDiag, setShowDiag] = createSignal(false);
+  const [showTrainer, setShowTrainer] = createSignal(false);
+  // trainer is MV/MZ-only — those run as JS (engineKind "html5") so we can reach
+  // their live $game* state. EasyRPG/Ren'Py/web have no such JS globals.
+  const canTrain = engineKind(props.game.engine) === "html5";
   const [showPad, setShowPad] = createSignal(false);
   const [barShown, setBarShown] = createSignal(true);
   // media probe: "" = fine · "gesture" = needs one real tap in the game frame
@@ -147,7 +152,7 @@ export default function RpgPlayer(props: {
   props.bind((a) => {
     if (phase() === "prelaunch") { if (a === "confirm") launch(); else if (a === "back") { sfx.back(); props.onClose(); } return; }
     if (a === "back") quit();
-    else if (a === "options") { setShowDiag((v) => !v); flashBar(); }
+    else if (a === "options") { setShowDiag((v) => !v); setShowTrainer(false); flashBar(); }
   });
 
   return (
@@ -222,7 +227,10 @@ export default function RpgPlayer(props: {
           <div class="panel-tag">{props.game.title.toUpperCase()}{props.sublabel ? ` · ${props.sublabel}` : ""}</div>
           <div class="rpgplay-actions">
             <button class="ps-act" classList={{ on: showPad() }} onClick={() => { setShowPad((v) => !v); flashBar(); }}>⌨ controls</button>
-            <button class="ps-act" onClick={() => { setShowDiag((v) => !v); flashBar(); }}>diagnostics</button>
+            <Show when={canTrain}>
+              <button class="ps-act" classList={{ on: showTrainer() }} onClick={() => { setShowTrainer((v) => !v); setShowDiag(false); flashBar(); }}>✨ trainer</button>
+            </Show>
+            <button class="ps-act" onClick={() => { setShowDiag((v) => !v); setShowTrainer(false); flashBar(); }}>diagnostics</button>
             <button class="ps-act" onClick={goFullscreen}>full screen</button>
             <button class="ps-act" onClick={quit}><span class="btn-o" /> quit</button>
           </div>
@@ -251,6 +259,10 @@ export default function RpgPlayer(props: {
         open={showDiag() && phase() !== "prelaunch"}
         onClose={() => setShowDiag(false)}
       />
+
+      <Show when={canTrain}>
+        <RpgTrainer frame={() => frame} open={showTrainer() && phase() === "ready"} onClose={() => setShowTrainer(false)} />
+      </Show>
     </div>
   );
 }
