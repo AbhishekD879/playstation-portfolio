@@ -21,9 +21,9 @@ const mimeOf = (p) => MIME[(p.split(".").pop() || "").toLowerCase()] || "applica
 
 self.addEventListener("install", () => self.skipWaiting());
 self.addEventListener("activate", (e) => e.waitUntil(self.clients.claim()));
-// a re-import can change a game's root prefix — the page tells us to forget it
+// a re-import can change a game's root prefix / lite flag — forget both
 self.addEventListener("message", (e) => {
-  if (e.data && e.data.type === "rpgm-root-bust") rootCache.delete(e.data.id);
+  if (e.data && e.data.type === "rpgm-root-bust") { rootCache.delete(e.data.id); liteCache.delete(e.data.id); }
 });
 
 // —— MV/MZ save isolation shim (injected into that route's HTML only) ——
@@ -180,6 +180,24 @@ const DIAG_SHIM = `<script>(function(){
   setInterval(post, 1000); post();
 })();</` + `script>`;
 
+// —— audio stub (injected into MV/MZ HTML of LITE installs only) ——
+// A lite install skipped every audio file, and RPG Maker halts with a loading
+// error when a BGM/SE it wants is missing. Stubbing AudioManager's play/load
+// entry points means the engine never asks — the game runs, just silent.
+const AUDIO_STUB = `<script>(function(){
+  var t=setInterval(function(){
+    var A=window.AudioManager;
+    if(!A) return;
+    clearInterval(t);
+    var noop=function(){};
+    ["playBgm","replayBgm","playBgs","replayBgs","playMe","playSe","playStaticSe",
+     "loadStaticSe","checkErrors","checkWebAudioError"].forEach(function(k){
+      if(typeof A[k]==="function") A[k]=noop;
+    });
+  },10);
+  setTimeout(function(){clearInterval(t);},20000);
+})();</` + `script>`;
+
 // —— media probe (injected into all HTML routes) ——
 // A cutscene that "opens for a moment then closes" is usually a VIDEO that
 // failed to start: (a) blocked autoplay — synthetic pad presses carry no user
@@ -252,6 +270,20 @@ async function gameRootPrefix(gameDir, gameId) {
   } catch { root = ""; }
   rootCache.set(gameId, root);
   return root;
+}
+// lite installs (audio skipped at import) carry a .rpgmlite marker
+const liteCache = new Map();
+async function gameIsLite(gameId) {
+  if (liteCache.has(gameId)) return liteCache.get(gameId);
+  let lite = false;
+  try {
+    let dir = await (await navigator.storage.getDirectory()).getDirectoryHandle("rpgm");
+    dir = await dir.getDirectoryHandle(gameId);
+    await dir.getFileHandle(".rpgmlite");
+    lite = true;
+  } catch { lite = false; }
+  liteCache.set(gameId, lite);
+  return lite;
 }
 // Exact-match first; on a miss, retry that segment CASE-INSENSITIVELY (NFKC).
 // Games authored on Windows (case-insensitive fs) routinely reference assets
@@ -332,7 +364,8 @@ self.addEventListener("fetch", (e) => {
       // usually has a <head>; if it somehow doesn't, prepend.
       const raw = await file.text();
       const headShim = isRenpy ? RENPY_SHIM : isWeb ? WEB_SHIM : NW_SHIM;
-      const shims = headShim + DIAG_SHIM + MEDIA_SHIM + isolationShim(gameId);
+      const audioStub = isMvMz && (await gameIsLite(gameId)) ? AUDIO_STUB : "";
+      const shims = headShim + audioStub + DIAG_SHIM + MEDIA_SHIM + isolationShim(gameId);
       const html = /<head[^>]*>/i.test(raw)
         ? raw.replace(/<head[^>]*>/i, (m) => m + shims)
         : shims + raw;

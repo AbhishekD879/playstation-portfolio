@@ -7,9 +7,9 @@
 // backoff per file; the archive itself stays on disk (central-directory reads,
 // entry-by-entry streaming) so peak memory is a few chunk buffers.
 import { Inflate } from "fflate";
-import { checkEntry, entryDataStart, runtimeSkipper, zipEntries, type ZipEntry } from "./zipcd";
+import { checkEntry, entryDataStart, isAudioPath, runtimeSkipper, zipEntries, type ZipEntry } from "./zipcd";
 
-interface Job { file: File; id: string }
+interface Job { file: File; id: string; skipAudio?: boolean }
 // minimal local typings — lib.dom doesn't carry the worker-only OPFS sync API
 interface SyncHandle { write(b: Uint8Array, opts?: { at?: number }): number; truncate(n: number): void; flush(): void; close(): void }
 
@@ -61,7 +61,7 @@ async function extractEntry(gameDir: FileSystemDirectoryHandle, file: File, ent:
 }
 
 self.onmessage = async (ev: MessageEvent<Job>) => {
-  const { file, id } = ev.data;
+  const { file, id, skipAudio } = ev.data;
   let ctx = "";
   try {
     if (!("createSyncAccessHandle" in FileSystemFileHandle.prototype)) {
@@ -72,7 +72,7 @@ self.onmessage = async (ev: MessageEvent<Job>) => {
     if (!entries.length) throw new Error("Couldn't read this zip — it looks empty or isn't a standard .zip archive.");
     const names = entries.map((e) => e.name);
     const skipRt = runtimeSkipper(names.filter((p) => !p.endsWith("/")));
-    const files = entries.filter((e) => !e.name.endsWith("/") && !skipRt(e.name));
+    const files = entries.filter((e) => !e.name.endsWith("/") && !skipRt(e.name) && !(skipAudio && isAudioPath(e.name)));
 
     // quota against the real UNPACKED size, before anything is written
     const totalOut = files.reduce((s, f) => s + f.uncompSize, 0);

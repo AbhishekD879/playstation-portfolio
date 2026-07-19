@@ -11,7 +11,7 @@
 //   · rm2k / rm2k3     → EasyRPG (WASM) — RPG Maker 2000 / 2003.
 //   · xp / vx / vxace  → mkxp (WASM, RGSS) — RPG Maker XP / VX / VX Ace.
 import { Inflate } from "fflate";
-import { checkEntry, entryDataStart, runtimeSkipper, zipEntries, zipReadError } from "./zipcd";
+import { checkEntry, entryDataStart, isAudioPath, runtimeSkipper, zipEntries, zipReadError } from "./zipcd";
 
 export type RpgEngine =
   | "mz" | "mv" | "rm2k3" | "rm2k" | "vxace" | "vx" | "xp"
@@ -251,10 +251,12 @@ export interface ImportProgress { phase: "reading" | "detecting" | "extracting";
  *  written straight to OPFS, and the huge NW.js runtime is skipped entirely.
  *  The game root is NOT stripped — its prefix is recorded and the service
  *  worker prepends it, so detection can happen after the (single) stream. */
+export interface ImportOpts { skipAudio?: boolean } // "lite install" — music/sounds skipped
+
 export async function importRpgZip(
-  file: File, profileId: string, onProgress?: (p: ImportProgress) => void,
+  file: File, profileId: string, onProgress?: (p: ImportProgress) => void, opts?: ImportOpts,
 ): Promise<RpgGame> {
-  return doImport(file, profileId, crypto.randomUUID(), null, onProgress);
+  return doImport(file, profileId, crypto.randomUUID(), null, onProgress, opts);
 }
 
 /** RE-IMPORT an existing game IN PLACE — same id, so its saves survive.
@@ -263,11 +265,11 @@ export async function importRpgZip(
  *  updates the game without touching progress. Used to repair games imported
  *  before a fix (e.g. the .dat/.bin skip) without losing save data. */
 export async function reimportRpgZip(
-  file: File, game: RpgGame, onProgress?: (p: ImportProgress) => void,
+  file: File, game: RpgGame, onProgress?: (p: ImportProgress) => void, opts?: ImportOpts,
 ): Promise<RpgGame> {
   await (await rpgmDir()).removeEntry(game.id, { recursive: true }).catch(() => {});
-  bustSwRootCache(game.id); // the SW caches .rpgmroot per id — the root may change
-  return doImport(file, game.profileId, game.id, game, onProgress);
+  bustSwRootCache(game.id); // the SW caches .rpgmroot/.rpgmlite per id — both may change
+  return doImport(file, game.profileId, game.id, game, onProgress, opts);
 }
 
 /** The running SW memoises each game's root prefix; after a re-import the root
@@ -280,7 +282,7 @@ function bustSwRootCache(id: string): void {
  *  path isn't available (old browser, worker failed to boot) — caller falls
  *  back to in-page extraction. Rejects with the worker's error (carrying .ctx,
  *  the file-position context) when extraction itself failed. */
-function extractInWorker(file: File, id: string, onProgress?: (p: ImportProgress) => void): Promise<{ bytes: number } | null> {
+function extractInWorker(file: File, id: string, skipAudio: boolean, onProgress?: (p: ImportProgress) => void): Promise<{ bytes: number } | null> {
   return new Promise((resolve, reject) => {
     let w: Worker;
     try {
@@ -300,13 +302,13 @@ function extractInWorker(file: File, id: string, onProgress?: (p: ImportProgress
         reject(err);
       }
     };
-    w.postMessage({ file, id });
+    w.postMessage({ file, id, skipAudio });
   });
 }
 
 async function doImport(
   file: File, profileId: string, id: string, existing: RpgGame | null,
-  onProgress?: (p: ImportProgress) => void,
+  onProgress?: (p: ImportProgress) => void, opts?: ImportOpts,
 ): Promise<RpgGame> {
   onProgress?.({ phase: "reading", pct: 0 });
 
@@ -325,7 +327,7 @@ async function doImport(
     if (!entries.length) throw new Error("Couldn't read this zip — it looks empty or isn't a standard .zip archive.");
     names.push(...entries.map((e) => e.name));
     const skipRt = runtimeSkipper(names.filter((p) => !p.endsWith("/")));
-    const files = entries.filter((e) => !e.name.endsWith("/") && !skipRt(e.name));
+    const files = entries.filter((e) => !e.name.endsWith("/") && !skipRt(e.name) && !(opts?.skipAudio && isAudioPath(e.name)));
 
     // the UNPACKED total is what OPFS must hold — fail clearly before writing
     const totalOut = files.reduce((s, f) => s + f.uncompSize, 0);
@@ -342,7 +344,7 @@ async function doImport(
     // (no per-write swap-file copies, no contention with the console UI) — the
     // path that holds up on phones. Falls back to in-page extraction when
     // workers/sync handles aren't available.
-    const viaWorker = await extractInWorker(file, id, onProgress);
+    const viaWorker = await extractInWorker(file, id, !!opts?.skipAudio, onProgress);
     if (viaWorker) {
       bytes = viaWorker.bytes;
     } else {
@@ -421,6 +423,9 @@ async function doImport(
 
   // record the game root so the SW can prepend it (we didn't strip the tree)
   await writeMarker(dir, ".rpgmroot", det.root);
+  // lite install → the SW injects an AudioManager stub so the game never asks
+  // for the audio we skipped (a missing BGM would otherwise crash MV/MZ)
+  if (opts?.skipAudio) await writeMarker(dir, ".rpgmlite", "noaudio");
 
   const title = file.name.replace(/\.zip$/i, "").replace(/[._]+/g, " ").trim() || "RPG Maker Game";
   const cover = await bestCover(id, det.engine, det.root).catch(() => undefined);

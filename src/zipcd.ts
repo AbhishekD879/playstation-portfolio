@@ -104,6 +104,13 @@ export function runtimeSkipper(paths: string[]): (p: string) => boolean {
   };
 }
 
+/** Audio files — music, ambience, sound effects (plain + RPG Maker encrypted
+ *  variants). "Lite install" skips these: they're most of a game's bulk and
+ *  none of its logic. The player stubs the engine's AudioManager for lite
+ *  installs so the game never even asks for them. */
+export const isAudioPath = (p: string): boolean =>
+  /\.(ogg|mp3|m4a|wav|mid|midi|rpgmvo|ogg_|m4a_|wav_)$/i.test(p) || /(^|\/)(audio|music|sound)\//i.test(p);
+
 /** Turn cryptic zip errors into something a person can act on. */
 export function zipReadError(e: unknown): Error {
   const m = e instanceof Error ? e.message : String(e);
