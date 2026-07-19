@@ -1423,6 +1423,9 @@ img.status-avatar, img.ptile-avatar { object-fit: cover; border: 1px solid rgba(
 }
 .rpg-cell:hover .rpg-del, .rpg-cell.sel .rpg-del { opacity: 1; }
 .rpg-del:hover, .rpg-del.armed { color: #e0483e; }
+/* file inputs: off-screen but RENDERED (not display:none — Android ignores
+   .click() on a display:none input, which caused the picker to blink) */
+.rpg-file-input { position: absolute; width: 1px; height: 1px; opacity: 0; overflow: hidden; clip: rect(0 0 0 0); pointer-events: none; }
 .rpg-cellacts { display: flex; gap: 12px; }
 .rpg-reimp:hover { color: color-mix(in oklab, var(--xmb-tint) 80%, #fff); }
 .rpg-headacts { display: flex; align-items: center; gap: 8px; }

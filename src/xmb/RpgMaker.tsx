@@ -46,6 +46,13 @@ export default function RpgMaker(props: { profile: { id: string }; family: Famil
   // select OR cancel) or a hard timeout, whichever first.
   function openPicker(input: HTMLInputElement) {
     if (picking || importing()) return;
+    // A file picker can only open with genuine user activation. A gamepad
+    // "confirm" (or any synthetic click) has NONE — the browser rejects the
+    // picker the instant it opens, and if the trigger repeats you get the
+    // open/close blink. So on the pad path, bail when there's no activation
+    // (real taps go through the <label> and never reach here).
+    const ua = (navigator as unknown as { userActivation?: { isActive: boolean } }).userActivation;
+    if (ua && !ua.isActive) { setError("Tap “Add a game” to pick a file (the on-screen tile, not the controller)."); sfx.tickV(); return; }
     pickCleanup?.(); // drop any stale listeners from a previous session
     picking = true;
     let done = false;
@@ -237,10 +244,12 @@ export default function RpgMaker(props: { profile: { id: string }; family: Famil
                 </div>
                 <div class="rpg-title">{g.title}</div>
                 <div class="rpg-cellacts">
-                  <button class="rpg-del rpg-reimp" title="Replace the game files with a new zip — saves are kept"
-                    onClick={(e) => { e.stopPropagation(); reimportGame = g; openPicker(reimportInput); }}>
+                  {/* label opens the picker natively; onClick just records which
+                      game this re-import targets (runs before the native open) */}
+                  <label for="rpg-reimport-file" class="rpg-del rpg-reimp" title="Replace the game files with a new zip — saves are kept"
+                    onClick={(e) => { e.stopPropagation(); reimportGame = g; }}>
                     ↻ re-import
-                  </button>
+                  </label>
                   <button class="rpg-del" classList={{ armed: armDelete() === g.id }}
                     onClick={(e) => { e.stopPropagation(); setSel(i()); void del(g); }}>
                     {armDelete() === g.id ? "sure?" : "△ delete"}
@@ -249,12 +258,11 @@ export default function RpgMaker(props: { profile: { id: string }; family: Famil
               </div>
             )}
           </For>
-          {/* import tile */}
-          <div class="rpg-cell rpg-import-tile" classList={{ sel: sel() === importIdx() }} role="button" tabindex={0}
-            onClick={() => openPicker(fileInput)}>
+          {/* import tile — a real <label> so the tap natively opens the picker */}
+          <label for="rpg-add-file" class="rpg-cell rpg-import-tile" classList={{ sel: sel() === importIdx() }}>
             <div class="rpg-cover rpg-cover-add"><span class="rpg-cover-glyph"><Icon name="plus" /></span></div>
             <div class="rpg-title">Add a game (.zip)</div>
-          </div>
+          </label>
         </div>
 
         {/* advisory memory readout for the selected game — informs, never blocks */}
@@ -292,8 +300,12 @@ export default function RpgMaker(props: { profile: { id: string }; family: Famil
         </Show>
 
         <div class="panel-hint guide-hint">←→↑↓ browse · <span class="btn-x" /> play · △ delete · <span class="btn-o" /> back</div>
-        <input type="file" ref={fileInput} hidden accept=".zip,application/zip" onChange={() => void pickAndImport()} />
-        <input type="file" ref={reimportInput} hidden accept=".zip,application/zip" onChange={() => void pickAndReimport()} />
+        {/* Off-screen (NOT hidden — some Android browsers ignore .click() on a
+            display:none input, which is what made the picker blink open/closed).
+            A <label for> opens each natively on a real tap — no programmatic
+            click, so nothing can loop it. */}
+        <input id="rpg-add-file" class="rpg-file-input" type="file" ref={fileInput} accept=".zip,application/zip" onChange={() => void pickAndImport()} />
+        <input id="rpg-reimport-file" class="rpg-file-input" type="file" ref={reimportInput} accept=".zip,application/zip" onChange={() => void pickAndReimport()} />
       </div>
     </Show>
   );
