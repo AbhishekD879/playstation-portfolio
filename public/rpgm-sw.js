@@ -214,11 +214,21 @@ const MEDIA_SHIM = `<script>(function(){
     if(list.length) notify("unlocked",""); }
   document.addEventListener("pointerdown",unlock,true);
   document.addEventListener("touchend",unlock,true);
+  document.addEventListener("keydown",unlock,true);
   try{ var P=HTMLMediaElement.prototype.play;
     HTMLMediaElement.prototype.play=function(){ var el=this,r;
+      // CUTSCENE FIX: gameplay here is driven by SYNTHETIC key input (the
+      // on-screen controls), which grants no user activation — so an UNMUTED
+      // <video> is autoplay-blocked and the cutscene "blinks and goes away".
+      // A MUTED video autoplays without a gesture, so force video muted (the
+      // player doesn't want cutscene audio anyway). Keeps the sound off, keeps
+      // the scene ON.
+      if(el.tagName==="VIDEO"){ try{ el.muted=true; el.defaultMuted=true; el.setAttribute("muted",""); el.playsInline=true; el.setAttribute("playsinline",""); }catch(e){} }
       try{ r=P.apply(this,arguments); }catch(e){ notify("error",e&&e.message); throw e; }
       if(r&&r.catch){ r=r.catch(function(err){
-        if(err&&err.name==="NotAllowedError"){ if(blocked.indexOf(el)<0)blocked.push(el); notify("gesture",""); return; }
+        // still blocked (rare, e.g. audio) → queue for the next real gesture
+        if(err&&err.name==="NotAllowedError"){ try{el.muted=true;el.play();return;}catch(e){}
+          if(blocked.indexOf(el)<0)blocked.push(el); notify("gesture",""); return; }
         notify("error",(err&&(err.name+": "+err.message))||err); }); }
       return r; }; }catch(e){}
   document.addEventListener("error",function(ev){ var t=ev.target;
