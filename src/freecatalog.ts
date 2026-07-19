@@ -12,7 +12,8 @@ export type Cat = { title: string; tools: Tool[] };
 /** An owner-published entry (added live from /admin via the KV-backed API). */
 export type Entry = { id: string; name: string; url: string; note: string; category: string };
 
-export const CATALOG_API = "/api/catalog";
+export const CATALOG_API = "/api/catalog";               // public read
+export const CATALOG_WRITE_API = "/admin/api/catalog";   // write — behind Cloudflare Access
 export const hostOf = (u: string) => { try { return new URL(u).hostname.replace(/^www\./, ""); } catch { return u; } };
 
 /** Merge owner-published entries onto the built-in catalog: append to a category

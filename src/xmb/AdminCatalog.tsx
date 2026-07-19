@@ -9,7 +9,7 @@
 // Adding a NEW bulk scrape-source is a one-line edit to SOURCES in
 // freecatalog.ts (owner-controlled, in-repo) — kept clean by design.
 import { For, Show, createSignal, onMount } from "solid-js";
-import { CATALOG_API, CATS, SOURCES, hostOf, publishedUrls, type Entry } from "../freecatalog";
+import { CATALOG_API, CATALOG_WRITE_API, CATS, SOURCES, hostOf, publishedUrls, type Entry } from "../freecatalog";
 
 type Cand = { name: string; url: string; note: string; source: string };
 const RAW = "https://raw.githubusercontent.com/fmhy/edit/main/docs/";
@@ -102,10 +102,10 @@ export default function AdminCatalog() {
   async function publish() {
     setPub("publishing…");
     try {
-      const r = await fetch(CATALOG_API, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ entries: entries() }) });
+      const r = await fetch(CATALOG_WRITE_API, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ entries: entries() }) });
       const j = await r.json() as { count?: number; error?: string };
       if (r.ok) { setDirty(false); setPub(`✓ published ${j.count} entries — live on the site now`); }
-      else setPub(`✗ ${j.error || r.status}${r.status === 401 ? " (set ACCESS_TEAM_DOMAIN / ACCESS_AUD in Pages env vars)" : ""}`);
+      else setPub(`✗ ${j.error || r.status}${r.status === 401 ? " (make sure /admin is behind Cloudflare Access)" : ""}`);
     } catch { setPub("✗ network error"); }
   }
 
@@ -122,8 +122,8 @@ export default function AdminCatalog() {
         </span>
       </div>
       <div class="adm-warn">
-        Writes require this route behind <b>Cloudflare Access</b> + env vars <code>ACCESS_TEAM_DOMAIN</code> and <code>ACCESS_AUD</code>.
-        Entries publish live to the public app. Bulk scrape-sources are the whitelisted tool files only (edit <code>freecatalog.ts</code> to change them).
+        Publishing is authorized by <b>Cloudflare Access</b> on <code>/admin</code> (no env vars, no tokens to manage). Entries publish live to the public app.
+        Bulk scrape-sources are the whitelisted tool files only — edit <code>freecatalog.ts</code> to change them.
       </div>
 
       {/* —— published entries (your CMS) —— */}
