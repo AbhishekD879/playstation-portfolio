@@ -1,9 +1,11 @@
-// Privacy Toolkit — a curated, hand-picked shelf of FREE, non-tracking privacy
-// & security tools. Sourced from the LEGITIMATE part of FMHY's privacy list
-// (fmhy.net/privacy) — open-source software, privacy-respecting services and
-// educational guides ONLY. No streaming/download/ROM/crack/piracy sections.
-// Each entry just opens the tool's official site in a new tab; the console
-// stores and proxies nothing. Hidden by default — opt in via Labs.
+// Free & Open — a curated shelf of FREE, LEGAL, open resources: the parts of
+// FMHY (fmhy.net) that DON'T rely on piracy. AI tools, legal free streaming,
+// music, open-source games + emulator software, learning, dev tools, creative
+// tools, legal downloads, and a full privacy/security set. What's deliberately
+// NOT here: pirate streaming / download / torrent / ROM-site sections — those
+// facilitate copyright infringement and stay out of a public, real-name site.
+// Each entry just opens the official site in a new tab; the console stores and
+// proxies nothing. Hidden by default — opt in via Labs.
 import { For, onCleanup, onMount } from "solid-js";
 import * as sfx from "../audio";
 
@@ -11,6 +13,121 @@ type Tool = { name: string; url: string; note: string };
 type Cat = { title: string; tools: Tool[] };
 
 const CATS: Cat[] = [
+  {
+    title: "AI tools",
+    tools: [
+      { name: "ChatGPT", url: "https://chatgpt.com/", note: "Free tier" },
+      { name: "Claude", url: "https://claude.ai/", note: "Free tier" },
+      { name: "Google AI Studio", url: "https://aistudio.google.com/", note: "Free Gemini access" },
+      { name: "Perplexity", url: "https://www.perplexity.ai/", note: "AI answer engine" },
+      { name: "Le Chat (Mistral)", url: "https://chat.mistral.ai/", note: "Free chat" },
+      { name: "Hugging Face", url: "https://huggingface.co/", note: "Models + free Spaces" },
+      { name: "Ollama", url: "https://ollama.com/", note: "Run LLMs locally" },
+      { name: "LM Studio", url: "https://lmstudio.ai/", note: "Local LLM desktop app" },
+      { name: "Fooocus", url: "https://github.com/lllyasviel/Fooocus", note: "Local image generation" },
+    ],
+  },
+  {
+    title: "Free & legal streaming",
+    tools: [
+      { name: "Internet Archive", url: "https://archive.org/", note: "Public-domain film, audio, books" },
+      { name: "Tubi", url: "https://tubitv.com/", note: "Free legal movies & TV (ads)" },
+      { name: "Pluto TV", url: "https://pluto.tv/", note: "Free legal live TV" },
+      { name: "Plex (free)", url: "https://www.plex.tv/watch-free/", note: "Free legal movies & TV" },
+      { name: "Crackle", url: "https://www.crackle.com/", note: "Free legal streaming" },
+      { name: "Kanopy", url: "https://www.kanopy.com/", note: "Free with a library card" },
+      { name: "Hoopla", url: "https://www.hoopladigital.com/", note: "Free with a library card" },
+    ],
+  },
+  {
+    title: "Books & reading",
+    tools: [
+      { name: "Project Gutenberg", url: "https://www.gutenberg.org/", note: "75k+ public-domain books" },
+      { name: "Standard Ebooks", url: "https://standardebooks.org/", note: "Beautifully typeset PD books" },
+      { name: "LibriVox", url: "https://librivox.org/", note: "Public-domain audiobooks" },
+      { name: "Open Library", url: "https://openlibrary.org/", note: "Borrow & read (Internet Archive)" },
+      { name: "Wikibooks", url: "https://www.wikibooks.org/", note: "Free open textbooks" },
+    ],
+  },
+  {
+    title: "Music & podcasts",
+    tools: [
+      { name: "Free Music Archive", url: "https://freemusicarchive.org/", note: "Free & CC-licensed music" },
+      { name: "Bandcamp", url: "https://bandcamp.com/", note: "Free streaming + support artists" },
+      { name: "Musopen", url: "https://musopen.org/", note: "Public-domain classical" },
+      { name: "Jamendo", url: "https://www.jamendo.com/", note: "Creative-Commons music" },
+      { name: "NTS Radio", url: "https://www.nts.live/", note: "Free global radio" },
+      { name: "Radio Garden", url: "https://radio.garden/", note: "Spin the globe, hear local radio" },
+      { name: "AntennaPod", url: "https://antennapod.org/", note: "Open-source podcast app" },
+    ],
+  },
+  {
+    title: "Games & emulators (legal)",
+    tools: [
+      { name: "itch.io", url: "https://itch.io/", note: "Indie & free games" },
+      { name: "Epic Free Games", url: "https://store.epicgames.com/en-US/free-games", note: "Weekly free giveaways" },
+      { name: "GOG", url: "https://www.gog.com/", note: "DRM-free store + free games" },
+      { name: "IsThereAnyDeal", url: "https://isthereanydeal.com/", note: "Price & deal tracker" },
+      { name: "RetroArch", url: "https://www.retroarch.com/", note: "All-in-one emulator frontend" },
+      { name: "Dolphin", url: "https://dolphin-emu.org/", note: "GameCube / Wii emulator" },
+      { name: "PCSX2", url: "https://pcsx2.net/", note: "PlayStation 2 emulator" },
+      { name: "PPSSPP", url: "https://www.ppsspp.org/", note: "PSP emulator" },
+      { name: "0 A.D.", url: "https://play0ad.com/", note: "Open-source RTS" },
+      { name: "SuperTuxKart", url: "https://supertuxkart.net/", note: "Open-source kart racer" },
+    ],
+  },
+  {
+    title: "Learning",
+    tools: [
+      { name: "freeCodeCamp", url: "https://www.freecodecamp.org/", note: "Learn to code, free" },
+      { name: "The Odin Project", url: "https://www.theodinproject.com/", note: "Full-stack curriculum" },
+      { name: "MDN Web Docs", url: "https://developer.mozilla.org/", note: "The web reference" },
+      { name: "Khan Academy", url: "https://www.khanacademy.org/", note: "Free courses, all ages" },
+      { name: "MIT OpenCourseWare", url: "https://ocw.mit.edu/", note: "Real MIT course material" },
+      { name: "CS50", url: "https://cs50.harvard.edu/x/", note: "Harvard's intro to CS" },
+      { name: "roadmap.sh", url: "https://roadmap.sh/", note: "Developer learning paths" },
+    ],
+  },
+  {
+    title: "Developer tools",
+    tools: [
+      { name: "GitHub", url: "https://github.com/", note: "Code hosting" },
+      { name: "Codeberg", url: "https://codeberg.org/", note: "Nonprofit Git hosting" },
+      { name: "VS Code", url: "https://code.visualstudio.com/", note: "The editor" },
+      { name: "StackBlitz", url: "https://stackblitz.com/", note: "Instant web IDE" },
+      { name: "CodeSandbox", url: "https://codesandbox.io/", note: "Online IDE" },
+      { name: "Cloudflare Pages", url: "https://pages.cloudflare.com/", note: "Free static hosting" },
+      { name: "Hoppscotch", url: "https://hoppscotch.io/", note: "Open-source API client" },
+      { name: "DevDocs", url: "https://devdocs.io/", note: "All docs, one search" },
+      { name: "Excalidraw", url: "https://excalidraw.com/", note: "Whiteboard / diagrams" },
+      { name: "regex101", url: "https://regex101.com/", note: "Build & test regex" },
+    ],
+  },
+  {
+    title: "Creative & file tools",
+    tools: [
+      { name: "Photopea", url: "https://www.photopea.com/", note: "Photoshop in the browser, free" },
+      { name: "GIMP", url: "https://www.gimp.org/", note: "Open-source image editor" },
+      { name: "Krita", url: "https://krita.org/", note: "Open-source painting" },
+      { name: "Inkscape", url: "https://inkscape.org/", note: "Open-source vector editor" },
+      { name: "Squoosh", url: "https://squoosh.app/", note: "Compress images" },
+      { name: "HandBrake", url: "https://handbrake.fr/", note: "Video transcoder" },
+      { name: "Audacity", url: "https://www.audacityteam.org/", note: "Audio editor" },
+      { name: "VLC", url: "https://www.videolan.org/vlc/", note: "Plays anything" },
+      { name: "CloudConvert", url: "https://cloudconvert.com/", note: "Convert any file" },
+    ],
+  },
+  {
+    title: "Legal downloads & open data",
+    tools: [
+      { name: "Wikimedia Commons", url: "https://commons.wikimedia.org/", note: "Free media library" },
+      { name: "Unsplash", url: "https://unsplash.com/", note: "Free-to-use photos" },
+      { name: "Pexels", url: "https://www.pexels.com/", note: "Free photos & video" },
+      { name: "OpenGameArt", url: "https://opengameart.org/", note: "Free game assets" },
+      { name: "Ubuntu", url: "https://ubuntu.com/download", note: "Linux — free, legal ISOs / torrents" },
+      { name: "Academic Torrents", url: "https://academictorrents.com/", note: "Research datasets over torrent" },
+    ],
+  },
   {
     title: "Browsers & anti-tracking",
     tools: [
@@ -103,7 +220,7 @@ const CATS: Cat[] = [
     ],
   },
   {
-    title: "Guides & references",
+    title: "Privacy guides",
     tools: [
       { name: "Privacy Guides", url: "https://www.privacyguides.org/", note: "The go-to reference" },
       { name: "EFF Surveillance Self-Defense", url: "https://ssd.eff.org/", note: "Practical, plain-language" },
@@ -128,13 +245,15 @@ export default function Privacy(props: { onClose: () => void }) {
   return (
     <div class="pvk pad-focus-scope">
       <div class="pvk-head">
-        <div class="panel-tag">PRIVACY TOOLKIT · FREE &amp; OPEN</div>
+        <div class="panel-tag">FREE &amp; OPEN · CURATED</div>
         <button class="ps-act" onClick={() => { sfx.back(); props.onClose(); }}><span class="btn-o" /> back</button>
       </div>
       <div class="pvk-intro">
-        Hand-picked <b>free, non-tracking</b> privacy &amp; security tools — the legitimate slice of
-        {" "}<a href="https://fmhy.net/privacy" target="_blank" rel="noopener noreferrer">FMHY's privacy list</a>.
-        Each opens the tool's official site in a new tab; the console stores and proxies nothing.
+        The <b>free, legal &amp; open</b> corners of the internet — AI, streaming, music, games &amp; emulators,
+        learning, dev &amp; creative tools, and a full privacy set. Curated from the non-piracy parts of
+        {" "}<a href="https://fmhy.net/" target="_blank" rel="noopener noreferrer">FMHY</a>.
+        Each opens the official site in a new tab; the console stores and proxies nothing.
+        <span class="pvk-note"> Pirate streaming / download / torrent / ROM sites aren't here — by design.</span>
       </div>
       <div class="pvk-grid">
         <For each={CATS}>{(c) => (

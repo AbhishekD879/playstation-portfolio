@@ -362,7 +362,7 @@ export const CATEGORIES: XmbCategory[] = [
       { id: "tm", title: "Time Machine", sub: "Browse any website in 1996–today", icon: "clock", action: { type: "timemachine" } },
       { id: "map", title: "Planet Earth", sub: "Live globe — world tour, ISS, quakes & rain", icon: "globe", action: { type: "map" } },
       { id: "weather", title: "Weather", sub: "Live conditions & forecast", icon: "cloud", action: { type: "weather" } },
-      { id: "privacy", title: "Privacy Toolkit", sub: "Curated free & open privacy & security tools", icon: "lock", action: { type: "privacy" } },
+      { id: "privacy", title: "Free & Open", sub: "Curated free, legal & open tools — AI, media, games, dev, privacy", icon: "spark", action: { type: "privacy" } },
     ],
   },
   {

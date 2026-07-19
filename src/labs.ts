@@ -103,7 +103,7 @@ const APPS: { id: string; title: string; cat: string }[] = [
   { id: "tm", title: "Time Machine", cat: "Web" },
   { id: "map", title: "Planet Earth", cat: "Web" },
   { id: "weather", title: "Weather", cat: "Web" },
-  { id: "privacy", title: "Privacy Toolkit (free & open tools)", cat: "Web" },
+  { id: "privacy", title: "Free & Open (curated free/legal tools)", cat: "Web" },
   { id: "art", title: "Art Gallery", cat: "Photo" },
   { id: "apod", title: "Astronomy Photo of the Day", cat: "Photo" },
 ];
@@ -280,9 +280,9 @@ APP_GUIDES.renpy = {
   go: "app:renpy", goLabel: "OPEN REN'PY",
 };
 APP_GUIDES.privacy = {
-  what: "A curated shelf of free, open, non-tracking privacy & security tools — the LEGITIMATE slice of FMHY's privacy list (open-source apps, privacy-respecting services, guides). Adblockers, private browsers, VPNs, encrypted messengers, password managers, breach checks, anti-censorship, privacy-first OSes. Hidden by default; each entry opens the tool's official site — the console stores and proxies nothing. No streaming/download/piracy sections.",
-  steps: ["Enable this flag, then find it: Web › Privacy Toolkit", "Browse by category", "Tap a tool to open its official site in a new tab"],
-  go: "app:privacy", goLabel: "OPEN THE TOOLKIT",
+  what: "A curated shelf of the FREE, LEGAL & open corners of the internet — the non-piracy parts of FMHY. AI tools, legal free streaming (Tubi/Pluto/Archive), public-domain books & music, open-source games + emulator software, learning, developer & creative tools, legal downloads, and a full privacy/security set (browsers, VPNs, encrypted messengers, password managers, guides). Hidden by default; each entry opens the official site — the console stores and proxies nothing. Pirate streaming/download/torrent/ROM sites are deliberately excluded.",
+  steps: ["Enable this flag, then find it: Web › Free & Open", "Browse by category", "Tap anything to open its official site in a new tab"],
+  go: "app:privacy", goLabel: "OPEN IT",
 };
 APP_GUIDES.settingshub = {
   what: "Console Settings — the PS5-style hub: customize the console font and text size, re-icon any category or app from the PS glyph set, tune audio, pick a language, and manage every Labs flag in one place.",
