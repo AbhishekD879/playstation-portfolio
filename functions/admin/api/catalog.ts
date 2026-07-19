@@ -1,14 +1,11 @@
-// Free & Open catalog — ADMIN write. This route lives UNDER /admin, which is
-// protected by Cloudflare Access, so only the authenticated owner ever reaches
-// it (unauthenticated requests are blocked at Cloudflare's edge — they never hit
-// this code). No token verification, no team domain, no env vars needed.
-//
-// Defense-in-depth: Cloudflare injects Cf-Access-Jwt-Assertion on Access-
-// protected routes and strips any client-supplied copy. Its ABSENCE means this
-// route isn't actually behind Access → we refuse (fail-safe), so a
-// misconfiguration can't silently leave writes open.
+// Free & Open catalog — ADMIN write. Authorized by a single admin password held
+// server-side as the ADMIN_KEY variable (Pages → Settings → Variables; encrypt
+// it). The /admin CMS sends it as the x-admin-key header. This gates ONLY
+// publishing to the catalog — it has nothing to do with the public site, which
+// stays fully open. If ADMIN_KEY is unset, writes are refused (fail-safe).
 interface Env {
   GB: KVNamespace;
+  ADMIN_KEY?: string;
 }
 type Entry = { id: string; name: string; url: string; note: string; category: string };
 const KEY = "catalog:v1";
@@ -16,10 +13,18 @@ const MAX = 2000;
 const json = (data: unknown, status = 200) =>
   new Response(JSON.stringify(data), { status, headers: { "content-type": "application/json", "cache-control": "no-store" } });
 
+// constant-time-ish string compare (avoid leaking length/prefix via timing)
+function safeEqual(a: string, b: string): boolean {
+  if (typeof a !== "string" || typeof b !== "string" || a.length !== b.length) return false;
+  let r = 0;
+  for (let i = 0; i < a.length; i++) r |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  return r === 0;
+}
+
 export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
-  if (!request.headers.get("Cf-Access-Jwt-Assertion")) {
-    return json({ error: "unauthorized — this route must be behind Cloudflare Access (it is, once /admin is protected)" }, 401);
-  }
+  if (!env.ADMIN_KEY) return json({ error: "admin locked — set the ADMIN_KEY variable in Pages → Settings → Variables" }, 503);
+  if (!safeEqual(request.headers.get("x-admin-key") ?? "", env.ADMIN_KEY)) return json({ error: "wrong admin password" }, 401);
+
   let body: { entries?: unknown };
   try { body = await request.json(); } catch { return json({ error: "bad json" }, 400); }
   const arr = Array.isArray(body?.entries) ? body.entries : null;
@@ -30,10 +35,10 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
   const seen = new Set<string>();
   for (const raw of arr as Record<string, unknown>[]) {
     const url = String(raw?.url ?? "").trim();
-    if (!/^https?:\/\//i.test(url)) continue;            // only real http(s) links
-    const key = url.replace(/\/+$/, "").toLowerCase();
-    if (seen.has(key)) continue;
-    seen.add(key);
+    if (!/^https?:\/\//i.test(url)) continue;
+    const k = url.replace(/\/+$/, "").toLowerCase();
+    if (seen.has(k)) continue;
+    seen.add(k);
     clean.push({
       id: String(raw?.id ?? "").slice(0, 40) || crypto.randomUUID(),
       name: String(raw?.name ?? "").trim().slice(0, 80),

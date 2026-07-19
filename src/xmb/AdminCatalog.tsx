@@ -9,7 +9,7 @@
 // Adding a NEW bulk scrape-source is a one-line edit to SOURCES in
 // freecatalog.ts (owner-controlled, in-repo) — kept clean by design.
 import { For, Show, createSignal, onMount } from "solid-js";
-import { CATALOG_API, CATALOG_WRITE_API, CATS, SOURCES, hostOf, publishedUrls, type Entry } from "../freecatalog";
+import { CATALOG_API, CATALOG_AUTH_API, CATALOG_WRITE_API, CATS, SOURCES, hostOf, publishedUrls, type Entry } from "../freecatalog";
 
 type Cand = { name: string; url: string; note: string; source: string };
 const RAW = "https://raw.githubusercontent.com/fmhy/edit/main/docs/";
@@ -37,7 +37,27 @@ function parseMd(md: string, source: string): Cand[] {
   return out;
 }
 
+const AKEY = "asp.admin.key";
+
 export default function AdminCatalog() {
+  // —— admin login (password gates ONLY /admin; the public site is untouched) ——
+  const [authed, setAuthed] = createSignal(false);
+  const [keyInput, setKeyInput] = createSignal("");
+  const [authMsg, setAuthMsg] = createSignal("");
+  let adminKey = sessionStorage.getItem(AKEY) ?? "";
+
+  async function tryLogin(pw: string) {
+    setAuthMsg("checking…");
+    try {
+      const r = await fetch(CATALOG_AUTH_API, { method: "POST", headers: { "x-admin-key": pw } });
+      if (r.ok) { adminKey = pw; sessionStorage.setItem(AKEY, pw); setAuthed(true); setAuthMsg(""); void loadEntries().then(loadCands); return; }
+      const j = await r.json().catch(() => ({}));
+      setAuthMsg(r.status === 503 ? ((j as { error?: string }).error ?? "ADMIN_KEY not set yet") : "wrong password");
+      if (r.status !== 503) { sessionStorage.removeItem(AKEY); adminKey = ""; }
+    } catch { setAuthMsg("network error"); }
+  }
+  const logout = () => { sessionStorage.removeItem(AKEY); adminKey = ""; setAuthed(false); setKeyInput(""); };
+
   // —— published (owner) entries ——
   const [entries, setEntries] = createSignal<Entry[]>([]);
   const [dirty, setDirty] = createSignal(false);
@@ -84,7 +104,8 @@ export default function AdminCatalog() {
     setCands(all);
     setStatus(`${all.length} new candidates · ${ok}/${active.length} sources${fail ? ` · ${fail} failed (CORS/offline?)` : ""}`);
   }
-  onMount(() => { void loadEntries().then(loadCands); });
+  // resume a session if a password is already stored (verify it's still valid)
+  onMount(() => { if (adminKey) void tryLogin(adminKey); });
 
   function addEntry() {
     const url = fUrl().trim();
@@ -102,10 +123,10 @@ export default function AdminCatalog() {
   async function publish() {
     setPub("publishing…");
     try {
-      const r = await fetch(CATALOG_WRITE_API, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ entries: entries() }) });
+      const r = await fetch(CATALOG_WRITE_API, { method: "POST", headers: { "content-type": "application/json", "x-admin-key": adminKey }, body: JSON.stringify({ entries: entries() }) });
       const j = await r.json() as { count?: number; error?: string };
       if (r.ok) { setDirty(false); setPub(`✓ published ${j.count} entries — live on the site now`); }
-      else setPub(`✗ ${j.error || r.status}${r.status === 401 ? " (make sure /admin is behind Cloudflare Access)" : ""}`);
+      else { setPub(`✗ ${j.error || r.status}`); if (r.status === 401) logout(); }
     } catch { setPub("✗ network error"); }
   }
 
@@ -113,12 +134,26 @@ export default function AdminCatalog() {
   const byCat = () => { const m = new Map<string, Entry[]>(); for (const e of entries()) { const c = e.category || "Added by owner"; if (!m.has(c)) m.set(c, []); m.get(c)!.push(e); } return [...m]; };
 
   return (
+    <Show when={authed()} fallback={
+      <div class="adm adm-login">
+        <div class="adm-login-box">
+          <div class="adm-login-title">🔒 Admin</div>
+          <div class="adm-login-sub">Only you get in here. The public site has no login and is unaffected.</div>
+          <input class="adm-search" type="password" autocomplete="current-password" placeholder="admin password"
+            value={keyInput()} onInput={(e) => setKeyInput(e.currentTarget.value)}
+            onKeyDown={(e) => { if (e.key === "Enter") void tryLogin(keyInput()); }} />
+          <button class="adm-btn primary" onClick={() => void tryLogin(keyInput())}>unlock</button>
+          <Show when={authMsg()}><div class="adm-login-msg">{authMsg()}</div></Show>
+        </div>
+      </div>
+    }>
     <div class="adm">
       <div class="adm-bar">
         <b>ADMIN · FREE &amp; OPEN CMS</b>
         <span class="adm-actions">
           <button class="adm-btn primary" classList={{ dirty: dirty() }} onClick={publish}>{dirty() ? "● publish changes" : "publish"}</button>
           <span class="adm-status">{pub()}</span>
+          <button class="adm-btn" onClick={logout}>lock</button>
         </span>
       </div>
       <div class="adm-warn">
@@ -187,5 +222,6 @@ export default function AdminCatalog() {
         <Show when={shown().length === 0}><div class="adm-empty">{status()}</div></Show>
       </div>
     </div>
+    </Show>
   );
 }
