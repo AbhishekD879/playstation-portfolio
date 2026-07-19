@@ -189,23 +189,47 @@ const DIAG_SHIM = `<script>(function(){
     return el; }; W.prototype=Native.prototype; return W; }
   try{ window.Image=wrapMediaCtor(window.Image); }catch(e){}
   try{ if(window.Audio) window.Audio=wrapMediaCtor(window.Audio); }catch(e){}
-  // ENGINE-LEVEL probe: RPG Maker's "Show Picture" (cutscenes) goes through
-  // ImageManager.loadPicture. Logging it tells us whether the ENGINE even asks
-  // for the picture — the difference between "image won't load" and "the event
-  // never ran". Poll until the engine defines it (after our head script).
-  var engTries=0, engIv=setInterval(function(){
-    var IM=window.ImageManager;
-    if(IM){
-      clearInterval(engIv);
-      ["loadPicture","loadBitmap","loadCharacter","loadFace","loadBattleback1","loadBattleback2","loadParallax"].forEach(function(m){
-        if(typeof IM[m]!=="function"||IM["__w_"+m]) return; IM["__w_"+m]=true;
-        var orig=IM[m];
-        IM[m]=function(){ try{ var a=Array.prototype.slice.call(arguments).filter(function(x){return typeof x==="string";}).join("/");
-          activity.unshift({path:"engine."+m+"("+a+")", ok:true, reason:"engine requested", t:Date.now()-T0}); if(activity.length>30)activity.pop(); }catch(e){}
-          return orig.apply(this,arguments); };
-      });
-    } else if(++engTries>3000){ clearInterval(engIv); }
+  // ENGINE TRACE (a real debugger): wrap RPG Maker's subsystems so the feed
+  // shows everything the engine DOES — event commands (Show Picture, Plugin
+  // Command, Common Event…), data + image loads, audio, scene changes — not
+  // just raw network. This is what reveals whether a "talk → cutscene" event
+  // even runs and where it stops. Poll until the engine classes exist.
+  function elog(path, reason){ activity.unshift({path:path, ok:true, reason:reason||"", t:Date.now()-T0}); if(activity.length>250) activity.pop(); }
+  var CMD={101:"Show Text",102:"Show Choices",103:"Input Number",104:"Select Item",105:"Scroll Text",
+    108:"Comment",111:"Conditional",112:"Loop",115:"Abort",117:"Common Event",119:"Jump Label",
+    201:"Transfer",203:"Set Event Loc",204:"Scroll Map",205:"Move Route",211:"Transparency",
+    212:"Show Animation",213:"Show Balloon",216:"Erase Event",221:"Fadeout",222:"Fadein",223:"Tint Screen",
+    224:"Flash",225:"Shake",230:"Wait",231:"Show Picture",232:"Move Picture",233:"Rotate Picture",
+    234:"Tint Picture",235:"Erase Picture",236:"Weather",241:"Play BGM",245:"Play ME",249:"Play SE",
+    250:"Play SE",251:"Stop SE",261:"Play Movie",301:"Battle",302:"Shop",351:"Menu",352:"Save",
+    355:"Script",356:"Plugin Cmd",357:"Plugin Cmd"};
+  var INTERESTING={101:1,102:1,105:1,115:1,117:1,201:1,204:1,212:1,213:1,221:1,222:1,223:1,224:1,225:1,231:1,232:1,233:1,234:1,235:1,236:1,241:1,245:1,249:1,250:1,261:1,301:1,302:1,351:1,352:1,355:1,356:1,357:1};
+  function briefCmd(c){ try{ var p=c.parameters||[];
+    if(c.code===231||c.code===232||c.code===233||c.code===234) return "#"+p[0]+(p[1]?" "+p[1]:"");
+    if(c.code===235) return "#"+p[0];
+    if(c.code===117) return "commonEvent#"+p[0];
+    if(c.code===356) return String(p[0]).slice(0,70);
+    if(c.code===357) return (p[1]||"?")+" ["+(p[0]||"")+"]";
+    if(c.code===355) return String(p[0]).slice(0,60);
+    if(c.code===201) return "map#"+p[1];
+    if(c.code===241||c.code===245||c.code===249||c.code===250) return (p[0]&&p[0].name)||"";
+    if(c.code===111) return "branch";
+    return ""; }catch(e){ return ""; } }
+  var hkTries=0, hkIv=setInterval(function(){
+    var IM=window.ImageManager, GI=window.Game_Interpreter, DM=window.DataManager, AM=window.AudioManager, SM=window.SceneManager;
+    if(IM && !IM.__diag){ IM.__diag=1;
+      ["loadPicture","loadCharacter","loadFace","loadBattleback1","loadBattleback2","loadParallax","loadTileset","loadSystem"].forEach(function(m){
+        if(typeof IM[m]!=="function")return; var o=IM[m]; IM[m]=function(){ var a=Array.prototype.slice.call(arguments).filter(function(x){return typeof x==="string";}).join("/"); elog("img."+m+"("+a+")","engine img"); return o.apply(this,arguments); }; }); }
+    if(GI && GI.prototype && !GI.prototype.__diag){ GI.prototype.__diag=1;
+      var ec=GI.prototype.executeCommand; GI.prototype.executeCommand=function(){ try{ var c=this._list&&this._list[this._index];
+        if(c&&INTERESTING[c.code]){ elog("cmd "+c.code+" "+(CMD[c.code]||"?")+(briefCmd(c)?": "+briefCmd(c):""), "event"); } }catch(e){} return ec.apply(this,arguments); }; }
+    if(DM && !DM.__diag){ DM.__diag=1; if(typeof DM.loadDataFile==="function"){ var ld=DM.loadDataFile; DM.loadDataFile=function(name,src){ elog("data "+src,"data"); return ld.apply(this,arguments); }; } }
+    if(AM && !AM.__diag){ AM.__diag=1; ["playBgm","playBgs","playMe","playSe"].forEach(function(m){ if(typeof AM[m]!=="function")return; var o=AM[m]; AM[m]=function(x){ elog("audio."+m+"("+((x&&x.name)||"")+")","audio"); return o.apply(this,arguments); }; }); }
+    if(SM && !SM.__diag){ SM.__diag=1; ["push","goto","pop"].forEach(function(m){ if(typeof SM[m]!=="function")return; var o=SM[m]; SM[m]=function(s){ elog("scene."+m+" → "+((s&&s.name)||""),"scene"); return o.apply(this,arguments); }; }); }
+    if(++hkTries>3000) clearInterval(hkIv);
   }, 10);
+  // Clear-log command from the host debugger (the "Clear" button)
+  window.addEventListener("message", function(e){ if(e.data&&e.data.__rpgmDiagClear){ activity.length=0; recent.length=0; errors.length=0; counts.ok=0; counts.fail=0; post(); } });
   try { var XO=XMLHttpRequest.prototype.open, XS=XMLHttpRequest.prototype.send;
     XMLHttpRequest.prototype.open=function(m,u){ this.__du=u; return XO.apply(this,arguments); };
     XMLHttpRequest.prototype.send=function(){ var x=this,id=begin(x.__du);

@@ -175,6 +175,12 @@ export default function RpgPlayer(props: {
 
   const stuck = () => (diag()?.pending ?? []).filter((p) => p.age > 4000);
   const clean = () => { const d = diag(); return d && d.errors.length === 0 && stuck().length === 0 && d.recent.length === 0; };
+  // debugger: wipe the in-game trace buffers so the next thing you do (trigger
+  // the cutscene) shows a clean sequence of exactly what the engine did.
+  const clearDiag = () => {
+    try { (frame?.contentWindow as Window | null)?.postMessage({ __rpgmDiagClear: true }, "*"); } catch { /* frame gone */ }
+    setDiag(null);
+  };
 
   return (
     <div class="rpgplay" ref={container} classList={{ touch }}>
@@ -274,9 +280,13 @@ export default function RpgPlayer(props: {
       <Show when={showDiag() && phase() !== "prelaunch"}>
         <div class="rpg-diag">
           <div class="rpg-diag-head">
-            <span>DIAGNOSTICS</span>
-            <button class="ps-act" onClick={() => setShowDiag(false)}>close</button>
+            <span>DIAGNOSTICS · engine trace</span>
+            <span class="rpg-diag-btns">
+              <button class="ps-act" onClick={clearDiag}>clear</button>
+              <button class="ps-act" onClick={() => setShowDiag(false)}>close</button>
+            </span>
           </div>
+          <div class="rpg-diag-tip">Tap <b>clear</b>, then trigger the scene in-game — the list below is everything the engine did, newest first.</div>
           <div class="rpg-diag-state">
             {(() => {
               const d = diag();
