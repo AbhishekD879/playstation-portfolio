@@ -36,6 +36,8 @@ export default function RpgPlayer(props: {
   // error string to show (e.g. Safari can't decode .webm movies)
   const [mediaHint, setMediaHint] = createSignal("");
   let mediaHintTimer: ReturnType<typeof setTimeout> | undefined;
+  const [dumpText, setDumpText] = createSignal(""); // full exportable trace
+  const [verbose, setVerbose] = createSignal(false); // log EVERY event command
   let frame!: HTMLIFrameElement;
   let container!: HTMLDivElement;
   let release: (() => void) | undefined;
@@ -117,6 +119,11 @@ export default function RpgPlayer(props: {
       if (e.origin !== location.origin) return;
       const d = e.data as Snap & { kind?: string; msg?: string };
       if (d && d.source === "rpgm-diag") setDiag(d as Snap);
+      if (d && (d as { source?: string }).source === "rpgm-diag-dump") {
+        const t = (d as { text?: string }).text ?? "";
+        setDumpText(t);
+        try { void navigator.clipboard?.writeText?.(t); } catch { /* clipboard blocked — the textarea is the fallback */ }
+      }
       if (d && (d as { source?: string }).source === "rpgm-media") {
         clearTimeout(mediaHintTimer);
         if (d.kind === "gesture") setMediaHint("gesture");
@@ -179,8 +186,10 @@ export default function RpgPlayer(props: {
   // the cutscene) shows a clean sequence of exactly what the engine did.
   const clearDiag = () => {
     try { (frame?.contentWindow as Window | null)?.postMessage({ __rpgmDiagClear: true }, "*"); } catch { /* frame gone */ }
-    setDiag(null);
+    setDiag(null); setDumpText("");
   };
+  const copyLog = () => { try { (frame?.contentWindow as Window | null)?.postMessage({ __rpgmDiagDump: true }, "*"); } catch { /* frame gone */ } };
+  const toggleVerbose = () => { const v = !verbose(); setVerbose(v); try { (frame?.contentWindow as Window | null)?.postMessage({ __rpgmDiagVerbose: v }, "*"); } catch { /* frame gone */ } };
 
   return (
     <div class="rpgplay" ref={container} classList={{ touch }}>
@@ -282,11 +291,20 @@ export default function RpgPlayer(props: {
           <div class="rpg-diag-head">
             <span>DIAGNOSTICS · engine trace</span>
             <span class="rpg-diag-btns">
+              <button class="ps-act" classList={{ on: verbose() }} onClick={toggleVerbose}>verbose: {verbose() ? "on" : "off"}</button>
+              <button class="ps-act" onClick={copyLog}>copy log</button>
               <button class="ps-act" onClick={clearDiag}>clear</button>
               <button class="ps-act" onClick={() => setShowDiag(false)}>close</button>
             </span>
           </div>
-          <div class="rpg-diag-tip">Tap <b>clear</b>, then trigger the scene in-game — the list below is everything the engine did, newest first.</div>
+          <div class="rpg-diag-tip">Turn on <b>verbose</b> → tap <b>clear</b> → trigger the scene → tap <b>copy log</b>, then paste it to share with me. Newest first below.</div>
+          <Show when={dumpText()}>
+            <div class="rpg-diag-dump">
+              <div class="rpg-diag-dumphd"><span>Log copied to clipboard — paste it to share (or select all in the box).</span>
+                <button class="ps-act" onClick={() => setDumpText("")}>✕</button></div>
+              <textarea class="rpg-diag-dumptext" readonly value={dumpText()} onClick={(e) => (e.currentTarget as HTMLTextAreaElement).select()} />
+            </div>
+          </Show>
           <div class="rpg-diag-state">
             {(() => {
               const d = diag();

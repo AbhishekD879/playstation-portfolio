@@ -81,14 +81,16 @@ const NW_SHIM = `<script>(function(){
         var a=new Uint8Array(ab);
         a.toString=function(){ try{ return new TextDecoder().decode(new Uint8Array(this)); }catch(e){ return ""; } };
         return a; }); }); };
-  var fs={existsSync:function(){return false;},readFileSync:function(p){throw new Error("fs sync reads unavailable in browser: "+p);},
+  var dl=function(p,r){ try{ if(window.__diaglog) window.__diaglog(p,r); }catch(e){} };
+  var fs={existsSync:function(p){dl("fs.existsSync "+p,"scaffold →false");return false;},readFileSync:function(p){dl("fs.readFileSync "+p,"scaffold sync-unavailable");throw new Error("fs sync reads unavailable in browser: "+p);},
     writeFileSync:noop,appendFileSync:noop,mkdirSync:noop,rmdirSync:noop,unlinkSync:noop,renameSync:noop,copyFileSync:noop,
     readdirSync:function(){return [];},statSync:function(){return{isDirectory:ret(false),isFile:ret(false),size:0};},
     writeFile:function(){var cb=arguments[arguments.length-1];if(typeof cb==="function")cb(null);},
     readFile:function(p,opt,cb){ if(typeof opt==="function"){cb=opt;opt=null;}
       var enc=typeof opt==="string"?opt:(opt&&opt.encoding);
+      dl("fs.readFile "+p,"scaffold async");
       fsRead(p,enc).then(function(d){ if(typeof cb==="function")cb(null,d); },
-        function(e){ if(typeof cb==="function")cb(e); }); },
+        function(e){ dl("fs.readFile "+p,"scaffold FAILED: "+(e&&e.message)); if(typeof cb==="function")cb(e); }); },
     promises:{ readFile:function(p,opt){ return fsRead(p, typeof opt==="string"?opt:(opt&&opt.encoding)); } }};
   var win={on:noop,removeAllListeners:noop,show:noop,hide:noop,focus:noop,blur:noop,close:noop,reload:noop,
     maximize:noop,unmaximize:noop,minimize:noop,restore:noop,setProgressBar:noop,setResizable:noop,requestAttention:noop,
@@ -110,7 +112,7 @@ const NW_SHIM = `<script>(function(){
       ipcRenderer:{on:noop,once:noop,send:noop,removeListener:noop,invoke:function(){return Promise.resolve();}}},
     child_process:{execSync:noop,exec:function(){var cb=arguments[arguments.length-1];if(typeof cb==="function")cb(null,"","");},
       spawn:function(){return{on:noop,unref:noop,stdout:{on:noop},stderr:{on:noop}};}}};
-  window.require=function(n){return modules[n]||{};};
+  window.require=function(n){ try{ if(window.__diaglog) window.__diaglog("require('"+n+"')", modules[n]?"scaffold ok":"scaffold MISSING — plugin may break"); }catch(e){} return modules[n]||{};};
   // process must be an OBJECT (plugins read process.platform), but two traps:
   // (1) MZ main.js isPathRandomized() reads process.mainModule.filename
   //     unconditionally (only gated on typeof process==="object"), so a bare
@@ -204,6 +206,9 @@ const DIAG_SHIM = `<script>(function(){
   // just raw network. This is what reveals whether a "talk → cutscene" event
   // even runs and where it stops. Poll until the engine classes exist.
   function elog(path, reason){ activity.unshift({path:path, ok:true, reason:reason||"", t:Date.now()-T0}); if(activity.length>250) activity.pop(); }
+  // the NW.js shim (require/fs) calls this so our SCAFFOLDING shows in the trace
+  try { window.__diaglog = function(p, r){ elog(String(p), r || "scaffold"); }; } catch(e){}
+  var VERBOSE = false; // when on, EVERY event command is logged (not just the cutscene-relevant set)
   var CMD={101:"Show Text",102:"Show Choices",103:"Input Number",104:"Select Item",105:"Scroll Text",
     108:"Comment",111:"Conditional",112:"Loop",115:"Abort",117:"Common Event",119:"Jump Label",
     201:"Transfer",203:"Set Event Loc",204:"Scroll Map",205:"Move Route",211:"Transparency",
@@ -237,7 +242,7 @@ const DIAG_SHIM = `<script>(function(){
           var s="", j=this._index, L=this._list;
           while(j<L.length&&(L[j].code===355||L[j].code===655)){ s+=((L[j].parameters&&L[j].parameters[0])||"")+" "; j++; }
           s=s.replace(/\\s+/g," ").trim(); elog("cmd 355 Script: "+s.slice(0,500), "script");
-        } else if(c&&INTERESTING[c.code]){ elog("cmd "+c.code+" "+(CMD[c.code]||"?")+(briefCmd(c)?": "+briefCmd(c):""), "event"); } }catch(e){} return ec.apply(this,arguments); }; }
+        } else if(c&&(VERBOSE||INTERESTING[c.code])){ elog("cmd "+c.code+" "+(CMD[c.code]||"?")+(briefCmd(c)?": "+briefCmd(c):""), "event"); } }catch(e){} return ec.apply(this,arguments); }; }
     // catch errors thrown by Script (355) / Plugin (356/357) commands even if
     // the engine swallows them — that's the silent cutscene failure.
     if(GI && GI.prototype && !GI.prototype.__diag2){ GI.prototype.__diag2=1;
@@ -247,10 +252,40 @@ const DIAG_SHIM = `<script>(function(){
     if(DM && !DM.__diag){ DM.__diag=1; if(typeof DM.loadDataFile==="function"){ var ld=DM.loadDataFile; DM.loadDataFile=function(name,src){ elog("data "+src,"data"); return ld.apply(this,arguments); }; } }
     if(AM && !AM.__diag){ AM.__diag=1; ["playBgm","playBgs","playMe","playSe"].forEach(function(m){ if(typeof AM[m]!=="function")return; var o=AM[m]; AM[m]=function(x){ elog("audio."+m+"("+((x&&x.name)||"")+")","audio"); return o.apply(this,arguments); }; }); }
     if(SM && !SM.__diag){ SM.__diag=1; ["push","goto","pop"].forEach(function(m){ if(typeof SM[m]!=="function")return; var o=SM[m]; SM[m]=function(s){ elog("scene."+m+" → "+((s&&s.name)||""),"scene"); return o.apply(this,arguments); }; }); }
+    // THE engine's OWN error handlers — the internal catch that eats a cutscene
+    // error and makes it "blink" without a window error. This is what surfaces
+    // the real failure.
+    if(SM && !SM.__diagErr){ SM.__diagErr=1;
+      ["catchException","onError","catchLoadError","catchNormalError","catchUnknownError"].forEach(function(m){ if(typeof SM[m]!=="function")return; var o=SM[m]; SM[m]=function(e){ try{ var msg=(e&&(e.message||e.name))||String(e); addErr("SceneManager."+m+": "+String(msg).slice(0,240), (e&&e.stack)?String(e.stack).split("\\n").slice(1,3).join(" | ").slice(0,200):""); }catch(_){} return o.apply(this,arguments); }; }); }
+    if(window.Graphics && !window.Graphics.__diag && typeof window.Graphics.printError==="function"){ window.Graphics.__diag=1; var pe=window.Graphics.printError; window.Graphics.printError=function(nm,ms){ addErr("Graphics.printError: "+nm+" — "+ms, ""); return pe.apply(this,arguments); }; }
+    // plugin list + plugin-command dispatch (a Script calling a plugin command
+    // that isn't registered is a prime silent-cutscene cause)
+    var PM=window.PluginManager;
+    if(PM && !PM.__diag){ PM.__diag=1;
+      try{ if(window.$plugins&&window.$plugins.length) elog("plugins loaded: "+window.$plugins.map(function(p){return p.name+(p.status?"":"(OFF)");}).join(", "), "info"); }catch(e){}
+      if(typeof PM.callCommand==="function"){ var cc=PM.callCommand; PM.callCommand=function(intp,plugin,cmd){ elog("pluginCmd "+plugin+" :: "+cmd, "event"); return cc.apply(this,arguments); }; } }
     if(++hkTries>3000) clearInterval(hkIv);
   }, 10);
-  // Clear-log command from the host debugger (the "Clear" button)
-  window.addEventListener("message", function(e){ if(e.data&&e.data.__rpgmDiagClear){ activity.length=0; recent.length=0; errors.length=0; counts.ok=0; counts.fail=0; post(); } });
+
+  // full, shareable text dump of the whole trace (for the host's Copy button)
+  function buildDump(){ var L=["=== RPGM DIAG DUMP ==="];
+    var sc=(window.SceneManager&&SceneManager._scene&&SceneManager._scene.constructor)?SceneManager._scene.constructor.name:"";
+    L.push("up "+Math.round((Date.now()-T0)/1000)+"s · scene "+sc+" · ok "+counts.ok+" / fail "+counts.fail);
+    L.push("ua: "+navigator.userAgent);
+    try{ if(window.$plugins) L.push("plugins: "+window.$plugins.map(function(p){return p.name+(p.status?"":"(OFF)");}).join(", ")); }catch(e){}
+    try{ if(window.PluginManager&&PluginManager._commands) L.push("pluginCommands: "+Object.keys(PluginManager._commands).join(", ")); }catch(e){}
+    if(errors.length){ L.push(""); L.push("-- ERRORS --"); errors.forEach(function(x){ L.push("  ! "+x.msg+(x.at?" ("+x.at+")":"")); }); }
+    if(recent.length){ L.push(""); L.push("-- FAILED LOADS --"); recent.forEach(function(r){ L.push("  x "+r.path+" · "+r.status); }); }
+    L.push(""); L.push("-- ACTIVITY (oldest first, "+activity.length+" entries) --");
+    activity.slice().reverse().forEach(function(a){ L.push("  "+(a.ok?"+":"x")+" ["+Math.round(a.t)+"ms] "+a.path+(a.reason?" · "+a.reason:"")); });
+    return L.join("\\n");
+  }
+  // host commands: clear log · toggle verbose · dump full log to share
+  window.addEventListener("message", function(e){ if(!e.data) return;
+    if(e.data.__rpgmDiagClear){ activity.length=0; recent.length=0; errors.length=0; counts.ok=0; counts.fail=0; post(); }
+    else if(e.data.__rpgmDiagVerbose!==undefined){ VERBOSE=!!e.data.__rpgmDiagVerbose; elog("verbose logging "+(VERBOSE?"ON":"OFF"), "info"); post(); }
+    else if(e.data.__rpgmDiagDump){ try{ parent.postMessage({source:"rpgm-diag-dump", text: buildDump()}, "*"); }catch(_){} }
+  });
   try { var XO=XMLHttpRequest.prototype.open, XS=XMLHttpRequest.prototype.send;
     XMLHttpRequest.prototype.open=function(m,u){ this.__du=u; return XO.apply(this,arguments); };
     XMLHttpRequest.prototype.send=function(){ var x=this,id=begin(x.__du);
