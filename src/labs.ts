@@ -55,7 +55,7 @@ const FEATURE_GROUPS: FlagGroup[] = [
 ];
 
 /** Flags that ship OFF and are opted INTO via Labs (experimental tier). */
-const DEFAULT_OFF = new Set(["crt", "galaxyboot"]); // opt-in: full-console CRT, GPU galaxy boot
+const DEFAULT_OFF = new Set(["crt", "galaxyboot", "privacy"]); // opt-in: full-console CRT, GPU galaxy boot, hidden Privacy Toolkit
 
 // —— apps (each id matches the XmbItem id it hides on the crossbar) ——
 const APPS: { id: string; title: string; cat: string }[] = [
@@ -103,6 +103,7 @@ const APPS: { id: string; title: string; cat: string }[] = [
   { id: "tm", title: "Time Machine", cat: "Web" },
   { id: "map", title: "Planet Earth", cat: "Web" },
   { id: "weather", title: "Weather", cat: "Web" },
+  { id: "privacy", title: "Privacy Toolkit (free & open tools)", cat: "Web" },
   { id: "art", title: "Art Gallery", cat: "Photo" },
   { id: "apod", title: "Astronomy Photo of the Day", cat: "Photo" },
 ];
@@ -277,6 +278,11 @@ APP_GUIDES.renpy = {
   what: "Bring-your-own Ren'Py visual novels (experimental). Ren'Py WEB builds play in the browser — self-contained HTML5 + WASM (CPython + the Ren'Py engine), served from this device. To make one: open your game in the Ren'Py launcher and choose Build → Web, then zip and import the result. Desktop Ren'Py builds CAN'T run in a browser (the engine ships as platform-native code and scripts are locked to one engine version) — they're detected and saved with a note to re-export for web. Nothing is uploaded; the game lives only in this browser.",
   steps: ["Game › Ren'Py", "In the Ren'Py launcher: Build → Web, then zip the output folder", "Add the .zip — web builds boot straight to the title menu"],
   go: "app:renpy", goLabel: "OPEN REN'PY",
+};
+APP_GUIDES.privacy = {
+  what: "A curated shelf of free, open, non-tracking privacy & security tools — the LEGITIMATE slice of FMHY's privacy list (open-source apps, privacy-respecting services, guides). Adblockers, private browsers, VPNs, encrypted messengers, password managers, breach checks, anti-censorship, privacy-first OSes. Hidden by default; each entry opens the tool's official site — the console stores and proxies nothing. No streaming/download/piracy sections.",
+  steps: ["Enable this flag, then find it: Web › Privacy Toolkit", "Browse by category", "Tap a tool to open its official site in a new tab"],
+  go: "app:privacy", goLabel: "OPEN THE TOOLKIT",
 };
 APP_GUIDES.settingshub = {
   what: "Console Settings — the PS5-style hub: customize the console font and text size, re-icon any category or app from the PS glyph set, tune audio, pick a language, and manage every Labs flag in one place.",

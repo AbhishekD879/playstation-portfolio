@@ -61,6 +61,7 @@ import YouTubeApp from "./YouTubeApp";
 import TimeMachine from "./TimeMachine";
 import ArtGallery from "./ArtGallery";
 import WikiApp from "./WikiApp";
+import Privacy from "./Privacy";
 import { fetchApod, define, type Apod, type Definition } from "../apps";
 import { startGestures, stopGestures } from "../gestures";
 
@@ -193,7 +194,7 @@ export default function XMB(props: {
   const [ytQuery, setYtQuery] = createSignal(""); // AI agent → YouTube search handoff
   const [vListening, setVListening] = createSignal(false); // XMB voice command
   const [padTest, setPadTest] = createSignal(false);
-  const [app, setApp] = createSignal<null | "doom" | "doomrtx" | "chess" | "trivia" | "flash" | "cinema" | "podcasts" | "library" | "map" | "ai" | "webamp" | "youtube" | "timemachine" | "art" | "wiki" | "lichess" | "ps2" | "pc" | "guestbook" | "browser" | "visualizer" | "studio" | "code" | "manual" | "ps2home" | "ps1home" | "psphome" | "retrohome" | "scummvm" | "karaoke" | "strudel" | "settingshub" | "videoplayer" | "reporewind" | "rpgmaker" | "renpy" | "web">(null);
+  const [app, setApp] = createSignal<null | "doom" | "doomrtx" | "chess" | "trivia" | "flash" | "cinema" | "podcasts" | "library" | "map" | "ai" | "webamp" | "youtube" | "timemachine" | "art" | "wiki" | "lichess" | "ps2" | "pc" | "guestbook" | "browser" | "visualizer" | "studio" | "code" | "manual" | "ps2home" | "ps1home" | "psphome" | "retrohome" | "scummvm" | "karaoke" | "strudel" | "settingshub" | "videoplayer" | "reporewind" | "rpgmaker" | "renpy" | "web" | "privacy">(null);
   const [ps2Boot, setPs2Boot] = createSignal<GameRecord | null>(null);
   const [ps2Join, setPs2Join] = createSignal(false);
   const [ccOpen, setCcOpen] = createSignal(false);
@@ -670,6 +671,10 @@ export default function XMB(props: {
       case "wiki":
         sfx.confirm();
         setApp("wiki");
+        break;
+      case "privacy":
+        sfx.confirm();
+        setApp("privacy");
         break;
       case "lichess-tv":
         sfx.confirm();
@@ -1951,6 +1956,7 @@ export default function XMB(props: {
       <Show when={app() === "wiki"}>
         <WikiApp bind={(f) => (appNav = f)} onClose={() => setApp(null)} />
       </Show>
+      <Show when={app() === "privacy"}><Privacy onClose={() => setApp(null)} /></Show>
       <Show when={app() === "ps2"}><Ps2 profileId={props.profile.id} initialGame={ps2Boot() ?? undefined} initialJoin={ps2Join()} onClose={() => { setPs2Boot(null); setPs2Join(false); setApp(games().some((g) => g.sys === "ps2") ? "ps2home" : null); }} /></Show>
       <Show when={app() === "pc"}><PcApp onClose={() => setApp(null)} /></Show>
       <Show when={app() === "guestbook"}><Guestbook userName={props.profile.name} onClose={() => setApp(null)} /></Show>
