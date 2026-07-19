@@ -222,7 +222,19 @@ const DIAG_SHIM = `<script>(function(){
         if(typeof IM[m]!=="function")return; var o=IM[m]; IM[m]=function(){ var a=Array.prototype.slice.call(arguments).filter(function(x){return typeof x==="string";}).join("/"); elog("img."+m+"("+a+")","engine img"); return o.apply(this,arguments); }; }); }
     if(GI && GI.prototype && !GI.prototype.__diag){ GI.prototype.__diag=1;
       var ec=GI.prototype.executeCommand; GI.prototype.executeCommand=function(){ try{ var c=this._list&&this._list[this._index];
-        if(c&&INTERESTING[c.code]){ elog("cmd "+c.code+" "+(CMD[c.code]||"?")+(briefCmd(c)?": "+briefCmd(c):""), "event"); } }catch(e){} return ec.apply(this,arguments); }; }
+        if(c&&c.code===355){
+          // a Script command spans 355 (first line) + 655 (continuation) — join
+          // the whole thing so we see EXACTLY what JS the cutscene runs.
+          var s="", j=this._index, L=this._list;
+          while(j<L.length&&(L[j].code===355||L[j].code===655)){ s+=((L[j].parameters&&L[j].parameters[0])||"")+" "; j++; }
+          s=s.replace(/\\s+/g," ").trim(); elog("cmd 355 Script: "+s.slice(0,500), "script");
+        } else if(c&&INTERESTING[c.code]){ elog("cmd "+c.code+" "+(CMD[c.code]||"?")+(briefCmd(c)?": "+briefCmd(c):""), "event"); } }catch(e){} return ec.apply(this,arguments); }; }
+    // catch errors thrown by Script (355) / Plugin (356/357) commands even if
+    // the engine swallows them — that's the silent cutscene failure.
+    if(GI && GI.prototype && !GI.prototype.__diag2){ GI.prototype.__diag2=1;
+      [["command355","Script"],["command356","Plugin Cmd"],["command357","Plugin Cmd"]].forEach(function(pair){
+        var name=pair[0]; if(typeof GI.prototype[name]!=="function")return; var o=GI.prototype[name];
+        GI.prototype[name]=function(){ try{ return o.apply(this,arguments); }catch(err){ elog(pair[1]+" THREW: "+(err&&err.message||err), "error"); counts.fail++; recent.unshift({path:pair[1]+" threw", status:(err&&err.message)||String(err)}); post(); throw err; } }; }); }
     if(DM && !DM.__diag){ DM.__diag=1; if(typeof DM.loadDataFile==="function"){ var ld=DM.loadDataFile; DM.loadDataFile=function(name,src){ elog("data "+src,"data"); return ld.apply(this,arguments); }; } }
     if(AM && !AM.__diag){ AM.__diag=1; ["playBgm","playBgs","playMe","playSe"].forEach(function(m){ if(typeof AM[m]!=="function")return; var o=AM[m]; AM[m]=function(x){ elog("audio."+m+"("+((x&&x.name)||"")+")","audio"); return o.apply(this,arguments); }; }); }
     if(SM && !SM.__diag){ SM.__diag=1; ["push","goto","pop"].forEach(function(m){ if(typeof SM[m]!=="function")return; var o=SM[m]; SM[m]=function(s){ elog("scene."+m+" → "+((s&&s.name)||""),"scene"); return o.apply(this,arguments); }; }); }
