@@ -35,17 +35,33 @@ export function mergeExtra(base: Cat[], entries: Entry[]): Cat[] {
 }
 
 // whitelisted candidate sources for the /admin review queue (raw markdown).
+// Full mirror of fmhy.net/single-page.md — you still hand-review every candidate.
 export const SOURCES: { file: string; label: string }[] = [
   { file: "privacy.md", label: "Privacy & security" },
   { file: "ai.md", label: "AI tools" },
+  { file: "mobile.md", label: "Mobile tools" },
+  { file: "audio.md", label: "Audio & music" },
+  { file: "beginners-guide.md", label: "Beginner's guide" },
   { file: "developer-tools.md", label: "Developer tools" },
+  { file: "downloading.md", label: "Downloading" },
   { file: "educational.md", label: "Learning" },
   { file: "file-tools.md", label: "File tools" },
-  { file: "image-tools.md", label: "Image tools" },
-  { file: "video-tools.md", label: "Video tools" },
-  { file: "text-tools.md", label: "Text tools" },
-  { file: "internet-tools.md", label: "Internet tools" },
   { file: "gaming-tools.md", label: "Game tools & emulators" },
+  { file: "gaming.md", label: "Gaming & ROMs" },
+  { file: "image-tools.md", label: "Image tools" },
+  { file: "internet-tools.md", label: "Internet tools" },
+  { file: "linux-macos.md", label: "Linux & macOS" },
+  { file: "misc.md", label: "Miscellaneous" },
+  { file: "non-english.md", label: "Non-English" },
+  { file: "reading.md", label: "Reading" },
+  { file: "social-media-tools.md", label: "Social media tools" },
+  { file: "storage.md", label: "Storage & cloud" },
+  { file: "system-tools.md", label: "System tools" },
+  { file: "text-tools.md", label: "Text tools" },
+  { file: "torrenting.md", label: "Torrenting" },
+  { file: "unsafe.md", label: "Unsafe sites" },
+  { file: "video-tools.md", label: "Video tools" },
+  { file: "video.md", label: "Streaming" },
 ];
 
 export const CATS: Cat[] = [
