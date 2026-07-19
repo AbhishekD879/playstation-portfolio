@@ -251,7 +251,8 @@ export interface ImportProgress { phase: "reading" | "detecting" | "extracting";
  *  written straight to OPFS, and the huge NW.js runtime is skipped entirely.
  *  The game root is NOT stripped — its prefix is recorded and the service
  *  worker prepends it, so detection can happen after the (single) stream. */
-export interface ImportOpts { skipAudio?: boolean } // "lite install" — music/sounds skipped
+// "lite install" — music/sounds skipped, images lossy-recompressed to WebP
+export interface ImportOpts { skipAudio?: boolean; compressImages?: boolean }
 
 export async function importRpgZip(
   file: File, profileId: string, onProgress?: (p: ImportProgress) => void, opts?: ImportOpts,
@@ -282,7 +283,7 @@ function bustSwRootCache(id: string): void {
  *  path isn't available (old browser, worker failed to boot) — caller falls
  *  back to in-page extraction. Rejects with the worker's error (carrying .ctx,
  *  the file-position context) when extraction itself failed. */
-function extractInWorker(file: File, id: string, skipAudio: boolean, onProgress?: (p: ImportProgress) => void): Promise<{ bytes: number } | null> {
+function extractInWorker(file: File, id: string, opts: ImportOpts, onProgress?: (p: ImportProgress) => void): Promise<{ bytes: number } | null> {
   return new Promise((resolve, reject) => {
     let w: Worker;
     try {
@@ -302,7 +303,7 @@ function extractInWorker(file: File, id: string, skipAudio: boolean, onProgress?
         reject(err);
       }
     };
-    w.postMessage({ file, id, skipAudio });
+    w.postMessage({ file, id, skipAudio: !!opts.skipAudio, compressImages: !!opts.compressImages });
   });
 }
 
@@ -344,7 +345,7 @@ async function doImport(
     // (no per-write swap-file copies, no contention with the console UI) — the
     // path that holds up on phones. Falls back to in-page extraction when
     // workers/sync handles aren't available.
-    const viaWorker = await extractInWorker(file, id, !!opts?.skipAudio, onProgress);
+    const viaWorker = await extractInWorker(file, id, opts ?? {}, onProgress);
     if (viaWorker) {
       bytes = viaWorker.bytes;
     } else {

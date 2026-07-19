@@ -52,7 +52,7 @@ export default function RpgMaker(props: { profile: { id: string }; family: Famil
     setError("");
     setImporting({ phase: "reading", pct: 0 });
     try {
-      const g = await importRpgZip(f, props.profile.id, setImporting, { skipAudio: lite() });
+      const g = await importRpgZip(f, props.profile.id, setImporting, { skipAudio: lite(), compressImages: lite() });
       await refresh();
       // the detector, not the cabinet, decides the family — if you dropped the
       // wrong kind here, it's saved but lives in the other app, so say so.
@@ -82,7 +82,7 @@ export default function RpgMaker(props: { profile: { id: string }; family: Famil
     setError("");
     setImporting({ phase: "reading", pct: 0 });
     try {
-      await reimportRpgZip(f, g, setImporting, { skipAudio: lite() });
+      await reimportRpgZip(f, g, setImporting, { skipAudio: lite(), compressImages: lite() });
       await refresh();
       sfx.confirm();
     } catch (e: any) {
@@ -179,14 +179,14 @@ export default function RpgMaker(props: { profile: { id: string }; family: Famil
           <div class="panel-tag">{isRenpy() ? "REN'PY — YOUR GAMES · EXPERIMENTAL" : isWeb() ? "WEB GAMES — YOUR GAMES" : "RPG MAKER — YOUR GAMES"}</div>
           <div class="rpg-headacts">
             <button class="ps-act" classList={{ on: lite() }} onClick={() => { setLite((v) => !v); sfx.tickV(); }}
-              title="Skip music & sound files on import/re-import — much smaller install, the game plays silent. For phones that can't fit the full game.">
+              title="For phones that can't fit the full game: skips music & sounds and recompresses images (smaller, near-identical). Videos untouched. The game plays silent.">
               ♪ lite install: {lite() ? "on" : "off"}
             </button>
             <button class="ps-act" onClick={() => { sfx.back(); props.onClose(); }}><span class="btn-o" /> back</button>
           </div>
         </div>
         <Show when={lite()}>
-          <div class="rpg-lite-note">Lite install is on — music &amp; sounds will be skipped (the game plays silent, but fits and runs on low-storage devices). Applies to “Add a game” and “↻ re-import”.</div>
+          <div class="rpg-lite-note">Lite install is on — music &amp; sounds are skipped and images are recompressed (much smaller, near-identical; videos untouched). The game plays silent. Applies to “Add a game” and “↻ re-import”. Import takes a little longer while images convert.</div>
         </Show>
 
         <Show when={importing()}>

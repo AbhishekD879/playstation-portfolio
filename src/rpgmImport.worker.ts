@@ -9,7 +9,7 @@
 import { Inflate } from "fflate";
 import { checkEntry, entryDataStart, isAudioPath, runtimeSkipper, zipEntries, type ZipEntry } from "./zipcd";
 
-interface Job { file: File; id: string; skipAudio?: boolean }
+interface Job { file: File; id: string; skipAudio?: boolean; compressImages?: boolean }
 // minimal local typings — lib.dom doesn't carry the worker-only OPFS sync API
 interface SyncHandle { write(b: Uint8Array, opts?: { at?: number }): number; truncate(n: number): void; flush(): void; close(): void }
 
@@ -22,6 +22,62 @@ async function dirFor(root: FileSystemDirectoryHandle, path: string): Promise<{ 
   let dir = root;
   for (const p of parts) dir = await dir.getDirectoryHandle(p, { create: true });
   return { dir, name };
+}
+
+/** Inflate a whole (small) entry into memory — used for image transcoding. */
+async function inflateWhole(file: File, ent: ZipEntry): Promise<Uint8Array> {
+  const dataStart = await entryDataStart(file, ent);
+  const raw = new Uint8Array(await file.slice(dataStart, dataStart + ent.compSize).arrayBuffer());
+  if (ent.method === 0) return raw;
+  const chunks: Uint8Array[] = [];
+  const inf = new Inflate();
+  inf.ondata = (c) => { if (c?.length) chunks.push(c.slice()); };
+  inf.push(raw, true);
+  const total = chunks.reduce((s, c) => s + c.length, 0);
+  const out = new Uint8Array(total);
+  let o = 0;
+  for (const c of chunks) { out.set(c, o); o += c.length; }
+  return out;
+}
+
+/** Lossy-recompress a PNG to WebP (same name, same dimensions — browsers
+ *  decode by content, not extension, so the engine never notices). Falls back
+ *  to the original bytes on any failure, unsupported codec (Safari), or when
+ *  WebP isn't actually smaller. Typical win on RPG Maker art: 50-80%. */
+async function maybeTranscodePng(data: Uint8Array): Promise<Uint8Array> {
+  try {
+    if (typeof OffscreenCanvas === "undefined" || typeof createImageBitmap === "undefined") return data;
+    const bmp = await createImageBitmap(new Blob([data as unknown as BlobPart]));
+    const cv = new OffscreenCanvas(bmp.width, bmp.height);
+    const g = cv.getContext("2d");
+    if (!g) { bmp.close(); return data; }
+    g.drawImage(bmp, 0, 0);
+    bmp.close();
+    const blob = await cv.convertToBlob({ type: "image/webp", quality: 0.75 });
+    if (blob.type !== "image/webp" || blob.size >= data.length) return data;
+    return new Uint8Array(await blob.arrayBuffer());
+  } catch { return data; }
+}
+
+// candidates: plain .png only. NOT the encrypted variants (.rpgmvp/.png_ —
+// can't decode without the game key), NOT effects/ textures (effekseer's WASM
+// decodes PNG bytes itself and would choke on WebP), NOT gifs (animation).
+const canTranscode = (name: string, ent: ZipEntry): boolean =>
+  /\.png$/i.test(name) && !/(^|\/)effects\//i.test(name) && ent.uncompSize > 0 && ent.uncompSize < 30 * 1048576;
+
+/** Write one whole buffer via a sync access handle. */
+async function writeWhole(gameDir: FileSystemDirectoryHandle, path: string, data: Uint8Array): Promise<number> {
+  const { dir, name } = await dirFor(gameDir, path);
+  const fh = await dir.getFileHandle(name, { create: true });
+  const h = await (fh as unknown as { createSyncAccessHandle: () => Promise<SyncHandle> }).createSyncAccessHandle();
+  try {
+    h.truncate(0);
+    for (let o = 0; o < data.length; o += 4194304) h.write(data.subarray(o, Math.min(o + 4194304, data.length)), { at: o });
+    h.flush();
+    return data.length;
+  } finally {
+    try { h.close(); } catch { /* already closed */ }
+  }
 }
 
 /** Extract one entry into OPFS via a sync access handle. Restartable: on any
@@ -61,7 +117,7 @@ async function extractEntry(gameDir: FileSystemDirectoryHandle, file: File, ent:
 }
 
 self.onmessage = async (ev: MessageEvent<Job>) => {
-  const { file, id, skipAudio } = ev.data;
+  const { file, id, skipAudio, compressImages } = ev.data;
   let ctx = "";
   try {
     if (!("createSyncAccessHandle" in FileSystemFileHandle.prototype)) {
@@ -93,10 +149,17 @@ self.onmessage = async (ev: MessageEvent<Job>) => {
       // transient errors are exactly that — give the device a breather & retry
       let written = 0;
       for (let attempt = 0; ; attempt++) {
-        try { written = await extractEntry(gameDir, file, ent); break; }
-        catch (e) {
+        try {
+          if (compressImages && canTranscode(ent.name, ent)) {
+            const out = await maybeTranscodePng(await inflateWhole(file, ent));
+            written = await writeWhole(gameDir, ent.name, out);
+          } else {
+            written = await extractEntry(gameDir, file, ent);
+          }
+          break;
+        } catch (e) {
           const msg = e instanceof Error ? e.name + " " + e.message : String(e);
-          if (attempt < 3 && /transient|out of memory|UnknownError|NoModificationAllowed|InvalidState/i.test(msg)) {
+          if (attempt < 3 && /transient|out of memory|UnknownError|NoModificationAllowed|InvalidState|truncate/i.test(msg)) {
             await sleep(500 * (attempt + 1) ** 2); // 0.5s · 2s · 4.5s
             continue;
           }
