@@ -1,31 +1,28 @@
-// /admin — internal catalog review. Pulls candidate entries LIVE from the
-// whitelisted FMHY tool/knowledge files (freecatalog.SOURCES — never the
-// streaming/torrent/download/ROM files), diffs them against what's already
-// published, and shows only what's NEW. You (the owner) validate each — the
-// real destination host + one-click urlscan / VirusTotal — and approve the ones
-// you want. Approvals export as JSON to merge into the published catalog.
+// /admin — the Free & Open CMS (Cloudflare Access-gated at the edge).
+//   • Published entries: add / delete YOUR OWN links (any category) and PUBLISH
+//     live to the public app — no code changes, no redeploy (KV via /api/catalog).
+//   • Candidate queue: pulls LIVE from the whitelisted FMHY tool/knowledge files
+//     (freecatalog.SOURCES — never streaming/torrent/download/ROM), diffs against
+//     what's already live, and lets you validate (urlscan / VirusTotal) + approve
+//     each into your published set. You are the human gate.
 //
-// This is the human GATE: nothing an automated sync surfaces (a masked
-// redirect, a link changed upstream, a compromised repo edit) reaches the
-// public site without a person eyeballing it first.
-//
-// SECURITY: this page is only OBSCURED, not secured, until you put the /admin
-// route behind Cloudflare Access (Zero Trust → restrict to your email). Do that
-// before wiring live publishing.
+// Adding a NEW bulk scrape-source is a one-line edit to SOURCES in
+// freecatalog.ts (owner-controlled, in-repo) — kept clean by design.
 import { For, Show, createSignal, onMount } from "solid-js";
-import { SOURCES, hostOf, publishedUrls } from "../freecatalog";
+import { CATALOG_API, CATS, SOURCES, hostOf, publishedUrls, type Entry } from "../freecatalog";
 
 type Cand = { name: string; url: string; note: string; source: string };
 const RAW = "https://raw.githubusercontent.com/fmhy/edit/main/docs/";
+const CATEGORIES = CATS.map((c) => c.title);
+const uid = () => { try { return crypto.randomUUID(); } catch { return "e" + Math.random().toString(36).slice(2); } };
+const norm = (u: string) => u.replace(/\/+$/, "").toLowerCase();
 
-// FMHY list lines look like: `* ⭐ **[Name](url)** - note / [mirror](url2)`.
-// Take the FIRST link as the entry; strip markdown from the trailing note.
 function parseMd(md: string, source: string): Cand[] {
   const out: Cand[] = [];
   const seen = new Set<string>();
   for (const raw of md.split("\n")) {
     const line = raw.trim();
-    if (!/^[*-]\s/.test(line)) continue;                 // list items only
+    if (!/^[*-]\s/.test(line)) continue;
     const m = line.match(/\[([^\]]+)\]\((https?:\/\/[^)\s]+)\)/);
     if (!m) continue;
     const name = m[1].replace(/[⭐🌟*_`>▷►]/g, "").trim();
@@ -41,88 +38,140 @@ function parseMd(md: string, source: string): Cand[] {
 }
 
 export default function AdminCatalog() {
-  // per-source enable/disable (config-driven), persisted. Untick a source to
-  // stop pulling candidates from it — e.g. if that upstream file is compromised.
+  // —— published (owner) entries ——
+  const [entries, setEntries] = createSignal<Entry[]>([]);
+  const [dirty, setDirty] = createSignal(false);
+  const [pub, setPub] = createSignal("");
+  const [fName, setFName] = createSignal("");
+  const [fUrl, setFUrl] = createSignal("");
+  const [fNote, setFNote] = createSignal("");
+  const [fCat, setFCat] = createSignal(CATEGORIES[0]);
+
+  // —— candidate queue from whitelisted sources ——
   const SKEY = "asp.admin.sources.off";
   const loadOff = (): Set<string> => { try { return new Set(JSON.parse(localStorage.getItem(SKEY) ?? "[]")); } catch { return new Set(); } };
   const [off, setOff] = createSignal<Set<string>>(loadOff());
   const srcOn = (f: string) => !off().has(f);
-  const toggleSrc = (f: string) => { const s = new Set(off()); s.has(f) ? s.delete(f) : s.add(f); setOff(s); localStorage.setItem(SKEY, JSON.stringify([...s])); void load(); };
-
+  const toggleSrc = (f: string) => { const s = new Set(off()); s.has(f) ? s.delete(f) : s.add(f); setOff(s); localStorage.setItem(SKEY, JSON.stringify([...s])); void loadCands(); };
   const [cands, setCands] = createSignal<Cand[]>([]);
-  const [approved, setApproved] = createSignal<Set<string>>(new Set());
   const [status, setStatus] = createSignal("loading…");
   const [q, setQ] = createSignal("");
 
-  async function load() {
+  // everything already live: built-in catalog ∪ published entries
+  const liveSet = () => { const s = publishedUrls(); for (const e of entries()) s.add(norm(e.url)); return s; };
+
+  async function loadEntries() {
+    try { const r = await fetch(CATALOG_API); const j = await r.json() as { entries?: Entry[] }; setEntries(Array.isArray(j.entries) ? j.entries : []); } catch { /* none yet */ }
+  }
+  async function loadCands() {
     setStatus("fetching enabled sources…");
-    const pub = publishedUrls();
+    const live = liveSet();
     const active = SOURCES.filter((s) => srcOn(s.file));
-    const all: Cand[] = [];
-    const seen = new Set<string>();
-    let ok = 0, fail = 0;
+    const all: Cand[] = []; const seen = new Set<string>(); let ok = 0, fail = 0;
     await Promise.all(active.map(async (s) => {
       try {
         const r = await fetch(RAW + s.file, { cache: "no-store" });
         if (!r.ok) throw new Error(String(r.status));
-        const md = await r.text();
-        for (const c of parseMd(md, s.label)) {
-          const key = c.url.toLowerCase();
-          if (pub.has(key) || seen.has(key)) continue;   // already published / dup
-          seen.add(key); all.push(c);
+        for (const c of parseMd(await r.text(), s.label)) {
+          const k = norm(c.url);
+          if (live.has(k) || seen.has(k)) continue;
+          seen.add(k); all.push(c);
         }
         ok++;
       } catch { fail++; }
     }));
     all.sort((a, b) => a.source.localeCompare(b.source) || a.name.localeCompare(b.name));
     setCands(all);
-    setStatus(`${all.length} new candidates · ${ok}/${active.length} sources loaded${fail ? ` · ${fail} failed (CORS/offline?)` : ""}`);
+    setStatus(`${all.length} new candidates · ${ok}/${active.length} sources${fail ? ` · ${fail} failed (CORS/offline?)` : ""}`);
   }
-  onMount(load);
+  onMount(() => { void loadEntries().then(loadCands); });
 
-  const toggle = (url: string) => { const s = new Set(approved()); s.has(url) ? s.delete(url) : s.add(url); setApproved(s); };
+  function addEntry() {
+    const url = fUrl().trim();
+    if (!/^https?:\/\//i.test(url)) { setPub("enter a valid http(s) URL"); return; }
+    if (liveSet().has(norm(url))) { setPub("that URL is already in the catalog"); return; }
+    setEntries([...entries(), { id: uid(), name: fName().trim() || hostOf(url), url, note: fNote().trim(), category: fCat() }]);
+    setDirty(true); setFName(""); setFUrl(""); setFNote(""); setPub("added — remember to Publish");
+  }
+  const removeEntry = (id: string) => { setEntries(entries().filter((e) => e.id !== id)); setDirty(true); };
+  function approve(c: Cand) {
+    setEntries([...entries(), { id: uid(), name: c.name, url: c.url, note: c.note, category: c.source }]);
+    setCands(cands().filter((x) => x.url !== c.url)); setDirty(true);
+  }
+
+  async function publish() {
+    setPub("publishing…");
+    try {
+      const r = await fetch(CATALOG_API, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ entries: entries() }) });
+      const j = await r.json() as { count?: number; error?: string };
+      if (r.ok) { setDirty(false); setPub(`✓ published ${j.count} entries — live on the site now`); }
+      else setPub(`✗ ${j.error || r.status}${r.status === 401 ? " (set ACCESS_TEAM_DOMAIN / ACCESS_AUD in Pages env vars)" : ""}`);
+    } catch { setPub("✗ network error"); }
+  }
+
   const shown = () => { const f = q().toLowerCase().trim(); return f ? cands().filter((c) => (c.name + " " + c.url + " " + c.source + " " + c.note).toLowerCase().includes(f)) : cands(); };
-
-  const exportJson = () => {
-    const picked = cands().filter((c) => approved().has(c.url)).map(({ name, url, note, source }) => ({ name, url, note, source }));
-    if (!picked.length) { setStatus("approve some entries first"); return; }
-    const json = JSON.stringify(picked, null, 2);
-    try { void navigator.clipboard?.writeText?.(json); } catch { /* clipboard blocked */ }
-    const a = document.createElement("a");
-    a.href = URL.createObjectURL(new Blob([json], { type: "application/json" }));
-    a.download = "catalog-additions.json"; a.click();
-    setStatus(`exported ${picked.length} approved entries (also copied to clipboard)`);
-  };
+  const byCat = () => { const m = new Map<string, Entry[]>(); for (const e of entries()) { const c = e.category || "Added by owner"; if (!m.has(c)) m.set(c, []); m.get(c)!.push(e); } return [...m]; };
 
   return (
     <div class="adm">
       <div class="adm-bar">
-        <b>ADMIN · CATALOG REVIEW</b>
-        <span class="adm-status">{status()}</span>
+        <b>ADMIN · FREE &amp; OPEN CMS</b>
         <span class="adm-actions">
-          <input class="adm-search" placeholder="filter…" value={q()} onInput={(e) => setQ(e.currentTarget.value)} />
-          <button class="adm-btn" onClick={load}>reload</button>
-          <button class="adm-btn primary" onClick={exportJson}>export approved ({approved().size})</button>
+          <button class="adm-btn primary" classList={{ dirty: dirty() }} onClick={publish}>{dirty() ? "● publish changes" : "publish"}</button>
+          <span class="adm-status">{pub()}</span>
         </span>
       </div>
       <div class="adm-warn">
-        ⚠ <b>Not secured yet.</b> Lock <code>/admin</code> with Cloudflare Access (Zero Trust → restrict to your email) before relying on it.
-        Candidates come only from whitelisted tool/knowledge files — you approve each before it's published.
+        Writes require this route behind <b>Cloudflare Access</b> + env vars <code>ACCESS_TEAM_DOMAIN</code> and <code>ACCESS_AUD</code>.
+        Entries publish live to the public app. Bulk scrape-sources are the whitelisted tool files only (edit <code>freecatalog.ts</code> to change them).
       </div>
+
+      {/* —— published entries (your CMS) —— */}
+      <div class="adm-section">Published entries — add your own, publishes live</div>
+      <div class="adm-form">
+        <input class="adm-search" placeholder="name" value={fName()} onInput={(e) => setFName(e.currentTarget.value)} />
+        <input class="adm-search adm-grow" placeholder="https://…" value={fUrl()} onInput={(e) => setFUrl(e.currentTarget.value)} />
+        <input class="adm-search" placeholder="short note" value={fNote()} onInput={(e) => setFNote(e.currentTarget.value)} />
+        <select class="adm-search" value={fCat()} onChange={(e) => setFCat(e.currentTarget.value)}>
+          <For each={CATEGORIES}>{(c) => <option value={c}>{c}</option>}</For>
+          <option value="Added by owner">Added by owner</option>
+        </select>
+        <button class="adm-btn" onClick={addEntry}>+ add</button>
+      </div>
+      <Show when={entries().length} fallback={<div class="adm-empty">No custom entries yet. Add one above, or approve candidates below.</div>}>
+        <div class="adm-entries">
+          <For each={byCat()}>{([cat, list]) => (
+            <div class="adm-entry-cat">
+              <div class="adm-entry-cattitle">{cat} <span class="adm-src">{list.length}</span></div>
+              <For each={list}>{(e) => (
+                <div class="adm-entry">
+                  <span class="adm-entry-name">{e.name}</span>
+                  <span class="adm-entry-url">{hostOf(e.url)}</span>
+                  <a class="adm-btn" href={e.url} target="_blank" rel="noopener noreferrer">open ↗</a>
+                  <button class="adm-btn danger" onClick={() => removeEntry(e.id)}>remove</button>
+                </div>
+              )}</For>
+            </div>
+          )}</For>
+        </div>
+      </Show>
+
+      {/* —— candidate queue —— */}
+      <div class="adm-section">Candidate queue — {status()}</div>
       <div class="adm-sources">
-        <span class="adm-sources-label">Sources — untick to stop pulling from one (config in <code>freecatalog.ts</code>):</span>
+        <span class="adm-sources-label">Sources (untick to skip one, e.g. if compromised):</span>
         <For each={SOURCES}>{(s) => (
           <button class="adm-src-chip" classList={{ off: !srcOn(s.file) }} onClick={() => toggleSrc(s.file)} title={s.file}>
             {srcOn(s.file) ? "☑" : "☐"} {s.label}
           </button>
         )}</For>
+        <input class="adm-search" placeholder="filter…" value={q()} onInput={(e) => setQ(e.currentTarget.value)} />
+        <button class="adm-btn" onClick={loadCands}>reload</button>
       </div>
       <div class="adm-list">
         <For each={shown()}>{(c) => (
-          <div class="adm-row" classList={{ on: approved().has(c.url) }}>
-            <button class="adm-approve" classList={{ on: approved().has(c.url) }} onClick={() => toggle(c.url)}>
-              {approved().has(c.url) ? "✓ approved" : "approve"}
-            </button>
+          <div class="adm-row">
+            <button class="adm-approve" onClick={() => approve(c)}>+ approve</button>
             <div class="adm-info">
               <div class="adm-name">{c.name} <span class="adm-src">{c.source}</span></div>
               <Show when={c.note}><div class="adm-note">{c.note}</div></Show>

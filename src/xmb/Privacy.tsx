@@ -6,12 +6,18 @@
 // facilitate copyright infringement and stay out of a public, real-name site.
 // Each entry just opens the official site in a new tab; the console stores and
 // proxies nothing. Hidden by default — opt in via Labs.
-import { For, onCleanup, onMount } from "solid-js";
+import { For, createResource, onCleanup, onMount } from "solid-js";
 import * as sfx from "../audio";
-import { CATS, hostOf } from "../freecatalog";
+import { CATALOG_API, CATS, hostOf, mergeExtra, type Entry } from "../freecatalog";
 
+// owner-published entries (added live from /admin) merged onto the built-in list
+const fetchExtra = async (): Promise<Entry[]> => {
+  try { const r = await fetch(CATALOG_API); const j = await r.json() as { entries?: Entry[] }; return Array.isArray(j.entries) ? j.entries : []; } catch { return []; }
+};
 
 export default function Privacy(props: { onClose: () => void }) {
+  const [extra] = createResource(fetchExtra);
+  const cats = () => mergeExtra(CATS, extra() ?? []);
   onMount(() => {
     const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") { sfx.back(); props.onClose(); } };
     addEventListener("keydown", onKey);
@@ -33,7 +39,7 @@ export default function Privacy(props: { onClose: () => void }) {
         <span class="pvk-note"> Pirate streaming / download / torrent / ROM sites aren't here — by design.</span>
       </div>
       <div class="pvk-grid">
-        <For each={CATS}>{(c) => (
+        <For each={cats()}>{(c) => (
           <section class="pvk-cat">
             <h3 class="pvk-cat-title">{c.title}</h3>
             <For each={c.tools}>{(t) => (

@@ -9,8 +9,28 @@
 
 export type Tool = { name: string; url: string; note: string };
 export type Cat = { title: string; tools: Tool[] };
+/** An owner-published entry (added live from /admin via the KV-backed API). */
+export type Entry = { id: string; name: string; url: string; note: string; category: string };
 
+export const CATALOG_API = "/api/catalog";
 export const hostOf = (u: string) => { try { return new URL(u).hostname.replace(/^www\./, ""); } catch { return u; } };
+
+/** Merge owner-published entries onto the built-in catalog: append to a category
+ *  of the same title, else add a new section. Used by the public app. */
+export function mergeExtra(base: Cat[], entries: Entry[]): Cat[] {
+  if (!entries.length) return base;
+  const out: Cat[] = base.map((c) => ({ title: c.title, tools: [...c.tools] }));
+  const idx = new Map(out.map((c, i) => [c.title.toLowerCase(), i] as const));
+  for (const e of entries) {
+    if (!e || !e.url) continue;
+    const tool: Tool = { name: e.name || hostOf(e.url), url: e.url, note: e.note || "" };
+    const cat = e.category || "Added by owner";
+    const i = idx.get(cat.toLowerCase());
+    if (i != null) out[i].tools.push(tool);
+    else { idx.set(cat.toLowerCase(), out.length); out.push({ title: cat, tools: [tool] }); }
+  }
+  return out;
+}
 
 // whitelisted candidate sources for the /admin review queue (raw markdown).
 export const SOURCES: { file: string; label: string }[] = [
