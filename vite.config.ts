@@ -16,6 +16,10 @@ const isolation = {
 
 export default defineConfig({
   plugins: [solid(), multiplayerSignaling()],
+  // Two HTML entries: the console (index.html) and the internal /admin review
+  // tool (admin.html → served by Pages at /admin). Both boot the same main.tsx,
+  // which branches on location.pathname.
+  build: { rollupOptions: { input: { main: "index.html", admin: "admin.html" } } },
   server: {
     allowedHosts: true,
     headers: isolation,

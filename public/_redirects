@@ -1,5 +1,0 @@
-# Serve the SPA for the internal /admin route (main.tsx renders the catalog
-# review tool when the path is /admin). Everything else is a static asset at /.
-# Lock this route with Cloudflare Access (Zero Trust) before relying on it.
-/admin      /index.html   200
-/admin/*    /index.html   200
