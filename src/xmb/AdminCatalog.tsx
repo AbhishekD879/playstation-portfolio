@@ -76,6 +76,8 @@ export default function AdminCatalog() {
   const [cands, setCands] = createSignal<Cand[]>([]);
   const [status, setStatus] = createSignal("loading…");
   const [q, setQ] = createSignal("");
+  const [openSrc, setOpenSrc] = createSignal<Set<string>>(new Set()); // which candidate groups are expanded (lazy-rendered)
+  const toggleOpen = (s: string) => { const n = new Set(openSrc()); n.has(s) ? n.delete(s) : n.add(s); setOpenSrc(n); };
 
   // everything already live: built-in catalog ∪ published entries
   const liveSet = () => { const s = publishedUrls(); for (const e of entries()) s.add(norm(e.url)); return s; };
@@ -221,10 +223,14 @@ export default function AdminCatalog() {
             </div>
             <Show when={q().trim()} fallback={
               <For each={candGroups()}>{([src, list]) => (
-                <details class="adm-group">
-                  <summary class="adm-summary"><span class="adm-chev" /> {src} <span class="adm-count">{list.length}</span></summary>
-                  <div class="adm-group-body"><For each={list}>{(c) => <CandRow c={c} />}</For></div>
-                </details>
+                <div class="adm-group">
+                  <button class="adm-summary" classList={{ open: openSrc().has(src) }} onClick={() => toggleOpen(src)}>
+                    <span class="adm-chev" /> {src} <span class="adm-count">{list.length}</span>
+                  </button>
+                  <Show when={openSrc().has(src)}>
+                    <div class="adm-group-body"><For each={list}>{(c) => <CandRow c={c} />}</For></div>
+                  </Show>
+                </div>
               )}</For>
             }>
               <div class="adm-group"><div class="adm-group-body">

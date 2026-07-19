@@ -10,3 +10,4 @@ public/models/*.glb
 
 # stray test screenshots at repo root (public/ pngs are fine)
 /*.png
+.dev.vars
