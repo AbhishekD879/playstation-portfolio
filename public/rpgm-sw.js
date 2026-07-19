@@ -491,6 +491,20 @@ function packFor(gameId) {
   }
   return p;
 }
+// Recover a filename that a legacy-encoded zip (no UTF-8 flag) had mis-decoded
+// as latin1 at import ("主人公" → "¿ñk¬"). The mangling is byte→latin1, so
+// recover the bytes and re-decode with the real CJK codec (strict — a wrong
+// codec throws rather than guessing). Mirrors decodeLegacyName in zipcd.ts.
+const RECODECS = ["utf-8", "shift_jis", "gbk", "euc-kr", "big5"];
+function recodeName(name) {
+  if (/^[\x00-\x7F]*$/.test(name)) return name;                  // pure ASCII
+  for (const c of name) if (c.charCodeAt(0) > 0xFF) return name; // already real Unicode
+  const bytes = Uint8Array.from(name, (c) => c.charCodeAt(0) & 0xFF);
+  for (const enc of RECODECS) {
+    try { const s = new TextDecoder(enc, { fatal: true }).decode(bytes); if (s && s.indexOf("�") < 0) return s; } catch (e) { /* next */ }
+  }
+  return name;
+}
 async function parsePack(file) {
   const U32 = (d, o) => d.getUint32(o, true);
   const U16 = (d, o) => d.getUint16(o, true);
@@ -529,7 +543,14 @@ async function parsePack(file) {
       }
       ep += 4 + esz;
     }
-    map.set(name.normalize("NFKC").toLowerCase(), { method, csize, usize, lho, dataStart: -1 });
+    const ent = { method, csize, usize, lho, dataStart: -1 };
+    map.set(name.normalize("NFKC").toLowerCase(), ent);
+    // Packs built before the encoding fix stored CJK names mangled (latin1 of
+    // Shift-JIS/GBK bytes) → the engine's Unicode request misses. The mangling
+    // is reversible, so ALSO index the recovered name (same entry — the file
+    // bytes are fine) → existing installs work without a re-import.
+    const fixed = recodeName(name);
+    if (fixed !== name) { const k = fixed.normalize("NFKC").toLowerCase(); if (!map.has(k)) map.set(k, ent); }
     p += 46 + nlen + elen + clen;
   }
   return map;

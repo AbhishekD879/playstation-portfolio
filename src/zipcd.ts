@@ -6,6 +6,21 @@
 // data descriptors and odd layouts that trip sequential parsers. ZIP64 handled.
 export interface ZipEntry { name: string; method: number; flag: number; compSize: number; uncompSize: number; lho: number }
 
+// A zip WITHOUT the UTF-8 name flag holds filenames in a legacy encoding. RPG
+// Maker games zipped on a Japanese/Chinese/Korean Windows carry Shift-JIS/GBK/
+// EUC-KR filenames; decoding those bytes as latin1 (the old behaviour) mangled
+// "主人公" → "¿ñk¬", so the engine's Unicode asset request 404'd and the game
+// hung on boot. Try UTF-8 (some zippers omit the flag), then the common CJK
+// codecs — strict, so a wrong codec throws instead of producing garbage — and
+// only fall back to latin1 if nothing decodes cleanly.
+const LEGACY_CODECS = ["utf-8", "shift_jis", "gbk", "euc-kr", "big5"];
+export function decodeLegacyName(bytes: Uint8Array): string {
+  for (const enc of LEGACY_CODECS) {
+    try { const s = new TextDecoder(enc, { fatal: true }).decode(bytes); if (s && s.indexOf("�") < 0) return s; } catch { /* try next */ }
+  }
+  return Array.from(bytes, (b) => String.fromCharCode(b)).join("");
+}
+
 export async function zipEntries(file: File): Promise<ZipEntry[]> {
   const U32 = (d: DataView, o: number) => d.getUint32(o, true);
   const U16 = (d: DataView, o: number) => d.getUint16(o, true);
@@ -35,9 +50,7 @@ export async function zipEntries(file: File): Promise<ZipEntry[]> {
     let compSize: number = U32(cd, p + 20), uncompSize: number = U32(cd, p + 24), lho: number = U32(cd, p + 42);
     const nlen = U16(cd, p + 28), elen = U16(cd, p + 30), clen = U16(cd, p + 32);
     const nameBytes = new Uint8Array(cd.buffer, cd.byteOffset + p + 46, nlen);
-    // decode like fflate did (parity with already-imported games): UTF-8 when
-    // the zip says so, latin1 otherwise
-    const name = flag & 0x800 ? dec.decode(nameBytes) : Array.from(nameBytes, (b) => String.fromCharCode(b)).join("");
+    const name = flag & 0x800 ? dec.decode(nameBytes) : decodeLegacyName(nameBytes);
     // per-entry ZIP64 extra field (id 0x0001) carries the overflowed values
     let ep = p + 46 + nlen;
     const eEnd = ep + elen;
