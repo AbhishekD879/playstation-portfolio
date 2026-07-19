@@ -5,7 +5,7 @@
 // A diagnostics overlay listens for the diag shim the service worker injects
 // into the game (errors + stuck/failed asset loads) so a hang is legible even
 // on mobile where there's no console.
-import { For, Show, createEffect, createSignal, onCleanup, onMount } from "solid-js";
+import { For, Show, createSignal, onCleanup, onMount } from "solid-js";
 import * as sfx from "../audio";
 import type { NavAction } from "../input";
 import { holdWakeLock } from "../wakelock";
@@ -40,13 +40,11 @@ export default function RpgPlayer(props: {
   const [verbose, setVerbose] = createSignal(false); // log EVERY event command
   const [shareCode, setShareCode] = createSignal(""); // code after uploading the log
   const [shareState, setShareState] = createSignal<"" | "busy" | "error">("");
-  let pendingShare = false; // next dump should be uploaded, not just shown
   const LOG_HOST = "https://abhishekstation-mp.abhishekdiwate879.workers.dev";
   let frame!: HTMLIFrameElement;
   let container!: HTMLDivElement;
   let release: (() => void) | undefined;
   let hideTimer: ReturnType<typeof setTimeout> | undefined;
-  let autoRevealed = false;
 
   const mem = estimateRuntimeMB(props.game);
   const heavy = looksHeavy(props.game);
@@ -123,14 +121,6 @@ export default function RpgPlayer(props: {
       if (e.origin !== location.origin) return;
       const d = e.data as Snap & { kind?: string; msg?: string };
       if (d && d.source === "rpgm-diag") setDiag(d as Snap);
-      if (d && (d as { source?: string }).source === "rpgm-diag-dump") {
-        const t = (d as { text?: string }).text ?? "";
-        if (pendingShare) { pendingShare = false; void uploadLog(t); }
-        else {
-          setDumpText(t);
-          try { void navigator.clipboard?.writeText?.(t); } catch { /* clipboard blocked — the textarea is the fallback */ }
-        }
-      }
       if (d && (d as { source?: string }).source === "rpgm-media") {
         clearTimeout(mediaHintTimer);
         if (d.kind === "gesture") setMediaHint("gesture");
@@ -165,21 +155,9 @@ export default function RpgPlayer(props: {
     });
   });
 
-  // auto-reveal diagnostics when something's wrong: a boot stall (once), OR a
-  // NEW failure appears (so a broken cutscene surfaces the panel the moment it
-  // fails) — throttled + only when closed, so we don't fight the user.
-  let lastFailTotal = 0;
-  let lastAutoOpen = -1e9;
-  createEffect(() => {
-    const d = diag();
-    if (!d) return;
-    if (!autoRevealed && !d.booted && d.up > 10000) { autoRevealed = true; setShowDiag(true); }
-    const failTotal = d.errors.length + d.recent.length;
-    if (failTotal > lastFailTotal && !showDiag() && d.up - lastAutoOpen > 8000) {
-      lastAutoOpen = d.up; setShowDiag(true);
-    }
-    lastFailTotal = failTotal;
-  });
+  // The panel never opens itself — recording runs in the background always, so
+  // it can't cover the game while you play. You open it (diagnostics / Options)
+  // only when you want to clear or share the trace.
 
   props.bind((a) => {
     if (phase() === "prelaunch") { if (a === "confirm") launch(); else if (a === "back") { sfx.back(); props.onClose(); } return; }
@@ -195,18 +173,41 @@ export default function RpgPlayer(props: {
     try { (frame?.contentWindow as Window | null)?.postMessage({ __rpgmDiagClear: true }, "*"); } catch { /* frame gone */ }
     setDiag(null); setDumpText(""); setShareCode(""); setShareState("");
   };
-  const copyLog = () => { try { (frame?.contentWindow as Window | null)?.postMessage({ __rpgmDiagDump: true }, "*"); } catch { /* frame gone */ } };
-  // upload the trace to our worker and show a short code — no copy-paste; the
-  // maintainer fetches it at LOG_HOST/log/<code>.
-  async function uploadLog(text: string) {
+  // Build the log from the data the app ALREADY has (the live diag snapshots) —
+  // no message round-trip to the game frame, which was silently failing. The
+  // snapshot carries the full activity trace, errors and failed loads.
+  const buildLog = (): string => {
+    const d = diag();
+    if (!d) return "";
+    const L: string[] = ["=== RPGM DIAG ==="];
+    L.push(`game: ${props.game.title} · engine ${props.game.engine}`);
+    L.push(`scene ${d.scene || "?"} · up ${Math.round(d.up / 1000)}s · ok ${d.counts.ok} / fail ${d.counts.fail} · booted ${d.booted}`);
+    L.push(`ua: ${navigator.userAgent}`);
+    if (d.errors.length) { L.push("", "-- ERRORS --"); d.errors.forEach((e) => L.push(`  ! ${e.msg}${e.at ? ` (${e.at})` : ""}`)); }
+    if (d.recent.length) { L.push("", "-- FAILED LOADS --"); d.recent.forEach((r) => L.push(`  x ${r.path} · ${String(r.status)}`)); }
+    const act = d.activity ?? [];
+    L.push("", `-- ACTIVITY (oldest first, ${act.length}) --`);
+    act.slice().reverse().forEach((a) => L.push(`  ${a.ok ? "+" : "x"} [${Math.round(a.t)}ms] ${a.path}${a.reason ? ` · ${a.reason}` : ""}`));
+    return L.join("\n");
+  };
+  const copyLog = () => {
+    const t = buildLog();
+    if (!t) { setShareState("error"); return; }
+    setDumpText(t);
+    try { void navigator.clipboard?.writeText?.(t); } catch { /* textarea fallback shows it */ }
+  };
+  // upload the trace to our worker and show a short code — the maintainer
+  // fetches it at LOG_HOST/log/<code>.
+  const shareLog = async () => {
+    const t = buildLog();
+    if (!t) { setShareState("error"); return; }
     setShareState("busy"); setShareCode("");
     try {
-      const r = await fetch(`${LOG_HOST}/log`, { method: "POST", headers: { "content-type": "text/plain" }, body: text });
+      const r = await fetch(`${LOG_HOST}/log`, { method: "POST", headers: { "content-type": "text/plain" }, body: t });
       const j = await r.json() as { code?: string };
       if (j.code) { setShareCode(j.code); setShareState(""); } else throw new Error("no code");
-    } catch { setShareState("error"); setDumpText(text); } // fall back to the copy box on failure
-  }
-  const shareLog = () => { pendingShare = true; try { (frame?.contentWindow as Window | null)?.postMessage({ __rpgmDiagDump: true }, "*"); } catch { pendingShare = false; } };
+    } catch { setShareState("error"); setDumpText(t); } // offline → fall back to the copy box
+  };
   const toggleVerbose = () => { const v = !verbose(); setVerbose(v); try { (frame?.contentWindow as Window | null)?.postMessage({ __rpgmDiagVerbose: v }, "*"); } catch { /* frame gone */ } };
 
   return (
@@ -325,7 +326,7 @@ export default function RpgPlayer(props: {
           </Show>
           <Show when={dumpText()}>
             <div class="rpg-diag-dump">
-              <div class="rpg-diag-dumphd"><span>Log copied to clipboard — paste it to share (or select all in the box).</span>
+              <div class="rpg-diag-dumphd"><span>Tap the box to select all, then copy. (Also copied to clipboard if the browser allowed it.)</span>
                 <button class="ps-act" onClick={() => setDumpText("")}>✕</button></div>
               <textarea class="rpg-diag-dumptext" readonly value={dumpText()} onClick={(e) => (e.currentTarget as HTMLTextAreaElement).select()} />
             </div>

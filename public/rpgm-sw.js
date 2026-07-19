@@ -179,7 +179,7 @@ const DIAG_SHIM = `<script>(function(){
     var canvas=!!document.querySelector("canvas");
     return {source:"rpgm-diag", up:now-T0, scene:scene, spinner:spinner,
       booted:!!(canvas&&!spinner&&(scene?scene!=="Scene_Boot":true)), canvas:canvas,
-      pending:pend.slice(0,12), recent:recent.slice(0,12), counts:counts, errors:errors.slice(0,6), activity:activity.slice(0,30)}; }
+      pending:pend.slice(0,12), recent:recent.slice(0,20), counts:counts, errors:errors.slice(0,10), activity:activity.slice(0,180)}; }
   function post(){ try{ parent.postMessage(snap(), "*"); }catch(e){} }
   function addErr(msg, at){ errors.unshift({msg:String(msg).slice(0,280), at:at||""}); if(errors.length>10) errors.pop(); post(); }
   window.addEventListener("unhandledrejection", function(ev){ var r=ev&&ev.reason; addErr("Unhandled: "+((r&&r.message)||r), ""); });
