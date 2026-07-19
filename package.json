@@ -22,6 +22,7 @@
     "hls.js": "^1.6.16",
     "kokoro-js": "^1.2.1",
     "leaflet": "^1.9.4",
+    "libarchive-wasm": "^1.2.0",
     "prettier": "^3.9.5",
     "solid-js": "^1.9.14",
     "stockfish": "^18.0.8",
@@ -34,6 +35,7 @@
   "devDependencies": {
     "@types/leaflet": "^1.9.21",
     "@types/three": "^0.185.1",
+    "7zip-bin": "^5.2.0",
     "typescript": "^7.0.2",
     "vite": "^8.0.0",
     "vite-plugin-solid": "^2.11.12"

@@ -15,15 +15,31 @@
 // WebP (same filename — browsers decode by content). Media that the source
 // zip deflated is re-STORED in the pack so <video> Range requests can be
 // served by offset math.
-import { Inflate } from "fflate";
+import { Inflate, deflateSync } from "fflate";
 import { checkEntry, entryDataStart, isAudioPath, runtimeSkipper, zipEntries, type ZipEntry } from "./zipcd";
+import libarchiveWasmUrl from "libarchive-wasm/dist/libarchive.wasm?url";
 
 interface Job { file: File; id: string; skipAudio?: boolean; compressImages?: boolean; failAfter?: number }
 // resume sidecar (.rpgmprog): everything needed to continue a torn install
 interface Prog {
   srcSize: number; skipAudio: boolean; compressImages: boolean;
-  total: number; nextIndex: number; packOff: number;
+  total: number; nextIndex: number; packOff: number; fmt?: string;
   cd: { n: string; m: number; c: number; u: number; l: number }[];
+}
+
+// which archive format — zip is read lazily off disk (central directory);
+// rar/7z go through libarchive-wasm (whole archive in memory). Magic bytes,
+// with an extension fallback.
+async function archiveKind(file: File): Promise<"zip" | "rar" | "7z"> {
+  const b = new Uint8Array(await file.slice(0, 8).arrayBuffer());
+  const m = (a: number[]) => a.every((v, i) => b[i] === v);
+  if (m([0x37, 0x7a, 0xbc, 0xaf, 0x27, 0x1c])) return "7z";
+  if (m([0x52, 0x61, 0x72, 0x21, 0x1a, 0x07])) return "rar";
+  if (b[0] === 0x50 && b[1] === 0x4b) return "zip";
+  const n = (file.name || "").toLowerCase();
+  if (n.endsWith(".7z")) return "7z";
+  if (n.endsWith(".rar")) return "rar";
+  return "zip";
 }
 // minimal local typings — lib.dom doesn't carry the worker-only OPFS sync API
 interface SyncHandle { write(b: Uint8Array, opts?: { at?: number }): number; truncate(n: number): void; flush(): void; close(): void }
@@ -247,6 +263,81 @@ async function writeWhole(gameDir: FileSystemDirectoryHandle, path: string, data
 }
 
 const TRANSIENT = /transient|out of memory|UnknownError|NoModificationAllowed|InvalidState|truncate|NotReadable/i;
+const isImg = (n: string) => /\.png$/i.test(n) && !/(^|\/)effects\//i.test(n);
+
+// —— RAR / 7z via libarchive-wasm ————————————————————————————————————————————
+// These formats can't be lazily disk-sliced like zip — libarchive needs the
+// whole archive in memory, and each entry decompresses whole. So peak memory
+// is ~archive size + the largest entry: fine for reasonable games, tight for
+// multi-GB ones on a phone. Entries are re-deflated (or media/images stored/
+// transcoded) into the SAME .rpgmpack, so play-time serving + resume are
+// identical to zip. Resumable: re-open, skip to the recorded file index.
+async function extractViaLibarchive(file: File, id: string, skipAudio: boolean, compressImages: boolean): Promise<void> {
+  let ctx = "", curIndex = 0;
+  let pw: PackWriter | null = null;
+  let gameDir: FileSystemDirectoryHandle | null = null;
+  const names: string[] = [];
+  const snap = (nextIndex: number): Prog => ({ srcSize: file.size, skipAudio, compressImages, total: names.length, nextIndex, packOff: pw!.off, cd: pw!.cdJson(), fmt: "libarchive" });
+  try {
+    const root = await navigator.storage.getDirectory();
+    gameDir = await (await root.getDirectoryHandle("rpgm", { create: true })).getDirectoryHandle(id, { create: true });
+    // resume from a matching checkpoint
+    const prog = await readProg(gameDir);
+    let startIndex = 0, resumeOff = 0, resumeCd: CdRec[] = [];
+    if (prog && prog.fmt === "libarchive" && prog.srcSize === file.size && prog.skipAudio === skipAudio && prog.compressImages === compressImages && prog.nextIndex > 0) {
+      try { const pf = await (await gameDir.getFileHandle(".rpgmpack")).getFile();
+        if (pf.size >= prog.packOff) { startIndex = prog.nextIndex; resumeOff = prog.packOff; resumeCd = prog.cd.map((r) => ({ nameB: enc.encode(r.n), method: r.m, csize: r.c, usize: r.u, lho: r.l })); } } catch { /* fresh */ }
+    }
+    const { libarchiveWasm, ArchiveReader } = await import("libarchive-wasm");
+    const mod = await libarchiveWasm({ locateFile: () => libarchiveWasmUrl as string });
+    const data = new Int8Array(await file.arrayBuffer()); // whole archive in memory (format requires it)
+    pw = new PackWriter(); await pw.open(gameDir, resumeOff, resumeCd);
+    if (startIndex > 0) post({ type: "progress", pct: Math.min(95, Math.round(pw.off / Math.max(file.size, 1) * 100)) });
+
+    const reader = new (ArchiveReader as unknown as { new (m: unknown, d: Int8Array): { entries(): Iterable<{ getFiletype(): string; getPathname(): string; isEncrypted(): boolean; readData(): { buffer: ArrayBufferLike; byteOffset: number; length: number } | undefined }>; free(): void } })(mod, data);
+    let lastPct = -1;
+    try {
+      for (const entry of reader.entries()) {
+        if (entry.getFiletype() === "Directory") continue;
+        const name = entry.getPathname();
+        names.push(name);
+        const fileIdx = names.length - 1;
+        curIndex = fileIdx;
+        if (fileIdx < startIndex) continue;                 // already packed in a prior run
+        if (skipAudio && isAudioPath(name)) continue;
+        if (entry.isEncrypted()) throw new Error("This archive is password-protected — re-export it without a password and try again.");
+        ctx = ` (at file ${fileIdx + 1}: ${name.split("/").pop()}, ${(pw.off / 1048576).toFixed(0)} MB written)`;
+        const raw = entry.readData();
+        const u = raw ? new Uint8Array(raw.buffer, raw.byteOffset, raw.length) : new Uint8Array(0);
+        for (let attempt = 0; ; attempt++) {
+          const packStart = pw.off;
+          try {
+            if (compressImages && isImg(name) && u.length > 0 && u.length < 30 * 1048576) {
+              const out = await maybeTranscodePng(u.slice()); pw.begin(name, 0, out.length, out.length); pw.chunk(out);
+            } else if (isMedia(name) || isImg(name) || u.length === 0) {
+              pw.begin(name, 0, u.length, u.length); if (u.length) pw.chunk(u); // already-compressed → store as-is
+            } else {
+              const def = deflateSync(u, { level: 6 }); pw.begin(name, 8, def.length, u.length); pw.chunk(def); // re-deflate text/data to keep the pack small
+            }
+            break;
+          } catch (e) { pw.rewindTo(packStart); const msg = e instanceof Error ? e.name + " " + e.message : String(e);
+            if (attempt < 5 && TRANSIENT.test(msg)) { await sleep(400 * (attempt + 1) ** 2); continue; } throw e; }
+        }
+        if ((fileIdx + 1) % 12 === 0) { pw.flush(); await writeProg(gameDir, snap(fileIdx + 1)); }
+        const pct = Math.min(99, Math.round(pw.off / Math.max(file.size, 1) * 100));
+        if (pct !== lastPct) { lastPct = pct; post({ type: "progress", pct }); }
+      }
+    } finally { try { reader.free(); } catch { /* freed */ } }
+    const bytes = pw.finish();
+    await delProg(gameDir);
+    post({ type: "done", names, bytes, packed: true });
+  } catch (e) {
+    const err = e instanceof Error ? e : new Error(String(e));
+    let resumable = false;
+    if (pw && gameDir && curIndex > 0) { try { await writeProg(gameDir, snap(curIndex)); resumable = true; } catch { /* can't save */ } }
+    post({ type: "error", fallback: false, message: err.message, name: err.name, ctx, resumable, done: curIndex, total: names.length });
+  }
+}
 
 // —— resume sidecar io ————————————————————————————————————————————————————————
 async function readProg(gameDir: FileSystemDirectoryHandle): Promise<Prog | null> {
@@ -279,13 +370,15 @@ self.onmessage = async (ev: MessageEvent<Job>) => {
   let curIndex = 0, totalFiles = 0;
   const snapshot = (nextIndex: number): Prog => ({
     srcSize: file.size, skipAudio: !!skipAudio, compressImages: !!compressImages,
-    total: totalFiles, nextIndex, packOff: pw!.off, cd: pw!.cdJson(),
+    total: totalFiles, nextIndex, packOff: pw!.off, cd: pw!.cdJson(), fmt: "zip",
   });
   try {
     if (!("createSyncAccessHandle" in FileSystemFileHandle.prototype)) {
       post({ type: "error", fallback: true, message: "sync access handles unavailable" });
       return;
     }
+    // RAR / 7z → libarchive path (self-contained: posts done/error itself)
+    if ((await archiveKind(file)) !== "zip") { await extractViaLibarchive(file, id, !!skipAudio, !!compressImages); return; }
     const entries = await zipEntries(file);
     if (!entries.length) throw new Error("Couldn't read this zip — it looks empty or isn't a standard .zip archive.");
     const names = entries.map((e) => e.name);
@@ -306,7 +399,7 @@ self.onmessage = async (ev: MessageEvent<Job>) => {
     let resumeOff = 0;
     if (packed) {
       const prog = await readProg(gameDir);
-      if (prog && prog.srcSize === file.size && prog.skipAudio === !!skipAudio
+      if (prog && prog.fmt !== "libarchive" && prog.srcSize === file.size && prog.skipAudio === !!skipAudio
         && prog.compressImages === !!compressImages && prog.total === files.length
         && prog.nextIndex > 0 && prog.nextIndex <= files.length && Array.isArray(prog.cd)) {
         try {

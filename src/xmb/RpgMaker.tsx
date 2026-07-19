@@ -261,7 +261,7 @@ export default function RpgMaker(props: { profile: { id: string }; family: Famil
           {/* import tile — a real <label> so the tap natively opens the picker */}
           <label for="rpg-add-file" class="rpg-cell rpg-import-tile" classList={{ sel: sel() === importIdx() }}>
             <div class="rpg-cover rpg-cover-add"><span class="rpg-cover-glyph"><Icon name="plus" /></span></div>
-            <div class="rpg-title">Add a game (.zip)</div>
+            <div class="rpg-title">Add a game (.zip · .rar · .7z)</div>
           </label>
         </div>
 
@@ -291,9 +291,10 @@ export default function RpgMaker(props: { profile: { id: string }; family: Famil
                 detected and saved but can't run in a browser. Nothing is uploaded — the game stays in this browser.
               </Match>
               <Match when={true}>
-                Drop in a zip of an RPG Maker game you own. <b>MV, MZ, 2000 &amp; 2003 play now</b> — MV/MZ natively,
-                2000/2003 through EasyRPG (free RTP bundled). XP/VX/Ace are detected and saved but not yet playable.
-                Nothing is uploaded — the game stays in this browser.
+                Drop in a <b>.zip, .rar or .7z</b> of an RPG Maker game you own. <b>MV, MZ, 2000 &amp; 2003 play now</b> —
+                MV/MZ natively, 2000/2003 through EasyRPG (free RTP bundled). XP/VX/Ace are detected and saved but not
+                yet playable. Nothing is uploaded — the game stays in this browser. (Very large .rar/.7z can be heavy on
+                a phone — those formats unpack in memory; a .zip or a computer handles the biggest games best.)
               </Match>
             </Switch>
           </p>
@@ -304,8 +305,8 @@ export default function RpgMaker(props: { profile: { id: string }; family: Famil
             display:none input, which is what made the picker blink open/closed).
             A <label for> opens each natively on a real tap — no programmatic
             click, so nothing can loop it. */}
-        <input id="rpg-add-file" class="rpg-file-input" type="file" ref={fileInput} accept=".zip,application/zip" onChange={() => void pickAndImport()} />
-        <input id="rpg-reimport-file" class="rpg-file-input" type="file" ref={reimportInput} accept=".zip,application/zip" onChange={() => void pickAndReimport()} />
+        <input id="rpg-add-file" class="rpg-file-input" type="file" ref={fileInput} accept=".zip,.rar,.7z,application/zip" onChange={() => void pickAndImport()} />
+        <input id="rpg-reimport-file" class="rpg-file-input" type="file" ref={reimportInput} accept=".zip,.rar,.7z,application/zip" onChange={() => void pickAndReimport()} />
       </div>
     </Show>
   );

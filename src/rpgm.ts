@@ -356,7 +356,7 @@ function bustSwRootCache(id: string): void {
  *  path isn't available (old browser, worker failed to boot) — caller falls
  *  back to in-page extraction. Rejects with the worker's error (carrying .ctx,
  *  the file-position context) when extraction itself failed. */
-function extractInWorker(file: File, id: string, opts: ImportOpts, onProgress?: (p: ImportProgress) => void): Promise<{ bytes: number } | null> {
+function extractInWorker(file: File, id: string, opts: ImportOpts, onProgress?: (p: ImportProgress) => void): Promise<{ bytes: number; names: string[] } | null> {
   return new Promise((resolve, reject) => {
     let w: Worker;
     try {
@@ -374,9 +374,9 @@ function extractInWorker(file: File, id: string, opts: ImportOpts, onProgress?: 
     };
     w.onmessage = (ev) => {
       started = true;
-      const d = ev.data as { type: string; pct?: number; bytes?: number; message?: string; name?: string; ctx?: string; fallback?: boolean };
+      const d = ev.data as { type: string; pct?: number; bytes?: number; names?: string[]; message?: string; name?: string; ctx?: string; fallback?: boolean };
       if (d.type === "progress") onProgress?.({ phase: "extracting", pct: d.pct ?? 0 });
-      else if (d.type === "done") { w.terminate(); resolve({ bytes: d.bytes ?? 0 }); }
+      else if (d.type === "done") { w.terminate(); resolve({ bytes: d.bytes ?? 0, names: d.names ?? [] }); }
       else if (d.type === "error") {
         w.terminate();
         if (d.fallback) { resolve(null); return; }
@@ -410,41 +410,36 @@ async function doImport(
   const names: string[] = [];
   let bytes = 0;
 
-  // ONE lazy path for every size of zip, built for mobile: the archive stays on
-  // DISK; its central directory gives every entry's exact location, and each
-  // entry is sliced off the File and streamed through the decompressor straight
-  // into OPFS in small chunks. Peak memory is a few chunk buffers (~16MB)
-  // whether the game is 50MB or 6GB.
+  // Extraction runs in a WORKER (its own thread, OPFS sync access handles, no
+  // UI contention) and handles zip (lazy, off disk) AND rar/7z (via
+  // libarchive). It returns the file-name list so detection can run here. The
+  // in-page path is a ZIP-ONLY fallback for browsers without workers/sync
+  // handles. Peak memory: zip ≈ a few chunk buffers at any size; rar/7z ≈ the
+  // archive + one entry (the format needs the whole archive in memory).
   let ctx = ""; // where a failure happened — shown so errors are diagnosable
   try {
-    const entries = await zipEntries(file);
-    if (!entries.length) throw new Error("Couldn't read this zip — it looks empty or isn't a standard .zip archive.");
-    names.push(...entries.map((e) => e.name));
-    const skipRt = runtimeSkipper(names.filter((p) => !p.endsWith("/")));
-    const files = entries.filter((e) => !e.name.endsWith("/") && !skipRt(e.name) && !(opts?.skipAudio && isAudioPath(e.name)));
-
-    // the UNPACKED total is what OPFS must hold — fail clearly before writing
-    const totalOut = files.reduce((s, f) => s + f.uncompSize, 0);
-    try {
-      const est = await navigator.storage?.estimate?.();
-      if (est && est.quota != null && est.usage != null && totalOut > (est.quota - est.usage)) {
-        const gb = (n: number) => (n / 1073741824).toFixed(1);
-        throw new Error(`Not enough room: this game unpacks to ${gb(totalOut)} GB but only ${gb(est.quota - est.usage)} GB is free on this device.`);
-      }
-    } catch (e) { if (e instanceof Error && e.message.startsWith("Not enough")) throw e; }
-
     onProgress?.({ phase: "extracting", pct: 0 });
-    // WORKER FIRST: extraction on its own thread with OPFS sync access handles
-    // (no per-write swap-file copies, no contention with the console UI) — the
-    // path that holds up on phones. Falls back to in-page extraction when
-    // workers/sync handles aren't available.
     const viaWorker = await extractInWorker(file, id, opts ?? {}, onProgress);
     if (viaWorker) {
+      names.push(...viaWorker.names);
       bytes = viaWorker.bytes;
     } else {
+      // —— fallback: in-page ZIP extraction (loose files; no worker) ——
+      const entries = await zipEntries(file);
+      if (!entries.length) throw new Error("Couldn't read this zip — it looks empty or isn't a standard .zip archive.");
+      names.push(...entries.map((e) => e.name));
+      const skipRt = runtimeSkipper(names.filter((p) => !p.endsWith("/")));
+      const files = entries.filter((e) => !e.name.endsWith("/") && !skipRt(e.name) && !(opts?.skipAudio && isAudioPath(e.name)));
+      const totalOut = files.reduce((s, f) => s + f.uncompSize, 0);
+      try {
+        const est = await navigator.storage?.estimate?.();
+        if (est && est.quota != null && est.usage != null && totalOut > (est.quota - est.usage)) {
+          const gb = (n: number) => (n / 1073741824).toFixed(1);
+          throw new Error(`Not enough room: this game unpacks to ${gb(totalOut)} GB but only ${gb(est.quota - est.usage)} GB is free on this device.`);
+        }
+      } catch (e) { if (e instanceof Error && e.message.startsWith("Not enough")) throw e; }
       const totalComp = files.reduce((s, f) => s + f.compSize, 0) || 1;
-      let readComp = 0;
-      let fileNo = 0;
+      let readComp = 0, fileNo = 0;
       for (const ent of files) {
         ctx = ` (at file ${++fileNo}/${files.length}: ${ent.name.split("/").pop()}, ${(bytes / 1048576).toFixed(0)} MB written)`;
         checkEntry(ent);
@@ -454,17 +449,16 @@ async function doImport(
         const reader = (file.slice(dataStart, dataStart + ent.compSize).stream() as ReadableStream<Uint8Array>).getReader();
         try {
           if (ent.method === 0) {
-            for (;;) { // stored: pipe as-is
+            for (;;) {
               const { done, value } = await reader.read();
               if (value?.length) { await w.write(value as unknown as BufferSource); bytes += value.length; readComp += value.length; }
               if (done) break;
               onProgress?.({ phase: "extracting", pct: Math.min(99, Math.round((readComp / totalComp) * 100)) });
             }
           } else {
-            // deflated: stream through fflate's raw-inflate, write as chunks emerge
             const q: Uint8Array[] = [];
             const inf = new Inflate();
-            inf.ondata = (chunk) => { if (chunk?.length) q.push(chunk.slice()); }; // copy: fflate reuses buffers
+            inf.ondata = (chunk) => { if (chunk?.length) q.push(chunk.slice()); };
             for (;;) {
               const { done, value } = await reader.read();
               if (value?.length) { inf.push(value, false); readComp += value.length; }
@@ -527,7 +521,7 @@ async function doImport(
   let det = detect(paths);
   if (det.engine === "unknown") {
     await (await rpgmDir()).removeEntry(id, { recursive: true }).catch(() => {});
-    throw new Error("Couldn't recognise a game in this zip — no index.html (web build), RPG_RT (RPG Maker 2000/2003), RGSS data (XP/VX/Ace) or Ren'Py files found. Desktop binaries (.exe) can't run in a browser; export the game for web first.");
+    throw new Error("Couldn't recognise a game in this archive — no index.html (web build), RPG_RT (RPG Maker 2000/2003), RGSS data (XP/VX/Ace) or Ren'Py files found. Desktop binaries (.exe) can't run in a browser; export the game for web first.");
   }
 
   // refine XP/VX/VXAce from Game.ini's Library= line (read the one small file)
@@ -547,7 +541,7 @@ async function doImport(
   // for the audio we skipped (a missing BGM would otherwise crash MV/MZ)
   if (opts?.skipAudio) await writeMarker(dir, ".rpgmlite", "noaudio");
 
-  const title = file.name.replace(/\.zip$/i, "").replace(/[._]+/g, " ").trim() || "RPG Maker Game";
+  const title = file.name.replace(/\.(zip|rar|7z)$/i, "").replace(/[._]+/g, " ").trim() || "RPG Maker Game";
   const cover = await bestCover(id, det.engine, det.root).catch(() => undefined);
 
   // EasyRPG needs a case-insensitive directory manifest (index.json) it fetches
