@@ -21,9 +21,9 @@ const mimeOf = (p) => MIME[(p.split(".").pop() || "").toLowerCase()] || "applica
 
 self.addEventListener("install", () => self.skipWaiting());
 self.addEventListener("activate", (e) => e.waitUntil(self.clients.claim()));
-// a re-import can change a game's root prefix / lite flag — forget both
+// a re-import can change a game's root prefix / lite flag / pack — forget all
 self.addEventListener("message", (e) => {
-  if (e.data && e.data.type === "rpgm-root-bust") { rootCache.delete(e.data.id); liteCache.delete(e.data.id); }
+  if (e.data && e.data.type === "rpgm-root-bust") { rootCache.delete(e.data.id); liteCache.delete(e.data.id); packCache.delete(e.data.id); }
 });
 
 // —— MV/MZ save isolation shim (injected into that route's HTML only) ——
@@ -285,6 +285,86 @@ async function gameIsLite(gameId) {
   liteCache.set(gameId, lite);
   return lite;
 }
+
+async function gameDirOf(gameId) {
+  const r = await navigator.storage.getDirectory();
+  return (await r.getDirectoryHandle("rpgm")).getDirectoryHandle(gameId);
+}
+
+// —— packed installs ————————————————————————————————————————————————————————
+// New installs are ONE compact zip (.rpgmpack): files stay compressed on disk
+// and are inflated lazily, per request, with the browser's native streaming
+// DecompressionStream. The central directory is parsed once per game and kept
+// as an NFKC-lowercased name map (which also gives case-insensitive lookups
+// for free). Media entries were re-stored at import so Range works by offset.
+const packCache = new Map(); // gameId -> Promise<{file, map} | null>
+function packFor(gameId) {
+  let p = packCache.get(gameId);
+  if (!p) {
+    p = (async () => {
+      try {
+        const dir = await gameDirOf(gameId);
+        const file = await (await dir.getFileHandle(".rpgmpack")).getFile();
+        return { file, map: await parsePack(file) };
+      } catch { return null; }
+    })();
+    packCache.set(gameId, p);
+  }
+  return p;
+}
+async function parsePack(file) {
+  const U32 = (d, o) => d.getUint32(o, true);
+  const U16 = (d, o) => d.getUint16(o, true);
+  const U64 = (d, o) => Number(d.getBigUint64(o, true));
+  const tailLen = Math.min(file.size, 65557 + 20);
+  const tail = new DataView(await file.slice(file.size - tailLen).arrayBuffer());
+  let eocd = -1;
+  for (let i = tail.byteLength - 22; i >= 0; i--) { if (U32(tail, i) === 0x06054b50) { eocd = i; break; } }
+  if (eocd < 0) throw new Error("bad pack");
+  let count = U16(tail, eocd + 10), cdSize = U32(tail, eocd + 12), cdOff = U32(tail, eocd + 16);
+  if ((count === 0xffff || cdSize === 0xffffffff || cdOff === 0xffffffff) && eocd >= 20 && U32(tail, eocd - 20) === 0x07064b50) {
+    const z64Off = U64(tail, eocd - 20 + 8);
+    const z = new DataView(await file.slice(z64Off, z64Off + 56).arrayBuffer());
+    if (U32(z, 0) === 0x06064b50) { count = U64(z, 32); cdSize = U64(z, 40); cdOff = U64(z, 48); }
+  }
+  const cd = new DataView(await file.slice(cdOff, cdOff + cdSize).arrayBuffer());
+  const dec = new TextDecoder();
+  const map = new Map();
+  let p = 0;
+  for (let n = 0; n < count && p + 46 <= cd.byteLength; n++) {
+    if (U32(cd, p) !== 0x02014b50) break;
+    const flag = U16(cd, p + 8), method = U16(cd, p + 10);
+    let csize = U32(cd, p + 20), usize = U32(cd, p + 24), lho = U32(cd, p + 42);
+    const nlen = U16(cd, p + 28), elen = U16(cd, p + 30), clen = U16(cd, p + 32);
+    const nameBytes = new Uint8Array(cd.buffer, cd.byteOffset + p + 46, nlen);
+    const name = flag & 0x800 ? dec.decode(nameBytes) : Array.from(nameBytes, (b) => String.fromCharCode(b)).join("");
+    let ep = p + 46 + nlen;
+    const eEnd = ep + elen;
+    while (ep + 4 <= eEnd) {
+      const eid = U16(cd, ep), esz = U16(cd, ep + 2);
+      if (eid === 1) {
+        let fp = ep + 4;
+        if (usize === 0xffffffff) { usize = U64(cd, fp); fp += 8; }
+        if (csize === 0xffffffff) { csize = U64(cd, fp); fp += 8; }
+        if (lho === 0xffffffff) { lho = U64(cd, fp); fp += 8; }
+      }
+      ep += 4 + esz;
+    }
+    map.set(name.normalize("NFKC").toLowerCase(), { method, csize, usize, lho, dataStart: -1 });
+    p += 46 + nlen + elen + clen;
+  }
+  return map;
+}
+async function packDataStart(file, ent) {
+  if (ent.dataStart >= 0) return ent.dataStart;
+  const lh = new DataView(await file.slice(ent.lho, ent.lho + 30).arrayBuffer());
+  ent.dataStart = ent.lho + 30 + lh.getUint16(26, true) + lh.getUint16(28, true);
+  return ent.dataStart;
+}
+function packStream(file, ent, ds) {
+  const slice = file.slice(ds, ds + ent.csize);
+  return ent.method === 0 ? slice.stream() : slice.stream().pipeThrough(new DecompressionStream("deflate-raw"));
+}
 // Exact-match first; on a miss, retry that segment CASE-INSENSITIVELY (NFKC).
 // Games authored on Windows (case-insensitive fs) routinely reference assets
 // with the wrong case ("Actor1.png" vs "actor1.png") — on real Windows that
@@ -333,15 +413,24 @@ self.addEventListener("fetch", (e) => {
   e.respondWith((async () => {
     const type = mimeOf(path);
     const base = { "Content-Type": type, "Accept-Ranges": "bytes", ...ISO_HEADERS };
-    let file;
-    try {
-      file = await opfsFile(gameId, path);
-    } catch {
+
+    // Resolve the content: LOOSE first (extracted installs, index.json,
+    // markers), then the PACK (new installs — files inflate on demand).
+    let file = null, packEnt = null, packFile = null;
+    try { file = await opfsFile(gameId, path); } catch { /* try the pack */ }
+    if (!file) {
+      const pack = await packFor(gameId);
+      if (pack) {
+        let root = "";
+        try { root = await gameRootPrefix(await gameDirOf(gameId), gameId); } catch { /* no dir */ }
+        const ent = pack.map.get((root + path).normalize("NFKC").toLowerCase());
+        if (ent) { packEnt = ent; packFile = pack.file; }
+      }
+    }
+    if (!file && !packEnt) {
       // EasyRPG: fall back to the bundled RTP for assets the game itself omits.
       // LAZY: RTP files are only fetched when a game actually references one it
-      // doesn't bundle (self-contained games pull zero RTP — the 12MB pack is
-      // never a single download). Each fetched asset is cached so replays and
-      // offline don't re-download it.
+      // doesn't bundle. Each fetched asset is cached for replays/offline.
       if (isEasy) {
         const rtpUrl = "/rpgm/easyrpg/rtp/" + path;
         try {
@@ -350,7 +439,6 @@ self.addEventListener("fetch", (e) => {
           if (hit) return hit;
           const res = await fetch(rtpUrl);
           if (res.ok) { cache.put(rtpUrl, res.clone()); return res; }
-          // fall through to 404 (missing RTP asset renders blank, never crashes)
         } catch { /* offline + not cached */ }
       }
       return new Response("Not found: " + path, { status: 404, headers: ISO_HEADERS });
@@ -360,9 +448,10 @@ self.addEventListener("fetch", (e) => {
       // Inject shims into the game HTML before any of its scripts run. RPG Maker
       // gets the NW.js polyfill (require/process); Ren'Py and web builds get a
       // service-worker neutraliser so their bundled SW can't hijack our scope.
-      // All get the diagnostics probe + per-game save isolation. index.html
-      // usually has a <head>; if it somehow doesn't, prepend.
-      const raw = await file.text();
+      // All get the diagnostics probe + per-game save isolation.
+      const raw = file
+        ? await file.text()
+        : await new Response(packStream(packFile, packEnt, await packDataStart(packFile, packEnt))).text();
       const headShim = isRenpy ? RENPY_SHIM : isWeb ? WEB_SHIM : NW_SHIM;
       const audioStub = isMvMz && (await gameIsLite(gameId)) ? AUDIO_STUB : "";
       const shims = headShim + audioStub + DIAG_SHIM + MEDIA_SHIM + isolationShim(gameId);
@@ -371,24 +460,44 @@ self.addEventListener("fetch", (e) => {
         : shims + raw;
       return new Response(html, { headers: base });
     }
+
     // Unity Brotli/Gzip WebGL builds ship pre-compressed assets (.wasm.br,
-    // .data.gz, …). The file on disk IS the compressed bytes — tell the browser
-    // to decompress natively (Content-Encoding) and label it with the DECODED
-    // type, or Unity's loader rejects it. (.unityweb is JS-side, served as-is.)
-    const enc = path.endsWith(".br") ? "br" : path.endsWith(".gz") ? "gzip" : null;
-    if (enc) {
-      return new Response(file, { headers: { "Content-Type": mimeOf(path.slice(0, -3)), "Content-Encoding": enc, ...ISO_HEADERS } });
-    }
+    // .data.gz, …) — serve with Content-Encoding so the browser decompresses.
+    const cenc = path.endsWith(".br") ? "br" : path.endsWith(".gz") ? "gzip" : null;
+    const encHeaders = cenc ? { "Content-Type": mimeOf(path.slice(0, -3)), "Content-Encoding": cenc, ...ISO_HEADERS } : null;
+
     const range = e.request.headers.get("range");
     const mr = range && range.match(/bytes=(\d*)-(\d*)/);
-    if (mr) {
-      const start = mr[1] ? parseInt(mr[1], 10) : 0;
-      const end = mr[2] ? parseInt(mr[2], 10) : file.size - 1;
-      return new Response(file.slice(start, end + 1), {
-        status: 206,
-        headers: { ...base, "Content-Range": `bytes ${start}-${end}/${file.size}`, "Content-Length": String(end - start + 1) },
-      });
+
+    if (file) {
+      if (encHeaders) return new Response(file, { headers: encHeaders });
+      if (mr) {
+        const start = mr[1] ? parseInt(mr[1], 10) : 0;
+        const end = mr[2] ? parseInt(mr[2], 10) : file.size - 1;
+        return new Response(file.slice(start, end + 1), {
+          status: 206,
+          headers: { ...base, "Content-Range": `bytes ${start}-${end}/${file.size}`, "Content-Length": String(end - start + 1) },
+        });
+      }
+      return new Response(file, { headers: base });
     }
-    return new Response(file, { headers: base });
+
+    // —— packed serving ——
+    const ds = await packDataStart(packFile, packEnt);
+    if (packEnt.method === 0) {
+      if (encHeaders) return new Response(packFile.slice(ds, ds + packEnt.csize), { headers: encHeaders });
+      if (mr) { // stored entries serve ranges by plain offset math
+        const start = mr[1] ? parseInt(mr[1], 10) : 0;
+        const end = mr[2] ? parseInt(mr[2], 10) : packEnt.usize - 1;
+        return new Response(packFile.slice(ds + start, ds + end + 1), {
+          status: 206,
+          headers: { ...base, "Content-Range": `bytes ${start}-${end}/${packEnt.usize}`, "Content-Length": String(end - start + 1) },
+        });
+      }
+      return new Response(packFile.slice(ds, ds + packEnt.csize), { headers: base });
+    }
+    // deflated entry: stream-inflate on demand (Range unsupported here — media
+    // was re-stored at import precisely so it never lands in this branch)
+    return new Response(packStream(packFile, packEnt, ds), { headers: encHeaders ?? base });
   })());
 });

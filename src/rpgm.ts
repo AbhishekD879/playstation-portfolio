@@ -139,11 +139,46 @@ export async function readAllGameFiles(id: string): Promise<{ path: string; byte
   return out;
 }
 
-/** Read one file out of an extracted game (used by the SW-less fallback + covers). */
+// —— packed-install reader (main thread) ——————————————————————————————————————
+// New installs are ONE compact zip (.rpgmpack) in the game dir; files inflate
+// on demand. This mirrors what the service worker does, for main-thread needs
+// (covers, Game.ini engine refinement).
+const packCache = new Map<string, Promise<{ file: File; map: Map<string, import("./zipcd").ZipEntry> } | null>>();
+function packOf(id: string) {
+  let p = packCache.get(id);
+  if (!p) {
+    p = (async () => {
+      try {
+        const fh = await (await gameDir(id)).getFileHandle(".rpgmpack");
+        const file = await fh.getFile();
+        const map = new Map<string, import("./zipcd").ZipEntry>();
+        for (const e of await zipEntries(file)) map.set(e.name.normalize("NFKC").toLowerCase(), e);
+        return { file, map };
+      } catch { return null; }
+    })();
+    packCache.set(id, p);
+  }
+  return p;
+}
+
+/** Read one file out of a game — loose (extracted installs, markers,
+ *  index.json) first, then the pack. Used for covers + engine refinement. */
 export async function readGameFile(id: string, path: string): Promise<File | null> {
   try {
     const { dir, name } = await ensurePath(await gameDir(id), path);
     return await (await dir.getFileHandle(name)).getFile();
+  } catch { /* not loose — try the pack */ }
+  try {
+    const pack = await packOf(id);
+    if (!pack) return null;
+    const ent = pack.map.get(path.normalize("NFKC").toLowerCase());
+    if (!ent) return null;
+    const ds = await entryDataStart(pack.file, ent);
+    const slice = pack.file.slice(ds, ds + ent.compSize);
+    const blob = ent.method === 0
+      ? slice
+      : await new Response(slice.stream().pipeThrough(new DecompressionStream("deflate-raw") as unknown as ReadableWritablePair<Uint8Array, Uint8Array>)).blob();
+    return new File([blob], path.split("/").pop() || "file");
   } catch { return null; }
 }
 
@@ -269,7 +304,8 @@ export async function reimportRpgZip(
   file: File, game: RpgGame, onProgress?: (p: ImportProgress) => void, opts?: ImportOpts,
 ): Promise<RpgGame> {
   await (await rpgmDir()).removeEntry(game.id, { recursive: true }).catch(() => {});
-  bustSwRootCache(game.id); // the SW caches .rpgmroot/.rpgmlite per id — both may change
+  packCache.delete(game.id);
+  bustSwRootCache(game.id); // the SW caches .rpgmroot/.rpgmlite/.rpgmpack per id
   return doImport(file, game.profileId, game.id, game, onProgress, opts);
 }
 
@@ -433,7 +469,7 @@ async function doImport(
 
   // EasyRPG needs a case-insensitive directory manifest (index.json) it fetches
   // first — generated here (EasyRPG's gencache v2 rules), rooted at det.root.
-  if (engineKind(det.engine) === "easyrpg") await buildEasyRpgIndex(id, det.root);
+  if (engineKind(det.engine) === "easyrpg") await buildEasyRpgIndex(id, det.root, paths);
 
   // re-import keeps identity (title/addedAt) and refreshes the file-derived
   // fields; a fresh import records everything new.
@@ -460,22 +496,25 @@ type Cache = { [k: string]: string | Cache };
 const lc = (s: string) => s.normalize("NFKC").toLowerCase();
 const stripExt = (n: string) => (/\.(ini|po)$/i.test(n) ? n : n.replace(/\.[^.]+$/, ""));
 
-async function buildCache(dir: FileSystemDirectoryHandle, depth: number): Promise<Cache> {
+/** Build the EasyRPG cache from a PATH LIST (works for packed and extracted
+ *  installs alike — no directory walking needed). */
+function cacheFromPaths(paths: string[], root: string): Cache {
   const out: Cache = {};
-  for await (const [name, handle] of (dir as any).entries()) {
-    if (name === "_dirname" || name === "index.json") continue;
-    if (handle.kind === "directory") {
-      const sub = await buildCache(handle, depth + 1);
-      sub._dirname = name;
-      out[lc(name)] = sub;
-    } else {
-      if (depth === 0) {
-        const key = /^exfont(\.|$)/i.test(name) ? "exfont" : lc(name); // root keeps ext (ExFont special-cased)
-        out[key] = name;
-      } else {
-        out[lc(stripExt(name))] = name;
-      }
+  for (const p of paths) {
+    if (!p.startsWith(root)) continue;
+    const rel = p.slice(root.length);
+    if (!rel || rel.endsWith("/") || rel === "index.json") continue;
+    const parts = rel.split("/");
+    let node = out;
+    for (let i = 0; i < parts.length - 1; i++) {
+      const dn = parts[i];
+      let sub = node[lc(dn)];
+      if (!sub || typeof sub === "string") { sub = { _dirname: dn }; node[lc(dn)] = sub; }
+      node = sub as Cache;
     }
+    const fname = parts[parts.length - 1];
+    if (parts.length === 1) node[/^exfont(\.|$)/i.test(fname) ? "exfont" : lc(fname)] = fname; // root keeps ext
+    else node[lc(stripExt(fname))] = fname;
   }
   return out;
 }
@@ -495,9 +534,8 @@ async function intoDir(dir: FileSystemDirectoryHandle, prefix: string): Promise<
   for (const p of prefix.split("/").filter(Boolean)) d = await d.getDirectoryHandle(p);
   return d;
 }
-async function buildEasyRpgIndex(id: string, root: string): Promise<void> {
-  const gameRoot = await intoDir(await gameDir(id), root);
-  const gameCache = await buildCache(gameRoot, 0);
+async function buildEasyRpgIndex(id: string, root: string, paths: string[]): Promise<void> {
+  const gameCache = cacheFromPaths(paths, root);
   // merge the bundled RTP manifest so RTP-dependent games find shared assets
   let cache = gameCache;
   try {
@@ -505,7 +543,10 @@ async function buildEasyRpgIndex(id: string, root: string): Promise<void> {
     if (res.ok) cache = mergeCache((await res.json()) as Cache, gameCache);
   } catch { /* no RTP pack — self-contained games still work */ }
   const index = { cache, metadata: { version: 2, date: new Date().toISOString().slice(0, 10) } };
-  const fh = await gameRoot.getFileHandle("index.json", { create: true });
+  // written LOOSE beside the pack (or into the extracted tree) — the SW serves
+  // loose files first, so this works for both install modes
+  const { dir: parent, name } = await ensurePath(await gameDir(id), root + "index.json");
+  const fh = await parent.getFileHandle(name, { create: true });
   const w = await fh.createWritable();
   await w.write(new Blob([JSON.stringify(index)]));
   await w.close();
@@ -528,7 +569,18 @@ async function firstImageIn(id: string, base: string): Promise<File | null> {
     for await (const [name, handle] of (dir as any).entries()) {
       if (handle.kind === "file" && /\.(png|jpe?g|webp)$/i.test(name)) return await handle.getFile();
     }
-  } catch { /* no such dir */ }
+  } catch { /* no such dir (packed install) — search the pack below */ }
+  try {
+    const pack = await packOf(id);
+    if (pack) {
+      const b = base.normalize("NFKC").toLowerCase();
+      for (const [key, ent] of pack.map) {
+        if (key.startsWith(b) && !key.slice(b.length).includes("/") && /\.(png|jpe?g|webp)$/i.test(key)) {
+          return await readGameFile(id, ent.name);
+        }
+      }
+    }
+  } catch { /* no cover — fine */ }
   return null;
 }
 const blobToDataUrl = (b: Blob) => new Promise<string>((res, rej) => { const r = new FileReader(); r.onload = () => res(r.result as string); r.onerror = rej; r.readAsDataURL(b); });
@@ -536,6 +588,7 @@ const blobToDataUrl = (b: Blob) => new Promise<string>((res, rej) => { const r =
 // —— delete ————————————————————————————————————————————————————————————————————
 export async function removeRpgGame(id: string): Promise<void> {
   try { await (await rpgmDir()).removeEntry(id, { recursive: true }); } catch { /* already gone */ }
+  packCache.delete(id);
   await purgeGameStorage(id); // its isolated saves, too
   const d = await db();
   await new Promise<void>((res) => { const tx = d.transaction(STORE, "readwrite"); tx.objectStore(STORE).delete(id); tx.oncomplete = () => res(); tx.onerror = () => res(); });
