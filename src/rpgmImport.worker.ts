@@ -31,6 +31,18 @@ interface SyncHandle { write(b: Uint8Array, opts?: { at?: number }): number; tru
 const post = (m: unknown) => (self as unknown as Worker).postMessage(m);
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
+/** A sync-access-handle write() may write FEWER bytes than asked — loop until
+ *  the whole buffer lands, or a stalled (0-byte) write throws. Returns length. */
+function wsafe(h: SyncHandle, buf: Uint8Array, at: number): number {
+  let w = 0;
+  while (w < buf.length) {
+    const n = h.write(w === 0 ? buf : buf.subarray(w), { at: at + w });
+    if (!(n > 0)) throw new Error("sync write returned 0 (storage pressure)");
+    w += n;
+  }
+  return buf.length;
+}
+
 async function dirFor(root: FileSystemDirectoryHandle, path: string): Promise<{ dir: FileSystemDirectoryHandle; name: string }> {
   const parts = path.split("/").filter(Boolean);
   const name = parts.pop()!;
@@ -115,7 +127,7 @@ class PackWriter {
     const dec = new TextDecoder();
     return this.cd.map((r) => ({ n: dec.decode(r.nameB), m: r.method, c: r.csize, u: r.usize, l: r.lho }));
   }
-  private put(...parts: Uint8Array[]) { for (const p of parts) { this.h.write(p, { at: this.off }); this.off += p.length; } }
+  private put(...parts: Uint8Array[]) { for (const p of parts) { this.off += wsafe(this.h, p, this.off); } }
 
   /** zip64 extra for a local/central header when any value overflows 32 bits */
   private static extra(usize: number, csize: number, lho?: number): Uint8Array {
@@ -199,7 +211,7 @@ async function extractEntry(gameDir: FileSystemDirectoryHandle, file: File, ent:
     if (ent.method === 0) {
       for (;;) {
         const { done, value } = await reader.read();
-        if (value?.length) { h.write(value, { at }); at += value.length; }
+        if (value?.length) at += wsafe(h, value, at);
         if (done) break;
       }
     } else {
@@ -210,7 +222,7 @@ async function extractEntry(gameDir: FileSystemDirectoryHandle, file: File, ent:
         const { done, value } = await reader.read();
         if (value?.length) inf.push(value, false);
         if (done) inf.push(new Uint8Array(0), true);
-        while (q.length) { const c = q.shift()!; h.write(c, { at }); at += c.length; }
+        while (q.length) at += wsafe(h, q.shift()!, at);
         if (done) break;
       }
     }
@@ -226,7 +238,7 @@ async function writeWhole(gameDir: FileSystemDirectoryHandle, path: string, data
   const h = await openSync(dir, name);
   try {
     h.truncate(0);
-    for (let o = 0; o < data.length; o += 4194304) h.write(data.subarray(o, Math.min(o + 4194304, data.length)), { at: o });
+    for (let o = 0; o < data.length; o += 4194304) wsafe(h, data.subarray(o, Math.min(o + 4194304, data.length)), o);
     h.flush();
     return data.length;
   } finally {
@@ -248,7 +260,7 @@ async function writeProg(gameDir: FileSystemDirectoryHandle, prog: Prog): Promis
   try {
     const b = enc.encode(JSON.stringify(prog));
     h.truncate(0);
-    h.write(b, { at: 0 });
+    wsafe(h, b, 0);
     h.flush();
   } finally {
     try { h.close(); } catch { /* closed */ }

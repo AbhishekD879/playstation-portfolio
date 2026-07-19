@@ -400,6 +400,12 @@ async function doImport(
 ): Promise<RpgGame> {
   onProgress?.({ phase: "reading", pct: 0 });
 
+  // ask for PERSISTENT storage before a big write: it exempts the install from
+  // automatic LRU eviction under storage pressure (so a finished game isn't
+  // silently dropped) — Chrome auto-grants by engagement, no prompt. Best
+  // effort; doesn't raise quota.
+  try { await navigator.storage?.persist?.(); } catch { /* unsupported */ }
+
   const dir = await gameDir(id, true);
   const names: string[] = [];
   let bytes = 0;
