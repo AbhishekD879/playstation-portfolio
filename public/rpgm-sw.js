@@ -189,6 +189,23 @@ const DIAG_SHIM = `<script>(function(){
     return el; }; W.prototype=Native.prototype; return W; }
   try{ window.Image=wrapMediaCtor(window.Image); }catch(e){}
   try{ if(window.Audio) window.Audio=wrapMediaCtor(window.Audio); }catch(e){}
+  // ENGINE-LEVEL probe: RPG Maker's "Show Picture" (cutscenes) goes through
+  // ImageManager.loadPicture. Logging it tells us whether the ENGINE even asks
+  // for the picture — the difference between "image won't load" and "the event
+  // never ran". Poll until the engine defines it (after our head script).
+  var engTries=0, engIv=setInterval(function(){
+    var IM=window.ImageManager;
+    if(IM){
+      clearInterval(engIv);
+      ["loadPicture","loadBitmap","loadCharacter","loadFace","loadBattleback1","loadBattleback2","loadParallax"].forEach(function(m){
+        if(typeof IM[m]!=="function"||IM["__w_"+m]) return; IM["__w_"+m]=true;
+        var orig=IM[m];
+        IM[m]=function(){ try{ var a=Array.prototype.slice.call(arguments).filter(function(x){return typeof x==="string";}).join("/");
+          activity.unshift({path:"engine."+m+"("+a+")", ok:true, reason:"engine requested", t:Date.now()-T0}); if(activity.length>30)activity.pop(); }catch(e){}
+          return orig.apply(this,arguments); };
+      });
+    } else if(++engTries>3000){ clearInterval(engIv); }
+  }, 10);
   try { var XO=XMLHttpRequest.prototype.open, XS=XMLHttpRequest.prototype.send;
     XMLHttpRequest.prototype.open=function(m,u){ this.__du=u; return XO.apply(this,arguments); };
     XMLHttpRequest.prototype.send=function(){ var x=this,id=begin(x.__du);
