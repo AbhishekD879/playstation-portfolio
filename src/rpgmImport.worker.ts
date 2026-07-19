@@ -308,18 +308,30 @@ self.onmessage = async (ev: MessageEvent<Job>) => {
       }
     }
 
-    // quota: only what's still LEFT to write needs to fit
+    // quota: only what's still LEFT to write needs to fit. This can trip on a
+    // RESUMED attempt (the partial pack itself now occupies space) — that's
+    // fine: the failure is resumable (progress is NEVER discarded), the user
+    // frees some space and continues.
     const rest = files.slice(startIndex);
     const need = rest.reduce((s, f) => s + (packed ? (isMedia(f.name) && f.method !== 0 ? f.uncompSize : f.compSize) : f.uncompSize), 0);
     const est = await navigator.storage?.estimate?.().catch(() => null);
     if (est && est.quota != null && est.usage != null && need > (est.quota - est.usage)) {
-      const gb = (n: number) => (n / 1073741824).toFixed(1);
-      throw new Error(`Not enough room: this game still needs ${gb(need)} GB but only ${gb(est.quota - est.usage)} GB is free on this device.`);
+      const mb = (n: number) => Math.ceil(n / 1048576);
+      throw new Error(`Not enough room to continue: about ${mb(need)} MB still to write but only ${mb(est.quota - est.usage)} MB free. Free up some space, then import the same zip again — your progress is kept.`);
     }
 
     const totalComp = files.reduce((s, f) => s + f.compSize, 0) || 1;
     let readComp = files.slice(0, startIndex).reduce((s, f) => s + f.compSize, 0);
     let bytes = 0, lastPct = -1;
+
+    // TEST HOOK: failAfter < 0 throws BEFORE pw exists (simulates the early
+    // quota-check failure on a resume — worker reports resumable=false, yet a
+    // prior checkpoint is on disk; rpgm.ts must still keep it).
+    if (failAfter !== undefined && failAfter < 0) {
+      const err = new Error("synthetic early failure (test hook)");
+      err.name = "TestEarly";
+      throw err;
+    }
 
     pw = packed ? new PackWriter() : null;
     if (pw) await pw.open(gameDir, resumeOff, resumeCd);
@@ -381,9 +393,11 @@ self.onmessage = async (ev: MessageEvent<Job>) => {
           throw e;
         }
       }
-      // checkpoint: flush to disk + persist resume state every 25 files, so a
-      // failure (or even a killed tab) never costs more than 25 files of work
-      if (pw && (i + 1) % 25 === 0) {
+      // checkpoint: flush to disk + persist resume state every 12 files, so a
+      // failure (or even an OOM-killed tab) never costs more than 12 files of
+      // work and a durable checkpoint exists early — the whole point is that
+      // progress is NEVER lost, so each retry only has to get a bit further.
+      if (pw && (i + 1) % 12 === 0) {
         pw.flush();
         await writeProg(gameDir, snapshot(i + 1));
       }

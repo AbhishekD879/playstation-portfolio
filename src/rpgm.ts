@@ -362,8 +362,18 @@ function extractInWorker(file: File, id: string, opts: ImportOpts, onProgress?: 
     try {
       w = new Worker(new URL("./rpgmImport.worker.ts", import.meta.url), { type: "module" });
     } catch { resolve(null); return; }
-    w.onerror = () => { w.terminate(); resolve(null); }; // couldn't even boot → fallback
+    let started = false; // has the worker done real work? (distinguishes crash from boot-fail)
+    // A hard crash (OOM-killed thread) fires onerror with NO error message. If
+    // it happened MID-EXTRACTION, don't fall back to in-page (that OOMs worse
+    // and ignores the on-disk checkpoint) — reject so the sidecar check
+    // resumes. Only a crash BEFORE any progress is a genuine boot failure.
+    w.onerror = () => {
+      w.terminate();
+      if (started) reject(Object.assign(new Error("the install worker was interrupted"), { name: "WorkerInterrupted", resumable: true }));
+      else resolve(null); // couldn't even boot → in-page fallback
+    };
     w.onmessage = (ev) => {
+      started = true;
       const d = ev.data as { type: string; pct?: number; bytes?: number; message?: string; name?: string; ctx?: string; fallback?: boolean };
       if (d.type === "progress") onProgress?.({ phase: "extracting", pct: d.pct ?? 0 });
       else if (d.type === "done") { w.terminate(); resolve({ bytes: d.bytes ?? 0 }); }
@@ -464,15 +474,31 @@ async function doImport(
     }
   } catch (e) {
     const we = e as Error & { ctx?: string; resumable?: boolean; done?: number; total?: number };
-    // RESUMABLE failure: the partial pack + progress sidecar stay on disk —
-    // importing the same zip again CONTINUES from where it stopped. Only
-    // non-resumable failures clean up.
-    if (we?.resumable && we.done != null && we.total != null) {
-      throw new Error(
-        `Install paused — ${we.done} of ${we.total} files are safely stored. `
-        + `Import the SAME zip again and it will continue from there (not start over). `
-        + `Freeing some space or closing other apps first helps. Details: ${we.name}: ${we.message}${we.ctx ?? ""}`,
-      );
+    // GROUND TRUTH for resumability: is there a checkpoint sidecar on disk?
+    // NEVER trust only the worker's in-memory flag — an early failure (the
+    // quota pre-check) or a hard crash reports resumable=false yet a periodic
+    // checkpoint from a prior attempt is already safely stored. If a checkpoint
+    // exists we must NOT delete anything, so the next import continues from it.
+    let done = we?.done, total = we?.total;
+    let hasCheckpoint = false;
+    try {
+      const sc = await readGameFile(id, ".rpgmprog");
+      if (sc) {
+        const p = JSON.parse(await sc.text()) as { nextIndex?: number; total?: number };
+        hasCheckpoint = true;
+        // the sidecar is the authoritative count of what's durably stored —
+        // prefer it over an early-failure's worker-reported 0
+        done = Math.max(done ?? 0, p.nextIndex ?? 0);
+        total = total ?? p.total;
+      }
+    } catch { /* no sidecar */ }
+    if (hasCheckpoint) {
+      // pending id is kept (importRpgZip only clears it on success), so
+      // re-importing the same zip resumes into this very game dir.
+      const reason = we?.message && /Not enough room to continue/.test(we.message)
+        ? we.message
+        : `Import the SAME zip again and it continues from here (not from zero). Closing other apps or freeing some space helps.`;
+      throw new Error(`Install paused — ${done ?? "?"} of ${total ?? "?"} files are safely stored. ${reason}`);
     }
     await (await rpgmDir()).removeEntry(id, { recursive: true }).catch(() => {});
     // keep the ORIGINAL error visible — a blanket "out of memory" label hid the
