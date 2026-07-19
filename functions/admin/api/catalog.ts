@@ -9,7 +9,7 @@ interface Env {
 }
 type Entry = { id: string; name: string; url: string; note: string; category: string };
 const KEY = "catalog:v1";
-const MAX = 2000;
+const MAX = 12000; // headroom for bulk category approvals
 const json = (data: unknown, status = 200) =>
   new Response(JSON.stringify(data), { status, headers: { "content-type": "application/json", "cache-control": "no-store" } });
 

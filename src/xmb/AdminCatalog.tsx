@@ -121,6 +121,19 @@ export default function AdminCatalog() {
     setEntries([...entries(), { id: uid(), name: c.name, url: c.url, note: c.note, category: c.source }]);
     setCands(cands().filter((x) => x.url !== c.url)); setDirty(true);
   }
+  // bulk approve — a whole source group, or all current filter matches. Dedups
+  // against what's already live so re-clicking is safe.
+  function approveAll(list: Cand[]) {
+    const live = liveSet();
+    const add: Entry[] = [];
+    for (const c of list) { const k = norm(c.url); if (live.has(k)) continue; live.add(k); add.push({ id: uid(), name: c.name, url: c.url, note: c.note, category: c.source }); }
+    if (!add.length) return;
+    const added = new Set(add.map((e) => norm(e.url)));
+    setEntries([...entries(), ...add]);
+    setCands(cands().filter((c) => !added.has(norm(c.url))));
+    setDirty(true);
+    setPub(`added ${add.length} — remember to Publish`);
+  }
 
   async function publish() {
     setPub("publishing…");
@@ -224,15 +237,20 @@ export default function AdminCatalog() {
             <Show when={q().trim()} fallback={
               <For each={candGroups()}>{([src, list]) => (
                 <div class="adm-group">
-                  <button class="adm-summary" classList={{ open: openSrc().has(src) }} onClick={() => toggleOpen(src)}>
+                  <div class="adm-summary" classList={{ open: openSrc().has(src) }} role="button" tabindex="0"
+                    onClick={() => toggleOpen(src)} onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); toggleOpen(src); } }}>
                     <span class="adm-chev" /> {src} <span class="adm-count">{list.length}</span>
-                  </button>
+                    <button class="adm-btn tiny primary adm-approve-all" onClick={(e) => { e.stopPropagation(); approveAll(list); }}>+ approve all {list.length}</button>
+                  </div>
                   <Show when={openSrc().has(src)}>
                     <div class="adm-group-body"><For each={list}>{(c) => <CandRow c={c} />}</For></div>
                   </Show>
                 </div>
               )}</For>
             }>
+              <Show when={shown().length}>
+                <button class="adm-btn primary adm-approve-matches" onClick={() => approveAll(shown())}>+ approve all {shown().length} matches</button>
+              </Show>
               <div class="adm-group"><div class="adm-group-body">
                 <For each={shown()}>{(c) => <CandRow c={c} />}</For>
                 <Show when={shown().length === 0}><div class="adm-empty">no matches</div></Show>
