@@ -35,6 +35,30 @@ export default function RpgMaker(props: { profile: { id: string }; family: Famil
   let reimportGame: RpgGame | null = null; // which game the re-import picker targets
   let hostNav: ((a: NavAction) => void) | undefined; // the active player's nav
   let disarm: ReturnType<typeof setTimeout> | null = null;
+  let picking = false; // a file picker is open — re-entry lock (see openPicker)
+  let pickCleanup: (() => void) | null = null;
+
+  // Open a file picker ONCE. fileInput.click() fires from several paths (the
+  // tile tap, pad "confirm", and synth-mode focused-button click); without a
+  // lock a flickering controller button, a double-fire, or the mobile picker's
+  // focus churn re-opens it in a tight loop ("file manager opening & closing
+  // infinitely"). Lock on open; release when the window wakes (picker closed —
+  // select OR cancel) or a hard timeout, whichever first.
+  function openPicker(input: HTMLInputElement) {
+    if (picking || importing()) return;
+    pickCleanup?.(); // drop any stale listeners from a previous session
+    picking = true;
+    let done = false;
+    const cleanup = () => { removeEventListener("focus", onWake); document.removeEventListener("visibilitychange", onVis); pickCleanup = null; };
+    const clear = () => { if (done) return; done = true; picking = false; cleanup(); };
+    const onWake = () => setTimeout(clear, 350);
+    const onVis = () => { if (document.visibilityState === "visible") setTimeout(clear, 350); };
+    pickCleanup = cleanup;
+    addEventListener("focus", onWake);
+    document.addEventListener("visibilitychange", onVis);
+    setTimeout(clear, 10000); // hard backup if neither event fires
+    input.click();
+  }
 
   const isRenpy = () => props.family === "renpy";
   const isWeb = () => props.family === "web";
@@ -46,6 +70,7 @@ export default function RpgMaker(props: { profile: { id: string }; family: Famil
   const importIdx = () => games().length;
 
   async function pickAndImport() {
+    picking = false; // a change landed → picker closed
     const f = fileInput.files?.[0];
     fileInput.value = "";
     if (!f) return;
@@ -74,6 +99,7 @@ export default function RpgMaker(props: { profile: { id: string }; family: Famil
   // replace a game's FILES in place (same id → saves survive) — the repair
   // path for zips imported before an importer fix, or updated game versions
   async function pickAndReimport() {
+    picking = false; // a change landed → picker closed
     const f = reimportInput.files?.[0];
     const g = reimportGame;
     reimportInput.value = "";
@@ -129,7 +155,7 @@ export default function RpgMaker(props: { profile: { id: string }; family: Famil
     else if (a === "up") { setSel((s) => Math.max(0, s - cols())); sfx.tickV(); }
     else if (a === "down") { setSel((s) => Math.min(n - 1, s + cols())); sfx.tickV(); }
     else if (a === "confirm") {
-      if (sel() === importIdx()) fileInput.click();
+      if (sel() === importIdx()) openPicker(fileInput);
       else { const g = games()[sel()]; if (g) launch(g); }
     }
     else if (a === "options") { const g = games()[sel()]; if (g) void del(g); }
@@ -212,7 +238,7 @@ export default function RpgMaker(props: { profile: { id: string }; family: Famil
                 <div class="rpg-title">{g.title}</div>
                 <div class="rpg-cellacts">
                   <button class="rpg-del rpg-reimp" title="Replace the game files with a new zip — saves are kept"
-                    onClick={(e) => { e.stopPropagation(); reimportGame = g; reimportInput.click(); }}>
+                    onClick={(e) => { e.stopPropagation(); reimportGame = g; openPicker(reimportInput); }}>
                     ↻ re-import
                   </button>
                   <button class="rpg-del" classList={{ armed: armDelete() === g.id }}
@@ -225,7 +251,7 @@ export default function RpgMaker(props: { profile: { id: string }; family: Famil
           </For>
           {/* import tile */}
           <div class="rpg-cell rpg-import-tile" classList={{ sel: sel() === importIdx() }} role="button" tabindex={0}
-            onClick={() => fileInput.click()}>
+            onClick={() => openPicker(fileInput)}>
             <div class="rpg-cover rpg-cover-add"><span class="rpg-cover-glyph"><Icon name="plus" /></span></div>
             <div class="rpg-title">Add a game (.zip)</div>
           </div>
