@@ -66,6 +66,7 @@ const NW_SHIM = `<script>(function(){
     join:function(){return Array.prototype.filter.call(arguments,Boolean).join("/").replace(/\\/+/g,"/");},
     resolve:function(){return ("/"+Array.prototype.filter.call(arguments,Boolean).join("/")).replace(/\\/+/g,"/");},
     normalize:function(p){return String(p).replace(/\\/+/g,"/");}};
+  path.posix=path; path.win32=path; // plugins reach for require('path').posix — JoiPlay's NWJSAPI clones it
   // fs: sync reads CAN'T work (sync XHR bypasses service workers in Chromium,
   // and there's no SharedArrayBuffer bridge without page-level isolation), so
   // existsSync stays FALSE — well-written NW.js plugins existsSync-guard their
@@ -93,6 +94,10 @@ const NW_SHIM = `<script>(function(){
     maximize:noop,unmaximize:noop,minimize:noop,restore:noop,setProgressBar:noop,setResizable:noop,requestAttention:noop,
     setMaximumSize:noop,setMinimumSize:noop,resizeTo:noop,moveTo:noop,setAlwaysOnTop:noop,setPosition:noop,
     leaveFullscreen:noop,toggleFullscreen:noop,enterFullscreen:noop,zoomLevel:0,x:0,y:0,width:816,height:624,
+    // evalNWBin: NW.js snapshot loader. We can't run compiled .bin, and the .js
+    // source already loads via normal <script> tags, so a defined no-op just
+    // prevents a "not a function" crash on games that call it (JoiPlay parity).
+    evalNWBin:noop,eval:function(f,s){try{if(s)(0,eval)(String(s));}catch(e){}},
     title:document.title,window:window,menu:null};
   var nwgui={Window:{get:function(){return win;},open:noop},App:{argv:[],fullArgv:[],filteredArgv:[],dataPath:"/",manifest:{},
     clearCache:noop,quit:function(){try{window.close();}catch(e){}},closeAllWindows:noop,addOriginAccessWhitelistEntry:noop},
@@ -120,6 +125,10 @@ const NW_SHIM = `<script>(function(){
   hrtime.bigint=function(){return typeof BigInt==="function"?BigInt(Math.round(performance.now()*1e6)):Math.round(performance.now()*1e6);};
   window.process=window.process||{platform:"browser",arch:"x64",argv:[],argv0:"",execPath:"/index.html",
     version:"",versions:{},env:{},cwd:ret("/"),chdir:noop,on:noop,exit:noop,hrtime:hrtime,
+    // process.release: DEFINED (some plugins read process.release.name) but
+    // EMPTY — do NOT set name:"node", or Node-detecting libs (effekseer) take
+    // the node path and break. Empty object = no crash, no false "I'm Node".
+    release:{},
     mainModule:{filename:"/index.html"},nextTick:function(f){Promise.resolve().then(f);},
     stdout:{write:noop},stderr:{write:noop}};
   window.global=window.global||window;
