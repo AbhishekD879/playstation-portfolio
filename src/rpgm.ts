@@ -287,12 +287,42 @@ export interface ImportProgress { phase: "reading" | "detecting" | "extracting";
  *  The game root is NOT stripped — its prefix is recorded and the service
  *  worker prepends it, so detection can happen after the (single) stream. */
 // "lite install" — music/sounds skipped, images lossy-recompressed to WebP
-export interface ImportOpts { skipAudio?: boolean; compressImages?: boolean }
+export interface ImportOpts { skipAudio?: boolean; compressImages?: boolean; __failAfter?: number }
+
+// Resumable installs: a failed import keeps its partial pack + a progress
+// sidecar. Importing the SAME zip again continues from where it stopped. For
+// fresh imports the retry must land in the SAME game dir — remember which id
+// a given zip (size:mtime) was assigned.
+const PENDING_KEY = "asp.rpgm.pendingImports";
+const zipKey = (f: File) => `${f.size}:${f.lastModified}`;
+function pendingId(f: File): string | null {
+  try { return (JSON.parse(localStorage.getItem(PENDING_KEY) || "{}"))[zipKey(f)] ?? null; } catch { return null; }
+}
+function setPending(f: File, id: string): void {
+  try {
+    const m = JSON.parse(localStorage.getItem(PENDING_KEY) || "{}") as Record<string, string>;
+    m[zipKey(f)] = id;
+    const keys = Object.keys(m);
+    while (keys.length > 4) delete m[keys.shift()!]; // keep it tiny
+    localStorage.setItem(PENDING_KEY, JSON.stringify(m));
+  } catch { /* storage full — resume just won't survive a reload */ }
+}
+function clearPending(f: File): void {
+  try {
+    const m = JSON.parse(localStorage.getItem(PENDING_KEY) || "{}") as Record<string, string>;
+    delete m[zipKey(f)];
+    localStorage.setItem(PENDING_KEY, JSON.stringify(m));
+  } catch { /* fine */ }
+}
 
 export async function importRpgZip(
   file: File, profileId: string, onProgress?: (p: ImportProgress) => void, opts?: ImportOpts,
 ): Promise<RpgGame> {
-  return doImport(file, profileId, crypto.randomUUID(), null, onProgress, opts);
+  const id = pendingId(file) ?? crypto.randomUUID();
+  setPending(file, id);
+  const g = await doImport(file, profileId, id, null, onProgress, opts);
+  clearPending(file);
+  return g;
 }
 
 /** RE-IMPORT an existing game IN PLACE — same id, so its saves survive.
@@ -303,7 +333,14 @@ export async function importRpgZip(
 export async function reimportRpgZip(
   file: File, game: RpgGame, onProgress?: (p: ImportProgress) => void, opts?: ImportOpts,
 ): Promise<RpgGame> {
-  await (await rpgmDir()).removeEntry(game.id, { recursive: true }).catch(() => {});
+  // keep the partial install when a resume sidecar matches this very zip —
+  // the worker will CONTINUE it instead of starting over
+  let resume = false;
+  try {
+    const prog = await readGameFile(game.id, ".rpgmprog");
+    if (prog) resume = (JSON.parse(await prog.text()) as { srcSize?: number }).srcSize === file.size;
+  } catch { /* no sidecar */ }
+  if (!resume) await (await rpgmDir()).removeEntry(game.id, { recursive: true }).catch(() => {});
   packCache.delete(game.id);
   bustSwRootCache(game.id); // the SW caches .rpgmroot/.rpgmlite/.rpgmpack per id
   return doImport(file, game.profileId, game.id, game, onProgress, opts);
@@ -333,13 +370,17 @@ function extractInWorker(file: File, id: string, opts: ImportOpts, onProgress?: 
       else if (d.type === "error") {
         w.terminate();
         if (d.fallback) { resolve(null); return; }
-        const err = new Error(d.message || "install failed") as Error & { ctx?: string };
-        err.name = d.name || "Error";
-        err.ctx = d.ctx;
+        const dd = d as typeof d & { resumable?: boolean; done?: number; total?: number };
+        const err = new Error(dd.message || "install failed") as Error & { ctx?: string; resumable?: boolean; done?: number; total?: number };
+        err.name = dd.name || "Error";
+        err.ctx = dd.ctx;
+        err.resumable = dd.resumable;
+        err.done = dd.done;
+        err.total = dd.total;
         reject(err);
       }
     };
-    w.postMessage({ file, id, skipAudio: !!opts.skipAudio, compressImages: !!opts.compressImages });
+    w.postMessage({ file, id, skipAudio: !!opts.skipAudio, compressImages: !!opts.compressImages, failAfter: opts.__failAfter });
   });
 }
 
@@ -422,11 +463,21 @@ async function doImport(
       }
     }
   } catch (e) {
+    const we = e as Error & { ctx?: string; resumable?: boolean; done?: number; total?: number };
+    // RESUMABLE failure: the partial pack + progress sidecar stay on disk —
+    // importing the same zip again CONTINUES from where it stopped. Only
+    // non-resumable failures clean up.
+    if (we?.resumable && we.done != null && we.total != null) {
+      throw new Error(
+        `Install paused — ${we.done} of ${we.total} files are safely stored. `
+        + `Import the SAME zip again and it will continue from there (not start over). `
+        + `Freeing some space or closing other apps first helps. Details: ${we.name}: ${we.message}${we.ctx ?? ""}`,
+      );
+    }
     await (await rpgmDir()).removeEntry(id, { recursive: true }).catch(() => {});
     // keep the ORIGINAL error visible — a blanket "out of memory" label hid the
     // real cause (Safari reports storage trouble as UnknownError too)
-    const wctx = (e as Error & { ctx?: string })?.ctx;
-    if (wctx) ctx = wctx;
+    if (we?.ctx) ctx = we.ctx;
     const orig = e instanceof Error ? `${e.name}: ${e.message}` : String(e);
     if (e instanceof Error && /quota|space|QuotaExceeded/i.test(e.name + e.message)) {
       throw new Error(`Ran out of storage while installing${ctx}. Free up space on this device and try again — details: ${orig}`);

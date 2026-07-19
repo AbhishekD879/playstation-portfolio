@@ -18,7 +18,13 @@
 import { Inflate } from "fflate";
 import { checkEntry, entryDataStart, isAudioPath, runtimeSkipper, zipEntries, type ZipEntry } from "./zipcd";
 
-interface Job { file: File; id: string; skipAudio?: boolean; compressImages?: boolean }
+interface Job { file: File; id: string; skipAudio?: boolean; compressImages?: boolean; failAfter?: number }
+// resume sidecar (.rpgmprog): everything needed to continue a torn install
+interface Prog {
+  srcSize: number; skipAudio: boolean; compressImages: boolean;
+  total: number; nextIndex: number; packOff: number;
+  cd: { n: string; m: number; c: number; u: number; l: number }[];
+}
 // minimal local typings — lib.dom doesn't carry the worker-only OPFS sync API
 interface SyncHandle { write(b: Uint8Array, opts?: { at?: number }): number; truncate(n: number): void; flush(): void; close(): void }
 
@@ -95,9 +101,20 @@ class PackWriter {
   h!: SyncHandle;
   off = 0;
   cd: CdRec[] = [];
-  private cur: Uint8Array[] = [];
 
-  async open(gameDir: FileSystemDirectoryHandle) { this.h = await openSync(gameDir, ".rpgmpack"); this.h.truncate(0); }
+  /** open fresh, or CONTINUE a partial pack at a recorded offset with the
+   *  central-directory records collected so far (resumable installs) */
+  async open(gameDir: FileSystemDirectoryHandle, at = 0, cd: CdRec[] = []) {
+    this.h = await openSync(gameDir, ".rpgmpack");
+    this.h.truncate(at);
+    this.off = at;
+    this.cd = cd;
+  }
+  flush() { this.h.flush(); }
+  cdJson(): Prog["cd"] {
+    const dec = new TextDecoder();
+    return this.cd.map((r) => ({ n: dec.decode(r.nameB), m: r.method, c: r.csize, u: r.usize, l: r.lho }));
+  }
   private put(...parts: Uint8Array[]) { for (const p of parts) { this.h.write(p, { at: this.off }); this.off += p.length; } }
 
   /** zip64 extra for a local/central header when any value overflows 32 bits */
@@ -217,11 +234,41 @@ async function writeWhole(gameDir: FileSystemDirectoryHandle, path: string, data
   }
 }
 
-const TRANSIENT = /transient|out of memory|UnknownError|NoModificationAllowed|InvalidState|truncate/i;
+const TRANSIENT = /transient|out of memory|UnknownError|NoModificationAllowed|InvalidState|truncate|NotReadable/i;
+
+// —— resume sidecar io ————————————————————————————————————————————————————————
+async function readProg(gameDir: FileSystemDirectoryHandle): Promise<Prog | null> {
+  try {
+    const fh = await gameDir.getFileHandle(".rpgmprog");
+    return JSON.parse(await (await fh.getFile()).text()) as Prog;
+  } catch { return null; }
+}
+async function writeProg(gameDir: FileSystemDirectoryHandle, prog: Prog): Promise<void> {
+  const h = await openSync(gameDir, ".rpgmprog");
+  try {
+    const b = enc.encode(JSON.stringify(prog));
+    h.truncate(0);
+    h.write(b, { at: 0 });
+    h.flush();
+  } finally {
+    try { h.close(); } catch { /* closed */ }
+  }
+}
+async function delProg(gameDir: FileSystemDirectoryHandle): Promise<void> {
+  try { await gameDir.removeEntry(".rpgmprog"); } catch { /* absent */ }
+}
 
 self.onmessage = async (ev: MessageEvent<Job>) => {
-  const { file, id, skipAudio, compressImages } = ev.data;
+  const { file, id, skipAudio, compressImages, failAfter } = ev.data;
   let ctx = "";
+  // resumable state — hoisted so the catch can persist progress
+  let gameDir: FileSystemDirectoryHandle | null = null;
+  let pw: PackWriter | null = null;
+  let curIndex = 0, totalFiles = 0;
+  const snapshot = (nextIndex: number): Prog => ({
+    srcSize: file.size, skipAudio: !!skipAudio, compressImages: !!compressImages,
+    total: totalFiles, nextIndex, packOff: pw!.off, cd: pw!.cdJson(),
+  });
   try {
     if (!("createSyncAccessHandle" in FileSystemFileHandle.prototype)) {
       post({ type: "error", fallback: true, message: "sync access handles unavailable" });
@@ -232,38 +279,69 @@ self.onmessage = async (ev: MessageEvent<Job>) => {
     const names = entries.map((e) => e.name);
     const skipRt = runtimeSkipper(names.filter((p) => !p.endsWith("/")));
     const files = entries.filter((e) => !e.name.endsWith("/") && !skipRt(e.name) && !(skipAudio && isAudioPath(e.name)));
+    totalFiles = files.length;
 
     // PACKED needs the SW to be able to inflate on demand
     const packed = typeof DecompressionStream === "function";
 
-    // quota: packed installs need ~compressed size (media re-stored at usize);
-    // extracted installs need the full unpacked size
-    const need = files.reduce((s, f) => s + (packed ? (isMedia(f.name) && f.method !== 0 ? f.uncompSize : f.compSize) : f.uncompSize), 0);
+    const root = await navigator.storage.getDirectory();
+    gameDir = await (await root.getDirectoryHandle("rpgm", { create: true })).getDirectoryHandle(id, { create: true });
+
+    // RESUME: a previous attempt left a sidecar — continue from where it died
+    // instead of starting over (each attempt only ever has to get FURTHER).
+    let startIndex = 0;
+    let resumeCd: CdRec[] = [];
+    let resumeOff = 0;
+    if (packed) {
+      const prog = await readProg(gameDir);
+      if (prog && prog.srcSize === file.size && prog.skipAudio === !!skipAudio
+        && prog.compressImages === !!compressImages && prog.total === files.length
+        && prog.nextIndex > 0 && prog.nextIndex <= files.length && Array.isArray(prog.cd)) {
+        try {
+          const pf = await (await gameDir.getFileHandle(".rpgmpack")).getFile();
+          if (pf.size >= prog.packOff) {
+            startIndex = prog.nextIndex;
+            resumeOff = prog.packOff;
+            resumeCd = prog.cd.map((r) => ({ nameB: enc.encode(r.n), method: r.m, csize: r.c, usize: r.u, lho: r.l }));
+          }
+        } catch { /* pack missing — fresh start */ }
+      }
+    }
+
+    // quota: only what's still LEFT to write needs to fit
+    const rest = files.slice(startIndex);
+    const need = rest.reduce((s, f) => s + (packed ? (isMedia(f.name) && f.method !== 0 ? f.uncompSize : f.compSize) : f.uncompSize), 0);
     const est = await navigator.storage?.estimate?.().catch(() => null);
     if (est && est.quota != null && est.usage != null && need > (est.quota - est.usage)) {
       const gb = (n: number) => (n / 1073741824).toFixed(1);
-      throw new Error(`Not enough room: this game needs ${gb(need)} GB but only ${gb(est.quota - est.usage)} GB is free on this device.`);
+      throw new Error(`Not enough room: this game still needs ${gb(need)} GB but only ${gb(est.quota - est.usage)} GB is free on this device.`);
     }
 
-    const root = await navigator.storage.getDirectory();
-    const gameDir = await (await root.getDirectoryHandle("rpgm", { create: true })).getDirectoryHandle(id, { create: true });
-
     const totalComp = files.reduce((s, f) => s + f.compSize, 0) || 1;
-    let readComp = 0, bytes = 0, fileNo = 0, lastPct = -1;
+    let readComp = files.slice(0, startIndex).reduce((s, f) => s + f.compSize, 0);
+    let bytes = 0, lastPct = -1;
 
-    const pw = packed ? new PackWriter() : null;
-    if (pw) await pw.open(gameDir);
+    pw = packed ? new PackWriter() : null;
+    if (pw) await pw.open(gameDir, resumeOff, resumeCd);
+    if (startIndex > 0) post({ type: "progress", pct: Math.min(99, Math.round((readComp / totalComp) * 100)) });
 
-    for (const ent of files) {
-      ctx = ` (at file ${++fileNo}/${files.length}: ${ent.name.split("/").pop()}, ${((pw ? pw.off : bytes) / 1048576).toFixed(0)} MB written)`;
+    for (let i = startIndex; i < files.length; i++) {
+      const ent = files[i];
+      curIndex = i;
+      ctx = ` (at file ${i + 1}/${files.length}: ${ent.name.split("/").pop()}, ${((pw ? pw.off : bytes) / 1048576).toFixed(0)} MB written)`;
       checkEntry(ent);
+      if (failAfter !== undefined && i >= failAfter && i < files.length - 1) {
+        const err = new Error("synthetic failure (test hook)");
+        err.name = "TestFatal";
+        throw err;
+      }
       for (let attempt = 0; ; attempt++) {
         const packStart = pw ? pw.off : 0;
         try {
           if (compressImages && canTranscode(ent.name, ent)) {
             const out = await maybeTranscodePng(await inflateWhole(file, ent));
             if (pw) { pw.begin(ent.name, 0, out.length, out.length); pw.chunk(out); }
-            else bytes += await writeWhole(gameDir, ent.name, out);
+            else bytes += await writeWhole(gameDir!, ent.name, out);
           } else if (pw && isMedia(ent.name) && ent.method !== 0) {
             // re-store deflated media so Range requests work by offset math
             const mds = await entryDataStart(file, ent);
@@ -290,28 +368,42 @@ self.onmessage = async (ev: MessageEvent<Job>) => {
               if (done) break;
             }
           } else {
-            bytes += await extractEntry(gameDir, file, ent);
+            bytes += await extractEntry(gameDir!, file, ent);
           }
           break;
         } catch (e) {
           if (pw) pw.rewindTo(packStart); // truncate the partial entry
           const msg = e instanceof Error ? e.name + " " + e.message : String(e);
-          if (attempt < 3 && TRANSIENT.test(msg)) {
-            await sleep(500 * (attempt + 1) ** 2); // 0.5s · 2s · 4.5s
+          if (attempt < 5 && TRANSIENT.test(msg)) {
+            await sleep(400 * (attempt + 1) ** 2); // 0.4s · 1.6s · 3.6s · 6.4s · 10s
             continue;
           }
           throw e;
         }
+      }
+      // checkpoint: flush to disk + persist resume state every 25 files, so a
+      // failure (or even a killed tab) never costs more than 25 files of work
+      if (pw && (i + 1) % 25 === 0) {
+        pw.flush();
+        await writeProg(gameDir, snapshot(i + 1));
       }
       readComp += ent.compSize;
       const pct = Math.min(99, Math.round((readComp / totalComp) * 100));
       if (pct !== lastPct) { lastPct = pct; post({ type: "progress", pct }); }
     }
 
-    if (pw) bytes = pw.finish();
-    post({ type: "done", names, bytes, packed: !!pw });
+    if (pw) {
+      bytes = pw.finish();
+      await delProg(gameDir);
+    }
+    post({ type: "done", names, bytes, packed: !!pw, resumedFrom: startIndex });
   } catch (e) {
     const err = e instanceof Error ? e : new Error(String(e));
-    post({ type: "error", fallback: false, message: err.message, name: err.name, ctx });
+    // persist progress so the NEXT attempt continues from here instead of zero
+    let resumable = false;
+    if (pw && gameDir && curIndex > 0) {
+      try { await writeProg(gameDir, snapshot(curIndex)); resumable = true; } catch { /* can't save — full restart */ }
+    }
+    post({ type: "error", fallback: false, message: err.message, name: err.name, ctx, resumable, done: curIndex, total: totalFiles });
   }
 };
