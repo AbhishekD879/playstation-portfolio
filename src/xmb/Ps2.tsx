@@ -4,6 +4,7 @@
 // iframe, so synthesized keys reach the emulator). ISOs are read locally.
 import { For, Show, createSignal, onCleanup, onMount } from "solid-js";
 import InputProbe from "./InputProbe";
+import PadLadder from "./PadLadder";
 import { freedPads, reconcileSeats, remoteSlots, type SeatMap } from "../ps2/netSeats";
 import { logInput } from "../inputLog";
 import * as sfx from "../audio";
@@ -409,24 +410,20 @@ export default function Ps2(props: {
             </span>
           </div>
           <Show when={mpRole() === "host"}>
-            <div class="ps2-mp-banner">
-              <b>Hosting · room code {mpCode()}</b>
-              <span>On another device or an incognito window, open this console → PlayStation 2 → “Join a game”, enter <b>{mpCode()}</b>. {mpStatus()}</span>
-              {/* Who holds which pad. Without this, "player 4 is not working" is
-                  unanswerable — an unassigned joiner looks identical to a broken one. */}
-              <span class="ps2-mp-seats">
-                <span class="ps2-seat held">P1 you</span>
-                <For each={Array.from({ length: Math.max(1, players() - 1) }, (_, i) => i + 1)}>
-                  {(pad) => {
-                    const holder = () => [...netSeats().entries()].find(([, pp]) => pp === pad)?.[0];
-                    return (
-                      <span class="ps2-seat" classList={{ held: !!holder() }}>
-                        P{pad + 1} {holder() ? holder()!.slice(0, 4) : "open"}
-                      </span>
-                    );
-                  }}
-                </For>
-              </span>
+            <div class="ps2-mp-banner" classList={{ settled: mpPlayers() > 0 }}>
+              {/* The room code is the one thing a host reads aloud, so it is the
+                  only large type on this surface. */}
+              <span class="ps2-room-k">ROOM CODE</span>
+              <span class="ps2-room">{mpCode()}</span>
+              <PadLadder
+                count={players()}
+                showPorts
+                slots={[
+                  { player: 1, label: "you" },
+                  ...[...netSeats().entries()].map(([id, pad]) => ({ player: pad + 1, label: id.slice(0, 4), remote: true })),
+                ]}
+              />
+              <span class="ps2-room-how">Others open this console → PlayStation 2 → Join a game, and enter the code. {mpStatus()}</span>
             </div>
           </Show>
           <Show when={saveNote()}><div class="ps2-savenote">{saveNote()}</div></Show>

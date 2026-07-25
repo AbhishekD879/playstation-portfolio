@@ -2369,6 +2369,11 @@ img.status-avatar, img.ptile-avatar { object-fit: cover; border: 1px solid rgba(
   opacity: 0.28; transition: opacity 0.2s; pointer-events: none;
 }
 .ps2-bar:hover ~ .ps2-mp-banner, .ps2-mp-banner:hover { opacity: 1; }
+/* Full strength while the room is empty — the host is reading the code aloud.
+   Once someone is in, it becomes reference and gets out of the way. */
+.ps2-mp-banner { opacity: 1; pointer-events: auto; }
+.ps2-mp-banner.settled { opacity: 0.3; }
+.ps2-mp-banner.settled:hover { opacity: 1; }
 .ps2-join-view { position: absolute; inset: 0; background: #000; display: flex; }
 .ps2-join-video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; background: #000; opacity: 0; transition: opacity 0.3s; }
 .ps2-join-video.live { opacity: 1; }
@@ -4232,35 +4237,103 @@ img.status-avatar, img.ptile-avatar { object-fit: cover; border: 1px solid rgba(
 .rpg-diag-t { display: inline-block; min-width: 46px; color: rgba(255,255,255,0.34); font-variant-numeric: tabular-nums; }
 .rpg-diag-row b { color: #7ee787; font-weight: 600; }
 
-/* ═════════ PS2 player selector — inline in the shelf's action row ═════════ */
-.padsel {
-  display: inline-flex; align-items: center; gap: 2px;
-  padding: 3px 4px 3px 10px; border: 1px solid rgba(255,255,255,0.14);
-  border-radius: 999px; background: rgba(6,10,18,0.55);
-}
-.padsel-k { font-size: 9.5px; letter-spacing: 0.2em; color: rgba(255,255,255,0.42); margin-right: 6px; }
-.padsel-n {
-  width: 22px; height: 22px; border-radius: 999px; border: 0; cursor: pointer; font: inherit;
-  font-size: 11.5px; font-variant-numeric: tabular-nums; background: transparent;
-  color: rgba(255,255,255,0.35); transition: background 0.14s, color 0.14s;
-}
-.padsel-n:hover, .padsel-n:focus-visible { color: #fff; outline: none; }
-.padsel-n.on { background: color-mix(in oklab, var(--xmb-tint) 42%, transparent); color: #fff; }
-.padsel-eng {
-  margin: 0 6px 0 8px; font-size: 9.5px; letter-spacing: 0.14em; text-transform: uppercase;
-  color: rgba(255,255,255,0.34);
-}
-.padsel-eng.fork { color: color-mix(in oklab, var(--xmb-tint) 75%, #fff); }
-@media (max-width: 760px) { .padsel-k, .padsel-eng { display: none; } }
 
-/* ═════════ PS2 online — who holds which pad ═════════ */
-.ps2-mp-seats { display: flex; flex-wrap: wrap; gap: 1px; margin-top: 8px; }
-.ps2-seat {
-  padding: 3px 9px; font-size: 10.5px; letter-spacing: 0.06em;
-  background: rgba(255,255,255,0.04); color: rgba(255,255,255,0.38);
-  border-top: 1px solid rgba(255,255,255,0.08); font-variant-numeric: tabular-nums;
+
+/* ═════════════════════════════════════════════════════════════════════════
+   CONTROLLER PORT LADDER
+   A PS2 has two controller ports; a multitap fans each into four slots. The
+   ladder draws that, and the GAP after slot 4 is the port boundary — which is
+   why a fifth player needs a second multitap. One vocabulary, used by the
+   picker, the host banner and the in-game strip.
+   ═════════════════════════════════════════════════════════════════════════ */
+.ladder { display: inline-flex; align-items: flex-end; gap: 0; }
+.ladder-port { display: flex; flex-direction: column; gap: 5px; }
+.ladder-lbl {
+  font-size: 8.5px; letter-spacing: 0.26em; color: rgba(255,255,255,0.3);
+  padding-left: 2px;
 }
-.ps2-seat.held {
-  color: #fff; background: color-mix(in oklab, var(--xmb-tint) 20%, rgba(255,255,255,0.04));
-  border-top-color: color-mix(in oklab, var(--xmb-tint) 65%, transparent);
+.ladder-rungs { display: flex; gap: 3px; }
+
+/* the port break: a hairline gap, wider than the slot gap so the eye reads
+   two groups rather than six-in-a-row */
+.ladder-break { width: 15px; align-self: stretch; position: relative; }
+.ladder-break::after {
+  content: ""; position: absolute; left: 50%; top: 0; bottom: 0; width: 1px;
+  background: linear-gradient(rgba(255,255,255,0.32), rgba(255,255,255,0.06));
+}
+.ladder.sm .ladder-break { width: 10px; }
+.ladder.sm .ladder-break::after { height: 10px; }
+
+.rung {
+  position: relative; display: flex; flex-direction: column; align-items: center; gap: 2px;
+  min-width: 26px; padding: 5px 2px 4px; border: 0; border-radius: 0; cursor: default;
+  font: inherit; background: rgba(255,255,255,0.03);
+  border-top: 2px solid rgba(255,255,255,0.10);
+  color: rgba(255,255,255,0.26);
+  transition: color 0.15s, background 0.15s, border-color 0.15s;
+}
+.ladder.sm .rung { min-width: 22px; padding: 4px 2px 3px; }
+.rung.pick { cursor: pointer; }
+.rung-n { font-size: 12px; font-variant-numeric: tabular-nums; line-height: 1; }
+.ladder.sm .rung-n { font-size: 11px; }
+.rung-who {
+  font-size: 8.5px; letter-spacing: 0.08em; max-width: 8ch; overflow: hidden;
+  text-overflow: ellipsis; white-space: nowrap; color: inherit; opacity: 0.72;
+}
+
+/* in range of the chosen player count */
+.rung.on {
+  color: rgba(255,255,255,0.92);
+  background: color-mix(in oklab, var(--xmb-tint) 13%, transparent);
+  border-top-color: color-mix(in oklab, var(--xmb-tint) 78%, transparent);
+}
+/* actually held by someone */
+.rung.held { background: color-mix(in oklab, var(--xmb-tint) 24%, transparent); }
+/* a remote player — hue, because it is the fastest read in a six-slot strip */
+.rung.remote {
+  background: color-mix(in oklab, #d99a4e 20%, transparent);
+  border-top-color: #d99a4e;
+}
+.rung.pick:hover, .rung.pick:focus-visible {
+  color: #fff; background: rgba(255,255,255,0.10);
+  outline: none; border-top-color: rgba(255,255,255,0.5);
+}
+.rung.pick:focus-visible { box-shadow: 0 0 0 2px color-mix(in oklab, var(--xmb-tint) 70%, transparent); }
+.rung.pick:active { transform: translateY(1px); }
+
+/* the one animated thing: a pad that is sending input right now. This is the
+   question that is otherwise unanswerable — "is player 4 connected AND working" */
+.rung.live { color: #fff; }
+.rung.live::before {
+  content: ""; position: absolute; inset: -2px -1px auto; height: 2px;
+  background: currentColor; box-shadow: 0 0 8px currentColor;
+  animation: rungPulse 0.5s ease-out;
+}
+@keyframes rungPulse { from { opacity: 1; } to { opacity: 0.35; } }
+@media (prefers-reduced-motion: reduce) {
+  .rung.live::before { animation: none; opacity: 0.8; }
+  .rung { transition: none; }
+}
+
+/* ── picker, inline in the shelf's action row ── */
+.padpick { display: inline-flex; align-items: center; gap: 12px; margin: 0 6px 0 14px; }
+.padpick-k { font-size: 9px; letter-spacing: 0.26em; color: rgba(255,255,255,0.34); }
+@media (max-width: 780px) { .padpick-k { display: none; } }
+
+/* ── host banner: the room code is the hero ── */
+.ps2-mp-banner {
+  align-items: center; gap: 0; padding: 16px 26px 18px;
+  background: rgba(4,7,13,0.9); border: 0; border-top: 2px solid color-mix(in oklab, var(--xmb-tint) 70%, transparent);
+  border-radius: 0; color: rgba(255,255,255,0.82);
+}
+.ps2-room-k { font-size: 9px; letter-spacing: 0.3em; color: rgba(255,255,255,0.36); }
+.ps2-room {
+  font-size: 30px; font-weight: 300; letter-spacing: 0.32em; line-height: 1.25;
+  margin: 2px 0 12px; padding-left: 0.32em;   /* optical: tracking adds a right gap */
+  color: #fff; text-shadow: 0 0 26px color-mix(in oklab, var(--xmb-tint) 60%, transparent);
+  font-variant-numeric: tabular-nums;
+}
+.ps2-room-how {
+  margin-top: 12px; max-width: 44ch; font-size: 11.5px; line-height: 1.6;
+  color: rgba(255,255,255,0.42); text-wrap: balance;
 }

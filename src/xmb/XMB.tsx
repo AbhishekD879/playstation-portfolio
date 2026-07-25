@@ -37,6 +37,7 @@ import Studio from "./Studio";
 import CodeApp from "./CodeApp";
 import Manual from "./Manual";
 import GameShelf from "./GameShelf";
+import PadLadder from "./PadLadder";
 import Doom from "./Doom";
 import DoomRtx from "./DoomRtx";
 import Karaoke from "./Karaoke";
@@ -2232,21 +2233,13 @@ export default function XMB(props: {
           onClose={() => setApp(null)}
           extra={() => (
             <>
-              {/* Controllers for the next disc. Chosen HERE — on the home
-                  screen, outside the emulator — so it is settled before the
-                  disc gesture exists. Putting it between the gesture and the
-                  boot is what broke player one. */}
-              <span class="padsel" title="Controllers for the next disc">
-                <span class="padsel-k">PLAYERS</span>
-                <For each={[1, 2, 3, 4, 5, 6]}>
-                  {(n) => (
-                    <button class="padsel-n" classList={{ on: ps2Players() >= n }}
-                      onClick={() => { sfx.tickH(); setPs2Players(n); }}>{n}</button>
-                  )}
-                </For>
-                <span class="padsel-eng" classList={{ fork: ps2Players() > 2 }}>
-                  {ps2Players() > 2 ? `multitap ×${ps2Players() > 4 ? 2 : 1}` : "classic"}
-                </span>
+              {/* Controllers for the next disc. The gap after slot 4 is the
+                  boundary between the PS2's two controller ports — which is why
+                  a fifth player needs a second multitap. Chosen HERE, on the
+                  home screen, so nothing sits between the disc and the boot. */}
+              <span class="padpick">
+                <span class="padpick-k">CONTROLLERS</span>
+                <PadLadder count={ps2Players()} size="sm" onPick={(n) => { sfx.tickH(); setPs2Players(n); }} />
               </span>
               <button class="ghost-btn" onClick={() => { sfx.confirm(); setPs2Boot(null); setPs2Join(true); setApp("ps2"); }}>🎮 Join 2-player</button>
             </>
