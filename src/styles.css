@@ -4252,3 +4252,15 @@ img.status-avatar, img.ptile-avatar { object-fit: cover; border: 1px solid rgba(
 }
 .padsel-eng.fork { color: color-mix(in oklab, var(--xmb-tint) 75%, #fff); }
 @media (max-width: 760px) { .padsel-k, .padsel-eng { display: none; } }
+
+/* ═════════ PS2 online — who holds which pad ═════════ */
+.ps2-mp-seats { display: flex; flex-wrap: wrap; gap: 1px; margin-top: 8px; }
+.ps2-seat {
+  padding: 3px 9px; font-size: 10.5px; letter-spacing: 0.06em;
+  background: rgba(255,255,255,0.04); color: rgba(255,255,255,0.38);
+  border-top: 1px solid rgba(255,255,255,0.08); font-variant-numeric: tabular-nums;
+}
+.ps2-seat.held {
+  color: #fff; background: color-mix(in oklab, var(--xmb-tint) 20%, rgba(255,255,255,0.04));
+  border-top-color: color-mix(in oklab, var(--xmb-tint) 65%, transparent);
+}

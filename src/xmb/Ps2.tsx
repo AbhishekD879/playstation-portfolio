@@ -2,8 +2,9 @@
 // our own PlayStation-style UI: disc-insert screen, spinning-disc load, full-
 // bleed canvas, Xbox-pad → PS2 mapping via the gamepad bridge (same-origin
 // iframe, so synthesized keys reach the emulator). ISOs are read locally.
-import { Show, createSignal, onCleanup, onMount } from "solid-js";
+import { For, Show, createSignal, onCleanup, onMount } from "solid-js";
 import InputProbe from "./InputProbe";
+import { freedPads, reconcileSeats, remoteSlots, type SeatMap } from "../ps2/netSeats";
 import { logInput } from "../inputLog";
 import * as sfx from "../audio";
 import { setNavEnabled } from "../input";
@@ -79,6 +80,12 @@ export default function Ps2(props: {
   let joinerHandle: JoinerHandle | null = null;
   let stopCapture: (() => void) | null = null;
   let injector: ReturnType<typeof makeInjector> | null = null;
+  // ★ One injector PER remote pad. The previous code held a single injector on
+  // __p2codes and discarded the joiner id, so every remote player drove player
+  // two no matter how many connected. __padcodes[n] — multitap engine only —
+  // gives each pad its own distinct key set.
+  const netInjectors = new Map<number, ReturnType<typeof makeInjector>>();
+  const [netSeats, setNetSeats] = createSignal<SeatMap>(new Map());
   let joinVideo: HTMLVideoElement | undefined;
 
   const genCode = () => {
@@ -112,17 +119,43 @@ export default function Ps2(props: {
     if (!canvas || !win?.__p2codes || !(canvas as any).captureStream) { setMpStatus("emulator not ready — boot a game first"); return; }
     sfx.confirm();
     const stream = (canvas as any).captureStream(30) as MediaStream;
-    injector = makeInjector(win, canvas, win.__p2codes);
+    // Remote capacity follows the host's chosen player count: the host is pad 0,
+    // so N players leaves N-1 remote seats. Per-pad key sets exist only on the
+    // multitap engine; on stock we keep the proven single-pad path.
+    const padCodes = win.__padcodes as Record<number, unknown> | undefined;
+    const slots = padCodes ? remoteSlots(players()) : 1;
+    const padFor = (pad: number) => {
+      let inj = netInjectors.get(pad);
+      if (!inj) {
+        const codes = padCodes ? padCodes[pad] : win.__p2codes;
+        if (!codes) return null;
+        inj = makeInjector(win, canvas, codes);
+        netInjectors.set(pad, inj);
+      }
+      return inj;
+    };
     const code = genCode();
-    setMpCode(code); setMpRole("host"); setMpPlayers(0);
+    setMpCode(code); setMpRole("host"); setMpPlayers(0); setNetSeats(new Map());
     hostHandle = startHost({
-      room: code, max: 1, stream,
-      onJoinerInput: (_id, data: any) => {
-        if (data?.t === "input" && injector) {
-          injector.applyState({ down: data.down ?? [], axes: data.axes ?? { lx: 0, ly: 0, rx: 0, ry: 0 } } as PadState);
-        }
+      room: code, max: slots, stream,
+      onJoinerInput: (id, data: any) => {
+        if (data?.t !== "input") return;
+        const pad = netSeats().get(id);
+        if (pad === undefined) return;          // connected, but over capacity
+        padFor(pad)?.applyState({ down: data.down ?? [], axes: data.axes ?? { lx: 0, ly: 0, rx: 0, ry: 0 } } as PadState);
       },
-      onJoinerChange: (ids) => { setMpPlayers(ids.length); if (ids.length === 0) injector?.release(); },
+      onJoinerChange: (ids) => {
+        setMpPlayers(ids.length);
+        const prev = netSeats();
+        const next = reconcileSeats(prev, ids, slots + 1);
+        // A pad nobody holds any more MUST be released, or the wrestler it was
+        // driving keeps whatever button was down when that player dropped.
+        for (const pad of freedPads(prev, next)) {
+          netInjectors.get(pad)?.release();
+          netInjectors.delete(pad);
+        }
+        setNetSeats(next);
+      },
       onStatus: (s) => setMpStatus(s),
     });
   }
@@ -130,6 +163,8 @@ export default function Ps2(props: {
   function stopHost() {
     hostHandle?.stop(); hostHandle = null;
     injector?.release(); injector = null;
+    for (const inj of netInjectors.values()) inj.release();
+    netInjectors.clear(); setNetSeats(new Map());
     setMpRole("none"); setMpCode(""); setMpStatus(""); setMpPlayers(0);
   }
 
@@ -364,7 +399,7 @@ export default function Ps2(props: {
                 <button class="ghost-btn" onClick={hostGame}>🎮 host 2-player</button>
               </Show>
               <Show when={mpRole() === "host"}>
-                <span class="ps2-mp-code">ROOM {mpCode()} · {mpPlayers() ? `player 2 connected` : "waiting for player 2…"}</span>
+                <span class="ps2-mp-code">ROOM {mpCode()} · {mpPlayers() ? `${mpPlayers()} joined` : "waiting for players…"}</span>
                 <button class="ghost-btn" onClick={stopHost}>✕ stop hosting</button>
               </Show>
               <button class="ghost-btn" onClick={() => requestSave()}>▪ save card</button>
@@ -377,6 +412,21 @@ export default function Ps2(props: {
             <div class="ps2-mp-banner">
               <b>Hosting · room code {mpCode()}</b>
               <span>On another device or an incognito window, open this console → PlayStation 2 → “Join a game”, enter <b>{mpCode()}</b>. {mpStatus()}</span>
+              {/* Who holds which pad. Without this, "player 4 is not working" is
+                  unanswerable — an unassigned joiner looks identical to a broken one. */}
+              <span class="ps2-mp-seats">
+                <span class="ps2-seat held">P1 you</span>
+                <For each={Array.from({ length: Math.max(1, players() - 1) }, (_, i) => i + 1)}>
+                  {(pad) => {
+                    const holder = () => [...netSeats().entries()].find(([, pp]) => pp === pad)?.[0];
+                    return (
+                      <span class="ps2-seat" classList={{ held: !!holder() }}>
+                        P{pad + 1} {holder() ? holder()!.slice(0, 4) : "open"}
+                      </span>
+                    );
+                  }}
+                </For>
+              </span>
             </div>
           </Show>
           <Show when={saveNote()}><div class="ps2-savenote">{saveNote()}</div></Show>
