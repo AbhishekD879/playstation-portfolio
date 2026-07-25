@@ -252,10 +252,6 @@ export default function XMB(props: {
   }) as typeof setAppRaw;
   const [ps2Boot, setPs2Boot] = createSignal<GameRecord | null>(null);
   const [ps2Join, setPs2Join] = createSignal(false);
-  // How many controllers the next PS2 disc boots with. Chosen on the PS2 HOME
-  // screen — deliberately outside the emulator component, so nothing can end up
-  // between the disc gesture and the boot. That is what broke player one before.
-  const [ps2Players, setPs2Players] = createSignal(1);
   const [ccOpen, setCcOpen] = createSignal(false);
   let ccNav: ((a: Parameters<Parameters<typeof onNav>[0]>[0]) => void) | undefined;
 
@@ -2195,7 +2191,7 @@ export default function XMB(props: {
       </Show>
       <Show when={app() === "privacy"}><Privacy onClose={() => setApp(null)} /></Show>
       <Show when={app() === "watch"}><WatchParty userName={props.profile.name} onClose={() => setApp(null)} /></Show>
-      <Show when={app() === "ps2"}><Ps2 profileId={props.profile.id} players={ps2Players()} initialGame={ps2Boot() ?? undefined} initialJoin={ps2Join()} onClose={() => { setPs2Boot(null); setPs2Join(false); setApp(games().some((g) => g.sys === "ps2") ? "ps2home" : null); }} /></Show>
+      <Show when={app() === "ps2"}><Ps2 profileId={props.profile.id} initialGame={ps2Boot() ?? undefined} initialJoin={ps2Join()} onClose={() => { setPs2Boot(null); setPs2Join(false); setApp(games().some((g) => g.sys === "ps2") ? "ps2home" : null); }} /></Show>
       <Show when={app() === "pc"}><PcApp onClose={() => setApp(null)} /></Show>
       <Show when={app() === "guestbook"}><Guestbook userName={props.profile.name} onClose={() => setApp(null)} /></Show>
       <Show when={app() === "browser"}><Browser onClose={() => setApp(null)} /></Show>
@@ -2229,30 +2225,7 @@ export default function XMB(props: {
           onLink={() => onLink("ps2")}
           onChanged={refreshGames}
           onClose={() => setApp(null)}
-          extra={() => (
-            <>
-              <div class="seats">
-                <div class="seats-head">
-                  <span class="seats-label">PLAYERS</span>
-                  <span class="seats-engine" classList={{ fork: ps2Players() > 2 }}>
-                    {ps2Players() > 2 ? `multitap · ${ps2Players() > 4 ? 2 : 1} tap${ps2Players() > 4 ? "s" : ""}` : "classic"}
-                  </span>
-                </div>
-                <div class="seats-row">
-                  <For each={[1, 2, 3, 4, 5, 6]}>
-                    {(n) => (
-                      <button class="seat" classList={{ on: ps2Players() >= n }}
-                        onClick={() => { sfx.tickH(); setPs2Players(n); }}>
-                        <span class="seat-n">{n}</span>
-                      </button>
-                    )}
-                  </For>
-                </div>
-                <p class="seats-hint">Set this before inserting a disc — three or more boots the multitap engine.</p>
-              </div>
-              <button class="ghost-btn" onClick={() => { sfx.confirm(); setPs2Boot(null); setPs2Join(true); setApp("ps2"); }}>🎮 Join 2-player</button>
-            </>
-          )}
+          extra={() => <button class="ghost-btn" onClick={() => { sfx.confirm(); setPs2Boot(null); setPs2Join(true); setApp("ps2"); }}>🎮 Join 2-player</button>}
         />
       </Show>
       <Show when={app() === "ps1home"}>

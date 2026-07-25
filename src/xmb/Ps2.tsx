@@ -8,7 +8,6 @@ import { logInput } from "../inputLog";
 import * as sfx from "../audio";
 import { setNavEnabled } from "../input";
 import { startBridge, stopBridge, touchKey, PS2_CONFIG } from "../gamepadBridge";
-import { ENGINE_URL, chooseEngine, MAX_MULTITAP_PLAYERS } from "../ps2/engineRouter";
 import { holdWakeLock } from "../wakelock";
 import TouchPad, { type TB } from "./TouchPad";
 import DiagOverlay from "./DiagOverlay";
@@ -32,18 +31,15 @@ export default function Ps2(props: {
   // boot path stay byte-identical to the 2-player build that works. An earlier
   // attempt put this in a step BETWEEN the disc and the boot; that broke player
   // one, so the rule now is: never add anything to the boot gesture.
-  const players = () => Math.max(1, Math.min(MAX_MULTITAP_PLAYERS, props.players ?? 1));
-  // ★ Snapshot ONCE, at mount, and render it as a plain string.
+  // ★ PARKED: the multitap engine is not wired into the UI.
   //
-  // A REACTIVE iframe src is not equivalent to a static one: Solid re-sets the
-  // attribute, and re-setting an iframe's src reloads the frame. If that lands
-  // after play-booted, startBridge is left holding the outputCanvas of a
-  // DESTROYED document, so every synthetic key is dispatched into a detached
-  // element. The pad still registers and focus still reads "iframe" — the game
-  // just never receives anything. main has a static src, which is why main
-  // works. The count cannot change while the app is open (it is chosen on the
-  // PS2 home screen), so there is nothing to be reactive about.
-  const engineSrc = ENGINE_URL[chooseEngine(Math.max(1, Math.min(MAX_MULTITAP_PLAYERS, props.players ?? 1))).engine];
+  // It repeatedly broke player one and cost the user hours of testing. It stays
+  // out of every default path until it is proven, by me, against a real game —
+  // not shipped for someone else to discover. Reach it with ?engine=multitap.
+  // Everything else here is main's, unchanged.
+  const engineSrc = new URLSearchParams(location.search).get("engine") === "multitap"
+    ? "/play-mt/index.html"
+    : "/play/index.html";
   const [mtInfo, setMtInfo] = createSignal("");
   const [linkBlock, setLinkBlock] = createSignal<"permission" | "missing" | null>(null);
   const [disc, setDisc] = createSignal<File | null>(null);
@@ -227,7 +223,7 @@ export default function Ps2(props: {
 
   function bootNow(f: File) {
     pending = null;
-    frame.contentWindow?.postMessage({ type: "play-boot", file: f, saveKey, players: players() }, location.origin);
+    frame.contentWindow?.postMessage({ type: "play-boot", file: f, saveKey }, location.origin);
   }
 
   function insert(f: File) {
