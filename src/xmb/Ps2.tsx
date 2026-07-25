@@ -2,11 +2,11 @@
 // our own PlayStation-style UI: disc-insert screen, spinning-disc load, full-
 // bleed canvas, Xbox-pad → PS2 mapping via the gamepad bridge (same-origin
 // iframe, so synthesized keys reach the emulator). ISOs are read locally.
-import { For, Show, createSignal, onCleanup, onMount } from "solid-js";
+import { Show, createSignal, onCleanup, onMount } from "solid-js";
 import * as sfx from "../audio";
 import { setNavEnabled } from "../input";
 import { startBridge, stopBridge, touchKey, PS2_CONFIG } from "../gamepadBridge";
-import { ENGINE_URL, chooseEngine, tapsFor, MAX_MULTITAP_PLAYERS } from "../ps2/engineRouter";
+import { ENGINE_URL, chooseEngine, MAX_MULTITAP_PLAYERS } from "../ps2/engineRouter";
 import { holdWakeLock } from "../wakelock";
 import TouchPad, { type TB } from "./TouchPad";
 import DiagOverlay from "./DiagOverlay";
@@ -17,7 +17,9 @@ import { bumpPlays, resolveGameFile, type GameRecord } from "../gamesdb";
 
 type Stage = "insert" | "reading" | "playing" | "error";
 
-export default function Ps2(props: { onClose: () => void; profileId: string; initialGame?: GameRecord; initialJoin?: boolean }) {
+export default function Ps2(props: {
+  /** how many controllers to boot with — chosen on the PS2 home screen */
+  players?: number; onClose: () => void; profileId: string; initialGame?: GameRecord; initialJoin?: boolean }) {
   const isDesktop = matchMedia("(pointer: fine)").matches && innerWidth >= 900 && typeof WebAssembly === "object";
   const isolated = (globalThis as any).crossOriginIsolated === true;
   const canEmulate = isDesktop && isolated;
@@ -28,7 +30,7 @@ export default function Ps2(props: { onClose: () => void; profileId: string; ini
   // boot path stay byte-identical to the 2-player build that works. An earlier
   // attempt put this in a step BETWEEN the disc and the boot; that broke player
   // one, so the rule now is: never add anything to the boot gesture.
-  const [players, setPlayers] = createSignal(1);
+  const players = () => Math.max(1, Math.min(MAX_MULTITAP_PLAYERS, props.players ?? 1));
   const engineUrl = () => ENGINE_URL[chooseEngine(players()).engine];
   const [mtInfo, setMtInfo] = createSignal("");
   const [linkBlock, setLinkBlock] = createSignal<"permission" | "missing" | null>(null);
@@ -404,32 +406,6 @@ export default function Ps2(props: { onClose: () => void; profileId: string; ini
                 <div class="ps2-disc-art"><div class="ps2-disc-hole" /></div>
                 <div class="ps2-big">Insert a PlayStation 2 disc</div>
                 <p>A game image <b>you own</b> — .iso, .cso, .chd, .isz, .bin or .elf. It's read locally by the emulator, never uploaded. No BIOS needed.</p>
-                {/* Players is chosen HERE, before the disc — the engine and its
-                    slot count are fixed when the VM boots, and nothing may be
-                    added between the disc gesture and the boot. */}
-                <div class="seats">
-                  <div class="seats-head">
-                    <span class="seats-label">PLAYERS</span>
-                    <span class="seats-engine" classList={{ fork: players() > 2 }}>
-                      {players() > 2 ? `multitap · ${tapsFor(players()).port1 ? 2 : 1} tap${tapsFor(players()).port1 ? "s" : ""}` : "classic"}
-                    </span>
-                  </div>
-                  <div class="seats-row">
-                    <For each={Array.from({ length: MAX_MULTITAP_PLAYERS }, (_, i) => i + 1)}>
-                      {(n) => (
-                        <button class="seat" classList={{ on: players() >= n }}
-                          onClick={() => { sfx.tickH(); setPlayers(n); }}>
-                          <span class="seat-n">{n}</span>
-                        </button>
-                      )}
-                    </For>
-                  </div>
-                  <p class="seats-hint">
-                    Three or more switches to the multitap engine; one or two uses
-                    the classic one. Set this before inserting the disc.
-                  </p>
-                </div>
-
                 <button class="ps2-launch" onClick={() => fileInput.click()}>⏏ &nbsp;INSERT DISC</button>
                 <button class="ps2-join-btn" onClick={() => { sfx.tickH(); setJoinStage("code"); setJoinInput(""); }}>🎮 &nbsp;JOIN A 2-PLAYER GAME</button>
                 <p class="ps2-warn">Experimental core — many titles run slowly or not at all. 🎮 Xbox pad mapped: A=✕ B=◯ X=◻ Y=△ · sticks work · Start/Back = Start/Select.</p>
