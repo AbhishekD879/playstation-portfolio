@@ -130,6 +130,10 @@
     const wantPort1 = players > 4;
     mod.setMultitapEnabled(0, wantPort0);
     mod.setMultitapEnabled(1, wantPort1);
+    // Trace whenever a tap is in play. Play!'s own CLog is compiled out in
+    // release builds, so this is the only window into what the game asks for.
+    // Lines are prefixed "[mtap]" and land in the browser console.
+    if (mod.setMultitapTracing) mod.setMultitapTracing(wantPort0 || wantPort1);
     return mod.getMultitapPadCount();
   }
   window.__enableMultitap = enableMultitap;
