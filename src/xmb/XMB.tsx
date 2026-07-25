@@ -261,6 +261,7 @@ export default function XMB(props: {
   // broke player one; that space stays empty permanently.
   const [ps2Players, setPs2Players] = createSignal(1);
   const [ps2Lobby, setPs2Lobby] = createSignal(false);
+  const [ps2JoinTitle, setPs2JoinTitle] = createSignal("");
   const [ccOpen, setCcOpen] = createSignal(false);
   let ccNav: ((a: Parameters<Parameters<typeof onNav>[0]>[0]) => void) | undefined;
 
@@ -2200,7 +2201,7 @@ export default function XMB(props: {
       </Show>
       <Show when={app() === "privacy"}><Privacy onClose={() => setApp(null)} /></Show>
       <Show when={app() === "watch"}><WatchParty userName={props.profile.name} onClose={() => setApp(null)} /></Show>
-      <Show when={app() === "ps2"}><Ps2 profileId={props.profile.id} players={ps2Players()} initialGame={ps2Boot() ?? undefined} initialJoin={ps2Join()} onClose={() => { setPs2Boot(null); setPs2Join(false); setApp(games().some((g) => g.sys === "ps2") ? "ps2home" : null); }} /></Show>
+      <Show when={app() === "ps2"}><Ps2 profileId={props.profile.id} players={ps2Players()} initialJoinTitle={ps2JoinTitle()} initialGame={ps2Boot() ?? undefined} initialJoin={ps2Join()} onClose={() => { setPs2Boot(null); setPs2Join(false); setApp(games().some((g) => g.sys === "ps2") ? "ps2home" : null); }} /></Show>
       <Show when={app() === "pc"}><PcApp onClose={() => setApp(null)} /></Show>
       <Show when={app() === "guestbook"}><Guestbook userName={props.profile.name} onClose={() => setApp(null)} /></Show>
       <Show when={app() === "browser"}><Browser onClose={() => setApp(null)} /></Show>
@@ -2252,7 +2253,7 @@ export default function XMB(props: {
       <Show when={app() === "ps2home" && ps2Lobby()}>
         <Lobby
           onClose={() => setPs2Lobby(false)}
-          onJoin={(code) => { sfx.confirm(); setPs2Lobby(false); setPs2Boot(null); setPs2Join(code); setApp("ps2"); }}
+          onJoin={(code, title) => { sfx.confirm(); setPs2Lobby(false); setPs2Boot(null); setPs2JoinTitle(title); setPs2Join(code); setApp("ps2"); }}
         />
       </Show>
       <Show when={app() === "ps1home"}>

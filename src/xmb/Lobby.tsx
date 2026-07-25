@@ -14,7 +14,7 @@ const AGO = (t: number) => {
   return m < 1 ? "just now" : m < 60 ? `${m}m` : `${Math.round(m / 60)}h`;
 };
 
-export default function Lobby(props: { onJoin: (code: string) => void; onClose: () => void }) {
+export default function Lobby(props: { onJoin: (code: string, title: string) => void; onClose: () => void }) {
   const [rooms, setRooms] = createSignal<LiveRoom[]>([]);
   const [state, setState] = createSignal<"loading" | "ok" | "error">("loading");
 
@@ -59,7 +59,7 @@ export default function Lobby(props: { onJoin: (code: string) => void; onClose: 
                 class="lobby-row"
                 classList={{ full: full(r) }}
                 disabled={full(r)}
-                onClick={() => props.onJoin(r.code)}
+                onClick={() => props.onJoin(r.code, r.title)}
               >
                 <span class="lobby-title">{r.title}</span>
                 <PadLadder

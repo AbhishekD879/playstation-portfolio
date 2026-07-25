@@ -23,7 +23,9 @@ type Stage = "insert" | "reading" | "playing" | "error";
 export default function Ps2(props: {
   /** how many controllers to boot with — chosen on the PS2 home screen */
   players?: number; onClose: () => void; profileId: string; initialGame?: GameRecord; /** true = open the code box; a 4-char code = join that room straight away */
-  initialJoin?: boolean | string }) {
+  initialJoin?: boolean | string;
+  /** the room's game, so the connecting screen can name it */
+  initialJoinTitle?: string }) {
   const isDesktop = matchMedia("(pointer: fine)").matches && innerWidth >= 900 && typeof WebAssembly === "object";
   const isolated = (globalThis as any).crossOriginIsolated === true;
   const canEmulate = isDesktop && isolated;
@@ -78,6 +80,25 @@ export default function Ps2(props: {
   const [mpPlayers, setMpPlayers] = createSignal(0);
   const [mpPublic, setMpPublic] = createSignal(true);   // listed in the lobby
   const [rejoin, setRejoin] = createSignal("");          // reconnect banner
+  const [joinTitle, setJoinTitle] = createSignal("");     // what we are joining
+
+  // ★ WHEN the party board is on screen — the whole design question here.
+  //
+  // Empty room: it is the only thing that matters, because the host is reading
+  // the code out. Someone in: the GAME is the point, so it docks to a slim rail
+  // and stops covering the picture. Manual override wins over both, so a host
+  // can pull it back up mid-match to read the code to a straggler.
+  const [partyOverride, setPartyOverride] = createSignal<boolean | null>(null);
+  const partyOpen = () => partyOverride() ?? mpPlayers() === 0;
+  /** Seat occupancy for the ladder: you on pad 0, joiners on their own pads. */
+  const partySlots = () => [
+    { player: 1, taken: true, label: "you" },
+    ...[...netSeats().entries()].map(([id, pad]) => ({ player: pad + 1, taken: true, label: id.slice(0, 4), remote: true })),
+  ];
+  const seatsFree = () => {
+    const free = players() - 1 - mpPlayers();
+    return free > 0 ? `${free} open` : "full";
+  };
   const [joinStage, setJoinStage] = createSignal<"" | "code" | "connecting" | "live">("");
   const [joinInput, setJoinInput] = createSignal("");
   let hostHandle: HostHandle | null = null;
@@ -184,7 +205,13 @@ export default function Ps2(props: {
     joinerHandle = startJoinerResilient({
       // Survives a wifi blip or the host reloading: the session is rebuilt and
       // the seat re-allocated, rather than dumping the player back to a code box.
-      onHealth: (h, _n, label) => setRejoin(h === "connected" ? "" : label),
+      onHealth: (h, n, label) => {
+        setRejoin(h === "connected" ? "" : label);
+        // Reconnect keeps trying, but a host who closed the room is not coming
+        // back. Rather than hold someone on a frozen last frame forever, hand
+        // them to Open rooms after a few tries so they can pick another game.
+        if (h === "gone" && n >= 4) { setRejoin(""); props.onClose(); }
+      },
       room: code,
       onStream: (stream) => {
         setJoinStage("live"); setMpStatus("connected");
@@ -215,7 +242,7 @@ export default function Ps2(props: {
   onMount(() => {
     // A code means the player picked a room from the lobby — connect, do not
     // make them retype what they just clicked.
-    if (typeof props.initialJoin === "string" && props.initialJoin.length === 4) joinGame(props.initialJoin);
+    if (typeof props.initialJoin === "string" && props.initialJoin.length === 4) { setJoinTitle(props.initialJoinTitle || ""); joinGame(props.initialJoin); }
     else if (props.initialJoin) setJoinStage("code");
     const esc = (e: KeyboardEvent) => { if (e.key === "Escape" && stage() !== "playing") props.onClose(); };
     addEventListener("keydown", esc);
@@ -311,6 +338,9 @@ export default function Ps2(props: {
   }
 
   function eject() {
+    // Tear the room down first: a room advertising a disc that is no longer in
+    // the machine is worse than no room. stopHost also unlists it.
+    if (mpRole() === "host") stopHost();
     sfx.back();
     if (saveTimer) clearInterval(saveTimer);
     stopBridge();
@@ -378,7 +408,7 @@ export default function Ps2(props: {
             <Show when={joinStage() !== "live"}>
               <div class="ps2-gate ps2-join-connecting">
                 <div class="session-disc ps2-spin"><div class="session-disc-hole" /></div>
-                <div class="session-reading-text">Joining room {mpCode()}…</div>
+                <div class="session-reading-text">{joinTitle() ? `Joining ${joinTitle()}` : `Joining room ${mpCode()}`}…</div>
                 <div class="session-reading-name">{mpStatus() || "connecting"}</div>
               </div>
             </Show>
@@ -416,11 +446,10 @@ export default function Ps2(props: {
             <span class="flash-now">▶ {disc()?.name}</span>
             <span class="flash-bar-btns">
               <Show when={mpRole() === "none"}>
-                <button class="ghost-btn" onClick={hostGame}>🎮 host 2-player</button>
+                <button class="ghost-btn" onClick={hostGame}>Play online · seats {players()}</button>
               </Show>
               <Show when={mpRole() === "host"}>
-                <span class="ps2-mp-code">ROOM {mpCode()} · {mpPlayers() ? `${mpPlayers()} joined` : "waiting for players…"}</span>
-                <button class="ghost-btn" onClick={stopHost}>✕ stop hosting</button>
+                <button class="ghost-btn" onClick={stopHost}>Close the room</button>
               </Show>
               <button class="ghost-btn" onClick={() => requestSave()}>▪ save card</button>
               <button class="ghost-btn" classList={{ on: showDiag() }} onClick={() => setShowDiag((v) => !v)}>🩺 diagnostics</button>
@@ -429,25 +458,49 @@ export default function Ps2(props: {
             </span>
           </div>
           <Show when={mpRole() === "host"}>
-            <div class="ps2-mp-banner" classList={{ settled: mpPlayers() > 0 }}>
-              {/* The room code is the one thing a host reads aloud, so it is the
-                  only large type on this surface. */}
-              <span class="ps2-room-k">ROOM CODE</span>
-              <span class="ps2-room">{mpCode()}</span>
-              <PadLadder
-                count={players()}
-                showPorts
-                showWho
-                slots={[
-                  { player: 1, label: "you" },
-                  ...[...netSeats().entries()].map(([id, pad]) => ({ player: pad + 1, label: id.slice(0, 4), remote: true })),
-                ]}
-              />
-              <button class="ps-act ps2-vis" onClick={() => setMpPublic((v) => !v)}>
-                  {mpPublic() ? "◉ listed in Open rooms" : "○ private — code only"}
+            {/* ── THE PARTY BOARD ─────────────────────────────────────────────
+                Two states, decided by the room rather than by a switch:
+
+                  nobody in yet → OPEN. The code is the only thing that matters,
+                                  because the host is reading it out loud.
+                  someone in    → DOCKED to a rail. The game is the point now, so
+                                  the board stops covering the picture.
+
+                Either can be overridden by clicking, so a host can pull the code
+                back up mid-match for a straggler. */}
+            <Show
+              when={partyOpen()}
+              fallback={
+                <button class="party-rail" onClick={() => setPartyOverride(true)}
+                  aria-label={`Room ${mpCode()}, ${mpPlayers()} joined. Show the room code`}>
+                  <span class="party-rail-k">ROOM</span>
+                  <span class="party-rail-code">{mpCode()}</span>
+                  <PadLadder count={players()} size="sm" slots={partySlots()} />
+                  <span class="party-rail-n">{seatsFree()}</span>
                 </button>
-                <span class="ps2-room-how">Others open this console → PlayStation 2 → Join a game, and enter the code. {mpStatus()}</span>
-            </div>
+              }
+            >
+              <div class="party">
+                <div class="party-head">
+                  <span class="party-k">ROOM CODE</span>
+                  <button class="ps-act party-x" onClick={() => setPartyOverride(false)}>hide</button>
+                </div>
+                <span class="party-code">{mpCode()}</span>
+                <PadLadder count={players()} showPorts showWho slots={partySlots()} />
+                <div class="party-vis" role="group" aria-label="Who can join">
+                  <button class="party-tab" classList={{ on: mpPublic() }} aria-pressed={mpPublic()}
+                    onClick={() => setMpPublic(true)}>Anyone can join</button>
+                  <button class="party-tab" classList={{ on: !mpPublic() }} aria-pressed={!mpPublic()}
+                    onClick={() => setMpPublic(false)}>Invite only</button>
+                </div>
+                <p class="party-how">
+                  {mpPublic()
+                    ? "Listed in Open rooms — anyone on the console can find this game. They can also type the code."
+                    : "Not listed. Only people you give the code to can get in."}
+                  {mpStatus() ? ` · ${mpStatus()}` : ""}
+                </p>
+              </div>
+            </Show>
           </Show>
           <Show when={saveNote()}><div class="ps2-savenote">{saveNote()}</div></Show>
           {/* touch pad → bridge keys into the emulator iframe. ANALOG flips the

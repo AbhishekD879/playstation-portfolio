@@ -2361,19 +2361,13 @@ img.status-avatar, img.ptile-avatar { object-fit: cover; border: 1px solid rgba(
 }
 .ps2-launch:disabled { opacity: 0.4; cursor: not-allowed; }
 .ps2-mp-code { font-size: 12.5px; letter-spacing: 0.14em; color: #8fe0b0; align-self: center; white-space: nowrap; }
-.ps2-mp-banner {
-  position: absolute; top: 56px; left: 50%; transform: translateX(-50%);
-  max-width: 620px; display: flex; flex-direction: column; gap: 3px; text-align: center;
-  padding: 10px 20px; border-radius: 12px; font-size: 13px; line-height: 1.5;
-  background: rgba(6,12,22,0.82); border: 1px solid rgba(79,194,127,0.4); color: #cfe8da;
-  opacity: 0.28; transition: opacity 0.2s; pointer-events: none;
-}
-.ps2-bar:hover ~ .ps2-mp-banner, .ps2-mp-banner:hover { opacity: 1; }
+
+
 /* Full strength while the room is empty — the host is reading the code aloud.
    Once someone is in, it becomes reference and gets out of the way. */
-.ps2-mp-banner { opacity: 1; pointer-events: auto; }
-.ps2-mp-banner.settled { opacity: 0.3; }
-.ps2-mp-banner.settled:hover { opacity: 1; }
+
+
+
 .ps2-join-view { position: absolute; inset: 0; background: #000; display: flex; }
 .ps2-join-video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; background: #000; opacity: 0; transition: opacity 0.3s; }
 .ps2-join-video.live { opacity: 1; }
@@ -4326,17 +4320,9 @@ img.status-avatar, img.ptile-avatar { object-fit: cover; border: 1px solid rgba(
   background: rgba(4,7,13,0.9); border: 0; border-top: 2px solid color-mix(in oklab, var(--xmb-tint) 70%, transparent);
   border-radius: 0; color: rgba(255,255,255,0.82);
 }
-.ps2-room-k { font-size: 9px; letter-spacing: 0.3em; color: rgba(255,255,255,0.36); }
-.ps2-room {
-  font-size: 30px; font-weight: 300; letter-spacing: 0.32em; line-height: 1.25;
-  margin: 2px 0 12px; padding-left: 0.32em;   /* optical: tracking adds a right gap */
-  color: #fff; text-shadow: 0 0 26px color-mix(in oklab, var(--xmb-tint) 60%, transparent);
-  font-variant-numeric: tabular-nums;
-}
-.ps2-room-how {
-  margin-top: 12px; max-width: 44ch; font-size: 11.5px; line-height: 1.6;
-  color: rgba(255,255,255,0.42); text-wrap: balance;
-}
+
+
+
 
 /* ═════════ OPEN ROOMS — the public lobby ═════════ */
 .lobby {
@@ -4377,7 +4363,7 @@ img.status-avatar, img.ptile-avatar { object-fit: cover; border: 1px solid rgba(
 }
 
 /* host visibility toggle + reconnect banner */
-.ps2-vis { margin-top: 10px; font-size: 11px; letter-spacing: 0.1em; }
+
 .ps2-rejoin {
   position: absolute; top: 0; left: 0; right: 0; z-index: 40;
   display: flex; align-items: center; justify-content: center; gap: 10px;
@@ -4391,3 +4377,62 @@ img.status-avatar, img.ptile-avatar { object-fit: cover; border: 1px solid rgba(
 }
 @keyframes rejoinPulse { 0%,100% { opacity: 1; } 50% { opacity: 0.25; } }
 @media (prefers-reduced-motion: reduce) { .ps2-rejoin-dot { animation: none; } }
+
+/* ═══════════════════════════════════════════════════════════════════════
+   THE PARTY BOARD
+   Open while the room is empty (the host is reading the code out), docked
+   to a rail once someone is in (the game is the point). Same vocabulary in
+   both states — the ladder just loses its labels.
+   ═══════════════════════════════════════════════════════════════════════ */
+.party {
+  position: absolute; top: 62px; left: 50%; transform: translateX(-50%); z-index: 30;
+  display: flex; flex-direction: column; align-items: center;
+  width: min(560px, 94vw); padding: 20px 26px 22px;
+  background: rgba(4,7,13,0.93); backdrop-filter: blur(18px) saturate(1.25);
+  border: 1px solid rgba(255,255,255,0.09);
+  border-top: 2px solid color-mix(in oklab, var(--xmb-tint) 75%, transparent);
+  border-radius: 0 0 16px 16px;
+}
+.party-head { display: flex; align-items: baseline; gap: 14px; width: 100%; }
+.party-k { flex: 1; font-size: 9px; letter-spacing: 0.32em; color: rgba(255,255,255,0.36); }
+.party-x { font-size: 10.5px; letter-spacing: 0.14em; }
+.party-code {
+  font-size: clamp(30px, 6vw, 42px); font-weight: 300; letter-spacing: 0.3em;
+  padding-left: 0.3em; margin: 2px 0 16px; color: #fff;
+  font-variant-numeric: tabular-nums;
+  text-shadow: 0 0 30px color-mix(in oklab, var(--xmb-tint) 65%, transparent);
+}
+.party-vis {
+  display: inline-flex; gap: 2px; padding: 3px; margin-top: 18px;
+  background: rgba(0,0,0,0.34); border: 1px solid rgba(255,255,255,0.09); border-radius: 999px;
+}
+.party-tab {
+  border: 0; background: none; color: rgba(255,255,255,0.4); font: inherit;
+  font-size: 11.5px; letter-spacing: 0.05em; padding: 7px 15px; border-radius: 999px; cursor: pointer;
+  transition: background 0.18s, color 0.18s;
+}
+.party-tab:hover { color: #fff; }
+.party-tab.on { background: var(--xmb-tint); color: #fff; }
+.party-tab:focus-visible { outline: none; box-shadow: 0 0 0 2px #fff; }
+.party-how {
+  margin: 14px 0 0; max-width: 46ch; text-align: center; text-wrap: balance;
+  font-size: 11.5px; line-height: 1.6; color: rgba(255,255,255,0.42);
+}
+
+/* docked: everything the host still needs, in one line that clears the game */
+.party-rail {
+  position: absolute; top: 56px; left: 50%; transform: translateX(-50%); z-index: 30;
+  display: flex; align-items: center; gap: 14px;
+  padding: 7px 16px 7px 18px; border: 0; font: inherit; cursor: pointer;
+  background: rgba(4,7,13,0.86); backdrop-filter: blur(14px);
+  border-top: 2px solid color-mix(in oklab, var(--xmb-tint) 70%, transparent);
+  border-radius: 0 0 12px 12px;
+  opacity: 0.55; transition: opacity 0.18s, background 0.18s;
+}
+.party-rail:hover, .party-rail:focus-visible { opacity: 1; background: rgba(4,7,13,0.96); outline: none; }
+.party-rail-k { font-size: 8.5px; letter-spacing: 0.28em; color: rgba(255,255,255,0.36); }
+.party-rail-code {
+  font-size: 15px; letter-spacing: 0.24em; color: #fff; font-variant-numeric: tabular-nums;
+}
+.party-rail-n { font-size: 10.5px; letter-spacing: 0.1em; color: color-mix(in oklab, var(--xmb-tint) 60%, #fff); }
+@media (max-width: 560px) { .party-rail-k { display: none; } }
