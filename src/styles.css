@@ -4208,3 +4208,23 @@ img.status-avatar, img.ptile-avatar { object-fit: cover; border: 1px solid rgba(
 .rack-note { flex-basis: 100%; padding: 4px 10px; font-size: 11px; color: #ffb44a; }
 @media (max-width: 700px) { .rack-label { display: none; } .seats-hint { font-size: 11px; } }
 .rack-note.ok { color: color-mix(in oklab, var(--xmb-tint) 70%, #fff); }
+
+/* ═════════ INPUT PROBE — live readout, read-only ═════════ */
+.probe { position: absolute; left: 10px; bottom: 10px; z-index: 30; font-size: 11px; }
+.probe-chip {
+  border: 1px solid rgba(255,255,255,0.16); background: rgba(4,7,13,0.82); color: rgba(255,255,255,0.6);
+  border-radius: 999px; padding: 3px 10px; font: inherit; letter-spacing: 0.1em; cursor: pointer;
+}
+.probe-chip:hover { color: #fff; }
+.probe-body {
+  margin-top: 6px; padding: 10px 12px; min-width: 300px; max-width: min(440px, 88vw);
+  background: rgba(4,7,13,0.94); border: 1px solid rgba(255,255,255,0.12); backdrop-filter: blur(8px);
+}
+.probe-row { display: flex; gap: 10px; padding: 2px 0; align-items: baseline; }
+.probe-k { flex: 0 0 68px; color: rgba(255,255,255,0.4); letter-spacing: 0.1em; font-size: 10px; text-transform: uppercase; }
+.probe-v { color: rgba(255,255,255,0.9); font-variant-numeric: tabular-nums; word-break: break-all; }
+.probe-v b { color: #7ee787; font-weight: 600; }
+.probe-hint { margin: 8px 0 0; font-size: 10.5px; line-height: 1.5; color: rgba(255,255,255,0.42); }
+.probe-v b.bad { color: #ff8a5c; }
+.probe-hint b { color: rgba(255,255,255,0.72); font-weight: 500; }
+.probe-hint i { color: rgba(255,255,255,0.72); font-style: normal; }

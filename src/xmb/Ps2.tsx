@@ -3,6 +3,7 @@
 // bleed canvas, Xbox-pad → PS2 mapping via the gamepad bridge (same-origin
 // iframe, so synthesized keys reach the emulator). ISOs are read locally.
 import { Show, createSignal, onCleanup, onMount } from "solid-js";
+import InputProbe from "./InputProbe";
 import * as sfx from "../audio";
 import { setNavEnabled } from "../input";
 import { startBridge, stopBridge, touchKey, PS2_CONFIG } from "../gamepadBridge";
@@ -283,6 +284,8 @@ export default function Ps2(props: {
             the user picks a disc; it's invisible until playing. A JOINER runs
             no emulator — they only watch the host's stream — so skip it then
             (and never load the wasm on a host that can't emulate anyway). */}
+        <InputProbe />
+
         <Show when={mpRole() !== "joiner" && canEmulate}>
           <iframe
             ref={frame}
