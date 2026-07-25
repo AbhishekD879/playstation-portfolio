@@ -14,7 +14,7 @@ import { holdWakeLock } from "../wakelock";
 import TouchPad, { type TB } from "./TouchPad";
 import DiagOverlay from "./DiagOverlay";
 import { Icon } from "./icons";
-import { startHost, startJoiner, type HostHandle, type JoinerHandle } from "../ps2mp/webrtc";
+import { startHost, startJoinerResilient, type HostHandle, type ResilientJoiner } from "../ps2mp/webrtc";
 import { captureLocalInput, makeInjector, type PadState } from "../ps2mp/input";
 import { bumpPlays, resolveGameFile, type GameRecord } from "../gamesdb";
 
@@ -22,7 +22,8 @@ type Stage = "insert" | "reading" | "playing" | "error";
 
 export default function Ps2(props: {
   /** how many controllers to boot with — chosen on the PS2 home screen */
-  players?: number; onClose: () => void; profileId: string; initialGame?: GameRecord; initialJoin?: boolean }) {
+  players?: number; onClose: () => void; profileId: string; initialGame?: GameRecord; /** true = open the code box; a 4-char code = join that room straight away */
+  initialJoin?: boolean | string }) {
   const isDesktop = matchMedia("(pointer: fine)").matches && innerWidth >= 900 && typeof WebAssembly === "object";
   const isolated = (globalThis as any).crossOriginIsolated === true;
   const canEmulate = isDesktop && isolated;
@@ -75,10 +76,12 @@ export default function Ps2(props: {
   const [mpCode, setMpCode] = createSignal("");
   const [mpStatus, setMpStatus] = createSignal("");
   const [mpPlayers, setMpPlayers] = createSignal(0);
+  const [mpPublic, setMpPublic] = createSignal(true);   // listed in the lobby
+  const [rejoin, setRejoin] = createSignal("");          // reconnect banner
   const [joinStage, setJoinStage] = createSignal<"" | "code" | "connecting" | "live">("");
   const [joinInput, setJoinInput] = createSignal("");
   let hostHandle: HostHandle | null = null;
-  let joinerHandle: JoinerHandle | null = null;
+  let joinerHandle: ResilientJoiner | null = null;
   let stopCapture: (() => void) | null = null;
   let injector: ReturnType<typeof makeInjector> | null = null;
   // ★ One injector PER remote pad. The previous code held a single injector on
@@ -139,6 +142,10 @@ export default function Ps2(props: {
     setMpCode(code); setMpRole("host"); setMpPlayers(0); setNetSeats(new Map());
     hostHandle = startHost({
       room: code, max: slots, stream,
+      // ★ Public by default. A room nobody can find is a room nobody joins, and
+      // the code-only flow only ever worked for two people already in a chat.
+      // `listing` is what puts it in the lobby; Private omits it entirely.
+      listing: mpPublic() ? { title: disc()?.name?.replace(/\.[^.]+$/, "") || "PlayStation 2", kind: "ps2" } : undefined,
       onJoinerInput: (id, data: any) => {
         if (data?.t !== "input") return;
         const pad = netSeats().get(id);
@@ -174,7 +181,10 @@ export default function Ps2(props: {
     sfx.confirm();
     setMpRole("joiner"); setMpCode(code); setJoinStage("connecting"); setMpStatus("connecting…");
     setNavEnabled(false); // controller/keys belong to the remote game now
-    joinerHandle = startJoiner({
+    joinerHandle = startJoinerResilient({
+      // Survives a wifi blip or the host reloading: the session is rebuilt and
+      // the seat re-allocated, rather than dumping the player back to a code box.
+      onHealth: (h, _n, label) => setRejoin(h === "connected" ? "" : label),
       room: code,
       onStream: (stream) => {
         setJoinStage("live"); setMpStatus("connected");
@@ -203,7 +213,10 @@ export default function Ps2(props: {
   };
 
   onMount(() => {
-    if (props.initialJoin) setJoinStage("code"); // opened straight into "join a game"
+    // A code means the player picked a room from the lobby — connect, do not
+    // make them retype what they just clicked.
+    if (typeof props.initialJoin === "string" && props.initialJoin.length === 4) joinGame(props.initialJoin);
+    else if (props.initialJoin) setJoinStage("code");
     const esc = (e: KeyboardEvent) => { if (e.key === "Escape" && stage() !== "playing") props.onClose(); };
     addEventListener("keydown", esc);
     const onMsg = (e: MessageEvent) => {
@@ -354,6 +367,12 @@ export default function Ps2(props: {
 
         {/* joiner view — full-bleed stream of the host's game + our input */}
         <Show when={mpRole() === "joiner"}>
+          {/* Reconnect is silent until it is not: this only appears when the link
+              actually drops, and names the cause so a dead host reads differently
+              from a dead wifi. */}
+          <Show when={rejoin()}>
+            <div class="ps2-rejoin"><span class="ps2-rejoin-dot" />{rejoin()}</div>
+          </Show>
           <div class="ps2-join-view">
             <video ref={joinVideo} class="ps2-join-video" classList={{ live: joinStage() === "live" }} autoplay playsinline muted />
             <Show when={joinStage() !== "live"}>
@@ -418,12 +437,16 @@ export default function Ps2(props: {
               <PadLadder
                 count={players()}
                 showPorts
+                showWho
                 slots={[
                   { player: 1, label: "you" },
                   ...[...netSeats().entries()].map(([id, pad]) => ({ player: pad + 1, label: id.slice(0, 4), remote: true })),
                 ]}
               />
-              <span class="ps2-room-how">Others open this console → PlayStation 2 → Join a game, and enter the code. {mpStatus()}</span>
+              <button class="ps-act ps2-vis" onClick={() => setMpPublic((v) => !v)}>
+                  {mpPublic() ? "◉ listed in Open rooms" : "○ private — code only"}
+                </button>
+                <span class="ps2-room-how">Others open this console → PlayStation 2 → Join a game, and enter the code. {mpStatus()}</span>
             </div>
           </Show>
           <Show when={saveNote()}><div class="ps2-savenote">{saveNote()}</div></Show>

@@ -14,7 +14,11 @@ import { For, Show } from "solid-js";
 export interface Slot {
   /** 1-based player number, as a human counts them. */
   player: number;
-  /** who holds it — "" means open */
+  /** occupied. Separate from `label` because a lobby row knows a seat is TAKEN
+      without knowing who by — deriving it from the label made every occupied
+      seat in the lobby render as "open". */
+  taken?: boolean;
+  /** who holds it, when known */
   label?: string;
   /** local pad (you / a controller here) vs a remote player */
   remote?: boolean;
@@ -28,6 +32,7 @@ export default function PadLadder(props: {
   onPick?: (n: number) => void;        // interactive picker when provided
   size?: "sm" | "md";
   showPorts?: boolean;                 // draw the PORT 1 / PORT 2 labels
+  showWho?: boolean;                   // name each holder under the slot
 }) {
   const all = () => Array.from({ length: 6 }, (_, i) => i + 1);
   const slotFor = (n: number) => props.slots?.find((s) => s.player === n);
@@ -45,7 +50,7 @@ export default function PadLadder(props: {
         class="rung"
         classList={{
           on: on(),
-          held: !!s()?.label,
+          held: s()?.taken ?? !!s()?.label,
           remote: !!s()?.remote,
           live: !!s()?.active,
           pick: !!props.onPick,
@@ -69,7 +74,9 @@ export default function PadLadder(props: {
         }}
       >
         <span class="rung-n">{n}</span>
-        <Show when={props.slots}>
+        {/* Names only where there is room for them. A lobby row shows
+            occupancy as fill; the host banner shows who. */}
+        <Show when={props.slots && props.showWho}>
           <span class="rung-who">{s()?.label || (on() ? "open" : "")}</span>
         </Show>
       </button>
@@ -77,7 +84,7 @@ export default function PadLadder(props: {
   };
 
   return (
-    <div class="ladder" classList={{ sm: props.size === "sm", withwho: !!props.slots }}>
+    <div class="ladder" classList={{ sm: props.size === "sm", withwho: !!props.slots && !!props.showWho }}>
       <div class="ladder-port">
         <Show when={props.showPorts}><span class="ladder-lbl">PORT 1</span></Show>
         <div class="ladder-rungs"><For each={all().slice(0, 4)}>{rung}</For></div>

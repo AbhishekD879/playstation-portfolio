@@ -19,7 +19,7 @@ interface Room {
 }
 
 // Dev mirror of the Cloudflare Directory DO — what's live on the console now.
-const liveRooms = new Map<string, { code: string; title: string; kind: string; since: number; watchers: number }>();
+const liveRooms = new Map<string, { code: string; title: string; kind: string; since: number; watchers: number; seats: number; max: number }>();
 const recentRooms: { title: string; kind: string; at: number }[] = [];
 
 const send = (ws: WebSocket | null | undefined, msg: unknown) => {
@@ -149,11 +149,11 @@ export function multiplayerSignaling(): Plugin {
             }
             const room: Room = existing ?? { host: null, joiners: new Map(), spectators: new Map(), max: 1, seq: 0 };
             room.host = ws;
-            room.max = Math.max(1, Math.min(3, Number(m.max) || 1));
+            room.max = Math.max(1, Math.min(7, Number(m.max) || 1)); // six players => five joiners
             // opt-in only: no `listing`, no entry on Console TV
             if (m.listing && typeof m.listing.title === "string") {
               room.listing = { title: String(m.listing.title).slice(0, 60), kind: String(m.listing.kind || "").slice(0, 24), since: Date.now(), watchers: 0 };
-              liveRooms.set(roomCode, { code: roomCode, ...room.listing });
+              liveRooms.set(roomCode, { code: roomCode, ...room.listing, since: Date.now(), watchers: 0, seats: room.joiners.size, max: room.max });
             }
             rooms.set(roomCode, room);
             role = "host";
@@ -170,6 +170,8 @@ export function multiplayerSignaling(): Plugin {
             if (pool.size >= (watching ? 24 : room.max)) return send(ws, { t: "error", msg: watching ? "too many watchers" : "room full" });
             selfId = `${watching ? "w" : "j"}${++room.seq}`;
             pool.set(selfId, ws);
+            const syncSeats = () => { const L = liveRooms.get(roomCode); if (L) L.seats = room.joiners.size; };
+            syncSeats();
             role = watching ? "spectator" : "joiner";
             send(ws, { t: "joined", room: roomCode, id: selfId });
             send(room.host, { t: "joiner", id: selfId, watch: watching }); // host kicks off the offer
@@ -204,6 +206,7 @@ export function multiplayerSignaling(): Plugin {
             rooms.delete(roomCode);
           } else if (role === "joiner") {
             room.joiners.delete(selfId);
+            { const L = liveRooms.get(roomCode); if (L) L.seats = room.joiners.size; } // keep the dev lobby honest
             send(room.host, { t: "peer-left", id: selfId });
           } else if (role === "spectator") {
             room.spectators.delete(selfId);

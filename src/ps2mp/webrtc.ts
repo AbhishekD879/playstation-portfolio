@@ -34,6 +34,8 @@ export async function iceConfig(): Promise<RTCIceServer[]> {
   return [{ urls: "stun:stun.cloudflare.com:3478" }];
 }
 
+import { backoffMs, classify, retryLabel, shouldRetry, type Health } from "./reconnect";
+
 export interface Signaling {
   send(msg: Record<string, unknown>): void;
   onMessage(cb: (m: any) => void): void;
@@ -215,7 +217,7 @@ export function startJoiner(opts: {
 }
 
 // —— Console TV directory ——————————————————————————————————————————————————
-export interface LiveRoom { code: string; title: string; kind: string; since: number; watchers: number }
+export interface LiveRoom { code: string; title: string; kind: string; since: number; watchers: number; seats: number; max: number }
 export interface Marquee { live: LiveRoom[]; recent: { title: string; kind: string; at: number }[] }
 
 /** What's playing on the console right now. Best-effort: an unreachable
@@ -229,4 +231,75 @@ export async function fetchLive(): Promise<Marquee> {
   } catch {
     return { live: [], recent: [] };
   }
+}
+
+
+// ── auto-reconnect ─────────────────────────────────────────────────────────
+// A dropped session is REBUILT rather than repaired: ICE state after a network
+// change is not worth salvaging, and a fresh join re-runs the seat allocation
+// so a returning player lands back in a real slot. The handle stays valid
+// across reconnects, so callers never hold a dead reference.
+
+export interface ResilientJoiner extends JoinerHandle {
+  /** attempts since the last good connection; 0 while healthy */
+  attempt(): number;
+}
+
+export function startJoinerResilient(opts: {
+  room: string;
+  onStream: (stream: MediaStream) => void;
+  onStatus?: (s: string) => void;
+  /** fires whenever the link drops or comes back, for the reconnect banner */
+  onHealth?: (h: Health, attempt: number, label: string) => void;
+  watch?: boolean;
+}): ResilientJoiner {
+  let inner: JoinerHandle | null = null;
+  let attempt = 0;
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  let stopped = false;
+
+  const connect = () => {
+    if (stopped) return;
+    inner = startJoiner({
+      room: opts.room,
+      watch: opts.watch,
+      onStream: opts.onStream,
+      onStatus: (raw) => {
+        opts.onStatus?.(raw);
+        if (stopped) return;
+        const h = classify(raw);
+        if (h === "connected") {
+          if (attempt > 0) opts.onHealth?.("connected", 0, "Back in the game");
+          attempt = 0;
+          return;
+        }
+        if (!shouldRetry(h)) return;
+        // one retry in flight at a time — several status events can report the
+        // same drop, and each must not start its own timer
+        if (timer) return;
+        attempt++;
+        opts.onHealth?.(h, attempt, retryLabel(h, attempt));
+        const wait = backoffMs(attempt);
+        timer = setTimeout(() => {
+          timer = undefined;
+          try { inner?.stop(); } catch { /* already gone */ }
+          inner = null;
+          connect();
+        }, wait);
+      },
+    });
+  };
+  connect();
+
+  return {
+    sendInput: (data) => inner?.sendInput(data),
+    attempt: () => attempt,
+    stop: () => {
+      stopped = true;                       // classify() treats this as final
+      if (timer) clearTimeout(timer);
+      timer = undefined;
+      inner?.stop();
+      inner = null;
+    },
+  };
 }

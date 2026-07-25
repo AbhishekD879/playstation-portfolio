@@ -38,6 +38,7 @@ import CodeApp from "./CodeApp";
 import Manual from "./Manual";
 import GameShelf from "./GameShelf";
 import PadLadder from "./PadLadder";
+import Lobby from "./Lobby";
 import Doom from "./Doom";
 import DoomRtx from "./DoomRtx";
 import Karaoke from "./Karaoke";
@@ -252,12 +253,14 @@ export default function XMB(props: {
     return out;
   }) as typeof setAppRaw;
   const [ps2Boot, setPs2Boot] = createSignal<GameRecord | null>(null);
-  const [ps2Join, setPs2Join] = createSignal(false);
+  // false = not joining · true = show the code box · "ABCD" = join that room
+  const [ps2Join, setPs2Join] = createSignal<boolean | string>(false);
   // Controllers for the next PS2 disc. Lives on the PS2 HOME screen, outside the
   // emulator component, so it is settled before the disc gesture exists. An
   // earlier version put this in a step BETWEEN the disc and the boot, which
   // broke player one; that space stays empty permanently.
   const [ps2Players, setPs2Players] = createSignal(1);
+  const [ps2Lobby, setPs2Lobby] = createSignal(false);
   const [ccOpen, setCcOpen] = createSignal(false);
   let ccNav: ((a: Parameters<Parameters<typeof onNav>[0]>[0]) => void) | undefined;
 
@@ -2241,9 +2244,15 @@ export default function XMB(props: {
                 <span class="padpick-k">CONTROLLERS</span>
                 <PadLadder count={ps2Players()} size="sm" onPick={(n) => { sfx.tickH(); setPs2Players(n); }} />
               </span>
-              <button class="ghost-btn" onClick={() => { sfx.confirm(); setPs2Boot(null); setPs2Join(true); setApp("ps2"); }}>🎮 Join 2-player</button>
+              <button class="ghost-btn" onClick={() => { sfx.confirm(); setPs2Lobby((v) => !v); }}>Play online</button>
             </>
           )}
+        />
+      </Show>
+      <Show when={app() === "ps2home" && ps2Lobby()}>
+        <Lobby
+          onClose={() => setPs2Lobby(false)}
+          onJoin={(code) => { sfx.confirm(); setPs2Lobby(false); setPs2Boot(null); setPs2Join(code); setApp("ps2"); }}
         />
       </Show>
       <Show when={app() === "ps1home"}>

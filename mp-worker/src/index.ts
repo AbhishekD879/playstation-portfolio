@@ -176,6 +176,11 @@ export class SignalRoom {
     if (this.code) void this.dir("/watchers", { code: this.code, n });
   }
 
+  /** Tell the directory how full this room is, so the lobby stays honest. */
+  private seats() {
+    if (this.code) void this.dir("/seats", { code: this.code, n: this.joiners.size });
+  }
+
   private dir(path: string, body?: unknown) {
     try {
       const stub = this.env.DIRECTORY.get(this.env.DIRECTORY.idFromName("live"));
@@ -216,7 +221,7 @@ export class SignalRoom {
         if (m.listing && typeof m.listing.title === "string") {
           this.code = String(m.room || "").toUpperCase().slice(0, 8);
           this.listing = { title: String(m.listing.title).slice(0, 60), kind: String(m.listing.kind || "").slice(0, 24) };
-          if (this.code) void this.dir("/reg", { code: this.code, ...this.listing });
+          if (this.code) void this.dir("/reg", { code: this.code, ...this.listing, seats: this.joiners.size, max: this.max });
         }
         return send(ws, { t: "hosted", max: this.max });
       }
@@ -232,7 +237,7 @@ export class SignalRoom {
         role = watching ? "spectator" : "joiner";
         send(ws, { t: "joined", id: selfId });
         send(this.host, { t: "joiner", id: selfId, watch: watching });
-        if (watching) this.announce();
+        if (watching) this.announce(); else this.seats();
         return;
       }
 
@@ -251,6 +256,7 @@ export class SignalRoom {
         this.listing = null; this.code = "";
       } else if (role === "joiner") {
         this.joiners.delete(selfId); send(this.host, { t: "peer-left", id: selfId });
+        this.seats();
       } else if (role === "spectator") {
         this.spectators.delete(selfId); send(this.host, { t: "peer-left", id: selfId });
         this.announce();
@@ -266,7 +272,7 @@ export class SignalRoom {
 // tail of what was on recently so the channel is never empty. In memory only:
 // a live room is by definition a thing with open sockets, so there is nothing
 // worth surviving an eviction — and a stale "live" entry is worse than none.
-interface LiveRoom { code: string; title: string; kind: string; since: number; watchers: number }
+interface LiveRoom { code: string; title: string; kind: string; since: number; watchers: number; seats: number; max: number }
 const RECENT_KEEP = 8;
 const STALE_MS = 6 * 3600 * 1000; // a room open >6h is almost certainly a leak
 
@@ -288,6 +294,10 @@ export class Directory {
         kind: String(body.kind || "").slice(0, 24),
         since: Date.now(),
         watchers: 0,
+        // Capacity, so the lobby can say "2 of 6" and grey out a full room
+        // rather than letting someone click into a rejection.
+        seats: Math.max(0, Number(body.seats) || 0),
+        max: Math.max(1, Number(body.max) || 1),
       });
     } else if (path === "/unreg" && code) {
       const gone = this.live.get(code);
@@ -297,6 +307,9 @@ export class Directory {
         this.recent.unshift({ title: gone.title, kind: gone.kind, at: Date.now() });
         this.recent = this.recent.slice(0, RECENT_KEEP);
       }
+    } else if (path === "/seats" && code) {
+      const r = this.live.get(code);
+      if (r) r.seats = Math.max(0, Math.min(r.max, Number(body.n) || 0));
     } else if (path === "/watchers" && code) {
       const r = this.live.get(code);
       if (r) r.watchers = Math.max(0, Number(body.n) || 0);
