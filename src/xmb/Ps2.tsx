@@ -46,6 +46,7 @@ export default function Ps2(props: { onClose: () => void; profileId: string; ini
   // WITHOUT owning six pads. Same idea as the bot players in Board Games.
   const [seats, setSeats] = createSignal<Seat[]>(emptySeats());
   const [seatNote, setSeatNote] = createSignal("");
+  const [mtInfo, setMtInfo] = createSignal("");   // what the engine reports back
   const players = () => playerCount(seats());
   // The engine is fixed once the disc boots — a game latches its slot count at
   // init — so this is only live while we are still on the disc-select screen.
@@ -280,6 +281,12 @@ export default function Ps2(props: { onClose: () => void; profileId: string; ini
         if (pending) bootNow(pending);
         else if (props.initialGame) bootRecord(props.initialGame, true); // auto-boot the library pick
       }
+      // The forked engine reports back how many pads it actually enabled. Show
+      // it — otherwise "did the multitap take?" is invisible until a game either
+      // does or doesn't offer six players, which is a terrible feedback loop.
+      if (e.data.type === "play-multitap") {
+        setMtInfo(`multitap: ${e.data.pads} pads for ${e.data.players} players`);
+      }
       if (e.data.type === "play-booted") {
         setStage("playing");
         setNavEnabled(false); // keyboard belongs to the PS2 now
@@ -448,6 +455,7 @@ export default function Ps2(props: { onClose: () => void; profileId: string; ini
                 </div>
               )}
             </For>
+            <Show when={mtInfo()}><div class="rack-note ok">{mtInfo()}</div></Show>
             <Show when={seatNote()}><div class="rack-note">{seatNote()}</div></Show>
           </div>
         </Show>

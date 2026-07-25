@@ -4207,3 +4207,4 @@ img.status-avatar, img.ptile-avatar { object-fit: cover; border: 1px solid rgba(
 .rack-acts .ps-act { font-size: 10px; letter-spacing: 0.1em; padding: 2px 4px; }
 .rack-note { flex-basis: 100%; padding: 4px 10px; font-size: 11px; color: #ffb44a; }
 @media (max-width: 700px) { .rack-label { display: none; } .seats-hint { font-size: 11px; } }
+.rack-note.ok { color: color-mix(in oklab, var(--xmb-tint) 70%, #fff); }
