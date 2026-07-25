@@ -134,8 +134,13 @@
     // tap was requested, which meant seating six players silently turned on a
     // per-poll console log and throttled the emulator into uselessness.
     // Diagnostics now require ?mtaptrace=1 on the URL.
-    const wantTrace = new URLSearchParams(location.search).has("mtaptrace");
-    if (mod.setMultitapTracing) mod.setMultitapTracing(wantTrace);
+    const q = new URLSearchParams(location.search);
+    if (mod.setMultitapTracing) mod.setMultitapTracing(q.has("mtaptrace"));
+    // ★ Slot switching acts on an unverified payload offset. Getting it wrong
+    // makes port 0 read a pad other than 0, which is exactly how player one
+    // vanished. Opt-in only, until the offset is confirmed from a real game's
+    // ChangeSlot dump (?mtaptrace=1 prints the raw bytes).
+    if (mod.setMultitapSlotSwitching) mod.setMultitapSlotSwitching(q.has("mtapslots"));
     return mod.getMultitapPadCount();
   }
   window.__enableMultitap = enableMultitap;
