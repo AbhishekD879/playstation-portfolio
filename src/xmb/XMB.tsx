@@ -38,7 +38,7 @@ import CodeApp from "./CodeApp";
 import Manual from "./Manual";
 import GameShelf from "./GameShelf";
 import PadLadder from "./PadLadder";
-import Lobby from "./Lobby";
+import Online from "./Online";
 import Doom from "./Doom";
 import DoomRtx from "./DoomRtx";
 import Karaoke from "./Karaoke";
@@ -261,6 +261,9 @@ export default function XMB(props: {
   // broke player one; that space stays empty permanently.
   const [ps2Players, setPs2Players] = createSignal(1);
   const [ps2Lobby, setPs2Lobby] = createSignal(false);
+  // armed by "host this" on the Online screen; Ps2 opens the room once the
+  // game is actually running, since hosting streams the emulator's canvas
+  const [ps2AutoHost, setPs2AutoHost] = createSignal(false);
   const [ps2JoinTitle, setPs2JoinTitle] = createSignal("");
   const [ccOpen, setCcOpen] = createSignal(false);
   let ccNav: ((a: Parameters<Parameters<typeof onNav>[0]>[0]) => void) | undefined;
@@ -2201,7 +2204,7 @@ export default function XMB(props: {
       </Show>
       <Show when={app() === "privacy"}><Privacy onClose={() => setApp(null)} /></Show>
       <Show when={app() === "watch"}><WatchParty userName={props.profile.name} onClose={() => setApp(null)} /></Show>
-      <Show when={app() === "ps2"}><Ps2 profileId={props.profile.id} players={ps2Players()} initialJoinTitle={ps2JoinTitle()} initialGame={ps2Boot() ?? undefined} initialJoin={ps2Join()} onClose={() => { setPs2Boot(null); setPs2Join(false); setApp(games().some((g) => g.sys === "ps2") ? "ps2home" : null); }} /></Show>
+      <Show when={app() === "ps2"}><Ps2 profileId={props.profile.id} players={ps2Players()} initialJoinTitle={ps2JoinTitle()} initialGame={ps2Boot() ?? undefined} initialJoin={ps2Join()} autoHost={ps2AutoHost()} onClose={() => { setPs2AutoHost(false); setPs2Boot(null); setPs2Join(false); setApp(games().some((g) => g.sys === "ps2") ? "ps2home" : null); }} /></Show>
       <Show when={app() === "pc"}><PcApp onClose={() => setApp(null)} /></Show>
       <Show when={app() === "guestbook"}><Guestbook userName={props.profile.name} onClose={() => setApp(null)} /></Show>
       <Show when={app() === "browser"}><Browser onClose={() => setApp(null)} /></Show>
@@ -2237,23 +2240,30 @@ export default function XMB(props: {
           onClose={() => setApp(null)}
           extra={() => (
             <>
-              {/* Controllers for the next disc. The gap after slot 4 is the
-                  boundary between the PS2's two controller ports — which is why
-                  a fifth player needs a second multitap. Chosen HERE, on the
-                  home screen, so nothing sits between the disc and the boot. */}
-              <span class="padpick">
-                <span class="padpick-k">CONTROLLERS</span>
-                <PadLadder count={ps2Players()} size="sm" onPick={(n) => { sfx.tickH(); setPs2Players(n); }} />
-              </span>
-              <button class="ghost-btn" onClick={() => { sfx.confirm(); setPs2Lobby((v) => !v); }}>Play online</button>
+              {/* One clear way in. Controllers, hosting, open rooms and the code
+                  box all live on the Online screen now — previously they were
+                  scattered across a toolbar, a button and a mid-game banner,
+                  which meant you could not find the feature without already
+                  knowing it existed. */}
+              <button class="ghost-btn ghost-btn-key" onClick={() => { sfx.confirm(); setPs2Lobby(true); }}>Play online</button>
             </>
           )}
         />
       </Show>
       <Show when={app() === "ps2home" && ps2Lobby()}>
-        <Lobby
+        <Online
+          players={ps2Players()}
+          onPlayers={(n) => { sfx.tickH(); setPs2Players(n); }}
           onClose={() => setPs2Lobby(false)}
-          onJoin={(code, title) => { sfx.confirm(); setPs2Lobby(false); setPs2Boot(null); setPs2JoinTitle(title); setPs2Join(code); setApp("ps2"); }}
+          library={games().filter((g) => g.sys === "ps2")
+            .map((g) => ({ id: g.id, title: g.name.replace(/\.[^.]+$/, "") }))}
+          onHost={(id) => {
+            const g = games().find((x) => x.id === id);
+            if (!g) return;
+            sfx.confirm(); setPs2Lobby(false); setPs2AutoHost(true); playRecord(g);
+          }}
+          onInsert={() => { sfx.confirm(); setPs2Lobby(false); setPs2AutoHost(true); insertPrefer = "ps2"; fileInput.click(); }}
+          onJoin={(code, title) => { sfx.confirm(); setPs2Lobby(false); setPs2AutoHost(false); setPs2Boot(null); setPs2JoinTitle(title); setPs2Join(code); setApp("ps2"); }}
         />
       </Show>
       <Show when={app() === "ps1home"}>

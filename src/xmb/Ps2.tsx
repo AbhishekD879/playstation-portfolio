@@ -25,7 +25,9 @@ export default function Ps2(props: {
   players?: number; onClose: () => void; profileId: string; initialGame?: GameRecord; /** true = open the code box; a 4-char code = join that room straight away */
   initialJoin?: boolean | string;
   /** the room's game, so the connecting screen can name it */
-  initialJoinTitle?: string }) {
+  initialJoinTitle?: string;
+  /** picked "host this" on the Online screen — open the room as soon as it boots */
+  autoHost?: boolean }) {
   const isDesktop = matchMedia("(pointer: fine)").matches && innerWidth >= 900 && typeof WebAssembly === "object";
   const isolated = (globalThis as any).crossOriginIsolated === true;
   const canEmulate = isDesktop && isolated;
@@ -270,6 +272,10 @@ export default function Ps2(props: {
         frame.contentWindow?.focus();
         // auto-save the memory card every 15s so progress survives a reload
         saveTimer = setInterval(requestSave, 15_000);
+        // Came here from "host this" on the Online screen. Hosting needs a
+        // running emulator (it captures the canvas), so it can only happen
+        // here — never in the boot gesture itself.
+        if (props.autoHost && mpRole() === "none") setTimeout(hostGame, 400);
       }
       if (e.data.type === "play-error") {
         setErr(e.data.message || "The emulator refused this disc.");

@@ -30,6 +30,9 @@ export default function PadLadder(props: {
   count: number;                       // how many slots exist
   slots?: Slot[];                      // occupancy, if known
   onPick?: (n: number) => void;        // interactive picker when provided
+  /** floor for the picker: online needs at least one seat to give away, so a
+      one-controller room is not an option there */
+  min?: number;
   size?: "sm" | "md";
   showPorts?: boolean;                 // draw the PORT 1 / PORT 2 labels
   showWho?: boolean;                   // name each holder under the slot
@@ -37,6 +40,7 @@ export default function PadLadder(props: {
   const all = () => Array.from({ length: 6 }, (_, i) => i + 1);
   const slotFor = (n: number) => props.slots?.find((s) => s.player === n);
   const within = (n: number) => n <= props.count;
+  const barred = (n: number) => n < (props.min ?? 1);
 
   // ★ Every one of these is an ACCESSOR, called inline in the JSX below.
   // Solid only tracks what it sees inside the markup — capturing these into
@@ -54,13 +58,14 @@ export default function PadLadder(props: {
           remote: !!s()?.remote,
           live: !!s()?.active,
           pick: !!props.onPick,
+          barred: barred(n),
         }}
-        disabled={!props.onPick}
+        disabled={!props.onPick || barred(n)}
         aria-pressed={props.onPick ? on() : undefined}
         aria-label={props.onPick
           ? `Play with ${n} controller${n === 1 ? "" : "s"}`
           : `Player ${n}: ${s()?.label || "open"}`}
-        onClick={() => props.onPick?.(n)}
+        onClick={() => !barred(n) && props.onPick?.(n)}
         // ★ The console runs a global crossbar key handler, and it swallows
         // Enter before a focused button ever sees it — so the ladder looked
         // mouse-only to anyone on a keyboard or a pad (✕ maps to Enter here).
@@ -68,6 +73,7 @@ export default function PadLadder(props: {
         onKeyDown={(e) => {
           if (!props.onPick) return;
           if (e.key !== "Enter" && e.key !== " ") return;
+          if (barred(n)) return;
           e.preventDefault();
           e.stopPropagation();
           props.onPick(n);

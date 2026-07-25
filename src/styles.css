@@ -4268,6 +4268,10 @@ img.status-avatar, img.ptile-avatar { object-fit: cover; border: 1px solid rgba(
 }
 .ladder.sm .rung { min-width: 22px; padding: 4px 2px 3px; }
 .rung.pick { cursor: pointer; }
+/* Not a pickable count here — a one-controller online room has no seat to give
+   away. No dimming: seat 1 is still yours and still filled, it just isn't a
+   choice, so only the affordance goes. */
+.rung.barred { cursor: default; }
 .rung-n { font-size: 12px; font-variant-numeric: tabular-nums; line-height: 1; }
 .ladder.sm .rung-n { font-size: 11px; }
 .rung-who {
@@ -4436,3 +4440,112 @@ img.status-avatar, img.ptile-avatar { object-fit: cover; border: 1px solid rgba(
 }
 .party-rail-n { font-size: 10.5px; letter-spacing: 0.1em; color: color-mix(in oklab, var(--xmb-tint) 60%, #fff); }
 @media (max-width: 560px) { .party-rail-k { display: none; } }
+
+/* ═══════════════════════════════════════════════════════════════════════
+   PLAYSTATION 2 · ONLINE — the multiplayer destination
+   A full screen, not a dropdown. Multiplayer was previously invisible unless
+   you already knew the sequence to reach it.
+   ═══════════════════════════════════════════════════════════════════════ */
+.online {
+  position: fixed; inset: 0; z-index: 40; overflow-y: auto;
+  background: radial-gradient(1100px 620px at 16% -12%, color-mix(in oklab, var(--xmb-tint) 22%, transparent), transparent 62%),
+              radial-gradient(880px 520px at 96% 108%, color-mix(in oklab, var(--xmb-tint) 12%, transparent), transparent 60%),
+              rgba(4,6,12,0.97);
+  backdrop-filter: blur(20px);
+}
+.online-in { max-width: 1000px; margin: 0 auto; padding: clamp(28px,5vw,60px) clamp(18px,4vw,40px) 90px; }
+
+.online-head { display: flex; align-items: flex-start; gap: 24px; margin-bottom: clamp(30px,5vw,50px); }
+.online-x { flex: none; margin-top: 6px; }
+.online-eyebrow { font-size: 10.5px; letter-spacing: 0.34em; text-transform: uppercase; color: rgba(255,255,255,0.34); margin: 0 0 12px; }
+.online-h1 {
+  font-size: clamp(27px,4.6vw,44px); font-weight: 300; letter-spacing: -0.02em;
+  line-height: 1.08; margin: 0 0 14px; text-wrap: balance; color: #fff;
+}
+.online-lede { font-size: 14.5px; line-height: 1.68; color: rgba(255,255,255,0.55); max-width: 60ch; margin: 0; }
+
+.online-k { font-size: 9.5px; letter-spacing: 0.3em; text-transform: uppercase; color: rgba(255,255,255,0.34); margin: 0 0 14px; }
+.online-k-row { display: flex; align-items: baseline; gap: 16px; margin-top: 38px; }
+.online-k-row .online-k { flex: 1; margin-bottom: 14px; }
+
+.online-card {
+  border: 1px solid rgba(255,255,255,0.09);
+  border-top: 2px solid color-mix(in oklab, var(--xmb-tint) 72%, transparent);
+  background: rgba(255,255,255,0.035); padding: clamp(20px,3vw,28px);
+}
+.online-seatrow { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 22px 34px; }
+.online-sub { font-size: 11px; letter-spacing: 0.16em; text-transform: uppercase; color: rgba(255,255,255,0.4); margin: 0 0 12px; }
+.online-taps { flex: 1 1 260px; font-size: 12.5px; line-height: 1.6; color: rgba(255,255,255,0.44); margin: 0; text-wrap: balance; }
+
+.online-act { display: flex; flex-wrap: wrap; align-items: center; gap: 14px 18px; margin-top: 26px; padding-top: 22px; border-top: 1px solid rgba(255,255,255,0.07); }
+.online-btn {
+  border: 0; border-radius: 999px; cursor: pointer; font: inherit; font-size: 14px; font-weight: 500;
+  padding: 12px 28px; background: var(--xmb-tint); color: #fff;
+  box-shadow: 0 6px 24px color-mix(in oklab, var(--xmb-tint) 45%, transparent);
+  transition: filter .16s, transform .1s;
+}
+.online-btn:hover:not(:disabled) { filter: brightness(1.14); }
+.online-btn:active:not(:disabled) { transform: translateY(1px); }
+.online-btn:disabled { opacity: 0.34; cursor: default; box-shadow: none; }
+.online-btn:focus-visible { outline: none; box-shadow: 0 0 0 3px #fff; }
+.online-btn.ghost { background: rgba(255,255,255,0.08); box-shadow: none; }
+.online-note { font-size: 12px; line-height: 1.6; color: rgba(255,255,255,0.4); margin: 0; max-width: 44ch; }
+
+/* Hosting starts from a game, not from a button — the emulator has to be
+   running before there is anything to stream. */
+.online-pick { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 10px; margin-top: 16px; }
+.online-game {
+  display: flex; align-items: center; justify-content: space-between; gap: 14px;
+  padding: 14px 16px; text-align: left; font: inherit; color: #fff; cursor: pointer;
+  background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.09); border-radius: 10px;
+  transition: background .15s, border-color .15s;
+}
+.online-game:hover { background: color-mix(in oklab, var(--xmb-tint) 20%, rgba(255,255,255,0.04)); border-color: color-mix(in oklab, var(--xmb-tint) 55%, transparent); }
+.online-game:focus-visible { outline: none; border-color: #fff; box-shadow: 0 0 0 2px rgba(255,255,255,0.5); }
+.online-game.ins { background: none; border-style: dashed; }
+.online-game-t { font-size: 13.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.online-game-go { font-size: 10.5px; letter-spacing: 0.18em; text-transform: uppercase; color: rgba(255,255,255,0.34); flex: none; }
+.online-game:hover .online-game-go { color: #fff; }
+
+.online-rooms { display: grid; gap: 1px; background: rgba(255,255,255,0.07); border: 1px solid rgba(255,255,255,0.07); }
+.online-room {
+  display: grid; grid-template-columns: 1fr auto auto auto auto auto; align-items: center; gap: 20px;
+  padding: 15px 20px; border: 0; background: rgba(6,10,18,0.9); color: inherit; font: inherit;
+  text-align: left; cursor: pointer; transition: background .15s;
+}
+.online-room:hover:not(:disabled) { background: color-mix(in oklab, var(--xmb-tint) 16%, rgba(6,10,18,0.9)); }
+.online-room:focus-visible { outline: none; box-shadow: inset 3px 0 0 var(--xmb-tint); }
+.online-room.full { opacity: 0.4; cursor: default; }
+.online-room-t { font-size: 14px; color: #fff; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* the code is public on purpose — read it off the list, text it to a friend */
+.online-room-c {
+  font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 12px; letter-spacing: 0.24em;
+  color: rgba(255,255,255,0.5); padding: 4px 2px 4px 10px; border-left: 1px solid rgba(255,255,255,0.1);
+}
+.online-room-s { font-size: 12px; letter-spacing: 0.06em; color: color-mix(in oklab, var(--xmb-tint) 55%, #fff); min-width: 6ch; text-align: right; }
+.online-room.full .online-room-s { color: rgba(255,255,255,0.45); }
+.online-room-m { font-size: 11px; color: rgba(255,255,255,0.32); font-variant-numeric: tabular-nums; }
+.online-room-go { font-size: 11.5px; letter-spacing: 0.14em; color: rgba(255,255,255,0.3); min-width: 4ch; }
+.online-room:hover:not(:disabled) .online-room-go { color: #fff; }
+
+.online-empty { font-size: 13px; line-height: 1.7; color: rgba(255,255,255,0.42); margin: 0; max-width: 62ch; }
+
+.online-code { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 16px; }
+.online-input {
+  width: 8ch; padding: 11px 14px; font: inherit; font-size: 19px; letter-spacing: 0.3em;
+  text-align: center; text-transform: uppercase; color: #fff;
+  background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.14); border-radius: 10px;
+}
+.online-input:focus { outline: none; border-color: var(--xmb-tint); box-shadow: 0 0 0 3px color-mix(in oklab, var(--xmb-tint) 30%, transparent); }
+
+@media (max-width: 700px) {
+  .online-head { flex-direction: column; gap: 12px; }
+  .online-room { grid-template-columns: 1fr auto; gap: 8px 14px; }
+  .online-room-m, .online-room-go, .online-room-c { display: none; }
+}
+/* the console's one way into multiplayer deserves to look like it */
+.ghost-btn.ghost-btn-key {
+  background: color-mix(in oklab, var(--xmb-tint) 30%, rgba(255,255,255,0.07));
+  color: #fff;
+}
+.ghost-btn.ghost-btn-key:hover { background: color-mix(in oklab, var(--xmb-tint) 52%, transparent); }
