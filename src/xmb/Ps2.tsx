@@ -4,6 +4,7 @@
 // iframe, so synthesized keys reach the emulator). ISOs are read locally.
 import { Show, createSignal, onCleanup, onMount } from "solid-js";
 import InputProbe from "./InputProbe";
+import { logInput } from "../inputLog";
 import * as sfx from "../audio";
 import { setNavEnabled } from "../input";
 import { startBridge, stopBridge, touchKey, PS2_CONFIG } from "../gamepadBridge";
@@ -32,7 +33,17 @@ export default function Ps2(props: {
   // attempt put this in a step BETWEEN the disc and the boot; that broke player
   // one, so the rule now is: never add anything to the boot gesture.
   const players = () => Math.max(1, Math.min(MAX_MULTITAP_PLAYERS, props.players ?? 1));
-  const engineUrl = () => ENGINE_URL[chooseEngine(players()).engine];
+  // ★ Snapshot ONCE, at mount, and render it as a plain string.
+  //
+  // A REACTIVE iframe src is not equivalent to a static one: Solid re-sets the
+  // attribute, and re-setting an iframe's src reloads the frame. If that lands
+  // after play-booted, startBridge is left holding the outputCanvas of a
+  // DESTROYED document, so every synthetic key is dispatched into a detached
+  // element. The pad still registers and focus still reads "iframe" — the game
+  // just never receives anything. main has a static src, which is why main
+  // works. The count cannot change while the app is open (it is chosen on the
+  // PS2 home screen), so there is nothing to be reactive about.
+  const engineSrc = ENGINE_URL[chooseEngine(Math.max(1, Math.min(MAX_MULTITAP_PLAYERS, props.players ?? 1))).engine];
   const [mtInfo, setMtInfo] = createSignal("");
   const [linkBlock, setLinkBlock] = createSignal<"permission" | "missing" | null>(null);
   const [disc, setDisc] = createSignal<File | null>(null);
@@ -171,7 +182,11 @@ export default function Ps2(props: {
         releaseLock ??= holdWakeLock();
         // Play! registers its key listeners ON the canvas element (not the
         // document), so the bridge must dispatch straight onto it.
-        startBridge(frame.contentDocument?.getElementById("outputCanvas") ?? frame.contentDocument, () => {}, PS2_CONFIG);
+        const canvas = frame.contentDocument?.getElementById("outputCanvas");
+        // If this ever binds to anything but the live canvas, keys vanish into
+        // the parent document and the game looks dead while input "works".
+        logInput(canvas ? "bridge -> outputCanvas" : "bridge -> NO CANVAS (keys will not reach the game)");
+        startBridge(canvas ?? frame.contentDocument, () => {}, PS2_CONFIG);
         frame.contentWindow?.focus();
         // auto-save the memory card every 15s so progress survives a reload
         saveTimer = setInterval(requestSave, 15_000);
@@ -291,7 +306,7 @@ export default function Ps2(props: {
             ref={frame}
             class="ps2-frame"
             classList={{ live: stage() === "playing" }}
-            src={engineUrl()}
+            src={engineSrc}
             allow="autoplay; fullscreen; gamepad; cross-origin-isolated"
             title="PlayStation 2"
           />

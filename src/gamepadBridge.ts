@@ -164,6 +164,7 @@ const down = new Set<string>(); // key-source ids currently held (btn "b12", axi
 // to one specific gamepad index so the *other* controller (driving port 2 via
 // the injector) never bleeds into player 1. null = default auto-pick behaviour.
 import { pickPad } from "./padPick";
+import { logInput } from "./inputLog";
 let primaryIndex: number | null = null;
 export function setPrimaryIndex(index: number | null) { primaryIndex = index; }
 
@@ -182,6 +183,7 @@ function primaryPad(pads: Gamepad[]): Gamepad | null {
 }
 
 function fire(type: "keydown" | "keyup", d: KeyDef) {
+  logInput(`${type === "keydown" ? "\u2193" : "\u2191"} ${d.key} -> emulator`);
   for (const t of targets) {
     // location matters: js-dos distinguishes left/right modifiers by it
     const ev = new KeyboardEvent(type, { key: d.key, code: d.code, location: d.loc ?? 0, bubbles: true, cancelable: true, composed: true });
@@ -225,7 +227,8 @@ function loop() {
   if (paused) return;
   const pads = allPads();
   const p = pickPad(pads, primaryIndex);
-  if (!p) return;
+  if (!p) { logInput(`no pad (browser reports ${pads.length})`); return; }
+  logInput(`pad #${p.index} active${primaryIndex != null ? ` (locked to #${primaryIndex})` : ""}`);
   const qb = cfg.quitButton === undefined ? QUIT_BTN : cfg.quitButton;
   if (qb !== null) {
     const q = btnPressed(p, qb);
@@ -255,6 +258,7 @@ export function startBridge(target: EventTarget | null, quit: () => void, config
   // so without this a lock set in one app (PS2 couch co-op, retro co-op) leaks
   // into the next game the user opens.
   primaryIndex = null;
+  logInput("bridge started");
   if (!targets.length) claimPad(true); // the game owns the pad — no app-key synthesis
   // ONE dispatch per event, on the deepest target — it bubbles to document and
   // window anyway. The old [target, document] pair delivered every key TWICE to

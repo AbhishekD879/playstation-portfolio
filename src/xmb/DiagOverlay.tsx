@@ -6,6 +6,7 @@
 // round-trip to the frame — that used to silently fail on mobile). "share log"
 // uploads the trace to our worker and shows a 6-char code to read it back.
 import { For, Show, createSignal, onCleanup, onMount } from "solid-js";
+import { clearInput, subscribeInput, type InputEvent } from "../inputLog";
 
 export type DiagSnap = {
   source: string; up: number; scene: string; spinner: boolean; booted: boolean; canvas: boolean;
@@ -30,6 +31,10 @@ export default function DiagOverlay(props: {
   const [dumpText, setDumpText] = createSignal("");     // copy-box fallback
   const [shareCode, setShareCode] = createSignal("");   // code after uploading
   const [shareState, setShareState] = createSignal<"" | "busy" | "error">("");
+  // Parent-side input trace. The frame's log covers the emulator; this covers
+  // what the gamepad bridge saw and dispatched — the half you cannot otherwise
+  // observe when "the controller does nothing".
+  const [inputs, setInputs] = createSignal<InputEvent[]>([]);
 
   onMount(() => {
     const onMsg = (e: MessageEvent) => {
@@ -46,7 +51,7 @@ export default function DiagOverlay(props: {
   const clean = () => { const d = diag(); return d && d.errors.length === 0 && stuck().length === 0 && d.recent.length === 0; };
 
   // wipe the in-frame trace buffers so the next thing you do shows a clean run.
-  const clearDiag = () => { send({ __rpgmDiagClear: true }); setDiag(null); setDumpText(""); setShareCode(""); setShareState(""); };
+  const clearDiag = () => { send({ __rpgmDiagClear: true }); setDiag(null); setDumpText(""); setShareCode(""); setShareState(""); clearInput(); };
   const toggleVerbose = () => { const v = !verbose(); setVerbose(v); send({ __rpgmDiagVerbose: v }); };
 
   // Build the log from the data we ALREADY have (the live snapshots) — no
@@ -57,6 +62,11 @@ export default function DiagOverlay(props: {
     const L: string[] = ["=== DIAG ===", `target: ${props.label}`];
     L.push(`scene ${d.scene || "?"} · up ${Math.round(d.up / 1000)}s · ok ${d.counts.ok} / fail ${d.counts.fail} · booted ${d.booted}`);
     L.push(`ua: ${navigator.userAgent}`);
+    const inp = inputs();
+    if (inp.length) {
+      L.push("", "-- INPUT (parent) --");
+      inp.forEach((e) => L.push(`  ${(e.t / 1000).toFixed(1)}s ${e.msg}${e.n > 1 ? ` x${e.n}` : ""}`));
+    }
     if (d.errors.length) { L.push("", "-- ERRORS --"); d.errors.forEach((e) => L.push(`  ! ${e.msg}${e.at ? ` (${e.at})` : ""}`)); }
     if (d.recent.length) { L.push("", "-- FAILED LOADS --"); d.recent.forEach((r) => L.push(`  x ${r.path} · ${String(r.status)}`)); }
     const xf = d.xfer ?? [];
@@ -137,6 +147,21 @@ export default function DiagOverlay(props: {
             <div class="rpg-diag-row">▶ {x.m}{x.n && x.n > 1 ? ` ×${x.n}` : ""}</div>
           )}</For>
         </Show>
+        <div class="rpg-diag-sec">Controller &amp; keys (this page)</div>
+        <Show when={inputs().length > 0} fallback={
+          <div class="rpg-diag-row dim">
+            nothing yet — press a button on your controller. If this stays empty while the
+            emulator is running, the bridge is not seeing your pad at all.
+          </div>
+        }>
+          <For each={inputs()}>{(e) => (
+            <div class="rpg-diag-row">
+              <span class="rpg-diag-t">{(e.t / 1000).toFixed(1)}s</span>
+              {e.msg}{e.n > 1 && <b> ×{e.n}</b>}
+            </div>
+          )}</For>
+        </Show>
+
         <Show when={(diag()?.activity?.length ?? 0) > 0}>
           <div class="rpg-diag-sec">Recent activity (newest first)</div>
           <For each={diag()!.activity}>{(a) => (

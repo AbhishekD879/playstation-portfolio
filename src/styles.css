@@ -4228,3 +4228,6 @@ img.status-avatar, img.ptile-avatar { object-fit: cover; border: 1px solid rgba(
 .probe-v b.bad { color: #ff8a5c; }
 .probe-hint b { color: rgba(255,255,255,0.72); font-weight: 500; }
 .probe-hint i { color: rgba(255,255,255,0.72); font-style: normal; }
+.rpg-diag-row.dim { color: rgba(255,255,255,0.42); font-style: normal; }
+.rpg-diag-t { display: inline-block; min-width: 46px; color: rgba(255,255,255,0.34); font-variant-numeric: tabular-nums; }
+.rpg-diag-row b { color: #7ee787; font-weight: 600; }
