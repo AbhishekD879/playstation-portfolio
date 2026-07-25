@@ -209,7 +209,16 @@ export class SignalRoom {
       let m: any;
       try { m = JSON.parse(evt.data as string); } catch { return; }
 
-      if (m.t === "ping") { send(ws, { t: "pong" }); return; } // keepalive — keeps an idle signaling socket from being closed
+      if (m.t === "ping") {
+        send(ws, { t: "pong" }); // keepalive — keeps an idle signaling socket from being closed
+        // …and doubles as the directory heartbeat. The Directory DO can be
+        // evicted at any time; without this a room stays alive but silently
+        // drops off the lobby, which reads as "nobody is hosting".
+        if (role === "host" && this.code && this.listing) {
+          void this.dir("/reg", { code: this.code, ...this.listing, seats: this.joiners.size, max: this.max });
+        }
+        return;
+      }
 
       if (m.t === "host") {
         if (this.host && this.host !== ws) return send(ws, { t: "error", msg: "room already hosted" });
@@ -217,8 +226,10 @@ export class SignalRoom {
         // cap 7 joiners (8 players): fine for data-only games like CS 1.6; the
         // heavier PS2 video host requests its own smaller max, unaffected.
         this.max = Math.max(1, Math.min(7, Number(m.max) || 1));
-        // Opt-in only: a host that doesn't send `listing` is never advertised.
-        if (m.listing && typeof m.listing.title === "string") {
+        // Opt-in only: a host that doesn't send `listing` is never advertised —
+        // and neither is a one-seat room, which can only ever render as "Full".
+        // Advertising something nobody can join is worse than not listing it.
+        if (m.listing && typeof m.listing.title === "string" && this.max >= 2) {
           this.code = String(m.room || "").toUpperCase().slice(0, 8);
           this.listing = { title: String(m.listing.title).slice(0, 60), kind: String(m.listing.kind || "").slice(0, 24) };
           if (this.code) void this.dir("/reg", { code: this.code, ...this.listing, seats: this.joiners.size, max: this.max });
@@ -272,17 +283,48 @@ export class SignalRoom {
 // tail of what was on recently so the channel is never empty. In memory only:
 // a live room is by definition a thing with open sockets, so there is nothing
 // worth surviving an eviction — and a stale "live" entry is worse than none.
-interface LiveRoom { code: string; title: string; kind: string; since: number; watchers: number; seats: number; max: number }
+interface LiveRoom { code: string; title: string; kind: string; since: number; seen: number; watchers: number; seats: number; max: number }
 const RECENT_KEEP = 8;
-const STALE_MS = 6 * 3600 * 1000; // a room open >6h is almost certainly a leak
+// A host re-registers on its 25s keepalive, so anything unheard-from for three
+// missed beats is gone. Short TTL only works *because* of that heartbeat —
+// without it this would delist healthy rooms.
+const STALE_MS = 80_000;
+// "Recently on" has to actually mean recently. Without this the channel would
+// still be advertising last week's session as if you could tune into it.
+const RECENT_MS = 3 * 3600 * 1000;
+// Bumped whenever the stored shape changes — or when the stored contents are
+// known-bad and should not be rehydrated. A mismatch wipes and starts clean.
+const SCHEMA = 3;
 
 export class Directory {
   live = new Map<string, LiveRoom>();
   recent: { title: string; kind: string; at: number }[] = [];
+  private store: any;
+  private loaded = false;
 
-  constructor(_state: any, _env: Env) {}
+  constructor(state: any, _env: Env) { this.store = state?.storage; }
+
+  // This DO is a singleton with no request of its own, so the runtime is free
+  // to evict it between a host registering and a player browsing. Losing the
+  // map that way looked exactly like "nobody is hosting yet".
+  private async hydrate() {
+    if (this.loaded) return;
+    this.loaded = true;
+    try {
+      if ((await this.store?.get("schema")) !== SCHEMA) {
+        await this.store?.deleteAll();
+        await this.store?.put("schema", SCHEMA);
+        return;
+      }
+      const saved = await this.store?.get("live");
+      if (saved) for (const r of saved as LiveRoom[]) this.live.set(r.code, r);
+      const rec = await this.store?.get("recent");
+      if (rec) this.recent = rec as typeof this.recent;
+    } catch { /* first boot, or storage unavailable — an empty list is correct */ }
+  }
 
   async fetch(request: Request): Promise<Response> {
+    await this.hydrate();
     const path = new URL(request.url).pathname;
     const body: any = path === "/list" ? {} : await request.json().catch(() => ({}));
     const code = String(body.code || "");
@@ -292,8 +334,11 @@ export class Directory {
         code,
         title: String(body.title || "Something").slice(0, 60),
         kind: String(body.kind || "").slice(0, 24),
-        since: Date.now(),
-        watchers: 0,
+        // re-registering is a heartbeat, not a new room: keep the original
+        // start time so the lobby's "12m ago" stays honest.
+        since: this.live.get(code)?.since ?? Date.now(),
+        seen: Date.now(),
+        watchers: this.live.get(code)?.watchers ?? 0,
         // Capacity, so the lobby can say "2 of 6" and grey out a full room
         // rather than letting someone click into a rejection.
         seats: Math.max(0, Number(body.seats) || 0),
@@ -317,7 +362,24 @@ export class Directory {
 
     // sweep on every touch — cheap, and keeps a crashed host from haunting the list
     const cutoff = Date.now() - STALE_MS;
-    for (const [k, v] of this.live) if (v.since < cutoff) this.live.delete(k);
+    let swept = false;
+    for (const [k, v] of this.live) {
+      if ((v.seen ?? v.since) < cutoff) { this.live.delete(k); swept = true; }
+    }
+    const before = this.recent.length;
+    this.recent = this.recent.filter((r) => r.at > Date.now() - RECENT_MS);
+    if (this.recent.length !== before) swept = true;
+
+    // A sweep has to reach storage too. Dropping a dead room from memory only
+    // means the next eviction rehydrates the corpse — it would be re-swept on
+    // read, so the lobby stays right, but storage would fill with rooms that
+    // ended weeks ago.
+    if (path !== "/list" || swept) {
+      try {
+        await this.store?.put("live", [...this.live.values()]);
+        await this.store?.put("recent", this.recent);
+      } catch { /* best-effort: an unpersisted list still serves this instance */ }
+    }
 
     return new Response(
       JSON.stringify({ live: [...this.live.values()].sort((a, b) => b.since - a.since), recent: this.recent }),
