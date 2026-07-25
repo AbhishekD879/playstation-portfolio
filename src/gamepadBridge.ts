@@ -163,8 +163,11 @@ const down = new Set<string>(); // key-source ids currently held (btn "b12", axi
 // Normally port 0 auto-picks the primary pad. Local 2-player co-op LOCKS port 0
 // to one specific gamepad index so the *other* controller (driving port 2 via
 // the injector) never bleeds into player 1. null = default auto-pick behaviour.
+import { pickPad } from "./padPick";
 let primaryIndex: number | null = null;
 export function setPrimaryIndex(index: number | null) { primaryIndex = index; }
+
+
 
 function allPads(): Gamepad[] {
   return [...(navigator.getGamepads?.() ?? [])].filter((p): p is Gamepad => !!p && p.connected !== false);
@@ -221,7 +224,7 @@ function loop() {
   raf = requestAnimationFrame(loop);
   if (paused) return;
   const pads = allPads();
-  const p = primaryIndex != null ? (pads.find((x) => x.index === primaryIndex) ?? null) : primaryPad(pads);
+  const p = pickPad(pads, primaryIndex);
   if (!p) return;
   const qb = cfg.quitButton === undefined ? QUIT_BTN : cfg.quitButton;
   if (qb !== null) {
@@ -248,6 +251,10 @@ function loop() {
 export function startBridge(target: EventTarget | null, quit: () => void, config: BridgeConfig = DEFAULT_CONFIG) {
   onQuit = quit;
   cfg = config;
+  // A fresh session never inherits a co-op lock. primaryIndex is module state,
+  // so without this a lock set in one app (PS2 couch co-op, retro co-op) leaks
+  // into the next game the user opens.
+  primaryIndex = null;
   if (!targets.length) claimPad(true); // the game owns the pad — no app-key synthesis
   // ONE dispatch per event, on the deepest target — it bubbles to document and
   // window anyway. The old [target, document] pair delivered every key TWICE to
