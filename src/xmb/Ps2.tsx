@@ -37,9 +37,12 @@ export default function Ps2(props: {
   // out of every default path until it is proven, by me, against a real game —
   // not shipped for someone else to discover. Reach it with ?engine=multitap.
   // Everything else here is main's, unchanged.
-  const engineSrc = new URLSearchParams(location.search).get("engine") === "multitap"
-    ? "/play-mt/index.html"
-    : "/play/index.html";
+  const q = new URLSearchParams(location.search);
+  const engineSrc = q.get("engine") === "multitap" ? "/play-mt/index.html" : "/play/index.html";
+  // Player count comes from the URL too, never the UI. The experiment has to be
+  // runnable to be finished, but it must not be reachable by accident: a normal
+  // boot is 1 player on the stock engine, byte-identical to main.
+  const urlPlayers = Math.max(1, Math.min(6, Number(q.get("players")) || 1));
   const [mtInfo, setMtInfo] = createSignal("");
   const [linkBlock, setLinkBlock] = createSignal<"permission" | "missing" | null>(null);
   const [disc, setDisc] = createSignal<File | null>(null);
@@ -223,7 +226,7 @@ export default function Ps2(props: {
 
   function bootNow(f: File) {
     pending = null;
-    frame.contentWindow?.postMessage({ type: "play-boot", file: f, saveKey }, location.origin);
+    frame.contentWindow?.postMessage({ type: "play-boot", file: f, saveKey, players: urlPlayers }, location.origin);
   }
 
   function insert(f: File) {
