@@ -38,11 +38,16 @@ export default function Ps2(props: {
   // not shipped for someone else to discover. Reach it with ?engine=multitap.
   // Everything else here is main's, unchanged.
   const q = new URLSearchParams(location.search);
-  const engineSrc = q.get("engine") === "multitap" ? "/play-mt/index.html" : "/play/index.html";
+  // Snapshotted ONCE, rendered as a plain string. A reactive iframe src re-sets
+  // the attribute, which reloads the frame and strands the bridge on a canvas
+  // from a destroyed document.
+  const engineSrc = (Number(q.get("players")) || props.players || 1) > 2 || q.get("engine") === "multitap"
+    ? "/play-mt/index.html" : "/play/index.html";
   // Player count comes from the URL too, never the UI. The experiment has to be
   // runnable to be finished, but it must not be reachable by accident: a normal
   // boot is 1 player on the stock engine, byte-identical to main.
-  const urlPlayers = Math.max(1, Math.min(6, Number(q.get("players")) || 1));
+  // Prop first (the PS2 home picker), URL as an override for testing.
+  const players = () => Math.max(1, Math.min(6, Number(q.get("players")) || props.players || 1));
   const [mtInfo, setMtInfo] = createSignal("");
   const [linkBlock, setLinkBlock] = createSignal<"permission" | "missing" | null>(null);
   const [disc, setDisc] = createSignal<File | null>(null);
@@ -226,7 +231,7 @@ export default function Ps2(props: {
 
   function bootNow(f: File) {
     pending = null;
-    frame.contentWindow?.postMessage({ type: "play-boot", file: f, saveKey, players: urlPlayers }, location.origin);
+    frame.contentWindow?.postMessage({ type: "play-boot", file: f, saveKey, players: players() }, location.origin);
   }
 
   function insert(f: File) {

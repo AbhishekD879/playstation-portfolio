@@ -252,6 +252,11 @@ export default function XMB(props: {
   }) as typeof setAppRaw;
   const [ps2Boot, setPs2Boot] = createSignal<GameRecord | null>(null);
   const [ps2Join, setPs2Join] = createSignal(false);
+  // Controllers for the next PS2 disc. Lives on the PS2 HOME screen, outside the
+  // emulator component, so it is settled before the disc gesture exists. An
+  // earlier version put this in a step BETWEEN the disc and the boot, which
+  // broke player one; that space stays empty permanently.
+  const [ps2Players, setPs2Players] = createSignal(1);
   const [ccOpen, setCcOpen] = createSignal(false);
   let ccNav: ((a: Parameters<Parameters<typeof onNav>[0]>[0]) => void) | undefined;
 
@@ -2191,7 +2196,7 @@ export default function XMB(props: {
       </Show>
       <Show when={app() === "privacy"}><Privacy onClose={() => setApp(null)} /></Show>
       <Show when={app() === "watch"}><WatchParty userName={props.profile.name} onClose={() => setApp(null)} /></Show>
-      <Show when={app() === "ps2"}><Ps2 profileId={props.profile.id} initialGame={ps2Boot() ?? undefined} initialJoin={ps2Join()} onClose={() => { setPs2Boot(null); setPs2Join(false); setApp(games().some((g) => g.sys === "ps2") ? "ps2home" : null); }} /></Show>
+      <Show when={app() === "ps2"}><Ps2 profileId={props.profile.id} players={ps2Players()} initialGame={ps2Boot() ?? undefined} initialJoin={ps2Join()} onClose={() => { setPs2Boot(null); setPs2Join(false); setApp(games().some((g) => g.sys === "ps2") ? "ps2home" : null); }} /></Show>
       <Show when={app() === "pc"}><PcApp onClose={() => setApp(null)} /></Show>
       <Show when={app() === "guestbook"}><Guestbook userName={props.profile.name} onClose={() => setApp(null)} /></Show>
       <Show when={app() === "browser"}><Browser onClose={() => setApp(null)} /></Show>
