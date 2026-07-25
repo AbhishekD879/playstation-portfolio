@@ -427,6 +427,22 @@ export async function wikiPage(title: string): Promise<WikiPage> {
   };
 }
 
+/** Resolve a free-typed person's name to a Wikipedia page WITH a photo. Tries the
+ *  name directly, then a search, returning the first hit that has a thumbnail (so
+ *  the Celebrity party game gets a real portrait). null if nothing usable. */
+export async function wikiPerson(name: string): Promise<WikiPage | null> {
+  const q = name.trim();
+  if (!q) return null;
+  try { const p = await wikiPage(q); if (p.thumb) return p; } catch { /* try search */ }
+  try {
+    const hits = await wikiSearch(q);
+    for (const h of hits.slice(0, 4)) {
+      try { const p = await wikiPage(h.title); if (p.thumb) return p; } catch { /* next */ }
+    }
+  } catch { /* give up → no photo */ }
+  return null;
+}
+
 // —— planet earth layers ——
 export interface Quake { mag: number; place: string; lat: number; lon: number; time: number }
 export function fetchQuakes(): Promise<Quake[]> {

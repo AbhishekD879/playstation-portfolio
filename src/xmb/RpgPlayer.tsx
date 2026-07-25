@@ -5,7 +5,7 @@
 // A diagnostics overlay listens for the diag shim the service worker injects
 // into the game (errors + stuck/failed asset loads) so a hang is legible even
 // on mobile where there's no console.
-import { Show, createSignal, onCleanup, onMount } from "solid-js";
+import { For, Show, createSignal, onCleanup, onMount } from "solid-js";
 import * as sfx from "../audio";
 import type { NavAction } from "../input";
 import { holdWakeLock } from "../wakelock";
@@ -27,6 +27,9 @@ export default function RpgPlayer(props: {
   const canTrain = engineKind(props.game.engine) === "html5";
   const [showPad, setShowPad] = createSignal(false);
   const [barShown, setBarShown] = createSignal(true);
+  const [sheetOpen, setSheetOpen] = createSignal(false); // touch: the single game menu
+  const [stateMsg, setStateMsg] = createSignal("");       // save/load toast
+  const [hasState, setHasState] = createSignal(false);    // a quick-save exists to load
   // media probe: "" = fine · "gesture" = needs one real tap in the game frame
   // (autoplay blocked — synthetic pad keys carry no user activation) · else an
   // error string to show (e.g. Safari can't decode .webm movies)
@@ -88,6 +91,69 @@ export default function RpgPlayer(props: {
     exitFullscreen();
     props.onClose();
   }
+
+  // ——— Save state (MV/MZ only) ———
+  // These engines ARE JavaScript and expose their whole runtime as globals in
+  // our same-origin iframe, so we drive their OWN save system — DataManager
+  // .saveGame/.loadGame into a dedicated slot, clear of the game's manual saves.
+  // Not an emulator memory snapshot; it's the engine's real save, which is what
+  // "save anywhere" means for RPG Maker. MV returns bool, MZ returns a Promise —
+  // Promise.resolve() normalises both. Gated by canTrain (engineKind "html5").
+  const QUICK_SLOT = 99;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const rpgWin = () => (frame?.contentWindow as any) ?? null;
+  const gameReady = () => { const w = rpgWin(); return !!(w?.DataManager && w.$gameParty?.members?.().length); };
+  const refreshHasState = () => {
+    const w = rpgWin(); if (!w) return;
+    try {
+      if (w.DataManager?.savefileExists) setHasState(!!w.DataManager.savefileExists(QUICK_SLOT));   // MZ
+      else if (w.StorageManager?.exists) setHasState(!!w.StorageManager.exists(QUICK_SLOT));         // MV
+    } catch { /* game not booted yet */ }
+  };
+  const flashState = (m: string) => { setStateMsg(m); setTimeout(() => setStateMsg(""), 2200); };
+  function quickSave() {
+    const w = rpgWin();
+    if (!gameReady()) { flashState("Start or load a game first"); sfx.deny(); return; }
+    try {
+      w.$gameSystem?.onBeforeSave?.();                    // records playtime + the BGM/BGS to restore on load
+      Promise.resolve(w.DataManager.saveGame(QUICK_SLOT))
+        .then((r: unknown) => { if (r === false) throw 0; sfx.confirm(); flashState("✓ State saved"); refreshHasState(); })
+        .catch(() => { sfx.deny(); flashState("Save failed"); });
+    } catch { sfx.deny(); flashState("Save failed"); }
+  }
+  function quickLoad() {
+    const w = rpgWin();
+    if (!w?.DataManager) { flashState("Start the game first"); sfx.deny(); return; }
+    try {
+      Promise.resolve(w.DataManager.loadGame(QUICK_SLOT))
+        .then((r: unknown) => {
+          if (r === false) throw 0;                        // MV: false = no/invalid file
+          w.$gameSystem?.onAfterLoad?.();
+          w.SceneManager.goto(w.Scene_Map);
+          const sys = w.$gameSystem;                       // resume the music that was playing at save time
+          if (sys && w.AudioManager) { if (sys._bgmOnSave) w.AudioManager.playBgm(sys._bgmOnSave); if (sys._bgsOnSave) w.AudioManager.playBgs(sys._bgsOnSave); }
+          sfx.confirm(); flashState("✓ State loaded");
+        })
+        .catch(() => { sfx.deny(); flashState("No saved state yet"); });
+    } catch { sfx.deny(); flashState("Load failed"); }
+  }
+
+  // ONE action list → rendered as the desktop top bar AND the touch menu sheet,
+  // so there's a single source of truth and no button drift between them.
+  type MenuItem = { id: string; ico: string; label: string; on?: boolean; show: boolean; danger?: boolean; run: () => void };
+  const menuItems = (): MenuItem[] => [
+    { id: "save", ico: "💾", label: "Save state", show: canTrain, run: quickSave },
+    { id: "load", ico: "↺", label: "Load state", show: canTrain && hasState(), run: quickLoad },
+    { id: "controls", ico: "🎮", label: showPad() ? "Hide controls" : "On-screen controls", on: showPad(), show: true, run: () => setShowPad((v) => !v) },
+    { id: "trainer", ico: "✨", label: "Trainer", on: showTrainer(), show: canTrain, run: () => { setShowTrainer((v) => !v); setShowDiag(false); } },
+    { id: "fs", ico: "⛶", label: "Full screen", show: true, run: goFullscreen },
+    { id: "diag", ico: "🩺", label: "Diagnostics", on: showDiag(), show: true, run: () => { setShowDiag((v) => !v); setShowTrainer(false); } },
+    { id: "quit", ico: "✕", label: "Quit game", show: true, danger: true, run: quit },
+  ];
+  // Save keeps the sheet open (so the toast shows + Load appears); everything
+  // else closes it — the overlays it opens (pad/trainer/diag) need the screen.
+  const runFromSheet = (it: MenuItem) => { it.run(); if (it.id !== "save") setSheetOpen(false); };
+  const openSheet = () => { refreshHasState(); setSheetOpen(true); };
 
   // Send a real key event INTO the same-origin game iframe — its own key
   // listeners fire on synthetic events. Built with the IFRAME's KeyboardEvent
@@ -226,26 +292,49 @@ export default function RpgPlayer(props: {
         <div class="rpgplay-bar" classList={{ show: barShown() }}>
           <div class="panel-tag">{props.game.title.toUpperCase()}{props.sublabel ? ` · ${props.sublabel}` : ""}</div>
           <div class="rpgplay-actions">
-            <button class="ps-act" classList={{ on: showPad() }} onClick={() => { setShowPad((v) => !v); flashBar(); }}>⌨ controls</button>
-            <Show when={canTrain}>
-              <button class="ps-act" classList={{ on: showTrainer() }} onClick={() => { setShowTrainer((v) => !v); setShowDiag(false); flashBar(); }}>✨ trainer</button>
-            </Show>
-            <button class="ps-act" onClick={() => { setShowDiag((v) => !v); setShowTrainer(false); flashBar(); }}>diagnostics</button>
-            <button class="ps-act" onClick={goFullscreen}>full screen</button>
-            <button class="ps-act" onClick={quit}><span class="btn-o" /> quit</button>
+            <For each={menuItems().filter((m) => m.show)}>
+              {(it) => (
+                <button class="ps-act" classList={{ on: !!it.on }} onClick={() => { it.run(); flashBar(); }}>
+                  {it.ico} {it.label}
+                </button>
+              )}
+            </For>
           </div>
         </div>
       </Show>
 
-      {/* touch: a clear, always-there floating toggle for the on-screen controls
-          (one tap, over a full-screen game — no reserved bar, no tiny handle).
-          Hidden on desktop via CSS, where the bar's ⌨ button is used instead. */}
+      {/* save/load feedback — works on desktop and touch */}
+      <Show when={stateMsg()}>
+        <div class="rpgplay-toast">{stateMsg()}</div>
+      </Show>
+
+      {/* touch: ONE bottom-thumb button opens a vertical menu sheet with every
+          game action (save · load · controls · trainer · full screen ·
+          diagnostics · quit). Replaces the old two-FAB + cramped top-bar combo —
+          one obvious control over a full-screen game. Hidden on desktop, which
+          keeps the top bar. */}
       <Show when={phase() === "ready"}>
-        <button class="rpgplay-padfab" classList={{ on: showPad() }}
-          onClick={() => { setShowPad((v) => !v); sfx.tickV(); }}
-          aria-label="Show or hide the on-screen controls">
-          <span class="padfab-ico">🎮</span>{showPad() ? "hide" : "controls"}
+        <button class="rpgplay-menufab" classList={{ on: sheetOpen() }}
+          onClick={() => { sheetOpen() ? setSheetOpen(false) : openSheet(); sfx.tickV(); }}
+          aria-label="Game menu">
+          <span class="padfab-ico">☰</span>{sheetOpen() ? "close" : "menu"}
         </button>
+      </Show>
+
+      <Show when={sheetOpen() && phase() === "ready"}>
+        <div class="rpgplay-sheet-scrim" onClick={() => setSheetOpen(false)} />
+        <div class="rpgplay-sheet">
+          <div class="rpgplay-sheet-title">{props.game.title}</div>
+          <For each={menuItems().filter((m) => m.show)}>
+            {(it) => (
+              <button class="rpgplay-sheet-row" classList={{ on: !!it.on, danger: !!it.danger }} onClick={() => runFromSheet(it)}>
+                <span class="rpgplay-sheet-ico">{it.ico}</span>
+                <span class="rpgplay-sheet-lbl">{it.label}</span>
+                <Show when={it.on}><span class="rpgplay-sheet-dot" /></Show>
+              </button>
+            )}
+          </For>
+        </div>
       </Show>
 
       {/* on-screen controls — send keys into games that expect a keyboard */}

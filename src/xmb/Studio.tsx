@@ -7,6 +7,7 @@ import { For, Show, createSignal, onCleanup, onMount } from "solid-js";
 import { audioContext, masterBus } from "../audio";
 import { setNavEnabled } from "../input";
 import * as sfx from "../audio";
+import { LESSONS, PracticeRun, type Lesson } from "../practice";
 
 type Wave = OscillatorType;
 const WAVES: Wave[] = ["sawtooth", "square", "triangle", "sine"];
@@ -35,6 +36,16 @@ export default function Studio(props: { onClose: () => void }) {
   const [active, setActive] = createSignal<Set<number>>(new Set()); // lit keys
   const [step, setStep] = createSignal(-1);
   const [midiName, setMidiName] = createSignal<string | null>(null);
+  // —— practice mode ——
+  const [lesson, setLesson] = createSignal<Lesson | null>(null);
+  const [pracHits, setPracHits] = createSignal(0);
+  const [pracMiss, setPracMiss] = createSignal(0);
+  const [pracDone, setPracDone] = createSignal(false);
+  const [pracPct, setPracPct] = createSignal(0);
+  let run: PracticeRun | null = null;
+  let pracStart = 0;
+  let pracRaf = 0;
+  let roll: HTMLCanvasElement | undefined;
   // drum grid: DRUMS × STEPS booleans
   const [grid, setGrid] = createSignal<boolean[][]>(
     DRUMS.map((_, r) => Array.from({ length: STEPS }, () => r === 2 && false)),
@@ -46,8 +57,84 @@ export default function Studio(props: { onClose: () => void }) {
   let seqTimer: ReturnType<typeof setInterval> | null = null;
   let midiAccess: any = null;
 
+  // —— practice mode ————————————————————————————————————————————————————
+  // Notes fall toward a line at the bottom; play each one as it lands. A three
+  // second lead-in means the first note isn't already on top of you.
+  const LEAD = 3;
+  const FALL = 3.2; // seconds of music visible on screen at once
+
+  function startLesson(l: Lesson) {
+    stopLesson();
+    setLesson(l);
+    run = new PracticeRun(l);
+    setPracHits(0); setPracMiss(0); setPracDone(false); setPracPct(0);
+    pracStart = performance.now() + LEAD * 1000;
+    const loop = () => {
+      pracRaf = requestAnimationFrame(loop);
+      const now = (performance.now() - pracStart) / 1000;
+      if (run) {
+        run.tick(now);
+        setPracMiss(run.misses);
+        if (run.done && !pracDone()) { setPracPct(run.percent); setPracDone(true); sfx.confirm(); }
+      }
+      drawRoll(now);
+    };
+    pracRaf = requestAnimationFrame(loop);
+    sfx.confirm();
+  }
+
+  function stopLesson() {
+    cancelAnimationFrame(pracRaf);
+    run = null;
+    setLesson(null); setPracDone(false);
+  }
+
+  function drawRoll(now: number) {
+    const c = roll;
+    const l = lesson();
+    if (!c || !l || !run) return;
+    const w = c.width, h = c.height;
+    const g = c.getContext("2d");
+    if (!g) return;
+    g.clearRect(0, 0, w, h);
+
+    const LO = 60, HI = 74;                 // Studio's two octaves
+    const colW = w / (HI - LO + 1);
+    const hitY = h - 26;
+    const tint = getComputedStyle(document.documentElement).getPropertyValue("--xmb-tint").trim() || "#4a7fc8";
+
+    // lane guides, with the naturals lighter so the shape of the keyboard reads
+    for (let m = LO; m <= HI; m++) {
+      const sharp = [1, 3, 6, 8, 10].includes(((m % 12) + 12) % 12);
+      g.fillStyle = sharp ? "rgba(255,255,255,0.02)" : "rgba(255,255,255,0.045)";
+      g.fillRect((m - LO) * colW, 0, colW - 1, hitY);
+    }
+
+    // the hit line
+    g.strokeStyle = "rgba(255,255,255,0.35)";
+    g.lineWidth = 1;
+    g.beginPath(); g.moveTo(0, hitY); g.lineTo(w, hitY); g.stroke();
+
+    for (let i = 0; i < l.notes.length; i++) {
+      const n = l.notes[i];
+      const dt = n.at - now;                 // >0 = still falling
+      if (dt > FALL || dt < -0.6) continue;  // off-screen either side
+      const y = hitY - (dt / FALL) * hitY;
+      const nh = Math.max(8, (n.len / FALL) * hitY);
+      const st = run.states[i];
+      g.fillStyle = st === "hit" ? tint : st === "missed" ? "rgba(255,120,90,0.35)" : "rgba(255,255,255,0.75)";
+      g.fillRect((n.midi - LO) * colW + 2, y - nh, colW - 5, nh);
+    }
+  }
+
   // —— synth voices ——
   function noteOn(midi: number) {
+    // Every input route — on-screen keys, computer keyboard, MIDI, gamepad —
+    // lands here, so practice only has to hook this one function.
+    if (run && !pracDone()) {
+      run.play(midi, (performance.now() - pracStart) / 1000);
+      setPracHits(run.hits); setPracMiss(run.misses);
+    }
     if (voices.has(midi)) return;
     const t = ctx.currentTime;
     const osc = ctx.createOscillator();
@@ -201,6 +288,36 @@ export default function Studio(props: { onClose: () => void }) {
               </div>
             )}
           </For>
+        </div>
+
+        {/* practice — falling notes over the same keyboard */}
+        <div class="studio-practice">
+          <Show
+            when={lesson()}
+            fallback={
+              <div class="prac-pick">
+                <span class="prac-label">LEARN A TUNE</span>
+                <For each={LESSONS}>
+                  {(l) => (
+                    <button class="ps-act" onClick={() => startLesson(l)}>
+                      <span class="btn-x" /> {l.name}<i>{l.sub}</i>
+                    </button>
+                  )}
+                </For>
+              </div>
+            }
+          >
+            <div class="prac-head">
+              <span class="prac-name">{lesson()!.name}</span>
+              <span class="prac-score">{pracHits()}<i>/{lesson()!.notes.length}</i></span>
+              <Show when={pracMiss() > 0}><span class="prac-miss">{pracMiss()} missed</span></Show>
+              <Show when={pracDone()}>
+                <span class="prac-done">{pracPct()}% — {pracPct() >= 90 ? "nailed it" : pracPct() >= 60 ? "nice" : "again?"}</span>
+              </Show>
+              <button class="ps-act" onClick={stopLesson}><span class="btn-o" /> stop</button>
+            </div>
+            <canvas class="prac-roll" ref={roll} width={900} height={200} />
+          </Show>
         </div>
 
         {/* synth keyboard */}

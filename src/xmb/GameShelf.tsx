@@ -6,6 +6,7 @@
 import { For, Show, createSignal, onCleanup, onMount } from "solid-js";
 import { CORE_NAMES, coverCandidates, fsAccessSupported, isLinked, relinkGame, removeGame, saveCover, type GameRecord, type GameSystem } from "../gamesdb";
 import type { NavAction } from "../input";
+import { generateCover } from "../covers";
 import * as sfx from "../audio";
 import TileGrid, { COLS } from "./TileGrid";
 
@@ -36,7 +37,14 @@ export default function GameShelf(props: {
     if (g.cover) { setCovers((c) => ({ ...c, [g.id]: g.cover! })); return; }
     const urls = coverCandidates(g);
     const tryNext = (list: string[]) => {
-      if (!list.length) return;
+      if (!list.length) {
+        // no real boxart exists for this dump — draw one from the title so the
+        // shelf never shows a blank tile (deterministic, offline, instant)
+        const art = generateCover(g.name, CORE_NAMES[g.sys ?? g.core] ?? "");
+        setCovers((c) => ({ ...c, [g.id]: art }));
+        saveCover(g.id, art);
+        return;
+      }
       const img = new Image();
       img.onload = () => { setCovers((c) => ({ ...c, [g.id]: list[0] })); saveCover(g.id, list[0]); };
       img.onerror = () => tryNext(list.slice(1));

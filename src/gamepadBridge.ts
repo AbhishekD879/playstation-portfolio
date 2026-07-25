@@ -160,6 +160,12 @@ let targets: EventTarget[] = [];
 let onQuit: (() => void) | null = null;
 const down = new Set<string>(); // key-source ids currently held (btn "b12", axis "a0-")
 
+// Normally port 0 auto-picks the primary pad. Local 2-player co-op LOCKS port 0
+// to one specific gamepad index so the *other* controller (driving port 2 via
+// the injector) never bleeds into player 1. null = default auto-pick behaviour.
+let primaryIndex: number | null = null;
+export function setPrimaryIndex(index: number | null) { primaryIndex = index; }
+
 function allPads(): Gamepad[] {
   return [...(navigator.getGamepads?.() ?? [])].filter((p): p is Gamepad => !!p && p.connected !== false);
 }
@@ -214,7 +220,8 @@ export function setBridgePaused(on: boolean) {
 function loop() {
   raf = requestAnimationFrame(loop);
   if (paused) return;
-  const p = primaryPad(allPads());
+  const pads = allPads();
+  const p = primaryIndex != null ? (pads.find((x) => x.index === primaryIndex) ?? null) : primaryPad(pads);
   if (!p) return;
   const qb = cfg.quitButton === undefined ? QUIT_BTN : cfg.quitButton;
   if (qb !== null) {
@@ -269,4 +276,5 @@ export function stopBridge() {
   targets = [];
   onQuit = null;
   cfg = DEFAULT_CONFIG;
+  primaryIndex = null; // co-op lock never survives leaving a game
 }

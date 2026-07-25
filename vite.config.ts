@@ -16,6 +16,7 @@ const isolation = {
 
 export default defineConfig({
   plugins: [solid(), multiplayerSignaling()],
+  assetsInclude: ["**/*.pk3"], // Xash3D/CS engine asset packs imported via ?url
   // Two HTML entries: the console (index.html) and the internal /admin review
   // tool (admin.html → served by Pages at /admin). Both boot the same main.tsx,
   // which branches on location.pathname.

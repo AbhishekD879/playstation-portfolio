@@ -34,6 +34,7 @@ const FEATURE_GROUPS: FlagGroup[] = [
     group: "Controllers", icon: "gamepad", items: [
       { id: "phonepad", title: "Phone Controller", desc: "Scan a QR to use your phone as a touch gamepad" },
       { id: "dualsense", title: "DualSense (WebHID)", desc: "Lightbar, rumble & battery over USB / Bluetooth" },
+      { id: "gyroaim", title: "Motion Aiming", desc: "Tilt a connected DualSense to aim in DOOM and Counter-Strike — stick to turn, gyro to fine-tune" },
     ],
   },
   {
@@ -55,7 +56,7 @@ const FEATURE_GROUPS: FlagGroup[] = [
 ];
 
 /** Flags that ship OFF and are opted INTO via Labs (experimental tier). */
-const DEFAULT_OFF = new Set(["crt", "galaxyboot", "privacy"]); // opt-in: full-console CRT, GPU galaxy boot, hidden Privacy Toolkit
+const DEFAULT_OFF = new Set(["crt", "galaxyboot", "privacy", "cobrowse", "syscity"]); // opt-in: full-console CRT, GPU galaxy boot, hidden Privacy Toolkit, Watch Party shared browser (costs $ + needs API key), System City learning hub (in development)
 
 // —— apps (each id matches the XmbItem id it hides on the crossbar) ——
 const APPS: { id: string; title: string; cat: string }[] = [
@@ -73,6 +74,8 @@ const APPS: { id: string; title: string; cat: string }[] = [
   { id: "sp-default", title: "Spotify — lofi beats playlist", cat: "Music" },
   { id: "sp-link", title: "Spotify — connect your account", cat: "Music" },
   { id: "yt", title: "YouTube", cat: "Video" },
+  { id: "watch", title: "Watch Party (synced YouTube)", cat: "Video" },
+  { id: "cobrowse", title: "Watch Party · Shared Browser (co-browse any site)", cat: "Video" },
   { id: "videoplayer", title: "Video Player (local files)", cat: "Video" },
   { id: "ia-video", title: "Archive Cinema", cat: "Video" },
   { id: "tv-guide", title: "Channel Guide (live TV)", cat: "Video" },
@@ -87,7 +90,18 @@ const APPS: { id: string; title: string; cat: string }[] = [
   { id: "scummvm", title: "Point & Click (ScummVM)", cat: "Games" },
   { id: "rpgmaker", title: "RPG Maker (bring your own)", cat: "Games" },
   { id: "renpy", title: "Ren'Py (bring your own · experimental)", cat: "Games" },
+  { id: "godot", title: "Godot (Web export · bring your own)", cat: "Games" },
+  { id: "unity", title: "Unity (WebGL · bring your own)", cat: "Games" },
+  { id: "html5", title: "HTML5 / WebGL (bring your own)", cat: "Games" },
   { id: "lichesstv", title: "Lichess TV", cat: "Games" },
+  { id: "cs", title: "Counter-Strike 1.6 (bring your own · experimental)", cat: "Games" },
+  { id: "party", title: "Party Games (phones as controllers)", cat: "Games" },
+  { id: "retrojoin", title: "Retro netplay — join as player 2", cat: "Games" },
+  { id: "consoletv", title: "Console TV — watch what's being played live", cat: "Games" },
+  { id: "analytics", title: "Console Analytics (SQL over this console's own data)", cat: "Extras" },
+  { id: "board", title: "Board Games (online 2–4 player)", cat: "Games" },
+  { id: "voiceavatar", title: "Talk to Abhishek (voice avatar · Gemini Nano only)", cat: "Users" },
+  { id: "syscity", title: "System City (system-design learning hub)", cat: "Learn" },
   { id: "code", title: "Code Playground", cat: "Extras" },
   { id: "pc", title: "Other OS — x86 PC", cat: "Extras" },
   { id: "manual", title: "System Manual", cat: "Extras" },
@@ -283,6 +297,16 @@ APP_GUIDES.privacy = {
   what: "A curated shelf of the FREE, LEGAL & open corners of the internet — the non-piracy parts of FMHY. AI tools, legal free streaming (Tubi/Pluto/Archive), public-domain books & music, open-source games + emulator software, learning, developer & creative tools, legal downloads, and a full privacy/security set (browsers, VPNs, encrypted messengers, password managers, guides). Hidden by default; each entry opens the official site — the console stores and proxies nothing. Pirate streaming/download/torrent/ROM sites are deliberately excluded.",
   steps: ["Enable this flag, then find it: Web › Free & Open", "Browse by category", "Tap anything to open its official site in a new tab"],
   go: "app:privacy", goLabel: "OPEN IT",
+};
+APP_GUIDES.watch = {
+  what: "Watch Party — you and friends anywhere watch the SAME YouTube video in perfect sync. No video is streamed between you; everyone loads it straight from YouTube and a tiny room server just keeps playback aligned (play/pause/seek) and carries live chat, floating emoji reactions and a shared queue. First in the room hosts (controls playback); the host can hand the wheel to everyone. Nothing is recorded.",
+  steps: ["Video › Watch Party", "Start a room → share the code or the invite link", "Paste a YouTube link (or search) to play; friends join and auto-sync", "React with emoji, chat, and queue up what's next — it auto-plays"],
+  go: "app:watch", goLabel: "OPEN IT",
+};
+APP_GUIDES.cobrowse = {
+  what: "Watch Party's SHARED BROWSER mode: instead of a specific video, the room gets one real browser running in the cloud (Hyperbeam), streamed to everyone — so you can point it at ANY site and watch/browse together in sync, then leave. Off by default because it uses a paid cloud browser: it needs HYPERBEAM_API_KEY set in Pages → Settings → Variables, and each live room costs while running (auto-shuts after a few idle minutes). Meant for you + friends, not a public button. A general co-browser can reach any site — use it for content you're allowed to watch.",
+  steps: ["Set HYPERBEAM_API_KEY in Pages → Settings → Variables (free tier at hyperbeam.com)", "Enable this flag", "Open Video › Watch Party, start a room", "Tap “🖥 shared browser” — everyone joins one browser and can click/type"],
+  go: "app:watch", goLabel: "OPEN WATCH PARTY",
 };
 APP_GUIDES.settingshub = {
   what: "Console Settings — the PS5-style hub: customize the console font and text size, re-icon any category or app from the PS glyph set, tune audio, pick a language, and manage every Labs flag in one place.",

@@ -2,19 +2,21 @@
 // our own PlayStation-style UI: disc-insert screen, spinning-disc load, full-
 // bleed canvas, Xbox-pad → PS2 mapping via the gamepad bridge (same-origin
 // iframe, so synthesized keys reach the emulator). ISOs are read locally.
-import { Show, createSignal, onCleanup, onMount } from "solid-js";
+import { For, Show, createEffect, createSignal, onCleanup, onMount } from "solid-js";
 import * as sfx from "../audio";
 import { setNavEnabled } from "../input";
-import { startBridge, stopBridge, touchKey, PS2_CONFIG } from "../gamepadBridge";
+import { startBridge, stopBridge, touchKey, setBridgePaused, setPrimaryIndex, PS2_CONFIG } from "../gamepadBridge";
 import { holdWakeLock } from "../wakelock";
 import TouchPad, { type TB } from "./TouchPad";
 import DiagOverlay from "./DiagOverlay";
 import { Icon } from "./icons";
 import { startHost, startJoiner, type HostHandle, type JoinerHandle } from "../ps2mp/webrtc";
-import { captureLocalInput, makeInjector, type PadState } from "../ps2mp/input";
+import { ENGINE_URL, chooseEngine, type Ps2Engine } from "../ps2/engineRouter";
+import { emptySeats, playerCount, portSlotFor, seatSummary, startTestPad, type Seat, type TestPad } from "../ps2/players";
+import { captureLocalInput, makeInjector, startLocalPad2, claimGamepadPress, type PadState } from "../ps2mp/input";
 import { bumpPlays, resolveGameFile, type GameRecord } from "../gamesdb";
 
-type Stage = "insert" | "reading" | "playing" | "error";
+type Stage = "insert" | "players" | "reading" | "playing" | "error";
 
 export default function Ps2(props: { onClose: () => void; profileId: string; initialGame?: GameRecord; initialJoin?: boolean }) {
   const isDesktop = matchMedia("(pointer: fine)").matches && innerWidth >= 900 && typeof WebAssembly === "object";
@@ -37,6 +39,82 @@ export default function Ps2(props: { onClose: () => void; profileId: string; ini
   const [saveNote, setSaveNote] = createSignal("");
   const [showDiag, setShowDiag] = createSignal(false); // diagnostics/share-log panel
 
+  // —— seats: who is in which controller slot ————————————————————————————
+  // Six slots. Filling slot 3 boots the multitap engine automatically (see
+  // ps2/engineRouter). A "test pad" is a synthetic controller that taps START
+  // on a loop — the point is to verify a 6-player game really sees six pads
+  // WITHOUT owning six pads. Same idea as the bot players in Board Games.
+  const [seats, setSeats] = createSignal<Seat[]>(emptySeats());
+  const [seatNote, setSeatNote] = createSignal("");
+  const players = () => playerCount(seats());
+  // The engine is fixed once the disc boots — a game latches its slot count at
+  // init — so this is only live while we are still on the disc-select screen.
+  const engine = (): Ps2Engine => chooseEngine(players()).engine;
+  // ★ The iframe src is LATCHED, not derived. Deriving it meant every seat
+  // change remounted the live emulator iframe — which tears down the wasm VM
+  // mid-session. It may only change while we are still choosing (insert /
+  // players); after that the engine is frozen for the life of the session.
+  const [engineUrl, setEngineUrl] = createSignal<string>(ENGINE_URL.stock);
+  createEffect(() => {
+    const st = stage();
+    if (st !== "insert" && st !== "players") return;   // never swap a running VM
+    const want = ENGINE_URL[engine()];
+    if (want !== engineUrl()) setEngineUrl(want);
+  });
+  const testPads = new Map<number, TestPad>();
+  const localPads = new Map<number, () => void>();
+
+  function setSeat(player: number, source: Seat["source"], label: string, ref?: number | string) {
+    setSeats((cur) => cur.map((s) => (s.player === player ? { ...s, source, label, ref } : s)));
+  }
+
+  function clearSeat(player: number) {
+    testPads.get(player)?.stop(); testPads.delete(player);
+    localPads.get(player)?.(); localPads.delete(player);
+    setSeat(player, "empty", "Empty", undefined);
+  }
+
+  /** An injector bound to one seat's pad slot on the running emulator. */
+  function seatInjector(player: number) {
+    const win = frame?.contentWindow as any;
+    const codes = win?.__padcodes?.[player - 1] ?? (player === 2 ? win?.__p2codes : null);
+    const canvas = win?.document?.getElementById("outputCanvas");
+    if (!codes || !canvas) return null;
+    return makeInjector(win, canvas, codes);
+  }
+
+  function addTestPad(player: number) {
+    const inj = seatInjector(player);
+    if (!inj) { setSeatNote("boot a game first — the pads attach to a running emulator"); return; }
+    const { port, slot } = portSlotFor(player);
+    testPads.get(player)?.stop();
+    testPads.set(player, startTestPad(player, (st) => inj.applyState(st)));
+    setSeat(player, "test", `Test pad · port ${port + 1} slot ${slot + 1}`);
+    setSeatNote("");
+    sfx.confirm();
+  }
+
+  async function addLocalPad(player: number) {
+    setSeatNote(`Player ${player}: press any button on the controller you want…`);
+    try {
+      const taken = seats().map((s) => (s.source === "pad" ? (s.ref as number) : -1)).filter((n) => n >= 0);
+      const claim = claimGamepadPress(taken);
+      const idx = await claim.promise;
+      const inj = seatInjector(player);
+      if (!inj) { setSeatNote("boot a game first"); return; }
+      localPads.get(player)?.();
+      localPads.set(player, startLocalPad2(() => idx, inj));
+      setSeat(player, "pad", `Controller ${idx + 1}`, idx);
+      setSeatNote("");
+      sfx.confirm();
+    } catch { setSeatNote(""); }
+  }
+
+  onCleanup(() => {
+    for (const t of testPads.values()) t.stop();
+    for (const stop of localPads.values()) stop();
+  });
+
   // —— multiplayer (host-authoritative WebRTC streaming) ————————————————————
   // Host: streams the emulator canvas to a joiner and injects the joiner's
   // input as controller port 2. Joiner: watches the stream and sends input —
@@ -53,6 +131,53 @@ export default function Ps2(props: { onClose: () => void; profileId: string; ini
   let stopCapture: (() => void) | null = null;
   let injector: ReturnType<typeof makeInjector> | null = null;
   let joinVideo: HTMLVideoElement | undefined;
+
+  // —— local 2-player: two physical controllers on THIS laptop ————————————————
+  // Player 1 keeps the normal bridge (port 0); a second pad drives port 2 through
+  // the very same injector the remote-play host uses. The tricky bit is telling
+  // the two pads apart — so each player claims theirs with a button press (which
+  // is also exactly when the Gamepad API first reveals a controller).
+  const [coop, setCoop] = createSignal<"" | "pairing" | "on">("");
+  const [coopStep, setCoopStep] = createSignal<"p1" | "p2">("p1");
+  let p1Idx = -1, p2Idx = -1;
+  let stopLocalPad2: (() => void) | null = null;
+  let cancelClaim: (() => void) | null = null;
+
+  async function startCoop() {
+    if (mpRole() !== "none" || coop() !== "") return; // mutually exclusive with WebRTC play
+    const canvas = frame.contentDocument?.getElementById("outputCanvas") as HTMLCanvasElement | null;
+    const win = frame.contentWindow as any;
+    if (!canvas || !win?.__p2codes) { setMpStatus("boot a game first, then start 2-player"); return; }
+    setCoop("pairing"); setCoopStep("p1");
+    setBridgePaused(true); // freeze player-1 input during the ~2-press setup
+    try {
+      const c1 = claimGamepadPress(null); cancelClaim = c1.cancel;
+      p1Idx = await c1.promise;
+      setCoopStep("p2");
+      const c2 = claimGamepadPress(p1Idx); cancelClaim = c2.cancel; // must be a DIFFERENT pad
+      p2Idx = await c2.promise;
+      cancelClaim = null;
+      sfx.confirm();
+      injector = makeInjector(win, canvas, win.__p2codes);
+      setPrimaryIndex(p1Idx);          // lock port 0 to player 1's pad only
+      stopLocalPad2 = startLocalPad2(() => p2Idx, injector); // player 2's pad → port 2
+      setBridgePaused(false);
+      setCoop("on");
+    } catch {
+      setBridgePaused(false); setCoop(""); // cancelled during pairing
+    }
+  }
+
+  function stopCoop() {
+    cancelClaim?.(); cancelClaim = null;
+    stopLocalPad2?.(); stopLocalPad2 = null; // also releases the injector
+    injector = null;
+    setPrimaryIndex(null);
+    setBridgePaused(false);
+    p1Idx = p2Idx = -1;
+    setCoop("");
+    sfx.back();
+  }
 
   const genCode = () => {
     const A = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"; // no ambiguous 0/O/1/I
@@ -80,6 +205,7 @@ export default function Ps2(props: { onClose: () => void; profileId: string; ini
   const JOIN_FACE: Record<number, string> = { 0: "KeyZ", 1: "KeyX", 2: "KeyA", 3: "KeyS" };
 
   function hostGame() {
+    if (coop() !== "") return; // local co-op owns port 2; stop it first
     const canvas = frame.contentDocument?.getElementById("outputCanvas") as HTMLCanvasElement | null;
     const win = frame.contentWindow as any;
     if (!canvas || !win?.__p2codes || !(canvas as any).captureStream) { setMpStatus("emulator not ready — boot a game first"); return; }
@@ -147,6 +273,10 @@ export default function Ps2(props: { onClose: () => void; profileId: string; ini
       if (e.origin !== location.origin || !e.data?.type) return;
       if (e.data.type === "play-ready") {
         ready = true;
+        // ★ Only auto-boot once the player count is settled. Swapping engines on
+        // the "players" step reloads this iframe, which fires play-ready again —
+        // without this guard that would boot the disc out from under the picker.
+        if (stage() === "players") return;
         if (pending) bootNow(pending);
         else if (props.initialGame) bootRecord(props.initialGame, true); // auto-boot the library pick
       }
@@ -187,6 +317,8 @@ export default function Ps2(props: { onClose: () => void; profileId: string; ini
       stopBridge();
       releaseLock?.();
       stopCapture?.();
+      cancelClaim?.();       // abort a pairing that's mid-press
+      stopLocalPad2?.();     // stop the local player-2 poll loop
       hostHandle?.stop();
       joinerHandle?.stop();
       injector?.release();
@@ -197,17 +329,30 @@ export default function Ps2(props: { onClose: () => void; profileId: string; ini
 
   function bootNow(f: File) {
     pending = null;
-    frame.contentWindow?.postMessage({ type: "play-boot", file: f, saveKey }, location.origin);
+    frame.contentWindow?.postMessage({ type: "play-boot", file: f, saveKey, players: players() }, location.origin);
   }
 
   function insert(f: File) {
     sfx.confirm();
     setDisc(f);
-    setStage("reading");
     goFullscreen(); // still inside the user gesture
     pending = f;
+    // ★ Stop here and ask how many players. The engine and the multitap layout
+    // are fixed the moment the VM boots — a game latches its controller-slot
+    // count during init — so this is the last point at which the choice can be
+    // made. Every console asks this before a multiplayer game; so do we.
+    setStage("players");
+  }
+
+  /** Leave the players step and actually spin the disc. */
+  function startGame() {
+    const f = pending ?? disc();
+    if (!f) return;
+    sfx.confirm();
+    setStage("reading");
+    pending = f;
     if (ready) bootNow(f);
-    // if not ready yet, play-ready handler boots it
+    // if not ready yet, the play-ready handler boots it
   }
 
   // boot a library record: stream its file (zero-copy for a multi-GB ISO —
@@ -274,10 +419,37 @@ export default function Ps2(props: { onClose: () => void; profileId: string; ini
             ref={frame}
             class="ps2-frame"
             classList={{ live: stage() === "playing" }}
-            src="/play/index.html"
+            src={engineUrl()}
             allow="autoplay; fullscreen; gamepad; cross-origin-isolated"
             title="PlayStation 2"
           />
+        </Show>
+
+        {/* in-game seat rack — attach a controller or a synthetic test pad to a
+            slot while the game runs. Test pads tap START on a loop, which is how
+            you confirm a 6-player game really sees six controllers without
+            owning six of them. */}
+        <Show when={stage() === "playing" && players() > 1}>
+          <div class="seat-rack">
+            <For each={seats().slice(0, players())}>
+              {(s) => (
+                <div class="rack-seat" classList={{ on: s.source !== "empty", test: s.source === "test" }}>
+                  <span class="rack-n">P{s.player}</span>
+                  <span class="rack-label">{s.label}</span>
+                  <Show when={s.player > 1}>
+                    <span class="rack-acts">
+                      <button class="ps-act" onClick={() => void addLocalPad(s.player)}>pad</button>
+                      <button class="ps-act" onClick={() => addTestPad(s.player)}>test</button>
+                      <Show when={s.source !== "empty"}>
+                        <button class="ps-act" onClick={() => clearSeat(s.player)}>clear</button>
+                      </Show>
+                    </span>
+                  </Show>
+                </div>
+              )}
+            </For>
+            <Show when={seatNote()}><div class="rack-note">{seatNote()}</div></Show>
+          </div>
         </Show>
 
         {/* joiner view — full-bleed stream of the host's game + our input */}
@@ -324,12 +496,17 @@ export default function Ps2(props: { onClose: () => void; profileId: string; ini
           <div class="ps2-bar">
             <span class="flash-now">▶ {disc()?.name}</span>
             <span class="flash-bar-btns">
-              <Show when={mpRole() === "none"}>
-                <button class="ghost-btn" onClick={hostGame}>🎮 host 2-player</button>
+              <Show when={mpRole() === "none" && coop() === ""}>
+                <button class="ghost-btn" onClick={hostGame}>🎮 online 2-player</button>
+                <button class="ghost-btn" onClick={startCoop}>🎮 local 2-player</button>
               </Show>
               <Show when={mpRole() === "host"}>
                 <span class="ps2-mp-code">ROOM {mpCode()} · {mpPlayers() ? `player 2 connected` : "waiting for player 2…"}</span>
                 <button class="ghost-btn" onClick={stopHost}>✕ stop hosting</button>
+              </Show>
+              <Show when={coop() !== ""}>
+                <span class="ps2-mp-code">{coop() === "on" ? "local 2-player · active" : "pairing controllers…"}</span>
+                <button class="ghost-btn" onClick={stopCoop}>✕ stop 2-player</button>
               </Show>
               <button class="ghost-btn" onClick={() => requestSave()}>▪ save card</button>
               <button class="ghost-btn" classList={{ on: showDiag() }} onClick={() => setShowDiag((v) => !v)}>🩺 diagnostics</button>
@@ -341,6 +518,18 @@ export default function Ps2(props: { onClose: () => void; profileId: string; ini
             <div class="ps2-mp-banner">
               <b>Hosting · room code {mpCode()}</b>
               <span>On another device or an incognito window, open this console → PlayStation 2 → “Join a game”, enter <b>{mpCode()}</b>. {mpStatus()}</span>
+            </div>
+          </Show>
+          <Show when={coop() === "pairing"}>
+            <div class="ps2-mp-banner">
+              <b>{coopStep() === "p1" ? "Player 1 — press any button on your controller" : "Player 2 — press any button on the OTHER controller"}</b>
+              <span>Two controllers plugged into this laptop. If a controller doesn't respond, press a button to wake it. <button class="ghost-btn" onClick={stopCoop}>cancel</button></span>
+            </div>
+          </Show>
+          <Show when={coop() === "on"}>
+            <div class="ps2-mp-banner">
+              <b>Local 2-player active</b>
+              <span>Both controllers share this screen — the game itself must support two players. Player 1 is your first pad; player 2 is the second.</span>
             </div>
           </Show>
           <Show when={saveNote()}><div class="ps2-savenote">{saveNote()}</div></Show>
@@ -413,6 +602,51 @@ export default function Ps2(props: { onClose: () => void; profileId: string; ini
                 />
                 <button class="ps2-launch" disabled={joinInput().length !== 4} onClick={() => joinGame(joinInput())}>▶ &nbsp;CONNECT</button>
                 <button class="ps2-join-btn" onClick={() => { sfx.back(); setJoinStage(""); }}>↩ &nbsp;BACK</button>
+              </div>
+            </Show>
+
+            {/* how many players — the last moment the engine can be chosen */}
+            <Show when={stage() === "players"}>
+              <div class="ps2-gate">
+                <div class="ps2-big">How many players?</div>
+                <p>{disc()?.name}</p>
+                {/* seats — decided BEFORE the disc boots, because a game latches
+                    its controller-slot count during init and never asks again */}
+                <div class="seats">
+                  <div class="seats-head">
+                    <span class="seats-label">PLAYERS</span>
+                    <span class="seats-sum">{seatSummary(seats())}</span>
+                    <span class="seats-engine" classList={{ fork: engine() === "multitap" }}>
+                      {engine() === "multitap" ? "multitap engine" : "classic engine"}
+                    </span>
+                  </div>
+                  <div class="seats-row">
+                    <For each={seats()}>
+                      {(s) => (
+                        <button
+                          class="seat"
+                          classList={{ on: s.source !== "empty", test: s.source === "test" }}
+                          onClick={() => {
+                            if (s.player === 1) return;                 // player one is always you
+                            if (s.source === "empty") setSeat(s.player, "pad", "Controller (claim on boot)");
+                            else clearSeat(s.player);
+                            sfx.tickH();
+                          }}
+                        >
+                          <span class="seat-n">{s.player}</span>
+                          <span class="seat-src">{s.source === "empty" ? "add" : s.source}</span>
+                        </button>
+                      )}
+                    </For>
+                  </div>
+                  <p class="seats-hint">
+                    Tap a slot to seat a player. Three or more switches to the multitap engine
+                    automatically; one or two stays on the classic one. Once the game is running
+                    you can attach a real controller or a <b>test pad</b> to each slot.
+                  </p>
+                </div>
+                <button class="ps2-launch" onClick={startGame}>▶ &nbsp;START GAME</button>
+                <button class="ps2-join-btn" onClick={() => { sfx.back(); setStage("insert"); setDisc(null); pending = null; }}>↩ &nbsp;PICK ANOTHER DISC</button>
               </div>
             </Show>
 

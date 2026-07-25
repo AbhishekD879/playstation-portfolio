@@ -1,0 +1,231 @@
+<!doctype html>
+<!-- Minimal same-origin host for Play! (jpd002/Play-, BSD-2-Clause — see
+     https://github.com/jpd002/Play-). We drive the emscripten module directly:
+     the parent posts a File; we boot it. No third-party UI, full-bleed canvas. -->
+<html>
+<head>
+<meta charset="utf-8" />
+<!-- diagnostics tracer: posts a live trace to the parent console (Ps2.tsx shows
+     it via the shared DiagOverlay). Loads first so it hooks console/errors
+     before the emulator boots. -->
+<script src="/diag-core.js"></script>
+<style>
+  html, body { margin: 0; height: 100%; background: #000; overflow: hidden; }
+  canvas { width: 100%; height: 100%; display: block; object-fit: contain; outline: none; }
+</style>
+</head>
+<body>
+<!-- id MUST be "outputCanvas": the wasm hardcodes the "#outputCanvas" selector
+     for its WebGL context — any other id boots to a black screen. -->
+<canvas id="outputCanvas" width="640" height="480" tabindex="0"></canvas>
+<script type="module">
+  import Play from "/play-mt/Play.js";
+  // The wasm reads the disc through this device (mirrors upstream's wiring).
+  class DiscImageDevice {
+    constructor(module) { this.module = module; this.doneFlag = false; this.file = null; }
+    read(ptr, offset, size) {
+      if (!this.file) throw new Error("No file set.");
+      this.doneFlag = false;
+      this.file.slice(offset, offset + size).arrayBuffer().then((buf) => {
+        this.module.HEAPU8.set(new Uint8Array(buf), ptr);
+        this.doneFlag = true;
+      });
+    }
+    getFileSize() { if (!this.file) throw new Error("No file set."); return this.file.size; }
+    isDone() { return this.doneFlag; }
+    setFile(f) { this.file = f; }
+  }
+
+  const canvas = document.getElementById("outputCanvas");
+  let mod = null;
+  const tell = (type, extra) => parent.postMessage(Object.assign({ type }, extra || {}), location.origin);
+
+  // —— save persistence ——————————————————————————————————————————————
+  // Play! keeps memory cards (vfs/mc0, vfs/mc1) and save states in this MEMFS
+  // dir, which vanishes on reload. We snapshot it to IndexedDB (one record per
+  // profile — like one physical memory card) and restore it before a game
+  // boots, so saves survive. Only vfs + states are persisted (the rest is
+  // rebuilt by initVm).
+  const DATA = "/home/web_user/.local/share/Play Data Files";
+
+  // —— multiplayer: up to SIX players via emulated multitaps ————————————
+  // This is the FORKED Play! build (see docs/ps2-multitap/). Two differences
+  // from the stock engine in ../play/:
+  //   1. Module.setMultitapEnabled(port, true) makes the emulator report a
+  //      multitap, which is what unlocks slots beyond the two physical ports.
+  //   2. With a tap present the flat pad index is port*4 + slot, so:
+  //        P1 = pad1 (port0 slot0)   P4 = pad4 (port0 slot3)
+  //        P2 = pad2 (port0 slot1)   P5 = pad5 (port1 slot0)
+  //        P3 = pad3 (port0 slot2)   P6 = pad6 (port1 slot1)
+  //      Six players therefore needs a tap on BOTH ports (4 + 2).
+  //
+  // Play!'s InputBindingManager auto-loads bindings for ALL pads from this
+  // profile at initVm time, and Main.cpp only OVERRIDES pad 1 afterwards — so
+  // profiles for pads 2-6 survive and give us real extra controllers. Input
+  // arrives as synthetic KeyboardEvents on #outputCanvas, the same path the
+  // gamepad bridge already uses for player 1. keyIds are plain small integers;
+  // pad 1 uses enum keyIds (>=0xFF80) so there is zero collision.
+  const PAD_BUTTONS = [
+    "start", "select", "dpad_up", "dpad_down", "dpad_left", "dpad_right",
+    "cross", "circle", "square", "triangle",
+    "l1", "r1", "l2", "r2", "l3", "r3",
+  ];
+  const PAD_AXES = ["analog_left_x", "analog_left_y", "analog_right_x", "analog_right_y"];
+  // 16 buttons + 4 axes x 2 = 24 keyIds per pad. Player 2 keeps 33..56 so the
+  // existing 2-player injector is byte-compatible with the stock engine.
+  const CODES_PER_PAD = 24;
+  const FIRST_CODE = 33;
+  const MAX_LOCAL_PLAYERS = 6;
+
+  function codesForPlayer(playerIndex) {   // playerIndex 1..5  → pads 2..6
+    const base = FIRST_CODE + (playerIndex - 1) * CODES_PER_PAD;
+    const codes = {};
+    PAD_BUTTONS.forEach((b, i) => { codes[b] = base + i; });
+    PAD_AXES.forEach((a, i) => { codes[a] = [base + 16 + i * 2, base + 17 + i * 2]; });
+    return codes;
+  }
+
+  // __padcodes[n] drives player n+1 (index 1 = player two). __p2codes stays as
+  // an alias so nothing that already speaks the 2-player protocol has to change.
+  const PAD_CODES = {};
+  for (let i = 1; i < MAX_LOCAL_PLAYERS; i++) PAD_CODES[i] = codesForPlayer(i);
+  window.__padcodes = PAD_CODES;
+  window.__p2codes = PAD_CODES[1];
+  window.__maxPlayers = MAX_LOCAL_PLAYERS;
+
+  const EMSC_PROVIDER = 1164792675; // 'EmSc' as a uint32 (multichar constant)
+  function writeInputProfile() {
+    const pref = (name, type, value) => `\t<Preference Name="${name}" Type="${type}" Value="${value}" />`;
+    const lines = ["<Config>"];
+    const target = (base, keyId) => {
+      lines.push(pref(base + ".providerId", "integer", EMSC_PROVIDER));
+      lines.push(pref(base + ".deviceId", "string", "0:0:0:0:0:0"));
+      lines.push(pref(base + ".keyId", "integer", keyId));
+      lines.push(pref(base + ".keyType", "integer", 0)); // KEYTYPE::BUTTON
+    };
+    for (let i = 1; i < MAX_LOCAL_PLAYERS; i++) {
+      const padName = `pad${i + 1}`;               // config names are 1-based
+      for (const [btn, key] of Object.entries(PAD_CODES[i])) {
+        const b = `input.${padName}.${btn}`;
+        if (Array.isArray(key)) { // simulated axis: bindingtype 2, two key targets
+          lines.push(pref(b + ".bindingtype", "integer", 2));
+          target(b + ".bindingtarget1", key[0]);
+          target(b + ".bindingtarget2", key[1]);
+        } else { // simple button: bindingtype 1
+          lines.push(pref(b + ".bindingtype", "integer", 1));
+          target(b + ".bindingtarget1", key);
+        }
+      }
+    }
+    lines.push("</Config>", "");
+    const xml = lines.join("\r\n");
+    mod.FS.mkdirTree(DATA + "/inputprofiles");
+    mod.FS.writeFile(DATA + "/inputprofiles/default.xml", xml);
+  }
+
+  // How many taps we need for a given player count: >4 needs both ports.
+  function enableMultitap(players) {
+    if (!mod || typeof mod.setMultitapEnabled !== "function") return 0;
+    const wantPort0 = players > 2;
+    const wantPort1 = players > 4;
+    mod.setMultitapEnabled(0, wantPort0);
+    mod.setMultitapEnabled(1, wantPort1);
+    return mod.getMultitapPadCount();
+  }
+  window.__enableMultitap = enableMultitap;
+
+  // snapshot the whole data dir (memory cards under vfs/, save states, etc.) so
+  // a save is captured wherever the emulator writes it
+  const PERSIST = [""];
+  const SAVE_DB = "asp-ps2", SAVE_STORE = "cards";
+  const idb = () => new Promise((res, rej) => {
+    const r = indexedDB.open(SAVE_DB, 1);
+    r.onupgradeneeded = () => r.result.createObjectStore(SAVE_STORE);
+    r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error);
+  });
+  const idbGet = async (k) => { const d = await idb(); return new Promise((res) => { const q = d.transaction(SAVE_STORE, "readonly").objectStore(SAVE_STORE).get(k); q.onsuccess = () => res(q.result ?? null); q.onerror = () => res(null); }); };
+  const idbPut = async (k, v) => { const d = await idb(); return new Promise((res) => { const q = d.transaction(SAVE_STORE, "readwrite").objectStore(SAVE_STORE).put(v, k); q.onsuccess = () => res(); q.onerror = () => res(); }); };
+
+  function walkFiles(dir, out) {
+    let ents; try { ents = mod.FS.readdir(dir); } catch { return out; }
+    for (const n of ents) {
+      if (n === "." || n === "..") continue;
+      const fp = dir + "/" + n;
+      let m; try { m = mod.FS.stat(fp).mode; } catch { continue; }
+      if (mod.FS.isDir(m)) walkFiles(fp, out);
+      else { try { out[fp] = mod.FS.readFile(fp); } catch { /* skip */ } }
+    }
+    return out;
+  }
+  async function snapshot(key) {
+    if (!mod || !key) return 0;
+    const files = {};
+    for (const sub of PERSIST) walkFiles(DATA + sub, files);
+    await idbPut(key, files);
+    return Object.keys(files).length;
+  }
+  async function restore(key) {
+    if (!mod || !key) return;
+    const files = await idbGet(key);
+    if (!files) return;
+    for (const fp of Object.keys(files)) {
+      const dir = fp.slice(0, fp.lastIndexOf("/"));
+      try { mod.FS.mkdirTree(dir); } catch { /* exists */ }
+      try { mod.FS.writeFile(fp, files[fp]); } catch { /* skip */ }
+    }
+  }
+
+  Play({
+    canvas,
+    locateFile: (f) => "/play-mt/" + f,
+    mainScriptUrlOrBlob: location.origin + "/play-mt/Play.js",
+  }).then((m) => {
+    mod = m;
+    window.__mod = m; // debug/stats handle (same-origin parent can read fps)
+    mod.discImageDevice = new DiscImageDevice(mod);
+    mod.FS.mkdir("/work");
+    // Write the pad2 input profile BEFORE initVm — the binding manager loads it
+    // during initVm, so it must already exist in the FS at this point.
+    try { writeInputProfile(); } catch (e) { console.warn("[mp] input profile write failed", e); }
+    // initVm creates the VM + WebGL context (#outputCanvas) + input + sound.
+    // Without this ccall nothing boots — bootElf/bootDiscImage assume the VM exists.
+    mod.ccall("initVm", "", [], []);
+    tell("play-ready");
+  }).catch((e) => tell("play-error", { message: String(e).slice(0, 200) }));
+
+  addEventListener("message", async (e) => {
+    if (e.origin !== location.origin || !e.data) return;
+    if (e.data.type === "play-boot" && e.data.file && mod) {
+      try {
+        // Taps must be enabled BEFORE the disc boots — a game latches its slot
+        // count during init and never asks again.
+        const players = Math.max(1, Math.min(MAX_LOCAL_PLAYERS, Number(e.data.players) || 2));
+        const pads = enableMultitap(players);
+        tell("play-multitap", { players, pads });
+        await restore(e.data.saveKey); // bring back this profile's memory card first
+        const f = e.data.file, name = f.name;
+        if (name.toLowerCase().endsWith(".elf")) {
+          const bytes = new Uint8Array(await f.arrayBuffer());
+          const h = mod.FS.open(name, "w+");
+          mod.FS.write(h, bytes, 0, bytes.length, 0);
+          mod.FS.close(h);
+          mod.bootElf(name);
+        } else {
+          mod.discImageDevice.setFile(f);
+          mod.bootDiscImage(name);
+        }
+        canvas.focus();
+        tell("play-booted");
+      } catch (err) {
+        tell("play-error", { message: String(err).slice(0, 200) });
+      }
+    }
+    if (e.data.type === "play-save" && mod) {
+      const count = await snapshot(e.data.saveKey);
+      tell("play-saved", { count });
+    }
+  });
+  addEventListener("click", () => canvas.focus());
+</script>
+</body>
+</html>

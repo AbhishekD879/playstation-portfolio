@@ -6,6 +6,7 @@ import XMB from "./xmb/XMB";
 import Osk from "./xmb/Osk";
 import MobileNudge from "./xmb/MobileNudge";
 import PhonePad from "./xmb/PhonePad";
+import PartyController from "./xmb/PartyController";
 import GameSession from "./emulator/GameSession";
 import { createProfile, loadProfiles, updateProfile, type Profile } from "./profiles";
 import type { GameRecord } from "./gamesdb";
@@ -30,13 +31,39 @@ export default function App() {
     return <PhonePad room={padRoom.toUpperCase()} />;
   }
 
+  // ?party=CODE → this device is a party-game controller (scanned the QR on the
+  // host's screen). Render only the controller — no boot, no wave, no XMB.
+  const partyRoom = new URLSearchParams(location.search).get("party");
+  if (partyRoom && /^[A-Za-z0-9]{1,8}$/.test(partyRoom)) {
+    return <PartyController room={partyRoom.toUpperCase()} />;
+  }
+
   // ejecting a disc restarts the console — resume straight to the XMB
   const resumeId = sessionStorage.getItem("asp.resume");
   const resumed = resumeId ? loadProfiles().find((p) => p.id === resumeId) : undefined;
   sessionStorage.removeItem("asp.resume");
 
-  const [stage, setStage] = createSignal<Stage>(resumed ? "xmb" : "boot");
-  const [profile, setProfile] = createSignal<Profile | null>(resumed ?? null);
+  // a ?watch=CODE invite link → open the Watch Party app (which auto-joins that
+  // room from the query). Add the app hash so the router opens it, keeping ?watch.
+  if (/[?&]watch=[A-Za-z0-9]{3,8}/.test(location.search) && !/^#\/app\//.test(location.hash)) {
+    history.replaceState(null, "", location.pathname + location.search + "#/app/watch");
+  }
+  // a ?board=CODE invite link → open Board Games (it auto-joins that room)
+  if (/[?&]board=[A-Za-z0-9]{1,8}/.test(location.search) && !/^#\/app\//.test(location.hash)) {
+    history.replaceState(null, "", location.pathname + location.search + "#/app/board");
+  }
+  // a ?tv=CODE link → Console TV, tuned to that room. Deliberately NOT ?watch=,
+  // which already belongs to the YouTube watch party.
+  if (/[?&]tv=[A-Za-z0-9]{1,8}/.test(location.search) && !/^#\/app\//.test(location.hash)) {
+    history.replaceState(null, "", location.pathname + location.search + "#/app/consoletv");
+  }
+  // deep link into an app (#/app/<id>) → skip the boot animation and land in the
+  // app immediately, so a refresh doesn't replay the intro just to get back.
+  const deepLinkApp = /^#\/app\/[a-z0-9-]+/i.test(location.hash);
+  const initialProfile = resumed ?? (deepLinkApp ? defaultProfile() : null);
+
+  const [stage, setStage] = createSignal<Stage>(initialProfile ? "xmb" : "boot");
+  const [profile, setProfile] = createSignal<Profile | null>(initialProfile);
   const [session, setSession] = createSignal<GameRecord | null>(null);
 
   return (

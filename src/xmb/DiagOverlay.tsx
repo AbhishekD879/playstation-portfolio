@@ -13,7 +13,8 @@ export type DiagSnap = {
   recent: { path: string; status: unknown }[];
   counts: { ok: number; fail: number };
   errors: { msg: string; at: string }[];
-  activity?: { path: string; ok: boolean; reason: string; t: number }[];
+  activity?: { path: string; ok: boolean; reason: string; t: number; n?: number }[];
+  xfer?: { m: string; t: number; n?: number }[];   // map transfers (doors/stairs) + event triggers
 };
 
 const LOG_HOST = "https://abhishekstation-mp.abhishekdiwate879.workers.dev";
@@ -58,9 +59,12 @@ export default function DiagOverlay(props: {
     L.push(`ua: ${navigator.userAgent}`);
     if (d.errors.length) { L.push("", "-- ERRORS --"); d.errors.forEach((e) => L.push(`  ! ${e.msg}${e.at ? ` (${e.at})` : ""}`)); }
     if (d.recent.length) { L.push("", "-- FAILED LOADS --"); d.recent.forEach((r) => L.push(`  x ${r.path} · ${String(r.status)}`)); }
+    const xf = d.xfer ?? [];
+    if (xf.length) { L.push("", `-- MOVEMENT: transfers & triggers (oldest first, ${xf.length}) --`);
+      xf.slice().reverse().forEach((x) => L.push(`  ▶ [${Math.round(x.t)}ms] ${x.m}${x.n && x.n > 1 ? ` ×${x.n}` : ""}`)); }
     const act = d.activity ?? [];
     L.push("", `-- ACTIVITY (oldest first, ${act.length}) --`);
-    act.slice().reverse().forEach((a) => L.push(`  ${a.ok ? "+" : "x"} [${Math.round(a.t)}ms] ${a.path}${a.reason ? ` · ${a.reason}` : ""}`));
+    act.slice().reverse().forEach((a) => L.push(`  ${a.ok ? "+" : "x"} [${Math.round(a.t)}ms] ${a.path}${a.n && a.n > 1 ? ` ×${a.n}` : ""}${a.reason ? ` · ${a.reason}` : ""}`));
     return L.join("\n");
   };
   const copyLog = () => {
@@ -127,10 +131,16 @@ export default function DiagOverlay(props: {
           <div class="rpg-diag-sec">Failed to load</div>
           <For each={diag()!.recent}>{(r) => <div class="rpg-diag-row err">{r.path} · {String(r.status)}</div>}</For>
         </Show>
+        <Show when={(diag()?.xfer?.length ?? 0) > 0}>
+          <div class="rpg-diag-sec">Movement — transfers &amp; triggers (newest first)</div>
+          <For each={diag()!.xfer}>{(x) => (
+            <div class="rpg-diag-row">▶ {x.m}{x.n && x.n > 1 ? ` ×${x.n}` : ""}</div>
+          )}</For>
+        </Show>
         <Show when={(diag()?.activity?.length ?? 0) > 0}>
           <div class="rpg-diag-sec">Recent activity (newest first)</div>
           <For each={diag()!.activity}>{(a) => (
-            <div class="rpg-diag-row" classList={{ err: !a.ok, dim: a.ok }}>{a.ok ? "✓" : "✗"} {a.path}{a.reason ? ` · ${a.reason}` : ""}</div>
+            <div class="rpg-diag-row" classList={{ err: !a.ok, dim: a.ok }}>{a.ok ? "✓" : "✗"} {a.path}{a.n && a.n > 1 ? ` ×${a.n}` : ""}{a.reason ? ` · ${a.reason}` : ""}</div>
           )}</For>
         </Show>
         <Show when={clean() && !(diag()?.activity?.length)}>

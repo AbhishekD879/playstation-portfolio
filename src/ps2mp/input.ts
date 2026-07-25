@@ -96,6 +96,75 @@ export function captureLocalInput(onState: (s: PadState) => void): () => void {
   return () => { claimPad(false); cancelAnimationFrame(raf); removeEventListener("keydown", onKey); removeEventListener("keyup", onKey); };
 }
 
+// —— local 2-player: a SECOND physical pad on the same laptop → port 2 ————————
+// Same destination as the remote joiner (the injector + win.__p2codes), but the
+// PadState is read straight off a local gamepad instead of arriving over WebRTC.
+export function padStateFromGamepad(p: Gamepad): PadState {
+  const down = new Set<Action>();
+  for (const [idx, action] of Object.entries(GP_BUTTON)) if (p.buttons[+idx]?.pressed) down.add(action);
+  return { down: [...down], axes: { lx: q(p.axes[0] ?? 0), ly: q(p.axes[1] ?? 0), rx: q(p.axes[2] ?? 0), ry: q(p.axes[3] ?? 0) } };
+}
+
+const NEUTRAL: PadState = { down: [], axes: { lx: 0, ly: 0, rx: 0, ry: 0 } };
+
+/** Resolve with the index of the STANDARD gamepad a player claims by pressing a
+ *  button — in a single press, whether the pad was already connected-and-idle
+ *  (rising edge) or the browser only just revealed it via that very press (the
+ *  Gamepad API hides a controller until first input). A button already HELD when
+ *  claiming starts is ignored, so a stuck/held button can't auto-claim. `exclude`
+ *  skips pads other players already took — one index, or several for 3-4 player
+ *  local play. Returns {promise, cancel}. */
+export function claimGamepadPress(exclude: number | number[] | null): { promise: Promise<number>; cancel: () => void } {
+  const skip = new Set(exclude == null ? [] : Array.isArray(exclude) ? exclude : [exclude]);
+  let raf = 0;
+  let reject!: (e: unknown) => void;
+  const stdPads = () => [...(navigator.getGamepads?.() ?? [])].filter((p): p is Gamepad => !!p && p.mapping === "standard");
+  const baseline = new Set<number>();   // pads already present when claiming began
+  const prev = new Map<number, boolean>(); // last frame's "any button down" per pad
+  let primed = false;
+  const promise = new Promise<number>((resolve, rej) => {
+    reject = rej;
+    const tick = () => {
+      raf = requestAnimationFrame(tick);
+      const pads = stdPads();
+      if (!primed) { // frame 0: snapshot who's already here + their held state, don't claim
+        for (const p of pads) { baseline.add(p.index); prev.set(p.index, p.buttons.some((b) => b?.pressed)); }
+        primed = true;
+        return;
+      }
+      for (const p of pads) {
+        if (skip.has(p.index)) continue;
+        const anyDown = p.buttons.some((b) => b?.pressed);
+        const revealed = !baseline.has(p.index) && anyDown;          // brand-new pad, appeared on a press
+        const rose = baseline.has(p.index) && anyDown && !prev.get(p.index); // was idle, now pressed
+        if (revealed || rose) { cancelAnimationFrame(raf); resolve(p.index); return; }
+        prev.set(p.index, anyDown);
+      }
+    };
+    raf = requestAnimationFrame(tick);
+  });
+  return { promise, cancel: () => { cancelAnimationFrame(raf); reject(new Error("cancelled")); } };
+}
+
+/** Poll the gamepad at getIndex() every frame and drive it into the given
+ *  injector — a PS2 port-2 injector or a retro per-player one, it doesn't care. If that pad vanishes, push a neutral state so no key sticks down.
+ *  Returns a stop() that also releases the injector. */
+export function startLocalPad2(
+  getIndex: () => number | null,
+  injector: { applyState: (s: PadState) => void; release: () => void },
+): () => void {
+  let raf = 0;
+  const loop = () => {
+    raf = requestAnimationFrame(loop);
+    const idx = getIndex();
+    // getGamepads() must be re-read each frame — cached Gamepad objects go stale
+    const p = idx == null ? null : navigator.getGamepads?.()[idx];
+    injector.applyState(p ? padStateFromGamepad(p) : NEUTRAL);
+  };
+  raf = requestAnimationFrame(loop);
+  return () => { cancelAnimationFrame(raf); injector.release(); };
+}
+
 // —— host side: turn remote state into controller-port key events ————————————
 // codeTable is the iframe's __p2codes (action -> keyId, axes -> [neg, pos]).
 export function makeInjector(win: Window, canvas: EventTarget, codeTable: Record<string, number | number[]>) {

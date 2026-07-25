@@ -4,7 +4,8 @@ import { For, Show, createEffect, createMemo, createSignal, onCleanup, onMount }
 import { CAREER, CATEGORIES, PROJECTS, TROPHIES, type XmbItem } from "../content";
 import { AVATARS, PLATINUM, award, resizePhoto, updateProfile, type Profile } from "../profiles";
 import { CORES, PS2_EXTS, PSP_ONLY_EXTS, PSX_ONLY_EXTS, addGame, listGames, addPhoto, listPhotos, fsAccessSupported, type GameRecord, type PhotoRecord } from "../gamesdb";
-import { BG_MODES, THEMES, applyCustomHsl, applyTheme, bgMode, currentThemeIndex, loadCustomHsl, setBgMode } from "../theme";
+import { BG_MODES, THEMES, applyCustomHsl, applyTheme, bgMode, currentThemeIndex, loadCustomHsl, setBgMode, setUpscale, upscale } from "../theme";
+import { UPSCALE_MODES, upscaleSupported } from "../upscale";
 import { LAB_FLAT, LAB_GROUPS, LAB_GUIDES, labEnabled, rateFeature, toggleLab } from "../labs";
 import { deviceSummary } from "../gpu";
 import { CHANNELS, fetchDevto, fetchGuide, fetchHN, fetchRadio, fetchRss, fetchWeather, wmo, type NewsEntry, type Weather } from "../apps";
@@ -60,12 +61,51 @@ import WinampApp from "./WinampApp";
 import YouTubeApp from "./YouTubeApp";
 import TimeMachine from "./TimeMachine";
 import ArtGallery from "./ArtGallery";
+import SystemCity from "./SystemCity";
+import CsApp from "./CsApp";
+import PartyHub from "./PartyHub";
+import RetroJoin from "./RetroJoin";
+import BoardGames from "./BoardGames";
+import ShareBar from "./ShareBar";
+import ConsoleTv from "./ConsoleTv";
+import Analytics from "./Analytics";
+import SplatView, { isSplatFile } from "./SplatView";
+import UpscaleLayer from "./UpscaleLayer";
+import { dsGyroAim, dsTriggers } from "../dualsense";
+import VoiceAvatar from "./VoiceAvatar";
 import WikiApp from "./WikiApp";
 import Privacy from "./Privacy";
+import WatchParty from "./WatchParty";
 import { fetchApod, define, type Apod, type Definition } from "../apps";
 import { startGestures, stopGestures } from "../gestures";
 
 const CAT_SPACING = 150;
+
+// —— URL routing ————————————————————————————————————————————————————————————
+// A refresh should land you back where you were. We mirror the open app (and, on
+// the home crossbar, the current category) into the URL HASH — hash, not path,
+// so it needs zero server config and never collides with the pathname-based
+// /admin route or the ?pad= controller mode. Shape: `#/app/<id>` for an open app,
+// `#/<categoryId>` for the home crossbar. `#setup=` share links are left alone.
+/** "3h 42m" / "12m" / "48s" — playtime is stored as seconds on the profile. */
+function fmtPlaytime(sec: number): string {
+  if (sec < 60) return `${sec}s`;
+  const h = Math.floor(sec / 3600), m = Math.round((sec % 3600) / 60);
+  return h ? `${h}h ${m}m` : `${m}m`;
+}
+const ROUTE_APPS = new Set(["doom","doomrtx","chess","trivia","flash","cinema","podcasts","library","map","ai","webamp","youtube","timemachine","art","wiki","lichess","ps2","pc","guestbook","browser","visualizer","studio","code","manual","ps2home","ps1home","psphome","retrohome","scummvm","karaoke","strudel","settingshub","videoplayer","reporewind","rpgmaker","renpy","godot","unity","html5","privacy","watch","syscity","cs","party","board","voiceavatar","retrojoin","consoletv","analytics"]);
+// a live PS2 emulator/MP session can't be resumed cold → route it to its library home.
+const routeSlug = (a: string) => (a === "ps2" ? "ps2home" : a);
+export const appRouteHash = (a: string | null, catId: string) => (a ? `#/app/${routeSlug(a)}` : `#/${catId}`);
+/** Parse a location hash → what it addresses. null = not an app/category route (empty, or a #setup= link). */
+export function parseRouteHash(hash: string): { app?: string } | { cat: string } | null {
+  if (!hash || /^#setup=/.test(hash)) return null;
+  const am = hash.match(/^#\/app\/([a-z0-9-]+)/i);
+  if (am) { const id = routeSlug(am[1].toLowerCase()); return ROUTE_APPS.has(id) ? { app: id } : null; }
+  const cm = hash.match(/^#\/([a-z0-9-]+)$/i);
+  if (cm) return { cat: cm[1].toLowerCase() };
+  return null;
+}
 
 interface Toast { id: number; title: string; sub: string; tier?: string; icon?: string }
 let toastSeq = 1;
@@ -194,7 +234,22 @@ export default function XMB(props: {
   const [ytQuery, setYtQuery] = createSignal(""); // AI agent → YouTube search handoff
   const [vListening, setVListening] = createSignal(false); // XMB voice command
   const [padTest, setPadTest] = createSignal(false);
-  const [app, setApp] = createSignal<null | "doom" | "doomrtx" | "chess" | "trivia" | "flash" | "cinema" | "podcasts" | "library" | "map" | "ai" | "webamp" | "youtube" | "timemachine" | "art" | "wiki" | "lichess" | "ps2" | "pc" | "guestbook" | "browser" | "visualizer" | "studio" | "code" | "manual" | "ps2home" | "ps1home" | "psphome" | "retrohome" | "scummvm" | "karaoke" | "strudel" | "settingshub" | "videoplayer" | "reporewind" | "rpgmaker" | "renpy" | "web" | "privacy">(null);
+  const [splatFile, setSplatFile] = createSignal<File | null>(null);
+  const [app, setAppRaw] = createSignal<null | "doom" | "doomrtx" | "chess" | "trivia" | "flash" | "cinema" | "podcasts" | "library" | "map" | "ai" | "webamp" | "youtube" | "timemachine" | "art" | "wiki" | "lichess" | "ps2" | "pc" | "guestbook" | "browser" | "visualizer" | "studio" | "code" | "manual" | "ps2home" | "ps1home" | "psphome" | "retrohome" | "scummvm" | "karaoke" | "strudel" | "settingshub" | "videoplayer" | "reporewind" | "rpgmaker" | "renpy" | "godot" | "unity" | "html5" | "privacy" | "watch" | "syscity" | "cs" | "party" | "retrojoin" | "board" | "voiceavatar" | "consoletv" | "analytics">(null);
+
+  // Opening/closing an app goes through the native View Transitions API (now
+  // Baseline for same-document), so the console cross-fades like real system
+  // software instead of snapping. Solid applies signal changes to the DOM
+  // synchronously, which is exactly what startViewTransition's callback needs.
+  // Falls back to a plain set where the API is missing or motion is reduced.
+  const setApp: typeof setAppRaw = ((v: any) => {
+    const doc = document as any;
+    const reduced = matchMedia("(prefers-reduced-motion: reduce)").matches;
+    if (typeof doc.startViewTransition !== "function" || reduced) return setAppRaw(v);
+    let out: any;
+    doc.startViewTransition(() => { out = setAppRaw(v); });
+    return out;
+  }) as typeof setAppRaw;
   const [ps2Boot, setPs2Boot] = createSignal<GameRecord | null>(null);
   const [ps2Join, setPs2Join] = createSignal(false);
   const [ccOpen, setCcOpen] = createSignal(false);
@@ -219,6 +274,7 @@ export default function XMB(props: {
   let lastActive = Date.now();
   let radioEl!: HTMLAudioElement;
   let galleryInput!: HTMLInputElement;
+  let splatInput!: HTMLInputElement;
   let restoreInput!: HTMLInputElement;
   const [news, setNews] = createSignal<{ label: string; entries: NewsEntry[]; sel: number; loading: boolean; error?: string } | null>(null);
   const [weather, setWeather] = createSignal<{ loading: boolean; data?: Weather } | null>(null);
@@ -235,7 +291,9 @@ export default function XMB(props: {
   const retroCount = () => games().filter((g) => g.sys !== "ps2" && g.core !== "psp" && g.core !== "psx").length;
   const [rpgCount, setRpgCount] = createSignal(0);
   const [renpyCount, setRenpyCount] = createSignal(0);
-  const [webCount, setWebCount] = createSignal(0);
+  const [godotCount, setGodotCount] = createSignal(0);
+  const [unityCount, setUnityCount] = createSignal(0);
+  const [html5Count, setHtml5Count] = createSignal(0);
   const gameItems = createMemo<XmbItem[]>(() => [
     { id: "doom", title: "DOOM", sub: "Built-in game · the 1993 shareware, playable now", icon: "skull", action: { type: "doom" } },
     ...(hasWebGPU() ? [{ id: "doomrtx", title: "DOOM RTX", sub: "E1M1 path-traced in real time — WebGPU ray tracing", icon: "lightning", action: { type: "doom-rtx" as const } }] : []),
@@ -246,10 +304,17 @@ export default function XMB(props: {
     { id: "ps1", title: "PlayStation", sub: `The original — .chd/.pbp discs, no BIOS needed${psxCount() ? ` · ${psxCount()} in your shelf` : ""}`, icon: "disc", action: { type: "ps1-home" } },
     { id: "psp", title: "PlayStation Portable", sub: `PSP library & downloads — experimental (PPSSPP)${pspCount() ? ` · ${pspCount()} in your shelf` : ""}`, icon: "handheld", action: { type: "psp-home" } },
     { id: "retro", title: "Retro Games", sub: `NES · SNES · GBA · N64 & more — library + downloads${retroCount() ? ` · ${retroCount()} in your shelf` : ""}`, icon: "gamepad", action: { type: "retro-home" } },
+    { id: "cs", title: "Counter-Strike 1.6", sub: "The classic FPS in your browser — bring your files · bots & online with friends", icon: "gamepad", action: { type: "cs" as const } },
+    { id: "retrojoin", title: "Join a Retro Game", sub: "Player two for a friend's NES/SNES game — they stream it, you just play", icon: "gamepad", action: { type: "retrojoin" as const } },
+    { id: "consoletv", title: "Console TV", sub: "Watch whatever is being played on this console right now — no controller needed", icon: "broadcast", action: { type: "consoletv" as const } },
+    { id: "party", title: "Party Games", sub: "Jackbox-style — everyone joins with their phone. Trivia, Bluff, Quips & Draw & Guess", icon: "gamepad", action: { type: "party" as const } },
+    { id: "board", title: "Board Games", sub: "Play a friend online — Connect Four, Gomoku, Reversi, Checkers & Ludo", icon: "knight", action: { type: "board" as const } },
     { id: "scummvm", title: "Point & Click", sub: "ScummVM in wasm — classic adventures, free ones included", icon: "cursor", action: { type: "scummvm" } },
     { id: "rpgmaker", title: "RPG Maker", sub: `Drop a zip of a game you own — MV/MZ play natively, 2000/2003 via EasyRPG${rpgCount() ? ` · ${rpgCount()} in your library` : ""}`, icon: "rpgmaker", action: { type: "rpg-maker" } },
     { id: "renpy", title: "Ren'Py", sub: `Drop a Ren'Py Web build — visual novels, experimental${renpyCount() ? ` · ${renpyCount()} in your library` : ""}`, icon: "renpy", action: { type: "renpy" as const } },
-    { id: "webgames", title: "Web & Engine Games", sub: `Drop a web-exported game — Godot · Unity · WebGL · Wolf RPG${webCount() ? ` · ${webCount()} in your library` : ""}`, icon: "gamepad", action: { type: "web-games" as const } },
+    { id: "godot", title: "Godot", sub: `Drop a Godot Web export (.zip) — runs natively${godotCount() ? ` · ${godotCount()} in your library` : ""}`, icon: "gamepad", action: { type: "godot" as const } },
+    { id: "unity", title: "Unity", sub: `Drop a Unity WebGL build (.zip) — runs natively${unityCount() ? ` · ${unityCount()} in your library` : ""}`, icon: "gamepad", action: { type: "unity" as const } },
+    { id: "html5", title: "HTML5 / WebGL", sub: `Drop any web-exported game with an index.html${html5Count() ? ` · ${html5Count()} in your library` : ""}`, icon: "gamepad", action: { type: "html5" as const } },
     { id: "lichesstv", title: "Lichess TV", sub: "Spectate · live grandmaster games", icon: "knight", action: { type: "lichess-tv" } },
   ]);
 
@@ -317,6 +382,7 @@ export default function XMB(props: {
       : []),
     { id: "photos-add", title: "Add Photos…", sub: "Stored in this browser only — never uploaded", icon: "plus", action: { type: "photos-add" } },
     { id: "photomode", title: "Photo Mode", sub: "Snapshot the living console — framed, shareable, on-device", icon: "camera", action: { type: "photo-mode" } },
+    { id: "splat", title: "Open a 3D Capture", sub: "Walk into a Gaussian splat scan from your phone — .ply / .splat / .spz", icon: "cube", action: { type: "splat" } },
     { id: "art", title: "Art Gallery", sub: "Masterpieces · The Met, New York", icon: "palette", action: { type: "art" } },
     { id: "apod", title: "Astronomy Photo of the Day", sub: "Live from NASA", icon: "star", action: { type: "apod" } },
   ]);
@@ -332,6 +398,56 @@ export default function XMB(props: {
 
   const selOf = (ci: number) => Math.min(sels()[CATEGORIES[ci].id] ?? 0, Math.max(0, itemsOf(ci).length - 1));
 
+  // —— URL routing: restore-from-hash, then keep the hash in sync ————————————
+  type AppId = Exclude<ReturnType<typeof app>, null>;
+  const applyRoute = () => {
+    const r = parseRouteHash(location.hash);
+    if (!r) return;
+    if ("app" in r && r.app) {
+      // respect the Labs gate so a shared #/app/<hidden> link can't reveal an
+      // opt-in easter egg (e.g. "privacy") on a console that hasn't enabled it
+      if (labEnabled(r.app) && app() !== r.app) setApp(r.app as AppId);
+    } else if ("cat" in r) {
+      if (app()) setApp(null);
+      const ci = CATEGORIES.findIndex((c) => c.id === r.cat);
+      if (ci >= 0 && itemsOf(ci).length) setCat(ci);
+    }
+  };
+  // —— DualSense, per app ————————————————————————————————————————————————
+  // Motion aim and trigger tension only make sense with a gun in your hands, so
+  // they're armed for the shooters and cleared for everything else. Both are
+  // no-ops unless a pad is actually connected over WebHID.
+  const FPS_APPS = new Set(["doom", "doomrtx", "cs"]);
+  createEffect(() => {
+    const shooting = FPS_APPS.has(app() ?? "") && labEnabled("gyroaim");
+    dsGyroAim(shooting);
+    // a firm bite point on R2 — the trigger stops being a switch and starts
+    // feeling like a trigger
+    dsTriggers({ mode: "off" }, shooting ? { mode: "resist", start: 0.35, force: 0.55 } : { mode: "off" });
+  });
+
+  // restore synchronously during setup so a deep link opens BEFORE the sync
+  // effect below runs (otherwise its first pass would overwrite the incoming hash)
+  applyRoute();
+  let prevAppOpen = !!app();
+  createEffect(() => {
+    const a = app(), catId = CATEGORIES[cat()]?.id ?? "";
+    if (/^#setup=/.test(location.hash)) { prevAppOpen = !!a; return; } // don't clobber a pending share link
+    const target = appRouteHash(a, catId);
+    if (location.hash !== target) {
+      // opening an app pushes a new entry (Back closes it); everything else replaces
+      if (a && !prevAppOpen) history.pushState(null, "", target);
+      else history.replaceState(null, "", target);
+    }
+    prevAppOpen = !!a;
+  });
+  onMount(() => {
+    const onRoute = () => applyRoute();            // Back/Forward + any external hash change
+    addEventListener("hashchange", onRoute);
+    addEventListener("popstate", onRoute);
+    onCleanup(() => { removeEventListener("hashchange", onRoute); removeEventListener("popstate", onRoute); });
+  });
+
   // a category with every app switched off in Labs simply leaves the crossbar;
   // cat() stays a raw CATEGORIES index, only rendering + nav use visible slots
   const visCats = createMemo(() => CATEGORIES.map((_, i) => i).filter((i) => itemsOf(i).length > 0));
@@ -342,7 +458,9 @@ export default function XMB(props: {
   const refreshRpgCounts = () => listRpgGames(props.profile.id).then((g) => {
     setRpgCount(g.filter((x) => engineFamily(x.engine) === "rpgmaker").length);
     setRenpyCount(g.filter((x) => engineFamily(x.engine) === "renpy").length);
-    setWebCount(g.filter((x) => engineFamily(x.engine) === "web").length);
+    setGodotCount(g.filter((x) => engineFamily(x.engine) === "godot").length);
+    setUnityCount(g.filter((x) => engineFamily(x.engine) === "unity").length);
+    setHtml5Count(g.filter((x) => engineFamily(x.engine) === "html5").length);
   });
   onMount(() => {
     refreshGames();
@@ -400,6 +518,9 @@ export default function XMB(props: {
     radioEl.src = "";
     setStation(null);
   }
+
+  // the game you've launched most, for the stats strip
+  const topGame = () => games().reduce<GameRecord | null>((best, g) => ((g.plays ?? 0) > (best?.plays ?? 0) ? g : best), null);
 
   // —— playtime tracking ——
   const ptId = setInterval(() => {
@@ -598,6 +719,10 @@ export default function XMB(props: {
         sfx.confirm();
         galleryInput.click();
         break;
+      case "splat":
+        sfx.confirm();
+        splatInput.click();
+        break;
       case "photos-view":
         sfx.confirm();
         setViewerOpen(true);
@@ -668,6 +793,40 @@ export default function XMB(props: {
         awardT("curator");
         setApp("art");
         break;
+      case "syscity":
+        sfx.confirm();
+        setApp("syscity");
+        break;
+      case "cs":
+        sfx.confirm();
+        awardT("counterterrorist");
+        setApp("cs");
+        break;
+      case "party":
+        sfx.confirm();
+        setApp("party");
+        break;
+      case "retrojoin":
+        sfx.confirm();
+        setApp("retrojoin");
+        break;
+      case "consoletv":
+        sfx.confirm();
+        setApp("consoletv");
+        break;
+      case "analytics":
+        sfx.confirm();
+        setApp("analytics");
+        break;
+      case "board":
+        sfx.confirm();
+        setApp("board");
+        break;
+      case "voiceavatar":
+        sfx.confirm();
+        awardT("voicecall");
+        setApp("voiceavatar");
+        break;
       case "wiki":
         sfx.confirm();
         setApp("wiki");
@@ -675,6 +834,10 @@ export default function XMB(props: {
       case "privacy":
         sfx.confirm();
         setApp("privacy");
+        break;
+      case "watch":
+        sfx.confirm();
+        setApp("watch");
         break;
       case "lichess-tv":
         sfx.confirm();
@@ -692,9 +855,17 @@ export default function XMB(props: {
         sfx.confirm();
         setApp("renpy");
         break;
-      case "web-games":
+      case "godot":
         sfx.confirm();
-        setApp("web");
+        setApp("godot");
+        break;
+      case "unity":
+        sfx.confirm();
+        setApp("unity");
+        break;
+      case "html5":
+        sfx.confirm();
+        setApp("html5");
         break;
       case "karaoke":
         sfx.confirm();
@@ -1339,7 +1510,7 @@ export default function XMB(props: {
     if (padTest()) { if (action === "back") setPadTest(false); return; }
     if (app()) {
       // bound apps route their own nav; the rest are keyboard-driven owner apps
-      if (["chess", "trivia", "flash", "cinema", "podcasts", "library", "youtube", "art", "wiki", "ps2home", "ps1home", "psphome", "retrohome", "karaoke", "settingshub", "videoplayer", "reporewind", "rpgmaker", "renpy", "web"].includes(app()!)) appNav?.(action);
+      if (["chess", "trivia", "flash", "cinema", "podcasts", "library", "youtube", "art", "wiki", "ps2home", "ps1home", "psphome", "retrohome", "karaoke", "settingshub", "videoplayer", "reporewind", "rpgmaker", "renpy", "godot", "unity", "html5", "syscity"].includes(app()!)) appNav?.(action);
       else if (app() === "lichess" && action === "back") { sfx.back(); setApp(null); }
       else if (src === "pad" || src === "gesture") {
         // owner apps (map/globe, lichess…) listen to the KEYBOARD — turn pad
@@ -1401,7 +1572,8 @@ export default function XMB(props: {
         awardT("stylist");
       };
       // rows, matching the modal's visual order: 0 = swatches · 1 = Living
-      // Background modes · 2-4 = custom H/S/L sliders (only when custom is picked)
+      // Background modes · 2 = Screen Upscaling (WebGPU only) · 3-5 = custom
+      // H/S/L sliders (only when custom is picked)
       const close = () => { sfx.back(); setThemesOpen(false); setThemeRow(0); };
       if (themeRow() === 0) {
         if (action === "left") { setThemeIdx((themeIdx() + n - 1) % n); sfx.tickH(); applyIdx(); }
@@ -1416,10 +1588,20 @@ export default function XMB(props: {
         if (action === "left") { setBgMode(modes[(cur - 1 + modes.length) % modes.length].id); sfx.tickH(); }
         if (action === "right") { setBgMode(modes[(cur + 1) % modes.length].id); sfx.tickH(); }
         if (action === "up") { setThemeRow(0); sfx.tickV(); }
-        if (action === "down" && isCustom()) { setThemeRow(2); sfx.tickV(); } // → sliders (custom only)
+        if (action === "down" && upscaleSupported()) { setThemeRow(2); sfx.tickV(); }        // → Screen Upscaling
+        else if (action === "down" && isCustom()) { setThemeRow(3); sfx.tickV(); }             // → sliders (custom only)
+        if (action === "back" || action === "confirm") close();
+      } else if (themeRow() === 2 && upscaleSupported()) {
+        // Screen Upscaling — same interaction as Living Background: ←→ cycles
+        // the mode and it applies live to whatever is on screen.
+        const cur = Math.max(0, UPSCALE_MODES.findIndex((m) => m.id === upscale()));
+        if (action === "left") { setUpscale(UPSCALE_MODES[(cur - 1 + UPSCALE_MODES.length) % UPSCALE_MODES.length].id); sfx.tickH(); }
+        if (action === "right") { setUpscale(UPSCALE_MODES[(cur + 1) % UPSCALE_MODES.length].id); sfx.tickH(); }
+        if (action === "up") { setThemeRow(1); sfx.tickV(); }
+        if (action === "down" && isCustom()) { setThemeRow(3); sfx.tickV(); }
         if (action === "back" || action === "confirm") close();
       } else {
-        const sliderRow = themeRow() - 2; // 0 = Hue · 1 = Saturation · 2 = Lightness
+        const sliderRow = themeRow() - 3; // 0 = Hue · 1 = Saturation · 2 = Lightness
         const step = action === "left" ? -1 : action === "right" ? 1 : 0;
         if (step) {
           const c = { ...customHsl() };
@@ -1428,8 +1610,8 @@ export default function XMB(props: {
           if (sliderRow === 2) c.l = Math.min(75, Math.max(30, c.l + step * 3));
           setCustomHsl(c); applyCustomHsl(c.h, c.s, c.l); sfx.tickH(); awardT("stylist");
         }
-        if (action === "up") { setThemeRow(themeRow() - 1); sfx.tickV(); }
-        if (action === "down" && themeRow() < 4) { setThemeRow(themeRow() + 1); sfx.tickV(); }
+        if (action === "up") { setThemeRow(Math.max(upscaleSupported() ? 2 : 1, themeRow() - 1)); sfx.tickV(); }
+        if (action === "down" && themeRow() < 5) { setThemeRow(themeRow() + 1); sfx.tickV(); }
         if (action === "back" || action === "confirm") close();
       }
       return;
@@ -1640,16 +1822,31 @@ export default function XMB(props: {
 
   // is any app / modal / overlay open? (crossbar is "home" when this is false)
   const overlayOpen = () => !!(app() || panel() || tv() || guideOpen() || spotifyOpen() || news() || inputMode() || viewerOpen() || yt() || apod() || dict() || ccOpen() || searchOpen() || labsOpen() || soundOpen() || themesOpen() || trophiesOpen() || padTest() || saver());
+  // full-screen game players bring their OWN on-screen controls (RpgPlayer FABs,
+  // the .gpad for PS2/DOOM), so the shell touch-controller stays out of their way.
+  const GAME_TOUCH = new Set(["rpgmaker", "renpy", "godot", "unity", "html5", "ps2", "doom", "doomrtx", "scummvm", "pc"]);
+  // show the on-screen controller once you're INSIDE something (an app/panel) —
+  // that's where back/select/move-focus are needed; the bare crossbar is swipe+tap.
+  const touchNavHidden = () => !overlayOpen() || GAME_TOUCH.has(app() ?? "");
   // touch: on the bare crossbar, a swipe navigates natively (horizontal =
   // categories, vertical = items) and a tap opens — no virtual d-pad needed.
   // Inside an app/modal the swipe is off (that surface handles its own touch).
-  let swipeStart: { x: number; y: number } | null = null;
-  const onTouchStart = (e: TouchEvent) => { swipeStart = overlayOpen() ? null : { x: e.touches[0].clientX, y: e.touches[0].clientY }; };
+  let swipeStart: { x: number; y: number; edge: boolean } | null = null;
+  const onTouchStart = (e: TouchEvent) => {
+    const x = e.touches[0].clientX, y = e.touches[0].clientY;
+    // bare crossbar → swipe navigates natively. Inside an app/overlay only a
+    // LEFT-EDGE swipe counts (iOS-style back), so it never fights the app's scroll.
+    if (!overlayOpen()) swipeStart = { x, y, edge: false };
+    else if (x < 24) swipeStart = { x, y, edge: true };
+    else swipeStart = null;
+  };
   const onTouchEnd = (e: TouchEvent) => {
     if (!swipeStart) return;
     const t = e.changedTouches[0], dx = t.clientX - swipeStart.x, dy = t.clientY - swipeStart.y;
+    const edge = swipeStart.edge;
     swipeStart = null;
     if (Math.max(Math.abs(dx), Math.abs(dy)) < 40) return; // a tap — let the item's onClick open it
+    if (edge) { if (dx > 60 && Math.abs(dx) > Math.abs(dy)) handleNav("back"); return; } // edge-swipe → back
     if (Math.abs(dx) > Math.abs(dy)) handleNav(dx < 0 ? "right" : "left");
     else handleNav(dy < 0 ? "down" : "up");
   };
@@ -1682,7 +1879,10 @@ export default function XMB(props: {
           {props.profile.name}
           <span class="status-troph">🏆 {trophyCount()}</span>
           <Show when={radioOn() || station()}>
-            <span class="status-radio">♪ {station()?.label ?? ""}</span>
+            <button class="status-radio" title="Stop the music" aria-label={`Stop ${station()?.label ?? "the music"}`}
+              onClick={() => { stopStation(); if (sfx.radioPlaying()) sfx.radioToggle(); setRadioOn(false); sfx.tickV(); }}>
+              ♪ {station()?.label ?? ""} <span class="status-radio-stop">■</span>
+            </button>
           </Show>
         </div>
         <Show when={statusWeather()}><span class="status-weather">{statusWeather()}</span></Show>
@@ -1797,6 +1997,16 @@ export default function XMB(props: {
         <div class="panel trophies">
           <div class="panel-tag">TROPHY COLLECTION — {trophyCount()} / {TROPHIES.length + 1}</div>
           <div class="panel-heading">{props.profile.name}</div>
+          {/* console stats — everything here is already tracked (profile playtime,
+              per-game play counts), it just had nowhere to be seen */}
+          <div class="console-stats">
+            <div class="cstat"><b>{fmtPlaytime(props.profile.playtime ?? 0)}</b><span>on the console</span></div>
+            <div class="cstat"><b>{trophyCount()}<i>/{TROPHIES.length + 1}</i></b><span>trophies</span></div>
+            <div class="cstat"><b>{games().length}</b><span>{games().length === 1 ? "game in library" : "games in library"}</span></div>
+            <div class="cstat"><b>{games().reduce((n, g) => n + (g.plays ?? 0), 0)}</b><span>games launched</span></div>
+            <Show when={topGame()}><div class="cstat wide"><b>{topGame()!.name}</b><span>most played · {topGame()!.plays}×</span></div></Show>
+            <div class="cstat"><b>{new Date(props.profile.created).toLocaleDateString()}</b><span>signed in since</span></div>
+          </div>
           <div class="trophy-list">
             <For each={[PLATINUM, ...TROPHIES]}>
               {(t) => (
@@ -1953,10 +2163,34 @@ export default function XMB(props: {
       <Show when={app() === "art"}>
         <ArtGallery bind={(f) => (appNav = f)} onClose={() => setApp(null)} />
       </Show>
+      <Show when={app() === "syscity"}>
+        <SystemCity bind={(f) => (appNav = f)} onClose={() => setApp(null)} />
+      </Show>
+      <Show when={app() === "cs"}><CsApp onClose={() => setApp(null)} /></Show>
+      <Show when={app() === "party"}><PartyHub onClose={() => setApp(null)} onTrophy={awardT} /></Show>
+      <Show when={app() === "retrojoin"}><RetroJoin onClose={() => setApp(null)} /></Show>
+      <Show when={splatFile()}>
+        <SplatView file={splatFile()!} onClose={() => setSplatFile(null)} />
+      </Show>
+      <Show when={app() === "analytics"}>
+        <Analytics
+          profileId={props.profile.id}
+          profileName={props.profile.name}
+          playtime={props.profile.playtime ?? 0}
+          trophies={Object.keys(props.profile.trophies ?? {}).length}
+          onClose={() => setApp(null)}
+        />
+      </Show>
+      <Show when={app() === "consoletv"}>
+        <ConsoleTv code={new URLSearchParams(location.search).get("tv")?.toUpperCase() || undefined} onClose={() => setApp(null)} />
+      </Show>
+      <Show when={app() === "board"}><BoardGames onClose={() => setApp(null)} onTrophy={awardT} /></Show>
+      <Show when={app() === "voiceavatar"}><VoiceAvatar onClose={() => setApp(null)} /></Show>
       <Show when={app() === "wiki"}>
         <WikiApp bind={(f) => (appNav = f)} onClose={() => setApp(null)} />
       </Show>
       <Show when={app() === "privacy"}><Privacy onClose={() => setApp(null)} /></Show>
+      <Show when={app() === "watch"}><WatchParty userName={props.profile.name} onClose={() => setApp(null)} /></Show>
       <Show when={app() === "ps2"}><Ps2 profileId={props.profile.id} initialGame={ps2Boot() ?? undefined} initialJoin={ps2Join()} onClose={() => { setPs2Boot(null); setPs2Join(false); setApp(games().some((g) => g.sys === "ps2") ? "ps2home" : null); }} /></Show>
       <Show when={app() === "pc"}><PcApp onClose={() => setApp(null)} /></Show>
       <Show when={app() === "guestbook"}><Guestbook userName={props.profile.name} onClose={() => setApp(null)} /></Show>
@@ -1965,6 +2199,10 @@ export default function XMB(props: {
       <Show when={app() === "studio"}><Studio onClose={() => setApp(null)} /></Show>
       <Show when={app() === "code"}><CodeApp onClose={() => setApp(null)} /></Show>
       <Show when={app() === "manual"}><Manual onClose={() => setApp(null)} /></Show>
+
+      {/* SHARE + upscaling — one instance each; both find the live canvas themselves */}
+      <ShareBar app={app()} />
+      <UpscaleLayer app={app()} />
 
       {/* Control Center — PS button / ` from anywhere */}
       <ControlCenter
@@ -2052,8 +2290,14 @@ export default function XMB(props: {
       <Show when={app() === "renpy"}>
         <RpgMaker family="renpy" profile={props.profile} bind={(f) => (appNav = f)} onClose={() => { setApp(null); void refreshRpgCounts(); }} />
       </Show>
-      <Show when={app() === "web"}>
-        <RpgMaker family="web" profile={props.profile} bind={(f) => (appNav = f)} onClose={() => { setApp(null); void refreshRpgCounts(); }} />
+      <Show when={app() === "godot"}>
+        <RpgMaker family="godot" profile={props.profile} bind={(f) => (appNav = f)} onClose={() => { setApp(null); void refreshRpgCounts(); }} />
+      </Show>
+      <Show when={app() === "unity"}>
+        <RpgMaker family="unity" profile={props.profile} bind={(f) => (appNav = f)} onClose={() => { setApp(null); void refreshRpgCounts(); }} />
+      </Show>
+      <Show when={app() === "html5"}>
+        <RpgMaker family="html5" profile={props.profile} bind={(f) => (appNav = f)} onClose={() => { setApp(null); void refreshRpgCounts(); }} />
       </Show>
       <Show when={app() === "reporewind"}>
         <RepoRewind bind={(f) => (appNav = f)} onClose={() => setApp(null)} />
@@ -2340,6 +2584,22 @@ export default function XMB(props: {
               </For>
             </div>
           </div>
+          <Show when={upscaleSupported()}>
+            <div class="bg-modes">
+              <span class="bg-modes-label">SCREEN UPSCALING</span>
+              <div class="bg-modes-row">
+                <For each={UPSCALE_MODES}>
+                  {(m) => (
+                    <button class="bg-mode" classList={{ active: upscale() === m.id, cursor: themeRow() === 2 && upscale() === m.id }}
+                      onClick={() => { setThemeRow(2); setUpscale(m.id); sfx.tickH(); }}>
+                      <span class="bg-mode-name">{m.name}</span>
+                      <span class="bg-mode-sub">{m.desc}</span>
+                    </button>
+                  )}
+                </For>
+              </div>
+            </div>
+          </Show>
           <Show when={themeIdx() === THEMES.length}>
             <div class="theme-sliders">
               <For each={[
@@ -2348,7 +2608,7 @@ export default function XMB(props: {
                 { label: "Lightness", key: "l" as const, min: 30, max: 75 },
               ]}>
                 {(s, i) => (
-                  <div class="theme-slider" classList={{ active: themeRow() === i() + 2 }}>
+                  <div class="theme-slider" classList={{ active: themeRow() === i() + 3 }}>
                     <span class="theme-slider-label">{s.label}</span>
                     <input
                       type="range" min={s.min} max={s.max} value={customHsl()[s.key]}
@@ -2578,7 +2838,7 @@ export default function XMB(props: {
 
       {/* on-screen controller — shown on touch devices; drives the exact same
           nav as the keyboard/gamepad so every app just works */}
-      <div class="touchpad" classList={{ "tpad-hide": !overlayOpen() }}>
+      <div class="touchpad" classList={{ "tpad-hide": touchNavHidden() }}>
         <div class="tpad-dpad">
           {(["up", "left", "right", "down"] as const).map((dir) => (
             <button
@@ -2589,7 +2849,10 @@ export default function XMB(props: {
           ))}
         </div>
         <div class="tpad-ab">
-          <button class="tpad-btn tpad-o" onPointerDown={(e) => { e.preventDefault(); handleNav("back"); }} aria-label="back"><span class="btn-o" /></button>
+          {/* touch is tap + scroll: content is tapped directly, so the only
+              on-screen control that's always useful is Back (the d-pad + ✕ are
+              hidden on touch via CSS — kept for the rare cursor-only screen). */}
+          <button class="tpad-btn tpad-o" onPointerDown={(e) => { e.preventDefault(); handleNav("back"); }} aria-label="Back"><span class="btn-o" /><span class="tpad-lbl">Back</span></button>
           <button class="tpad-btn tpad-x" onPointerDown={(e) => { e.preventDefault(); handleNav("confirm"); }} aria-label="select"><span class="btn-x" /></button>
         </div>
       </div>
@@ -2626,6 +2889,18 @@ export default function XMB(props: {
           const fs = [...(e.currentTarget.files ?? [])];
           e.currentTarget.value = "";
           if (fs.length) onGallery(fs);
+        }}
+      />
+      <input
+        type="file"
+        ref={splatInput}
+        hidden
+        accept=".ply,.splat,.spz,.ksplat"
+        onChange={(e) => {
+          const f = e.currentTarget.files?.[0];
+          e.currentTarget.value = "";
+          // the picker's accept list is a hint, not a guarantee — check the name
+          if (f && isSplatFile(f.name)) setSplatFile(f);
         }}
       />
       <input

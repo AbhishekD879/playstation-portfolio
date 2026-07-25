@@ -37,7 +37,39 @@ function crc32(bytes: Uint8Array): number {
   return (c ^ 0xffffffff) >>> 0;
 }
 
-// —— build + send an output state (rumble + lightbar) ——
+// —— adaptive triggers ————————————————————————————————————————————————————
+// L2/R2 can push back. `mode` byte then up to 10 parameter bytes:
+//   0x00 off · 0x01 constant resistance from `start` · 0x02 a "click" between
+//   start and end · 0x26 vibrating resistance.
+export type TriggerEffect =
+  | { mode: "off" }
+  | { mode: "resist"; start: number; force: number }        // 0-1 each
+  | { mode: "click"; start: number; end: number; force: number };
+
+function triggerBytes(fx: TriggerEffect): number[] {
+  const B = (v: number) => Math.max(0, Math.min(255, Math.round(v * 255)));
+  if (fx.mode === "resist") return [0x01, B(fx.start), B(fx.force), 0, 0, 0, 0, 0, 0, 0, 0];
+  if (fx.mode === "click") return [0x02, B(fx.start), B(fx.end), B(fx.force), 0, 0, 0, 0, 0, 0, 0];
+  return [0x00, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
+}
+
+let leftFx: TriggerEffect = { mode: "off" };
+let rightFx: TriggerEffect = { mode: "off" };
+
+/**
+ * Set trigger resistance. Safe by construction: while both triggers are "off"
+ * we never set the enable bits, so the bytes on the wire are byte-for-byte what
+ * the (already shipped and working) lightbar/rumble path sends today. Turning
+ * this on can therefore never regress those.
+ */
+export function dsTriggers(left: TriggerEffect, right: TriggerEffect) {
+  leftFx = left; rightFx = right;
+  if (!device?.opened) return;
+  const { r, g, b } = themeRgb();
+  sendState({ r, g, b });
+}
+
+// —— build + send an output state (rumble + lightbar + triggers) ——
 async function sendState(o: { strong?: number; weak?: number; r?: number; g?: number; b?: number }) {
   if (!device?.opened) return;
   // common 47-byte payload (valid-flag bits: 0x03 = rumble, 0x04|0x08 in byte2 covers LEDs)
@@ -46,6 +78,11 @@ async function sendState(o: { strong?: number; weak?: number; r?: number; g?: nu
   p[2] = 0x04 | 0x08;                     // lightbar + player-LED control
   p[3] = Math.round((o.weak ?? 0) * 255);   // right/weak motor
   p[4] = Math.round((o.strong ?? 0) * 255); // left/strong motor
+  // Trigger effect blocks sit at 10 (right) and 21 (left) in the common report,
+  // with their enable bits in valid_flag0. Only written when an effect is
+  // actually asked for — see dsTriggers().
+  if (rightFx.mode !== "off") { p[0] |= 0x04; p.set(triggerBytes(rightFx), 10) }
+  if (leftFx.mode !== "off") { p[0] |= 0x08; p.set(triggerBytes(leftFx), 21) }
   p[39] = 0x02;                            // lightbar setup: enable
   p[42] = 0x02;                            // brightness: medium
   p[43] = 0x04;                            // player LED: center
@@ -106,14 +143,116 @@ export function dsRumble(strong: number, weak: number, duration: number) {
   setTimeout(() => sendState({ strong: 0, weak: 0, r, g, b }), duration);
 }
 
-// battery lives in input report 0x01 (USB, byte 53) / 0x31 (BT, byte 54)
+// —— the rest of the pad: motion, touchpad, and the Create button ————————
+// The Gamepad API exposes none of these. Create in particular has no standard
+// button index at all, which is why the console's SHARE button had to be a
+// keyboard shortcut until now.
+//
+// Input report layout (hid-playstation `dualsense_input_report`), USB id 0x01.
+// Bluetooth id 0x31 prefixes one extra byte, so every offset shifts by 1.
+const OFF = { buttons: 7, gyro: 15, accel: 21, touch: 32 };
+
+export interface DsMotion { gx: number; gy: number; gz: number; ax: number; ay: number; az: number }
+export interface DsTouch { active: boolean; x: number; y: number } // x/y normalised 0-1
+
+const [dsMotion, setDsMotion] = createSignal<DsMotion | null>(null);
+const [dsTouch, setDsTouch] = createSignal<DsTouch>({ active: false, x: 0, y: 0 });
+export { dsMotion, dsTouch };
+
+// —— gyro aiming ——————————————————————————————————————————————————————————
+// DOOM and Counter-Strike both aim from pointer-lock mouse deltas, so the
+// cleanest way to add motion aim is to BE a mouse: turn the pad's yaw/pitch
+// into synthetic mousemove events. `movementX`/`movementY` are settable through
+// MouseEventInit even though they're read-only on the event, which is what
+// makes this work without touching either game.
+let gyroAim = false;
+let gyroSens = 0.055;
+/** Turn motion aiming on for the app that's open. Off by default everywhere. */
+export function dsGyroAim(on: boolean, sensitivity = 0.055) { gyroAim = on; gyroSens = sensitivity }
+
+// Small rotations are mostly hand tremor; without a deadzone the crosshair
+// drifts constantly while you hold the pad still.
+const DEADZONE = 90;
+function feedGyroAim(gz: number, gx: number) {
+  if (!gyroAim) return;
+  const yaw = Math.abs(gz) > DEADZONE ? gz : 0;
+  const pitch = Math.abs(gx) > DEADZONE ? gx : 0;
+  if (!yaw && !pitch) return;
+  const target = (document.pointerLockElement as HTMLElement) ?? document.activeElement ?? document.body;
+  target.dispatchEvent(new MouseEvent("mousemove", {
+    bubbles: true,
+    movementX: -yaw * gyroSens,   // yaw left should look left
+    movementY: -pitch * gyroSens,
+  }));
+}
+
+let createCb: (() => void) | null = null;
+/** Fires on a Create ("share") button PRESS. One listener; last one wins. */
+export function onDsCreate(cb: (() => void) | null) { createCb = cb }
+
+let micCb: (() => void) | null = null;
+export function onDsMute(cb: (() => void) | null) { micCb = cb }
+
+let prevCreate = false, prevMute = false;
+
+export interface DsParsed {
+  battery: number | null;
+  create: boolean;
+  mute: boolean;
+  motion: DsMotion | null;
+  touch: DsTouch | null;
+}
+
+/**
+ * Pure decode of a DualSense input report — exported so the bit-twiddling can
+ * be tested without a physical pad (see dualsense.test.ts). Bluetooth (0x31)
+ * prefixes one byte, so every offset shifts.
+ */
+export function parseInputReport(reportId: number, d: DataView): DsParsed {
+  const shift = reportId === 0x31 ? 1 : 0;
+  const out: DsParsed = { battery: null, create: false, mute: false, motion: null, touch: null };
+
+  const battOff = reportId === 0x31 ? 53 : 52;
+  if (d.byteLength > battOff) out.battery = Math.min(100, (d.getUint8(battOff) & 0x0f) * 10 + 5);
+
+  // buttons — only the two the Gamepad API can't see
+  const b1 = OFF.buttons + shift + 1, b2 = OFF.buttons + shift + 2;
+  if (d.byteLength > b2) {
+    out.create = (d.getUint8(b1) & 0x10) !== 0;
+    out.mute = (d.getUint8(b2) & 0x04) !== 0;
+  }
+
+  // motion — signed 16-bit little-endian triples
+  const g = OFF.gyro + shift;
+  if (d.byteLength >= g + 12) {
+    out.motion = {
+      gx: d.getInt16(g, true), gy: d.getInt16(g + 2, true), gz: d.getInt16(g + 4, true),
+      ax: d.getInt16(g + 6, true), ay: d.getInt16(g + 8, true), az: d.getInt16(g + 10, true),
+    };
+  }
+
+  // touchpad, first contact only. Bit 7 of byte 0 SET means not touching, and
+  // x/y are 12-bit values packed across three bytes sharing a middle nibble.
+  const t = OFF.touch + shift;
+  if (d.byteLength >= t + 4) {
+    const b = [d.getUint8(t + 1), d.getUint8(t + 2), d.getUint8(t + 3)];
+    out.touch = {
+      active: (d.getUint8(t) & 0x80) === 0,
+      x: Math.min(1, (b[0] | ((b[1] & 0x0f) << 8)) / 1920),
+      y: Math.min(1, ((b[1] >> 4) | (b[2] << 4)) / 1080),
+    };
+  }
+  return out;
+}
+
 function onInputReport(e: any) {
-  const d: DataView = e.data;
-  const off = e.reportId === 0x31 ? 53 : 52;
-  if (d.byteLength <= off) return;
-  const raw = d.getUint8(off);
-  const pct = Math.min(100, (raw & 0x0f) * 10 + 5);
-  setDsBattery(pct);
+  const p = parseInputReport(e.reportId, e.data as DataView);
+  if (p.battery !== null) setDsBattery(p.battery);
+  if (p.create && !prevCreate) createCb?.();   // edge only — a held button is one press
+  if (p.mute && !prevMute) micCb?.();
+  prevCreate = p.create; prevMute = p.mute;
+  if (p.motion) { setDsMotion(p.motion); feedGyroAim(p.motion.gz, p.motion.gx) }
+  if (p.touch) setDsTouch(p.touch);
 }
 
 /** User-gesture-only: prompt for a DualSense and light it up. */

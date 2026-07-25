@@ -25,7 +25,7 @@ const wsUrl = (room: string) => {
 // Fetched per connection attempt — TURN creds expire (24h TTL), so a page-
 // lifetime cache would hand stale creds to a long-lived tab. Dev: none
 // (local candidates). Prod: ask the Worker (Cloudflare STUN + TURN).
-async function iceConfig(): Promise<RTCIceServer[]> {
+export async function iceConfig(): Promise<RTCIceServer[]> {
   if (isDev) return [];
   try {
     const r = await fetch(`https://${MP_HOST}/turn`);
@@ -47,22 +47,26 @@ export function connectSignaling(room: string): Signaling {
   const msgCbs: ((m: any) => void)[] = [];
   const openCbs: (() => void)[] = [];
   const closeCbs: (() => void)[] = [];
-  ws.onmessage = (e) => { let m; try { m = JSON.parse(e.data); } catch { return; } msgCbs.forEach((cb) => cb(m)); };
+  // Keepalive: a tiny no-op the server ignores, so a quiet signaling socket
+  // (idle once the datachannel is up) never gets idle-closed by the edge/proxy.
+  // Without it the WS silently dies and reconnection/new joiners can't signal.
+  const ka = setInterval(() => { if (ws.readyState === WebSocket.OPEN) ws.send('{"t":"ping"}'); }, 25000);
+  ws.onmessage = (e) => { let m; try { m = JSON.parse(e.data); } catch { return; } if (m?.t === "pong") return; msgCbs.forEach((cb) => cb(m)); };
   ws.onopen = () => openCbs.forEach((cb) => cb());
-  ws.onclose = () => closeCbs.forEach((cb) => cb());
+  ws.onclose = () => { clearInterval(ka); closeCbs.forEach((cb) => cb()); };
   return {
     send: (msg) => { if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(msg)); },
     onMessage: (cb) => msgCbs.push(cb),
     onOpen: (cb) => { if (ws.readyState === WebSocket.OPEN) cb(); else openCbs.push(cb); },
     onClose: (cb) => closeCbs.push(cb),
-    close: () => ws.close(),
+    close: () => { clearInterval(ka); ws.close(); },
   };
 }
 
 // —— one host<->joiner connection ————————————————————————————————————————
 // Buffers ICE candidates that arrive before the remote description is set (a
 // classic WebRTC race), and flushes them once it is.
-function makePeer(iceServers: RTCIceServer[], onIce: (c: RTCIceCandidate) => void) {
+export function makePeer(iceServers: RTCIceServer[], onIce: (c: RTCIceCandidate) => void) {
   const pc = new RTCPeerConnection({ iceServers });
   const pending: RTCIceCandidateInit[] = [];
   let remoteSet = false;
@@ -81,6 +85,8 @@ function makePeer(iceServers: RTCIceServer[], onIce: (c: RTCIceCandidate) => voi
 
 export interface HostHandle {
   joiners(): string[];
+  /** how many people are watching without playing */
+  watchers(): number;
   stop(): void;
 }
 
@@ -88,35 +94,49 @@ export function startHost(opts: {
   room: string;
   max: number;
   stream?: MediaStream; // omit for data-only hosts (e.g. the phone controller)
+  /** Present = advertise this room on Console TV. Absent = private, unlisted. */
+  listing?: { title: string; kind: string };
   onJoinerInput: (joinerId: string, data: any) => void;
   onJoinerChange?: (ids: string[]) => void;
+  onWatcherChange?: (n: number) => void;
   onStatus?: (s: string) => void;
 }): HostHandle {
   const sig = connectSignaling(opts.room);
   const peers = new Map<string, ReturnType<typeof makePeer>>();
-  const notify = () => opts.onJoinerChange?.([...peers.keys()]);
+  // Spectators live in the same peer map (they need the same offer/ICE dance)
+  // but are tracked separately so they never look like players to the caller.
+  const watching = new Set<string>();
+  let watcherCount = 0;
+  const notify = () => opts.onJoinerChange?.([...peers.keys()].filter((id) => !watching.has(id)));
 
-  sig.onOpen(() => { sig.send({ t: "host", room: opts.room, max: opts.max }); });
+  sig.onOpen(() => { sig.send({ t: "host", room: opts.room, max: opts.max, listing: opts.listing }); });
   sig.onClose(() => opts.onStatus?.("signaling closed"));
 
   sig.onMessage(async (m) => {
     if (m.t === "hosted") { opts.onStatus?.("waiting for players"); return; }
     if (m.t === "error") { opts.onStatus?.(`error: ${m.msg}`); return; }
+    if (m.t === "watchers") { watcherCount = Number(m.n) || 0; opts.onWatcherChange?.(watcherCount); return; }
 
     if (m.t === "joiner") {
       const id = m.id as string;
+      const isWatcher = !!m.watch;
+      if (isWatcher) watching.add(id);
       const ice = await iceConfig();
       const peer = makePeer(ice, (c) => sig.send({ t: "signal", to: id, data: { candidate: c } }));
       peers.set(id, peer);
       notify();
       // host is the media sender + offerer (video only when a stream exists)
       if (opts.stream) for (const track of opts.stream.getTracks()) peer.pc.addTrack(track, opts.stream);
-      const dc = peer.pc.createDataChannel("input", { ordered: true });
-      dc.onmessage = (e) => { try { opts.onJoinerInput(id, JSON.parse(e.data)); } catch { /* ignore */ } };
+      // A spectator gets NO input channel — the point of watching is that you
+      // can't touch the game. Not creating it is the enforcement, not a UI rule.
+      if (!isWatcher) {
+        const dc = peer.pc.createDataChannel("input", { ordered: true });
+        dc.onmessage = (e) => { try { opts.onJoinerInput(id, JSON.parse(e.data)); } catch { /* ignore */ } };
+      }
       peer.pc.onconnectionstatechange = () => {
-        opts.onStatus?.(`player ${id}: ${peer.pc.connectionState}`);
+        opts.onStatus?.(`${isWatcher ? "watcher" : "player"} ${id}: ${peer.pc.connectionState}`);
         if (["failed", "closed", "disconnected"].includes(peer.pc.connectionState)) {
-          peers.delete(id); notify();
+          peers.delete(id); watching.delete(id); notify();
         }
       };
       const offer = await peer.pc.createOffer();
@@ -133,12 +153,13 @@ export function startHost(opts: {
       return;
     }
 
-    if (m.t === "peer-left") { peers.get(m.id)?.pc.close(); peers.delete(m.id); notify(); }
+    if (m.t === "peer-left") { peers.get(m.id)?.pc.close(); peers.delete(m.id); watching.delete(m.id); notify(); }
   });
 
   return {
-    joiners: () => [...peers.keys()],
-    stop: () => { for (const p of peers.values()) p.pc.close(); peers.clear(); sig.close(); },
+    joiners: () => [...peers.keys()].filter((id) => !watching.has(id)),
+    watchers: () => watcherCount,
+    stop: () => { for (const p of peers.values()) p.pc.close(); peers.clear(); watching.clear(); sig.close(); },
   };
 }
 
@@ -151,6 +172,8 @@ export function startJoiner(opts: {
   room: string;
   onStream: (stream: MediaStream) => void;
   onStatus?: (s: string) => void;
+  /** watch-only: takes no player slot and gets no input channel */
+  watch?: boolean;
 }): JoinerHandle {
   const sig = connectSignaling(opts.room);
   let dc: RTCDataChannel | null = null;
@@ -181,7 +204,7 @@ export function startJoiner(opts: {
     for (const m of early.splice(0)) handle(m); // drain buffered offers/candidates
   });
 
-  sig.onOpen(() => sig.send({ t: "join", room: opts.room }));
+  sig.onOpen(() => sig.send({ t: "join", room: opts.room, as: opts.watch ? "watch" : undefined }));
   sig.onClose(() => opts.onStatus?.("signaling closed"));
   sig.onMessage(handle);
 
@@ -189,4 +212,21 @@ export function startJoiner(opts: {
     sendInput: (data) => { if (dc && dc.readyState === "open") dc.send(JSON.stringify(data)); },
     stop: () => { peer?.pc.close(); sig.close(); },
   };
+}
+
+// —— Console TV directory ——————————————————————————————————————————————————
+export interface LiveRoom { code: string; title: string; kind: string; since: number; watchers: number }
+export interface Marquee { live: LiveRoom[]; recent: { title: string; kind: string; at: number }[] }
+
+/** What's playing on the console right now. Best-effort: an unreachable
+ *  directory means an empty channel, never a broken one. */
+export async function fetchLive(): Promise<Marquee> {
+  try {
+    const r = await fetch(isDev ? "/live" : `https://${MP_HOST}/live`, { cache: "no-store" });
+    if (!r.ok) return { live: [], recent: [] };
+    const d = await r.json();
+    return { live: Array.isArray(d?.live) ? d.live : [], recent: Array.isArray(d?.recent) ? d.recent : [] };
+  } catch {
+    return { live: [], recent: [] };
+  }
 }

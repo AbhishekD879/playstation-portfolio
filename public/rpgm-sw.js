@@ -159,7 +159,13 @@ const NW_SHIM = `<script>(function(){
 // image renders blank rather than hanging; XHR+fetch already cover data files,
 // audio buffers, fonts and the effekseer wasm, which are the things that stall.
 const DIAG_SHIM = `<script>(function(){
-  var T0=Date.now(), seq=0, pending={}, recent=[], errors=[], counts={ok:0,fail:0}, activity=[];
+  var T0=Date.now(), seq=0, pending={}, recent=[], errors=[], counts={ok:0,fail:0}, activity=[], xfer=[];
+  // MOVEMENT channel — map transfers (doors/stairs) + event triggers get their
+  // OWN small ring so they're NEVER evicted by high-frequency parallel-event
+  // command spam (a per-frame Script/Conditional loop can flood 'activity' in
+  // under a second, burying the one door line that matters). Dedups repeats.
+  function xlog(m){ var last=xfer[0]; if(last&&last.m===m){ last.n=(last.n||1)+1; last.t=Date.now()-T0; post(); return; }
+    xfer.unshift({m:m, n:1, t:Date.now()-T0}); if(xfer.length>60) xfer.pop(); post(); }
   // startup: record the fs manifest so a still-failing existsSync can be compared
   // against the REAL stored picture paths (case/prefix/naming mismatches show here).
   try{ var _fs=window.__rpgmFS, _s=[]; if(_fs){ var _it=_fs.values(), _v; while(_s.length<6){ _v=_it.next(); if(_v.done) break; if(/pictures/.test(_v.value)) _s.push(_v.value); } }
@@ -187,7 +193,7 @@ const DIAG_SHIM = `<script>(function(){
     var canvas=!!document.querySelector("canvas");
     return {source:"rpgm-diag", up:now-T0, scene:scene, spinner:spinner,
       booted:!!(canvas&&!spinner&&(scene?scene!=="Scene_Boot":true)), canvas:canvas,
-      pending:pend.slice(0,12), recent:recent.slice(0,20), counts:counts, errors:errors.slice(0,10), activity:activity.slice(0,180)}; }
+      pending:pend.slice(0,12), recent:recent.slice(0,20), counts:counts, errors:errors.slice(0,10), activity:activity.slice(0,400), xfer:xfer.slice(0,60)}; }
   function post(){ try{ parent.postMessage(snap(), "*"); }catch(e){} }
   function addErr(msg, at){ errors.unshift({msg:String(msg).slice(0,280), at:at||""}); if(errors.length>10) errors.pop(); post(); }
   window.addEventListener("unhandledrejection", function(ev){ var r=ev&&ev.reason; addErr("Unhandled: "+((r&&r.message)||r), ""); });
@@ -213,7 +219,15 @@ const DIAG_SHIM = `<script>(function(){
   // Command, Common Event…), data + image loads, audio, scene changes — not
   // just raw network. This is what reveals whether a "talk → cutscene" event
   // even runs and where it stops. Poll until the engine classes exist.
-  function elog(path, reason){ activity.unshift({path:path, ok:true, reason:reason||"", t:Date.now()-T0}); if(activity.length>250) activity.pop(); }
+  // O(1) dedup keyed by the full message → the ring holds DISTINCT lines only,
+  // each with a ×N count. A windowed scan misses floods whose paths rotate over
+  // a set bigger than the window (this game's CG plugins existsSync-probe 80+
+  // variants/frame); a Map handles any rotation size. Ring popped-oldest at 800.
+  var actSeen=Object.create(null);
+  function elog(path, reason){ reason=reason||""; var key=path+"\\u0001"+reason; var a=actSeen[key];
+    if(a){ a.n=(a.n||1)+1; a.t=Date.now()-T0; return; }
+    a={path:path, ok:true, reason:reason, n:1, t:Date.now()-T0}; actSeen[key]=a; activity.unshift(a);
+    if(activity.length>800){ var old=activity.pop(); delete actSeen[old.path+"\\u0001"+old.reason]; } }
   // the NW.js shim (require/fs) calls this so our SCAFFOLDING shows in the trace
   try { window.__diaglog = function(p, r){ elog(String(p), r || "scaffold"); }; } catch(e){}
   var VERBOSE = false; // when on, EVERY event command is logged (not just the cutscene-relevant set)
@@ -225,7 +239,7 @@ const DIAG_SHIM = `<script>(function(){
     234:"Tint Picture",235:"Erase Picture",236:"Weather",241:"Play BGM",245:"Play ME",249:"Play SE",
     250:"Play SE",251:"Stop SE",261:"Play Movie",301:"Battle",302:"Shop",351:"Menu",352:"Save",
     355:"Script",356:"Plugin Cmd",357:"Plugin Cmd"};
-  var INTERESTING={101:1,102:1,105:1,115:1,117:1,201:1,204:1,212:1,213:1,221:1,222:1,223:1,224:1,225:1,231:1,232:1,233:1,234:1,235:1,236:1,241:1,245:1,249:1,250:1,261:1,301:1,302:1,351:1,352:1,355:1,356:1,357:1};
+  var INTERESTING={101:1,102:1,105:1,111:1,115:1,117:1,201:1,204:1,212:1,213:1,221:1,222:1,223:1,224:1,225:1,231:1,232:1,233:1,234:1,235:1,236:1,241:1,245:1,249:1,250:1,261:1,301:1,302:1,351:1,352:1,355:1,356:1,357:1};
   function briefCmd(c){ try{ var p=c.parameters||[];
     if(c.code===231||c.code===232||c.code===233||c.code===234) return "#"+p[0]+(p[1]?" "+p[1]:"");
     if(c.code===235) return "#"+p[0];
@@ -235,7 +249,20 @@ const DIAG_SHIM = `<script>(function(){
     if(c.code===355) return String(p[0]).slice(0,60);
     if(c.code===201) return "map#"+p[1];
     if(c.code===241||c.code===245||c.code===249||c.code===250) return (p[0]&&p[0].name)||"";
-    if(c.code===111) return "branch";
+    if(c.code===111){ var t=p[0]; // decode the gate so a locked door shows WHAT it checks
+      if(t===0) return "IF switch#"+p[1]+"=="+(p[2]===0?"ON":"OFF");
+      if(t===1){ var op=["==",">=","<=",">","<","!="][p[4]]||"?"; return "IF var#"+p[1]+op+(p[2]===0?p[3]:"var#"+p[3]); }
+      if(t===2) return "IF selfSw "+p[1]+"=="+(p[2]===0?"ON":"OFF");
+      if(t===4) return "IF actor#"+p[1];
+      if(t===6) return "IF char#"+p[1]+" dir "+p[2];
+      if(t===7) return "IF gold"+(p[2]===0?">=":p[2]===1?"<=":"<")+p[1];
+      if(t===8) return "IF hasItem#"+p[1];
+      if(t===9) return "IF hasWeapon#"+p[1];
+      if(t===10) return "IF hasArmor#"+p[1];
+      if(t===11) return "IF button "+p[1];
+      if(t===12) return "IF script: "+String(p[1]).slice(0,80);
+      if(t===13) return "IF vehicle "+p[1];
+      return "IF cond-type "+t; }
     return ""; }catch(e){ return ""; } }
   var hkTries=0, hkIv=setInterval(function(){
     var IM=window.ImageManager, GI=window.Game_Interpreter, DM=window.DataManager, AM=window.AudioManager, SM=window.SceneManager;
@@ -260,6 +287,18 @@ const DIAG_SHIM = `<script>(function(){
     if(DM && !DM.__diag){ DM.__diag=1; if(typeof DM.loadDataFile==="function"){ var ld=DM.loadDataFile; DM.loadDataFile=function(name,src){ elog("data "+src,"data"); return ld.apply(this,arguments); }; } }
     if(AM && !AM.__diag){ AM.__diag=1; ["playBgm","playBgs","playMe","playSe"].forEach(function(m){ if(typeof AM[m]!=="function")return; var o=AM[m]; AM[m]=function(x){ elog("audio."+m+"("+((x&&x.name)||"")+")","audio"); return o.apply(this,arguments); }; }); }
     if(SM && !SM.__diag){ SM.__diag=1; ["push","goto","pop"].forEach(function(m){ if(typeof SM[m]!=="function")return; var o=SM[m]; SM[m]=function(s){ elog("scene."+m+" → "+((s&&s.name)||""),"scene"); return o.apply(this,arguments); }; }); }
+    // MOVEMENT hooks → the dedicated xfer channel. reserveTransfer fires for
+    // EVERY door/stairs/teleport (event cmd 201 routes through it); Game_Event.start
+    // fires when the player actually triggers a map event. Together they tell us:
+    // transfer + target-map load OK = door works; event started but NO transfer =
+    // a conditional/locked door (by design); neither = the tile triggered nothing.
+    var GP=window.Game_Player, GE=window.Game_Event;
+    if(GP && GP.prototype && !GP.prototype.__diagX){ GP.prototype.__diagX=1;
+      if(typeof GP.prototype.reserveTransfer==="function"){ var rt=GP.prototype.reserveTransfer;
+        GP.prototype.reserveTransfer=function(mapId,x,y,d,fade){ try{ var from=(window.$gameMap&&$gameMap.mapId)?$gameMap.mapId():"?"; xlog("TRANSFER → map "+mapId+" @ ("+x+","+y+")  [from map "+from+" @ ("+this._x+","+this._y+")]"); }catch(e){} return rt.apply(this,arguments); }; } }
+    if(GE && GE.prototype && !GE.prototype.__diagX){ GE.prototype.__diagX=1;
+      if(typeof GE.prototype.start==="function"){ var est=GE.prototype.start;
+        GE.prototype.start=function(){ try{ if(this.list&&this.list()){ var nm=""; try{ if(this.event&&this.event())nm=this.event().name||""; }catch(_){} xlog("event #"+this._eventId+(nm?" '"+nm+"'":"")+" started @ ("+this._x+","+this._y+")"); } }catch(e){} return est.apply(this,arguments); }; } }
     // THE engine's OWN error handlers — the internal catch that eats a cutscene
     // error and makes it "blink" without a window error. This is what surfaces
     // the real failure.
@@ -272,6 +311,31 @@ const DIAG_SHIM = `<script>(function(){
     if(PM && !PM.__diag){ PM.__diag=1;
       try{ if(window.$plugins&&window.$plugins.length) elog("plugins loaded: "+window.$plugins.map(function(p){return p.name+(p.status?"":"(OFF)");}).join(", "), "info"); }catch(e){}
       if(typeof PM.callCommand==="function"){ var cc=PM.callCommand; PM.callCommand=function(intp,plugin,cmd){ elog("pluginCmd "+plugin+" :: "+cmd, "event"); return cc.apply(this,arguments); }; } }
+    // ── NaN-coordinate guard ────────────────────────────────────────────────
+    // Some games/plugins call textColor(n) with a NaN colour index (a malformed
+    // colour text-code or a plugin passing undefined). MV/MZ turn that into
+    // getPixel(NaN,NaN) → getImageData(NaN,…), which throws FATALLY on iOS Safari
+    // ("Value NaN is outside the range …") and kills the game the moment the
+    // save/menu opens. It's a GAME fault — we can't fix its data, but we sanitise
+    // the bad value at the engine/browser boundary so the game survives instead
+    // of crashing. getImageData is the universal net (any caller); the textColor
+    // patches keep the colour correct (NaN → 0 = the normal white) for MV & MZ.
+    var CRC=window.CanvasRenderingContext2D;
+    if(CRC && CRC.prototype && !CRC.prototype.__diagNaN){ CRC.prototype.__diagNaN=1;
+      var _gid=CRC.prototype.getImageData;
+      CRC.prototype.getImageData=function(x,y,w,h){
+        if(isFinite(x)&&isFinite(y)&&isFinite(w)&&w&&isFinite(h)&&h) return _gid.apply(this,arguments);
+        var X=isFinite(x)?x:0, Y=isFinite(y)?y:0, W=(isFinite(w)&&w)?w:1, H=(isFinite(h)&&h)?h:1;
+        elog("guard: getImageData("+x+","+y+","+w+","+h+") clamped → ("+X+","+Y+","+W+","+H+") — game fed a NaN/0 coord; crash prevented","guard");
+        return _gid.call(this,X,Y,W,H); }; }
+    var WB=window.Window_Base;
+    if(WB && WB.prototype && !WB.prototype.__diagNaN && typeof WB.prototype.textColor==="function"){ WB.prototype.__diagNaN=1;
+      var _tc=WB.prototype.textColor;
+      WB.prototype.textColor=function(n){ if(!isFinite(n)){ elog("guard: Window_Base.textColor("+n+") → 0 (NaN colour index — game/plugin fault)","guard"); n=0; } return _tc.call(this,n); }; }
+    var CM=window.ColorManager;
+    if(CM && !CM.__diagNaN && typeof CM.textColor==="function"){ CM.__diagNaN=1;
+      var _cmt=CM.textColor;
+      CM.textColor=function(n){ if(!isFinite(n)){ elog("guard: ColorManager.textColor("+n+") → 0 (NaN colour index — game/plugin fault)","guard"); n=0; } return _cmt.call(this,n); }; }
     if(++hkTries>3000) clearInterval(hkIv);
   }, 10);
 
@@ -290,7 +354,7 @@ const DIAG_SHIM = `<script>(function(){
   }
   // host commands: clear log · toggle verbose · dump full log to share
   window.addEventListener("message", function(e){ if(!e.data) return;
-    if(e.data.__rpgmDiagClear){ activity.length=0; recent.length=0; errors.length=0; counts.ok=0; counts.fail=0; post(); }
+    if(e.data.__rpgmDiagClear){ activity.length=0; xfer.length=0; recent.length=0; errors.length=0; counts.ok=0; counts.fail=0; actSeen=Object.create(null); post(); }
     else if(e.data.__rpgmDiagVerbose!==undefined){ VERBOSE=!!e.data.__rpgmDiagVerbose; elog("verbose logging "+(VERBOSE?"ON":"OFF"), "info"); post(); }
     else if(e.data.__rpgmDiagDump){ try{ parent.postMessage({source:"rpgm-diag-dump", text: buildDump()}, "*"); }catch(_){} }
   });

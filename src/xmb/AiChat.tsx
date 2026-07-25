@@ -4,28 +4,48 @@
 // search YouTube, and pop rich widgets (career, skills, contact, weather)
 // right in the chat. Speak or type. No servers, no keys.
 import { For, Match, Show, Switch, createSignal, onCleanup, onMount } from "solid-js";
-import { CreateMLCEngine, type MLCEngine } from "@mlc-ai/web-llm";
+import { CreateMLCEngine, prebuiltAppConfig, type MLCEngine } from "@mlc-ai/web-llm";
 import { Agent, type AgentTool } from "@earendil-works/pi-agent-core";
 import { Type } from "typebox";
 import { CAREER, OWNER, PROJECTS, SKILLS } from "../content";
 import { fetchWeather, wmo, type Weather } from "../apps";
 import { webllmModel, webllmStreamFn } from "../piWebllm";
+import { geminiAvailability, geminiModel, geminiNanoStreamFn } from "../piGemini";
 import { loadTTS, speak, stopSpeaking, ttsSupported } from "../tts";
 import { clearChat, loadChat, saveChat, type StoredChat } from "../chatStore";
 import { buildIndex, retrieve } from "../rag";
+import { webSearchTool } from "../aiTools";
+import type { WebResult } from "../websearch";
 import { capabilitySummary, runAction } from "../consoleBus";
 import { asrSupported, record } from "../asr";
 import { Icon } from "./icons";
 import { primaryPad, setNavEnabled } from "../input";
 import * as sfx from "../audio";
 
-// Hermes is the default (listed first) — it uses tools, memory & retrieved
-// facts far more reliably than the 1B. Llama stays as the lightweight option.
+// Fallback brains for when Gemini Nano isn't available. All non-"thinking"
+// models (Qwen3 emits <think> blocks that fight the tool-call parse), all
+// tool-trained. Hermes is the default (listed first) — most reliable with the
+// <tool_call> convention. 2026 models via web-llm 0.2.84.
 const MODELS = {
-  agent: { id: "Hermes-3-Llama-3.2-3B-q4f16_1-MLC", label: "Hermes 3 · 3B", dl: "~1.9 GB", blurb: "recommended — smart with tools, memory & recall" },
-  fast: { id: "Llama-3.2-1B-Instruct-q4f16_1-MLC", label: "Llama 3.2 · 1B", dl: "~700 MB", blurb: "lighter & faster, for a modest GPU" },
+  agent: { id: "Hermes-3-Llama-3.2-3B-q4f16_1-MLC", label: "Hermes 3 · 3B", dl: "~2 GB", blurb: "recommended — most reliable with tools, memory & recall" },
+  reason: { id: "Phi-3.5-mini-instruct-q4f16_1-MLC", label: "Phi-3.5 mini", dl: "~2.2 GB", blurb: "sharpest reasoning — best at multi-step questions" },
+  balanced: { id: "Qwen2.5-1.5B-Instruct-q4f16_1-MLC", label: "Qwen2.5 · 1.5B", dl: "~1.6 GB", blurb: "balanced — tool-trained, lighter footprint" },
+  fast: { id: "gemma3-1b-it-q4f16_1-MLC", label: "Gemma 3 · 1B", dl: "~0.7 GB", blurb: "tiny & fast, for a modest GPU" },
+  tiny: { id: "SmolLM2-360M-Instruct-q4f16_1-MLC", label: "SmolLM2 · 360M", dl: "~0.3 GB", blurb: "last resort — runs almost anywhere, but simple answers" },
 } as const;
-type ModelKey = keyof typeof MODELS;
+
+/** Only offer models web-llm actually ships. A model id that quietly disappears
+ *  in a web-llm bump would otherwise fail at download time, after the user has
+ *  already committed to waiting — filter them out of the picker instead. */
+function availableModels(): [keyof typeof MODELS, (typeof MODELS)[keyof typeof MODELS]][] {
+  const entries = Object.entries(MODELS) as [keyof typeof MODELS, (typeof MODELS)[keyof typeof MODELS]][];
+  try {
+    const have = new Set(prebuiltAppConfig.model_list.map((m) => m.model_id));
+    const ok = entries.filter(([, m]) => have.has(m.id));
+    return ok.length ? ok : entries;   // never leave the picker empty
+  } catch { return entries; }
+}
+type ModelKey = keyof typeof MODELS | "gemini";
 
 const APPS = "doom, chess, lichess, trivia, flash, ps2, pc, guestbook, browser, visualizer, studio, code, youtube, cinema, podcasts, radio, spotify, winamp, library, wiki, dictionary, map, timemachine, art, apod, weather, tv, news, photos, trophies, whatsnew, themes";
 
@@ -42,11 +62,13 @@ These requests MUST become tool calls, never prose:
 - "what has he worked on" / "his experience" → show_career
 - "his projects" → show_projects
 - "how do I contact/hire him" → show_contact
-- "what's the weather" → get_weather`;
+- "what's the weather" → get_weather
+- anything about current events, recent news, live facts, prices, or something you don't know / happened after training → web_search, then answer from the results and cite the link`;
 
 type Widget =
   | { t: "career" } | { t: "projects" } | { t: "skills" } | { t: "contact" }
   | { t: "weather"; data: Weather }
+  | { t: "sources"; query: string; results: WebResult[] }
   | { t: "app"; app: string; ok: boolean };
 type ChatItem = { kind: "msg"; role: "user" | "assistant"; text: string } | { kind: "widget"; w: Widget };
 
@@ -68,6 +90,7 @@ export default function AiChat(props: {
   const [listening, setListening] = createSignal(false);
   const [voice, setVoice] = createSignal(false);
   const [voiceLoading, setVoiceLoading] = createSignal(false);
+  const [gemini, setGemini] = createSignal(false); // Chrome built-in Gemini Nano is the preferred brain
   let engine: MLCEngine | null = null;
   let agent: Agent | null = null;
   let rec: any = null;
@@ -141,6 +164,7 @@ export default function AiChat(props: {
         widget({ t: "app", app: String(action), ok });
         return { text, terminate: ok };
       }),
+    webSearchTool((query, results) => { if (results.length) widget({ t: "sources", query, results }); }),
   ];
 
   onMount(() => {
@@ -176,23 +200,24 @@ export default function AiChat(props: {
     });
     (async () => {
       restored = await loadChat(chatKey()); // prior chat, if any
-      const gpu = (navigator as any).gpu;
-      if (!gpu) { setSupported(false); return; }
-      try {
-        setSupported(!!(await gpu.requestAdapter()));
-      } catch {
-        setSupported(false);
-      }
+      void initBackend();
     })();
   });
 
-  async function boot(key: ModelKey) {
-    setModel(key);
-    setProgress("Contacting the model hub…");
-    try {
-      engine = await CreateMLCEngine(MODELS[key].id, {
-        initProgressCallback: (p) => setProgress(p.text),
-      });
+  // pick the brain: PREFER Chrome's built-in Gemini Nano (no download from us,
+  // hardware-accelerated); else fall back to WebGPU WebLLM (GPU check + picker).
+  async function initBackend() {
+    const gem = await geminiAvailability();
+    if (gem !== "unavailable") { setGemini(true); setSupported(true); void bootGemini(); return; }
+    setGemini(false);
+    const gpu = (navigator as any).gpu;
+    if (!gpu) { setSupported(false); return; }
+    try { setSupported(!!(await gpu.requestAdapter())); } catch { setSupported(false); }
+  }
+
+  // shared agent wiring — identical tools, RAG and event handling for EITHER
+  // brain (Gemini Nano or WebLLM); only the streamFn + model descriptor differ.
+  function startAgent(modelDesc: any, streamFn: any) {
       buildIndex().catch(() => {}); // warm the RAG index in the background
       // the control-bus manifest goes straight into the system prompt, so the
       // copilot always knows exactly what it can operate
@@ -209,8 +234,8 @@ Examples — these MUST become console_control calls (flat JSON, no nesting):
 - "turn off vibration" → {"action":"settings.rumble","state":"off"}`;
       agent = new Agent({
         // seed the model's memory with the prior conversation so it remembers
-        initialState: { systemPrompt: SYSTEM_LIVE, model: webllmModel(MODELS[key].id), tools, messages: (restored?.messages as any) ?? [] },
-        streamFn: webllmStreamFn(() => engine),
+        initialState: { systemPrompt: SYSTEM_LIVE, model: modelDesc, tools, messages: (restored?.messages as any) ?? [] },
+        streamFn,
         // RAG: pull the most relevant facts for the latest question and slot
         // them in just before it — grounds answers without bloating memory
         transformContext: async (msgs) => {
@@ -273,12 +298,34 @@ Examples — these MUST become console_control calls (flat JSON, no nesting):
       } else {
         setItems([{
           kind: "msg", role: "assistant",
-          text: "Online — a pi.dev agent running on your GPU. Ask about Abhishek (I'll pull up cards), or tell me things: “open doom”, “search lofi on youtube”, “what's the weather”. Tap the mic to talk.",
+          text: "Online — a pi.dev agent running privately on your device. Ask about Abhishek (I'll pull up cards), or tell me things: “open doom”, “search the web for…”, “what's the weather”. Tap the mic to talk.",
         }]);
       }
       setTimeout(() => scroll(), 60);
+  }
+
+  async function boot(key: keyof typeof MODELS) {
+    setGemini(false);
+    setModel(key);
+    setProgress("Contacting the model hub…");
+    try {
+      engine = await CreateMLCEngine(MODELS[key].id, { initProgressCallback: (p) => setProgress(p.text) });
+      startAgent(webllmModel(MODELS[key].id), webllmStreamFn(() => engine));
     } catch (e) {
       setProgress(`Couldn't load the model — ${String(e).slice(0, 120)}`);
+    }
+  }
+
+  // preferred brain — Chrome's built-in Gemini Nano (no model download from us)
+  async function bootGemini() {
+    setModel("gemini");
+    setProgress("Waking up Chrome's built-in Gemini Nano…");
+    try {
+      startAgent(geminiModel(), geminiNanoStreamFn((pct) => setProgress(`Downloading Gemini Nano… ${pct}%`)));
+    } catch {
+      setGemini(false); setModel(null); setReady(false);
+      const gpu = (navigator as any).gpu;
+      setSupported(!!gpu && !!(await gpu.requestAdapter().catch(() => null)));
     }
   }
 
@@ -291,9 +338,14 @@ Examples — these MUST become console_control calls (flat JSON, no nesting):
     restored = null;
     clearChat(chatKey());
     agent = null;
+    try { engine?.unload(); } catch { /* none */ }
+    engine = null;
     setReady(false);
-    setModel(null); // back to the brain picker; a fresh chat has no memory
+    setModel(null);
     setItems([]);
+    setSupported(null);
+    setGemini(false);
+    void initBackend(); // re-pick the brain (Gemini Nano if present, else the picker)
   }
 
   function send(text?: string) {
@@ -366,7 +418,7 @@ Examples — these MUST become console_control calls (flat JSON, no nesting):
     <div class="ai pad-focus-scope">
       <div class="ai-head">
         <div class="panel-tag">
-          AI ABHISHEK — {model() ? `${MODELS[model()!].label} · ` : ""}PI.DEV AGENT · WEBGPU, ON-DEVICE
+          AI ABHISHEK — {model() === "gemini" ? "GEMINI NANO · CHROME BUILT-IN · " : model() ? `${MODELS[model() as keyof typeof MODELS]?.label ?? ""} · WEBGPU · ` : ""}PI.DEV AGENT · ON-DEVICE
         </div>
         <Show when={ready() && ttsSupported()}>
           <button class="ghost-btn ai-iconbtn" classList={{ on: voice() }} title="speak replies aloud (on-device)" onClick={toggleVoice}>
@@ -396,9 +448,9 @@ Examples — these MUST become console_control calls (flat JSON, no nesting):
             fallback={
               <div class="ai-gate">
                 <div class="ai-gate-big">Pick a brain</div>
-                <p>Both run fully on your GPU — downloaded once, cached, nothing you type leaves this device. Not recommended on mobile data.</p>
+                <p>All run fully on your GPU — downloaded once, cached, nothing you type leaves this device. Not recommended on mobile data.</p>
                 <div class="ai-models">
-                  <For each={Object.entries(MODELS) as [ModelKey, (typeof MODELS)[ModelKey]][]}>
+                  <For each={availableModels()}>
                     {([key, m]) => (
                       <button class="ai-model-card" onClick={() => { sfx.confirm(); boot(key); }}>
                         <span class="ai-model-name"><span class="ai-ico"><Icon name={key === "agent" ? "chip" : "lightning"} /></span>{m.label}</span>
@@ -516,6 +568,20 @@ function AiWidget(props: { w: Widget }) {
           <a class="ps2-launch ai-w-btn" href={`mailto:${OWNER.email}`}><span class="ai-ico"><Icon name="mail" /></span>Email</a>
           <a class="ps2-launch ai-w-btn" href={OWNER.linkedin} target="_blank"><span class="ai-ico"><Icon name="link" /></span>LinkedIn</a>
           <a class="ps2-launch ai-w-btn" href={`tel:${OWNER.phone.replace(/\s/g, "")}`}><span class="ai-ico"><Icon name="phone" /></span>Call</a>
+        </div>
+      </Match>
+      <Match when={w.t === "sources"}>
+        <div class="ai-widget">
+          <div class="ai-w-title">🔎 WEB — “{(w as any).query}”</div>
+          <For each={(w as any).results as WebResult[]}>
+            {(r) => (
+              <a class="ai-src" href={r.url} target="_blank" rel="noopener">
+                <div class="ai-src-title">{r.title}</div>
+                <div class="ai-src-snip">{r.snippet}</div>
+                <div class="ai-src-url">{(() => { try { return new URL(r.url).hostname.replace(/^www\./, ""); } catch { return r.url; } })()}</div>
+              </a>
+            )}
+          </For>
         </div>
       </Match>
       <Match when={w.t === "weather"}>

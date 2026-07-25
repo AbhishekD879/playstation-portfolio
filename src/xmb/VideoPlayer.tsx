@@ -15,6 +15,16 @@ export default function VideoPlayer(props: { onClose: () => void; bind: (nav: (a
   const [pos, setPos] = createSignal(0);
   const [dur, setDur] = createSignal(0);
   const [chrome, setChrome] = createSignal(true); // controls fade like a real player
+  // Picture-in-Picture: floats the video into a small window that keeps playing
+  // while you browse the rest of the console (background playback). Native API.
+  const [inPip, setInPip] = createSignal(false);
+  const pipOk = () => typeof document !== "undefined" && !!(document as unknown as { pictureInPictureEnabled?: boolean }).pictureInPictureEnabled;
+  const togglePip = async () => {
+    try {
+      if (document.pictureInPictureElement) await document.exitPictureInPicture();
+      else if (video && video.readyState >= 1) await video.requestPictureInPicture();
+    } catch { /* PiP blocked or no video loaded yet */ }
+  };
   let fileInput!: HTMLInputElement;
   let video!: HTMLVideoElement;
   let wrap!: HTMLDivElement;
@@ -72,6 +82,8 @@ export default function VideoPlayer(props: { onClose: () => void; bind: (nav: (a
   onMount(() => {
     video.addEventListener("loadedmetadata", () => setDur(video.duration || 0));
     video.addEventListener("ended", () => { setPlaying(false); setChrome(true); releaseLock?.(); releaseLock = null; });
+    video.addEventListener("enterpictureinpicture", () => setInPip(true));
+    video.addEventListener("leavepictureinpicture", () => setInPip(false));
     onCleanup(() => {
       cancelAnimationFrame(raf);
       if (hideTimer) clearTimeout(hideTimer);
@@ -119,6 +131,12 @@ export default function VideoPlayer(props: { onClose: () => void; bind: (nav: (a
               <button class="ghost-btn karaoke-play" onClick={toggle}>{playing() ? "❚❚ pause" : "▶ play"}</button>
               <button class="ghost-btn" onClick={() => seek(10)}>10s ⏵⏵</button>
               <button class="ghost-btn" onClick={fullscreen}>⛶ fullscreen</button>
+              {/* Picture-in-Picture — pops the video into a floating window that
+                  keeps playing while you browse the rest of the console (or other
+                  tabs/apps). The browser's native PiP; needs a user gesture (this click). */}
+              <Show when={pipOk()}>
+                <button class="ghost-btn" onClick={togglePip}>{inPip() ? "▽ exit mini" : "◳ pop out"}</button>
+              </Show>
               <button class="ghost-btn" onClick={() => fileInput.click()}>⏏ change video</button>
             </span>
           </div>

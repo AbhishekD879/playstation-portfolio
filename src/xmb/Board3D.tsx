@@ -6,6 +6,8 @@ import { createEffect, onCleanup, onMount } from "solid-js";
 import * as THREE from "three";
 import gsap from "gsap";
 import { tint } from "../theme";
+import { addTabletop, addTableLights, fitDistance, makeControls, onBoardTap } from "./tabletop";
+import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 
 type Cell = { type: string; color: "w" | "b" } | null;
 
@@ -36,21 +38,12 @@ export default function Board3D(props: {
     renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     wrap.appendChild(renderer.domElement);
     const scene = new THREE.Scene();
-    const camera = new THREE.PerspectiveCamera(42, 1, 0.1, 100);
-    camera.position.set(0, 9.5, 9.8);
-    camera.lookAt(0, 0, 0.4);
+    const camera = new THREE.PerspectiveCamera(42, 1, 0.1, 300);
+    const controls = makeControls(camera, renderer.domElement, { min: 5, max: 42 });
 
-    scene.add(new THREE.AmbientLight(0xffffff, 0.6));
-    const sun = new THREE.DirectionalLight(0xfff4e0, 1.6);
-    sun.position.set(5, 11, 4);
-    sun.castShadow = true;
-    sun.shadow.mapSize.set(1024, 1024);
-    sun.shadow.camera.left = sun.shadow.camera.bottom = -6;
-    sun.shadow.camera.right = sun.shadow.camera.top = 6;
-    scene.add(sun);
-    const fill = new THREE.DirectionalLight(0x8fb4ff, 0.35);
-    fill.position.set(-6, 4, -5);
-    scene.add(fill);
+    // same table, same light rig as every other 3D board on the console
+    addTableLights(scene, matchMedia("(pointer: coarse)").matches, 7);
+    const tableJunk = addTabletop(scene, renderer, { mat: 11.4, y: -0.42, envIntensity: 0.5 });
 
     // —— board: 64 squares + frame ——
     const lightSq = new THREE.MeshStandardMaterial({ color: 0xcbb489, roughness: 0.55 });
@@ -108,11 +101,58 @@ export default function Board3D(props: {
       return g;
     };
 
-    createEffect(() => {
+    // ═══ real pieces ═══
+    // A CC0 photogrammetry chess set (Poly Haven, public/models/chess). Its nodes
+    // are helpfully named piece_<type>_<colour>_<n>, so we lift ONE prototype per
+    // (type, colour) and clone it per square. Until it lands — or if it fails to
+    // load at all — the lathe-turned pieces above are what you see, so the game
+    // is never blocked on a download.
+    const protos = new Map<string, THREE.Object3D>();
+    const TYPE_KEY: Record<string, string> = { pawn: "p", rook: "r", knight: "n", bishop: "b", queen: "q", king: "k" };
+    let modelReady = false;
+    new GLTFLoader().load("/models/chess/chess_set.gltf", (gltf) => {
+      let unit = 1;
+      gltf.scene.traverse((n: any) => {
+        if (!n.isMesh || !n.name) return;
+        // the node itself carries piece_<type>_<colour>_<n>; only fall back to the parent
+        const m = /piece_(\w+?)_(white|black)(?:_\d+)?$/.exec(n.name) ?? /piece_(\w+?)_(white|black)(?:_\d+)?$/.exec(n.parent?.name ?? "");
+        if (!m) return;
+        const key = TYPE_KEY[m[1]] + (m[2] === "white" ? "w" : "b");
+        if (protos.has(key)) return;
+        const clone = n.clone();
+        clone.position.set(0, 0, 0); clone.rotation.set(0, 0, 0);
+        clone.castShadow = true;
+        protos.set(key, clone);
+      });
+      if (!protos.size) return;                       // unexpected layout → keep the lathes
+      // scale so a pawn is a sensible fraction of a square
+      const pawn = protos.get("pw");
+      if (pawn) {
+        const size = new THREE.Box3().setFromObject(pawn).getSize(new THREE.Vector3());
+        unit = 0.62 / Math.max(size.x, size.z);       // pawn ≈ 62% of a square wide
+      }
+      for (const o of protos.values()) o.scale.setScalar(unit);
+      modelReady = true;
+      rebuild();
+    }, undefined, () => { /* offline → lathe pieces stay */ });
+
+    const rebuild = () => {
       const b = props.board;
       pieces.clear();
-      b.forEach((row, r) => row.forEach((p, f) => { if (p) pieces.add(makePiece(p.type, p.color, f, r)); }));
-    });
+      b.forEach((row, r) => row.forEach((p, f) => {
+        if (!p) return;
+        const proto = modelReady ? protos.get(p.type + p.color) : null;
+        if (proto) {
+          const g = proto.clone();
+          g.position.set(f - 3.5, 0, r - 3.5);
+          g.rotation.y = p.color === "w" ? 0 : Math.PI;  // face each other
+          pieces.add(g);
+        } else {
+          pieces.add(makePiece(p.type, p.color, f, r));
+        }
+      }));
+    };
+    createEffect(rebuild);
 
     // —— highlights: cursor ring, picked glow, hint dots ——
     const accent = new THREE.Color(tint());
@@ -163,18 +203,22 @@ export default function Board3D(props: {
     };
     const down = (e: PointerEvent) => { const i = squareAt(e); if (i !== null) props.onDown(i); };
     const up = (e: PointerEvent) => { const i = squareAt(e); if (i !== null) props.onUp(i); };
-    renderer.domElement.addEventListener("pointerdown", down);
-    renderer.domElement.addEventListener("pointerup", up);
+    const offTap = onBoardTap(renderer.domElement, (e) => { down(e); up(e); });
 
-    // gentle intro sweep, then an idle breath so it never sits frozen
-    gsap.from(camera.position, { y: 14, z: 14, duration: 1.4, ease: "power3.out" });
+    let placed = false;
+    const place = () => {
+      const d = fitDistance(camera, 13.5);
+      camera.position.set(0, Math.sin(0.86) * d, Math.cos(0.86) * d);
+      controls.target.set(0, 0.3, 0);
+      controls.update();
+      gsap.from(camera.position, { y: d * 1.5, z: d * 1.5, duration: 1.2, ease: "power3.out" });
+    };
     let disposed = false;
     let t0 = performance.now();
     const render = (now: number) => {
       if (disposed) return;
       const t = (now - t0) / 1000;
-      camera.position.x = Math.sin(t * 0.12) * 0.55;
-      camera.lookAt(0, 0, 0.4);
+      controls.update();
       cursorRing.rotation.z = Math.PI / 4 + t * 0.6;
       renderer.render(scene, camera);
       requestAnimationFrame(render);
@@ -187,6 +231,7 @@ export default function Board3D(props: {
       camera.aspect = w / h;
       camera.updateProjectionMatrix();
       renderer.setSize(w, h);
+      if (!placed) { place(); placed = true; }
     };
     size();
     const ro = new ResizeObserver(size);
@@ -195,8 +240,8 @@ export default function Board3D(props: {
     onCleanup(() => {
       disposed = true;
       ro.disconnect();
-      renderer.domElement.removeEventListener("pointerdown", down);
-      renderer.domElement.removeEventListener("pointerup", up);
+      offTap(); controls.dispose();
+      for (const d of tableJunk) d.dispose();
       Object.values(geoCache).forEach((g) => g.dispose());
       [sqGeo, knightHead, crossV, crossH, dotGeo].forEach((g) => g.dispose());
       renderer.dispose();

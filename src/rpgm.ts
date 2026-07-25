@@ -66,9 +66,11 @@ export const ENGINE_LABEL: Record<RpgEngine, string> = {
 };
 /** Which cabinet a game belongs to — RPG Maker, Ren'Py and Web games are
  *  separate apps (a web-exported Godot/Unity/HTML5 game is its own family). */
-export const engineFamily = (e: RpgEngine): "renpy" | "rpgmaker" | "web" =>
+export const engineFamily = (e: RpgEngine): "renpy" | "rpgmaker" | "godot" | "unity" | "html5" =>
   e === "renpy" || e === "renpydesktop" ? "renpy"
-  : e === "godot" || e === "unity" || e === "html5" ? "web"
+  : e === "godot" ? "godot"
+  : e === "unity" ? "unity"
+  : e === "html5" ? "html5"
   : "rpgmaker";
 
 /** Which player surface an engine routes to. ("web" = serve the exported build
@@ -521,6 +523,20 @@ async function doImport(
   let det = detect(paths);
   if (det.engine === "unknown") {
     await (await rpgmDir()).removeEntry(id, { recursive: true }).catch(() => {});
+    // Give a precise, actionable reason for the most common mistake: dropping a
+    // DESKTOP build. Browsers can only run games EXPORTED for the web; there's no
+    // desktop→web converter, so the fix is always "get/re-export the web build."
+    const lc = paths.map((p) => p.toLowerCase());
+    const has = (re: RegExp) => lc.some((p) => re.test(p));
+    const unityDesktop = has(/(^|\/)unityplayer\.dll$/)
+      || has(/(^|\/)mono(bleedingedge)?\/etc\/mono\//)
+      || (has(/(^|\/)[^/]+_data\//) && has(/(^|\/)[^/]+_data\/(level0|globalgamemanagers|resources\.assets|boot\.config|app\.info)/));
+    if (unityDesktop) {
+      throw new Error("This is a Windows/desktop Unity build (UnityPlayer.dll + a _Data folder with level0 / resources.assets / boot.config). Browsers can only run Unity games exported FOR WEBGL. In Unity: File → Build Settings → WebGL → Build — that produces an index.html plus a Build/ folder with .wasm, .data and .loader.js; import THAT. A desktop .exe can't run in a browser and there's no converter — you need the WebGL export from the original project.");
+    }
+    if (has(/\.exe$/) || has(/(^|\/)[^/]+_data\//)) {
+      throw new Error("This looks like a desktop build (.exe + a game-data folder), not a web build. Browsers only run games EXPORTED for the web — Unity → WebGL, Godot → HTML5, Ren'Py → Web. Ask the developer for the web build, or re-export it from the project.");
+    }
     throw new Error("Couldn't recognise a game in this archive — no index.html (web build), RPG_RT (RPG Maker 2000/2003), RGSS data (XP/VX/Ace) or Ren'Py files found. Desktop binaries (.exe) can't run in a browser; export the game for web first.");
   }
 

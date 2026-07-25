@@ -1,3 +1,10 @@
+// NOTE: this module is deliberately pinned to transformers.js **v3** (installed
+// as the `@huggingface/transformers-v3` alias). v4 dropped
+// SegformerForSemanticSegmentation from the "background-removal" task —
+// `pipeline("background-removal", "briaai/RMBG-1.4")` throws "Unsupported model
+// type ... for task background-removal" there. The rest of the app runs v4;
+// only this file needs the old runtime. Don't "upgrade" it without swapping the
+// model too.
 // On-device photo cutouts — two Labs tools, both through the model manager:
 //  · cutout(blob)          — Cutout Cam: RMBG-1.4 background removal; the
 //                            whole subject lifted onto transparency.
@@ -19,7 +26,7 @@ const progressCb = (p: any) => {
 
 const loadRmbg = (device: "webgpu" | "wasm") =>
   acquireModel<any>(`rmbg-${device}`, "RMBG (Cutout Cam)", 45, async () => {
-    const { pipeline } = await import("@huggingface/transformers");
+    const { pipeline } = await import("@huggingface/transformers-v3");
     return pipeline("background-removal", "briaai/RMBG-1.4", {
       device,
       session_options: { logSeverityLevel: 3 },
@@ -29,7 +36,7 @@ const loadRmbg = (device: "webgpu" | "wasm") =>
 
 const loadSam = (device: "webgpu" | "wasm") =>
   acquireModel<any>(`slimsam-${device}`, "SlimSAM (Click-to-Mask)", 40, async () => {
-    const { SamModel, AutoProcessor } = await import("@huggingface/transformers");
+    const { SamModel, AutoProcessor } = await import("@huggingface/transformers-v3");
     const model = await SamModel.from_pretrained("Xenova/slimsam-77-uniform", {
       device,
       session_options: { logSeverityLevel: 3 },
@@ -72,7 +79,7 @@ export async function isolate(blob: Blob, point: [number, number], onProgress?: 
   dlTick = (pct) => onProgress?.({ phase: "download", pct });
   const url = URL.createObjectURL(blob);
   try {
-    const { RawImage } = await import("@huggingface/transformers");
+    const { RawImage } = await import("@huggingface/transformers-v3");
     const image = await RawImage.read(url);
 
     const run = async (device: "webgpu" | "wasm") => {

@@ -57,6 +57,14 @@ export const ICONS: Record<string, () => JSX.Element> = {
   star: () => S(<><path d="M24 6l5.2 12.4 13.4 1-10.2 8.7 3.1 13.1L24 34.4 12.5 41.2l3.1-13.1L5.4 19.4l13.4-1L24 6Z" /></>),
   equalizer: () => S(<><path d="M12 36V22M20 36V12M28 36V26M36 36V16" /><circle cx="12" cy="26" r="2.2" fill="currentColor" /><circle cx="20" cy="18" r="2.2" fill="currentColor" /><circle cx="28" cy="29" r="2.2" fill="currentColor" /><circle cx="36" cy="21" r="2.2" fill="currentColor" /></>),
   // the PlayStation face-button glyphs — the signature visual language
+  // —— board & party games ——
+  dice: () => S(<><rect x="9" y="9" width="30" height="30" rx="5" /><circle cx="17" cy="17" r="2.2" fill="currentColor" /><circle cx="31" cy="17" r="2.2" fill="currentColor" /><circle cx="24" cy="24" r="2.2" fill="currentColor" /><circle cx="17" cy="31" r="2.2" fill="currentColor" /><circle cx="31" cy="31" r="2.2" fill="currentColor" /></>),
+  grid: () => S(<><path d="M8 8h32v32H8V8ZM8 19h32M8 29h32M19 8v32M29 8v32" /><circle cx="24" cy="24" r="3.4" fill="currentColor" /></>),
+  crown: () => S(<><path d="M8 34h32l3-19-10 7-7-12-7 12-10-7 3 19Z" /><path d="M12 40h24" /></>),
+  // share: a frame with an arrow leaving it — the console's SHARE button
+  share: () => S(<><path d="M24 6v22" /><path d="M16 14l8-8 8 8" /><path d="M13 24H9v18h30V24h-4" /></>),
+  broadcast: () => S(<><circle cx="24" cy="24" r="4.5" fill="currentColor" stroke="none" /><path d="M15.5 15.5a12 12 0 0 0 0 17M32.5 15.5a12 12 0 0 1 0 17" /><path d="M9.5 9.5a20.5 20.5 0 0 0 0 29M38.5 9.5a20.5 20.5 0 0 1 0 29" /></>),
+  mask: () => S(<><path d="M6 16c6-2 12-2 18 0 6-2 12-2 18 0 0 10-4 16-9 16-4 0-6-3-9-3s-5 3-9 3c-5 0-9-6-9-16Z" /><circle cx="16" cy="24" r="2.4" fill="currentColor" /><circle cx="32" cy="24" r="2.4" fill="currentColor" /></>),
   triangle: () => S(<><path d="M24 9 41 38H7L24 9Z" /></>),
   circle: () => S(<><circle cx="24" cy="24" r="15" /></>),
   cross: () => S(<><path d="M12 12 36 36M36 12 12 36" /></>),

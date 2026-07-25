@@ -10,12 +10,16 @@
   "durable_objects": {
     "bindings": [
       { "name": "SIGNAL_ROOM", "class_name": "SignalRoom" },
-      { "name": "LOG_STORE", "class_name": "LogStore" }
+      { "name": "LOG_STORE", "class_name": "LogStore" },
+      { "name": "WATCH_ROOM", "class_name": "WatchRoom" },
+      { "name": "DIRECTORY", "class_name": "Directory" }
     ]
   },
   // sqlite-backed classes so they run on the free Workers plan.
   "migrations": [
     { "tag": "v1", "new_sqlite_classes": ["SignalRoom"] },
-    { "tag": "v2", "new_sqlite_classes": ["LogStore"] }
+    { "tag": "v2", "new_sqlite_classes": ["LogStore"] },
+    { "tag": "v3", "new_sqlite_classes": ["WatchRoom"] },
+    { "tag": "v4", "new_sqlite_classes": ["Directory"] }
   ]
 }

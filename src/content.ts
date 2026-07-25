@@ -51,7 +51,9 @@ export interface XmbItem {
     | { type: "repo-rewind" }
     | { type: "rpg-maker" }
     | { type: "renpy" }
-    | { type: "web-games" }
+    | { type: "godot" }
+    | { type: "unity" }
+    | { type: "html5" }
     | { type: "chess" }
     | { type: "trivia" }
     | { type: "flash" }
@@ -77,8 +79,18 @@ export interface XmbItem {
     | { type: "youtube" }
     | { type: "timemachine" }
     | { type: "art" }
+    | { type: "voiceavatar" }
+    | { type: "cs" }
+    | { type: "party" }
+    | { type: "retrojoin" }
+    | { type: "consoletv" }
+    | { type: "analytics" }
+    | { type: "splat" }
+    | { type: "board" }
+    | { type: "syscity" }
     | { type: "wiki" }
     | { type: "privacy" }
+    | { type: "watch" }
     | { type: "lichess-tv" }
     | { type: "themes" }
     | { type: "labs" }
@@ -230,6 +242,14 @@ export const TROPHIES: TrophyDef[] = [
   { id: "aifriend", tier: "gold", name: "Ghost in the Machine", desc: "Talked to the on-device AI" },
   { id: "timetraveler", tier: "silver", name: "Time Traveler", desc: "Visited the old web" },
   { id: "curator", tier: "bronze", name: "Curator", desc: "Toured the art gallery" },
+  // —— the newer apps: playing them should count for something ——
+  { id: "strategist", tier: "silver", name: "Strategist", desc: "Beat the computer at a board game" },
+  { id: "boardgamer", tier: "bronze", name: "Good Sport", desc: "Won an online board game" },
+  { id: "ludochamp", tier: "silver", name: "All Four Home", desc: "Won a game of Ludo" },
+  { id: "partyhost", tier: "bronze", name: "Party Host", desc: "Opened a party game room" },
+  { id: "fullhouse", tier: "silver", name: "Full House", desc: "Had four or more phones in one party" },
+  { id: "counterterrorist", tier: "bronze", name: "Rush B", desc: "Booted Counter-Strike 1.6" },
+  { id: "voicecall", tier: "silver", name: "Say That Again", desc: "Spoke to the voice avatar" },
 ];
 
 // The cross-media bar, grouped like a real console. Left→right the columns
@@ -256,6 +276,7 @@ export const CATEGORIES: XmbCategory[] = [
       },
       { id: "resume", title: "Download Résumé", sub: "PDF — view or save a copy", icon: "disc-doc", action: { type: "link", href: "/resume.pdf" } },
       { id: "ai", title: "AI Abhishek", sub: "On-device LLM — ask about my work", icon: "chip", action: { type: "ai-chat" } },
+      { id: "voiceavatar", title: "Talk to Abhishek", sub: "Speak to a voice avatar of me — on-device, powered by Gemini Nano", icon: "mic", action: { type: "voiceavatar" } },
       { id: "guestbook", title: "Guestbook", sub: "Sign the console — notes from visitors", icon: "pen", action: { type: "guestbook" } },
       { id: "whatsnew", title: "What's New", sub: "Your activity on this console", icon: "spark", action: { type: "whats-new" } },
       { id: "trophies", title: "Trophy Collection", sub: "Your haul so far", icon: "trophy", action: { type: "trophies" } },
@@ -318,6 +339,7 @@ export const CATEGORIES: XmbCategory[] = [
     items: [
       { id: "videoplayer", title: "Video Player", sub: "Play any video file from this device — backdrops react to it", icon: "film", action: { type: "video-player" } },
       { id: "yt", title: "YouTube", sub: "Trending, search & play — no account", icon: "play", action: { type: "youtube" } },
+      { id: "watch", title: "Watch Party", sub: "Watch YouTube in sync with friends — chat, reactions & a shared queue", icon: "play", action: { type: "watch" } },
       { id: "ia-video", title: "Archive Cinema", sub: "Public-domain films from archive.org", icon: "film", action: { type: "video-ia" } },
     ],
   },
@@ -334,12 +356,22 @@ export const CATEGORIES: XmbCategory[] = [
     items: [], // injected: built-in games, then the consoles, then your library
   },
   {
+    // the learning hub — walkable/explorable courses that teach by doing.
+    id: "learn",
+    label: "Learn",
+    icon: "book",
+    items: [
+      { id: "syscity", title: "System City", sub: "Learn system design — bite-size lessons, live diagrams & an AI tutor, beginner to master", icon: "cube", action: { type: "syscity" } },
+    ],
+  },
+  {
     // not games, not media — the machine's weird side. PSP called it Extras.
     id: "extras",
     label: "Extras",
     icon: "chip",
     items: [
       { id: "code", title: "Code Playground", sub: "Write & run JavaScript / Python — sandboxed on this console", icon: "chip", action: { type: "code" } },
+      { id: "analytics", title: "Console Analytics", sub: "Real SQL over this console's own data — 200+ commits, your library, your playtime", icon: "grid", action: { type: "analytics" } },
       { id: "pc", title: "Other OS", sub: "Boot a whole x86 PC (KolibriOS) inside the console", icon: "monitor", action: { type: "pc" } },
       { id: "manual", title: "System Manual", sub: "How this console is built — architecture, APIs, diagrams", icon: "book", action: { type: "manual" } },
       { id: "reporewind", title: "Repo Rewind", sub: "Watch this console build itself — every commit, animated", icon: "clock", action: { type: "repo-rewind" } },

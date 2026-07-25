@@ -8,6 +8,7 @@ import { For, Show, createEffect, createSignal, onCleanup, onMount } from "solid
 export const COLS = 4;
 const RATIO = { wide: 16 / 9, cover: 2 / 3, square: 1 } as const;
 const GAP = 16;
+const MIN_TILE = 150; // px — drop columns on narrow screens so phone cards stay big enough to tap
 
 export interface Tile {
   img?: string;
@@ -27,12 +28,19 @@ export default function TileGrid(props: {
   onHover?: (i: number) => void;
 }) {
   let grid!: HTMLDivElement;
-  const cols = () => props.cols ?? COLS;
+  // The requested column count is a max; on a narrow viewport we fit fewer so
+  // tiles never shrink below MIN_TILE (tap targets on phones). Layout AND the
+  // measured thumb height both read this, so they can't drift apart.
+  const [cols, setCols] = createSignal(props.cols ?? COLS);
   const [thumbH, setThumbH] = createSignal(150);
 
   const measure = () => {
     if (!grid) return;
-    const cw = (grid.clientWidth - GAP * (cols() - 1)) / cols();
+    const want = props.cols ?? COLS;
+    const fit = Math.max(1, Math.floor((grid.clientWidth + GAP) / (MIN_TILE + GAP)));
+    const c = Math.min(want, fit);
+    setCols(c);
+    const cw = (grid.clientWidth - GAP * (c - 1)) / c;
     setThumbH(Math.round(cw / RATIO[props.shape ?? "wide"]));
   };
   onMount(() => {
@@ -41,7 +49,7 @@ export default function TileGrid(props: {
     ro.observe(grid);
     onCleanup(() => ro.disconnect());
   });
-  createEffect(() => { cols(); props.shape; measure(); });
+  createEffect(() => { props.cols; props.shape; measure(); });
 
   createEffect(() => {
     props.sel;

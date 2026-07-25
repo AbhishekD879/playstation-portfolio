@@ -15,6 +15,14 @@ const loadASR = () =>
     return pipeline("automatic-speech-recognition", "onnx-community/whisper-base.en", { device, session_options: { logSeverityLevel: 3 } } as any);
   });
 
+/** Transcribe a 16 kHz mono Float32 clip (e.g. a VAD speech segment). */
+export async function transcribe(audio: Float32Array): Promise<string> {
+  if (audio.length < 1600) return ""; // < 0.1s → nothing said
+  const asr = await loadASR();
+  const out = await asr(audio);
+  return (out?.text ?? "").trim();
+}
+
 /** Records until stop() is called, then resolves with the transcript. */
 export function record(): { stop: () => void; done: Promise<string> } {
   let stopRec: () => void = () => {};

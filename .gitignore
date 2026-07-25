@@ -11,3 +11,11 @@ public/models/*.glb
 # stray test screenshots at repo root (public/ pngs are fine)
 /*.png
 .dev.vars
+
+# CC0 Ludo tabletop assets (Poly Haven) — deploy assets, not tracked in git.
+# See public/ludo/README.md to re-fetch.
+public/ludo/*.jpg
+public/ludo/*.hdr
+
+# CC0 photogrammetry chess set — see public/models/README.md
+public/models/chess/

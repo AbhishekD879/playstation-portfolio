@@ -17,8 +17,8 @@ import RpgEasyRpg from "./RpgEasyRpg";
 import RpgRenPy from "./RpgRenPy";
 import RpgWeb from "./RpgWeb";
 
-type Family = "rpgmaker" | "renpy" | "web";
-const FAMILY_NAME: Record<Family, string> = { rpgmaker: "RPG Maker", renpy: "Ren'Py", web: "Web Games" };
+type Family = "rpgmaker" | "renpy" | "godot" | "unity" | "html5";
+const FAMILY_NAME: Record<Family, string> = { rpgmaker: "RPG Maker", renpy: "Ren'Py", godot: "Godot", unity: "Unity", html5: "HTML5 / WebGL" };
 
 export default function RpgMaker(props: { profile: { id: string }; family: Family; onClose: () => void; bind: (nav: (a: NavAction) => void) => void }) {
   const [games, setGames] = createSignal<RpgGame[]>([]);
@@ -68,7 +68,7 @@ export default function RpgMaker(props: { profile: { id: string }; family: Famil
   }
 
   const isRenpy = () => props.family === "renpy";
-  const isWeb = () => props.family === "web";
+  const isWeb = () => props.family === "godot" || props.family === "unity" || props.family === "html5";
   // only this family's games (RPG Maker / Ren'Py / Web are separate libraries)
   const refresh = () => listRpgGames(props.profile.id).then((gs) => setGames(gs.filter((g) => engineFamily(g.engine) === props.family)));
   onMount(refresh);
@@ -209,7 +209,7 @@ export default function RpgMaker(props: { profile: { id: string }; family: Famil
     >
       <div class="rpgcab">
         <div class="guide-head">
-          <div class="panel-tag">{isRenpy() ? "REN'PY — YOUR GAMES · EXPERIMENTAL" : isWeb() ? "WEB GAMES — YOUR GAMES" : "RPG MAKER — YOUR GAMES"}</div>
+          <div class="panel-tag">{FAMILY_NAME[props.family].toUpperCase()} — YOUR GAMES{props.family !== "rpgmaker" ? " · EXPERIMENTAL" : ""}</div>
           <div class="rpg-headacts">
             <button class="ps-act" classList={{ on: lite() }} onClick={() => { setLite((v) => !v); sfx.tickV(); }}
               title="For phones that can't fit the full game: skips music & sounds and recompresses images (smaller, near-identical). Videos untouched. The game plays silent.">
@@ -304,9 +304,14 @@ export default function RpgMaker(props: { profile: { id: string }; family: Famil
         {/* Off-screen (NOT hidden — some Android browsers ignore .click() on a
             display:none input, which is what made the picker blink open/closed).
             A <label for> opens each natively on a real tap — no programmatic
-            click, so nothing can loop it. */}
-        <input id="rpg-add-file" class="rpg-file-input" type="file" ref={fileInput} accept=".zip,.rar,.7z,application/zip" onChange={() => void pickAndImport()} />
-        <input id="rpg-reimport-file" class="rpg-file-input" type="file" ref={reimportInput} accept=".zip,.rar,.7z,application/zip" onChange={() => void pickAndReimport()} />
+            click, so nothing can loop it.
+            DELIBERATELY NO `accept` filter: some OS file dialogs only build a
+            selectable filter for types they recognise and GREY OUT .rar/.7z
+            entirely (even with the right MIME types declared). We detect the real
+            format by magic bytes in the worker and error clearly on non-archives,
+            so an accept filter only ever blocked valid files. Don't re-add it. */}
+        <input id="rpg-add-file" class="rpg-file-input" type="file" ref={fileInput} onChange={() => void pickAndImport()} />
+        <input id="rpg-reimport-file" class="rpg-file-input" type="file" ref={reimportInput} onChange={() => void pickAndReimport()} />
       </div>
     </Show>
   );

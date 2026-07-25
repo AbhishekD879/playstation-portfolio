@@ -54,6 +54,40 @@ const MODE = {
   reactive: { amp: 1.1, glow: 0.95, react: 1.0, speed: 1.05, sparkSize: 0.16, sparkOp: 0.82 },
   aurora: { amp: 1.32, glow: 1.18, react: 0.6, speed: 0.85, sparkSize: 0.19, sparkOp: 0.92 },
 } as const;
+const NEBULA_VERT = /* glsl */ `
+  varying vec2 vUv;
+  void main() {
+    vUv = uv;
+    gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+  }
+`;
+
+const NEBULA_FRAG = /* glsl */ `
+uniform float uTime;
+uniform vec3 uColor; // Theme tint from settings
+varying vec2 vUv;
+
+// Hash-based noise for fast volumetric gas on GPU
+float h(vec2 p, float t) { return fract(sin(dot((p + t) * 10.0, vec2(12.9898, 78.233))) * 43758.5); }
+
+void main() {
+  // Palette: Violet (#7c6bff) to Magenta (#ff4d97)
+  vec3 nebCol = mix(vec3(0.486, 0.415, 1.0), vec3(1.0, 0.298, 0.592), sin(uTime * 0.3) * 0.5 + 0.5);
+  
+  // Layer 1: Churning Gas (Slow swirling motion)
+  float t = uTime * 0.15;
+  vec2 uv = vUv - 0.5; // Center coordinate space
+  float gas = smoothstep(0.4, n + h(uv * 3.0, t), h(uv * 2.0, t * 0.5));
+  
+  // Layer 2: Deep Mist (Density over the core)
+  float mist = smoothstep(0.5, 1.0, h(uv * 8.0, -t)); 
+  float density = gas * mist;
+
+  // Apply Nebula colors mixed with Theme Tint
+  vec3 col = mix(nebCol, nebCol * uColor * 1.4, density);
+  gl_FragColor = vec4(col, density * 0.7); 
+}`;
+
 const isWaveMode = (m: string): m is keyof typeof MODE => m in MODE;
 
 // —— Horizon: a retro sunset grid scrolling toward the viewer ——
@@ -142,6 +176,14 @@ export default function Wave() {
     const sparkles = new THREE.Points(pgeo, sparkleMat);
     scene.add(sparkles);
 
+    // ——————————————————————————————————
+    // THEMED BACKDROPS
+    // The canvas normally sits behind everything (opacity 1). For nebula/ember/
+    // abyss/dawn we render a *unique* particle system so they never look flat.
+    // For fireflies/stars/grid the classic wave gets a pass-through shader;
+    // for flat / space the canvas fades out and .wave-bg does all the work.
+    // ————————————————————————————————————
+
     // —— Fireflies: dense tinted embers that wander and glow with the music ——
     const FN = 240;
     const fBase = new Float32Array(FN * 3), fPos = new Float32Array(FN * 3), fPhase = new Float32Array(FN), fVel = new Float32Array(FN);
@@ -187,6 +229,18 @@ export default function Wave() {
     grid.visible = false;
     scene.add(grid);
 
+    // —— Nebula: Violet gas clouds churning in void (Additive Blending) ——
+    const nGeo = new THREE.PlaneGeometry(50, 30, 1, 1);
+    const nMat = new THREE.ShaderMaterial({
+      vertexShader: NEBULA_VERT, fragmentShader: NEBULA_FRAG,
+      uniforms: { uTime: { value: Math.random() * 50 }, uColor: { value: new THREE.Color(0xffffff) } },
+      transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide,
+    });
+    const nPlane = new THREE.Mesh(nGeo, nMat);
+    nPlane.position.set(0, 0, -1.5);
+    nPlane.visible = false;
+    scene.add(nPlane);
+
     // —— pointer parallax: the whole backdrop leans toward the cursor ——
     let parX = 0, parY = 0, parTX = 0, parTY = 0;
     const onPar = (e: PointerEvent) => {
@@ -225,6 +279,12 @@ export default function Wave() {
       flies.visible = mode === "fireflies";
       stars.visible = mode === "stars";
       grid.visible = mode === "grid";
+    
+    // —— Nebula visibility & tinting ——
+    nPlane.visible = mode === "nebula";
+    if (mode === "nebula") {
+      nMat.uniforms.uColor.value = col.clone().lerp(new THREE.Color(0xff4d97), 0.5);
+    }
       flyMat.color = col.clone().lerp(new THREE.Color(0xffe9a8), 0.55);
       starMat.color = col.clone().lerp(new THREE.Color(0xdce9ff), 0.75);
       gridMat.uniforms.uColor.value = col;
@@ -239,7 +299,7 @@ export default function Wave() {
       // Labs "Living Background" off — or the "Flat 2D" mode — fades everything
       // out, leaving the original still gradient (the .wave-bg CSS). Fluid mode
       // renders on its own WebGPU canvas — the three scene sleeps under it.
-      const live = labEnabled("livingbg") && bgMode() !== "flat" && !(bgMode() === "fluid" && hasWebGPU());
+      const live = labEnabled("livingbg") && bgMode() !== "flat" && !["space", "nebula", "ember", "abyss", "dawn"].includes(bgMode()) && !(bgMode() === "fluid" && hasWebGPU());
       const want = live ? "1" : "0";
       if (canvas.style.opacity !== want) { canvas.style.transition = "opacity 0.5s ease"; canvas.style.opacity = want; }
       if (!live) return;
@@ -301,6 +361,8 @@ export default function Wave() {
       } else if (mode === "grid") {
         gridMat.uniforms.uTime.value += dt * (0.85 + audioLevel * 1.1);
         gridMat.uniforms.uAudio.value = audioLevel;
+      } else if (mode === "nebula") {
+        nMat.uniforms.uTime.value += dt * speedMul;
       }
       renderer.render(scene, camera);
     };
@@ -332,7 +394,25 @@ export default function Wave() {
   const brightness = h < 6 || h >= 22 ? 0.72 : h < 9 ? 0.88 : h < 17 ? 1 : h < 20 ? 0.92 : 0.8;
 
   return (
-    <div class="wave-bg" ref={wrap} style={{ "--xmb-tint": tint(), transition: "background 0.6s", filter: `brightness(${brightness})` }}>
+    <div
+      class="wave-bg"
+      classList={{
+        "is-grad": ["space", "nebula", "ember", "abyss", "dawn"].includes(bgMode()),
+        "grad-space": bgMode() === "space",
+        "grad-nebula": bgMode() === "nebula",
+        "grad-ember": bgMode() === "ember",
+        "grad-abyss": bgMode() === "abyss",
+        "grad-dawn": bgMode() === "dawn",
+      }}
+      ref={wrap}
+      style={{ "--xmb-tint": tint(), transition: "background 0.6s", filter: `brightness(${brightness})` }}
+    >
+      {/* animated gradient backdrops — near-black ground + slowly drifting colour clouds */}
+      <Show when={["space", "nebula", "ember", "abyss", "dawn"].includes(bgMode())}>
+        <div class="grad-layer g1" />
+        <div class="grad-layer g2" />
+        <div class="grad-layer g3" />
+      </Show>
       <canvas ref={canvas} />
       <Show when={bgMode() === "fluid" && hasWebGPU()}>
         <FluidBg />
