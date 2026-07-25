@@ -4231,3 +4231,24 @@ img.status-avatar, img.ptile-avatar { object-fit: cover; border: 1px solid rgba(
 .rpg-diag-row.dim { color: rgba(255,255,255,0.42); font-style: normal; }
 .rpg-diag-t { display: inline-block; min-width: 46px; color: rgba(255,255,255,0.34); font-variant-numeric: tabular-nums; }
 .rpg-diag-row b { color: #7ee787; font-weight: 600; }
+
+/* ═════════ PS2 player selector — inline in the shelf's action row ═════════ */
+.padsel {
+  display: inline-flex; align-items: center; gap: 2px;
+  padding: 3px 4px 3px 10px; border: 1px solid rgba(255,255,255,0.14);
+  border-radius: 999px; background: rgba(6,10,18,0.55);
+}
+.padsel-k { font-size: 9.5px; letter-spacing: 0.2em; color: rgba(255,255,255,0.42); margin-right: 6px; }
+.padsel-n {
+  width: 22px; height: 22px; border-radius: 999px; border: 0; cursor: pointer; font: inherit;
+  font-size: 11.5px; font-variant-numeric: tabular-nums; background: transparent;
+  color: rgba(255,255,255,0.35); transition: background 0.14s, color 0.14s;
+}
+.padsel-n:hover, .padsel-n:focus-visible { color: #fff; outline: none; }
+.padsel-n.on { background: color-mix(in oklab, var(--xmb-tint) 42%, transparent); color: #fff; }
+.padsel-eng {
+  margin: 0 6px 0 8px; font-size: 9.5px; letter-spacing: 0.14em; text-transform: uppercase;
+  color: rgba(255,255,255,0.34);
+}
+.padsel-eng.fork { color: color-mix(in oklab, var(--xmb-tint) 75%, #fff); }
+@media (max-width: 760px) { .padsel-k, .padsel-eng { display: none; } }

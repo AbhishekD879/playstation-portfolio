@@ -2230,7 +2230,27 @@ export default function XMB(props: {
           onLink={() => onLink("ps2")}
           onChanged={refreshGames}
           onClose={() => setApp(null)}
-          extra={() => <button class="ghost-btn" onClick={() => { sfx.confirm(); setPs2Boot(null); setPs2Join(true); setApp("ps2"); }}>🎮 Join 2-player</button>}
+          extra={() => (
+            <>
+              {/* Controllers for the next disc. Chosen HERE — on the home
+                  screen, outside the emulator — so it is settled before the
+                  disc gesture exists. Putting it between the gesture and the
+                  boot is what broke player one. */}
+              <span class="padsel" title="Controllers for the next disc">
+                <span class="padsel-k">PLAYERS</span>
+                <For each={[1, 2, 3, 4, 5, 6]}>
+                  {(n) => (
+                    <button class="padsel-n" classList={{ on: ps2Players() >= n }}
+                      onClick={() => { sfx.tickH(); setPs2Players(n); }}>{n}</button>
+                  )}
+                </For>
+                <span class="padsel-eng" classList={{ fork: ps2Players() > 2 }}>
+                  {ps2Players() > 2 ? `multitap ×${ps2Players() > 4 ? 2 : 1}` : "classic"}
+                </span>
+              </span>
+              <button class="ghost-btn" onClick={() => { sfx.confirm(); setPs2Boot(null); setPs2Join(true); setApp("ps2"); }}>🎮 Join 2-player</button>
+            </>
+          )}
         />
       </Show>
       <Show when={app() === "ps1home"}>
