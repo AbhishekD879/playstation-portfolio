@@ -5,13 +5,14 @@ import { searchBooks, type Book } from "../apps";
 import type { NavAction } from "../input";
 import * as sfx from "../audio";
 import TileGrid, { COLS } from "./TileGrid";
+import HzScreen from "./HzScreen";
 
 export default function Library(props: { onClose: () => void; bind: (nav: (a: NavAction) => void) => void }) {
   const [books, setBooks] = createSignal<Book[] | null>(null);
   const [q, setQ] = createSignal("");
   const [sel, setSel] = createSignal(0);
   const [reading, setReading] = createSignal<Book | null>(null);
-  let input!: HTMLInputElement;
+  let input: HTMLInputElement | undefined;
   let searchSeq = 0;
   let lastSearched = "";
 
@@ -56,7 +57,7 @@ export default function Library(props: { onClose: () => void; bind: (nav: (a: Na
   });
 
   return (
-    <div class="guide">
+    <div class="artwrap">
       <Show
         when={!reading()}
         fallback={
@@ -71,42 +72,36 @@ export default function Library(props: { onClose: () => void; bind: (nav: (a: Na
           </div>
         }
       >
-        <div class="guide-head">
-          <div>
-            <div class="panel-tag">LIBRARY — OPEN LIBRARY + INTERNET ARCHIVE</div>
-            <input
-              ref={input}
-              class="guide-search"
-              placeholder="Search books…"
-              value={q()}
-              onInput={(e) => setQ(e.currentTarget.value)}
-              onKeyDown={(e) => {
-                e.stopPropagation();
-                if (e.key === "ArrowDown") { e.preventDefault(); e.currentTarget.blur(); }
-                if (e.key === "Enter") { const t = q().trim(); if (t && t !== lastSearched) runSearch(t); else pick(); }
-                if (e.key === "Escape") { sfx.back(); props.onClose(); }
-              }}
+        <HzScreen
+          kick="Library · Open Library + Internet Archive"
+          count={books() ? `${books()!.length} book${books()!.length === 1 ? "" : "s"}` : ""}
+          hints="✕ open · ○ back"
+          sub="“readable” opens here · others on Open Library"
+          onClose={props.onClose}
+          search={{
+            value: q(),
+            placeholder: "title, author, subject…",
+            onInput: setQ,
+            ref: (el) => (input = el),
+            onEnter: () => { const t = q().trim(); if (t && t !== lastSearched) runSearch(t); else pick(); },
+          }}
+        >
+          <Show when={books()} fallback={<p class="hz-note">Walking the stacks…</p>}>
+            <TileGrid
+              tiles={books()!.map((b) => ({
+                img: b.cover?.replace("-M.jpg", "-L.jpg"),
+                title: b.title,
+                sub: `${b.author}${b.year ? ` · ${b.year}` : ""}`,
+                badge: b.ia ? "readable" : undefined,
+              }))}
+              sel={sel()}
+              shape="cover"
+              fallback="📕"
+              onPick={(i) => { setSel(i); pick(); }}
+              onHover={(i) => setSel(i)}
             />
-          </div>
-        </div>
-        <Show when={books()} fallback={<div class="guide-loading">Walking the stacks…</div>}>
-          <TileGrid
-            tiles={books()!.map((b) => ({
-              img: b.cover?.replace("-M.jpg", "-L.jpg"),
-              title: b.title,
-              sub: `${b.author}${b.year ? ` · ${b.year}` : ""}`,
-              badge: b.ia ? "readable" : undefined,
-            }))}
-            sel={sel()}
-            shape="cover"
-            fallback="📕"
-            onPick={(i) => { setSel(i); pick(); }}
-            onHover={(i) => setSel(i)}
-          />
-        </Show>
-        <div class="panel-hint guide-hint">
-          "readable" opens right here · others open on Open Library · <span class="btn-x" /> open · <span class="btn-o" /> back
-        </div>
+          </Show>
+        </HzScreen>
       </Show>
     </div>
   );

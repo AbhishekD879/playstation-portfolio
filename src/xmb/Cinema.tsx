@@ -5,6 +5,7 @@ import { searchArchive, type IAItem } from "../apps";
 import type { NavAction } from "../input";
 import * as sfx from "../audio";
 import TileGrid, { COLS } from "./TileGrid";
+import HzScreen from "./HzScreen";
 
 export default function Cinema(props: {
   onWatch: () => void; // trophy hook
@@ -15,7 +16,7 @@ export default function Cinema(props: {
   const [q, setQ] = createSignal("");
   const [sel, setSel] = createSignal(0);
   const [playing, setPlaying] = createSignal<IAItem | null>(null);
-  let input!: HTMLInputElement;
+  let input: HTMLInputElement | undefined;
   let searchSeq = 0;
 
   async function runSearch(query: string) {
@@ -54,7 +55,7 @@ export default function Cinema(props: {
   });
 
   return (
-    <div class="guide">
+    <div class="artwrap">
       <Show
         when={!playing()}
         fallback={
@@ -69,38 +70,31 @@ export default function Cinema(props: {
           </div>
         }
       >
-        <div class="guide-head">
-          <div>
-            <div class="panel-tag">ARCHIVE CINEMA — PUBLIC-DOMAIN FILMS · ARCHIVE.ORG</div>
-            <input
-              ref={input}
-              class="guide-search"
-              placeholder="Search films… (try: detour, dementia, plan 9)"
-              value={q()}
-              onInput={(e) => { setQ(e.currentTarget.value); runSearch(e.currentTarget.value); }}
-              onKeyDown={(e) => {
-                e.stopPropagation();
-                if (e.key === "ArrowDown") { e.preventDefault(); e.currentTarget.blur(); }
-                if (e.key === "Enter") play();
-                if (e.key === "Escape") { sfx.back(); e.currentTarget.blur(); } // step out of the field; next Esc closes the app
-              }}
+        <HzScreen
+          kick="Archive Cinema · public-domain films"
+          count={items() ? `${items()!.length} films · most-watched first` : ""}
+          hints="✕ watch · ○ back"
+          sub="archive.org"
+          onClose={props.onClose}
+          search={{
+            value: q(),
+            placeholder: "detour, dementia, plan 9…",
+            onInput: (v) => { setQ(v); runSearch(v); },
+            ref: (el) => (input = el),
+            onEnter: play,
+          }}
+        >
+          <Show when={items()} fallback={<p class="hz-note">Dusting off the reels…</p>}>
+            <TileGrid
+              tiles={items()!.map((it) => ({ img: `https://archive.org/services/img/${it.id}`, title: it.title }))}
+              sel={sel()}
+              cols={3}
+              fallback="🎬"
+              onPick={(i) => { setSel(i); play(); }}
+              onHover={(i) => setSel(i)}
             />
-          </div>
-          <div class="guide-count">
-            <Show when={items()}>{items()!.length} films · most-watched first</Show>
-          </div>
-        </div>
-        <Show when={items()} fallback={<div class="guide-loading">Dusting off the reels…</div>}>
-          <TileGrid
-            tiles={items()!.map((it) => ({ img: `https://archive.org/services/img/${it.id}`, title: it.title }))}
-            sel={sel()}
-            cols={3}
-            fallback="🎬"
-            onPick={(i) => { setSel(i); play(); }}
-            onHover={(i) => setSel(i)}
-          />
-        </Show>
-        <div class="panel-hint guide-hint"><span class="btn-x" /> watch · <span class="btn-o" /> back</div>
+          </Show>
+        </HzScreen>
       </Show>
     </div>
   );

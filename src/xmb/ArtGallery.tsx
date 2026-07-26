@@ -6,13 +6,14 @@ import type { NavAction } from "../input";
 import * as sfx from "../audio";
 import TileGrid, { COLS } from "./TileGrid";
 import DepthPhoto from "./DepthPhoto";
+import HzScreen from "./HzScreen";
 
 export default function ArtGallery(props: { onClose: () => void; bind: (nav: (a: NavAction) => void) => void }) {
   const [works, setWorks] = createSignal<Artwork[] | null>(null);
   const [q, setQ] = createSignal("");
   const [sel, setSel] = createSignal(0);
   const [viewing, setViewing] = createSignal(false);
-  let input!: HTMLInputElement;
+  let input: HTMLInputElement | undefined;
   let searchSeq = 0;
   let lastSearched = "";
 
@@ -52,7 +53,7 @@ export default function ArtGallery(props: { onClose: () => void; bind: (nav: (a:
   });
 
   return (
-    <div class="guide">
+    <div class="artwrap">
       <Show
         when={!viewing()}
         fallback={
@@ -67,39 +68,34 @@ export default function ArtGallery(props: { onClose: () => void; bind: (nav: (a:
           </div>
         }
       >
-        <div class="guide-head">
-          <div>
-            <div class="panel-tag">ART GALLERY — THE MET, NEW YORK</div>
-            <input
-              ref={input}
-              class="guide-search"
-              placeholder="Search art… (monet, samurai, gothic, waves)"
-              value={q()}
-              onInput={(e) => setQ(e.currentTarget.value)}
-              onKeyDown={(e) => {
-                e.stopPropagation();
-                if (e.key === "ArrowDown") { e.preventDefault(); e.currentTarget.blur(); }
-                if (e.key === "Enter") {
-                  const t = q().trim();
-                  if (t && t !== lastSearched) runSearch(t);
-                  else if (works()?.length) { sfx.confirm(); setViewing(true); }
-                }
-                if (e.key === "Escape") { sfx.back(); props.onClose(); }
-              }}
+        <HzScreen
+          kick="Art Gallery · the Met, New York"
+          count={works() ? `${works()!.length} work${works()!.length === 1 ? "" : "s"}` : ""}
+          hints="✕ view full-screen · ○ back"
+          sub="type to search the collection"
+          onClose={props.onClose}
+          search={{
+            value: q(),
+            placeholder: "monet, samurai, gothic, waves",
+            onInput: setQ,
+            ref: (el) => (input = el),
+            onEnter: () => {
+              const t = q().trim();
+              if (t && t !== lastSearched) runSearch(t);
+              else if (works()?.length) { sfx.confirm(); setViewing(true); }
+            },
+          }}
+        >
+          <Show when={works()} fallback={<p class="hz-note">Unlocking the vault…</p>}>
+            <TileGrid
+              tiles={works()!.map((w) => ({ img: w.img, title: w.title, sub: w.artist }))}
+              sel={sel()}
+              fallback="🖼"
+              onPick={(i) => { setSel(i); sfx.confirm(); setViewing(true); }}
+              onHover={(i) => setSel(i)}
             />
-          </div>
-          <div class="guide-count"><Show when={works()}>{works()!.length} works</Show></div>
-        </div>
-        <Show when={works()} fallback={<div class="guide-loading">Unlocking the vault…</div>}>
-          <TileGrid
-            tiles={works()!.map((w) => ({ img: w.img, title: w.title, sub: w.artist }))}
-            sel={sel()}
-            fallback="🖼"
-            onPick={(i) => { setSel(i); sfx.confirm(); setViewing(true); }}
-            onHover={(i) => setSel(i)}
-          />
-        </Show>
-        <div class="panel-hint guide-hint"><span class="btn-x" /> view full-screen · <span class="btn-o" /> back</div>
+          </Show>
+        </HzScreen>
       </Show>
     </div>
   );

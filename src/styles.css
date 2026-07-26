@@ -4779,3 +4779,42 @@ img.status-avatar, img.ptile-avatar { object-fit: cover; border: 1px solid rgba(
 .hz-sheet-head .s { font-size: clamp(10px, 0.95cqw, 12.5px); color: var(--faint2); margin-top: 3px; }
 .hz-srow.pri { background: var(--glass); box-shadow: inset 0 0 0 1px var(--glassline); }
 .hz-srow.pri:hover { background: rgba(158,190,235,0.18); }
+
+/* Horizon · browse screen — search and a grid. Same shell, same Control
+   Center as the shelves; the body scrolls rather than the page. */
+.hz-browse .hz-lay {
+  grid-template-rows:
+    [status] auto
+    [head]   auto
+    [body]   1fr
+    [ccbar]  var(--hz-cc-h);
+}
+.hz-browse .hz-top { grid-row: status; }
+.hz-head { grid-row: head; padding: clamp(10px, 1.2cqw, 20px) clamp(18px, 2.6cqw, 46px) 0; }
+.hz-body {
+  grid-row: body; min-height: 0; overflow-y: auto; overscroll-behavior: contain;
+  padding: clamp(14px, 1.6cqw, 26px) clamp(18px, 2.6cqw, 46px) clamp(10px, 1.2cqw, 20px);
+  scrollbar-width: none;
+}
+.hz-body::-webkit-scrollbar { display: none; }
+/* the browse screen has no key art behind it, so the scrim alone would be flat */
+.hz-browse { background: radial-gradient(120% 90% at 50% 120%, #0b1a30, #04070c 62%); }
+
+.hz-search {
+  display: flex; align-items: center; gap: clamp(8px, 1cqw, 14px);
+  padding: clamp(8px, 0.85cqw, 14px) clamp(14px, 1.5cqw, 24px);
+  border-radius: 999px; width: min(38cqw, 520px);
+  background: rgba(255,255,255,0.05); box-shadow: inset 0 0 0 1px rgba(255,255,255,0.12);
+  backdrop-filter: blur(14px); cursor: text;
+}
+.hz-search:focus-within { box-shadow: inset 0 0 0 1px rgba(255,255,255,0.5); }
+.hz-search svg { width: clamp(15px, 1.4cqw, 20px); height: clamp(15px, 1.4cqw, 20px); color: var(--faint2); flex: none; }
+.hz-search input {
+  flex: 1; min-width: 0; background: none; border: 0; outline: none; color: var(--text);
+  font-family: inherit; font-size: clamp(13px, 1.25cqw, 17px);
+}
+.hz-search input::placeholder { color: var(--faint2); }
+@media (max-width: 640px) { .hz-search { width: 100%; } }
+
+/* the viewer state still needs a full-screen ground; HzScreen supplies its own */
+.artwrap { position: fixed; inset: 0; z-index: 25; }
