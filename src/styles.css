@@ -1721,7 +1721,8 @@ img.status-avatar, img.ptile-avatar { object-fit: cover; border: 1px solid rgba(
 .rpg-diag-state { color: rgba(255,255,255,0.85); margin-bottom: 6px; font-variant-numeric: tabular-nums; }
 .rpg-diag-sec { font-size: 10px; letter-spacing: 0.2em; color: var(--dim); margin: 9px 0 3px; text-transform: uppercase; }
 .rpg-diag-row { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11.5px; padding: 2px 0; word-break: break-all; border-bottom: 1px solid rgba(255,255,255,0.05); }
-.rpg-diag-row.err { color: #ff9a9a; }
+/* pre-wrap: an error entry may now carry stack frames, one per line */
+.rpg-diag-row.err { color: #ff9a9a; white-space: pre-wrap; }
 .rpg-diag-row.warn { color: #e8c46a; }
 .rpg-diag-row.dim { color: var(--dim); }
 

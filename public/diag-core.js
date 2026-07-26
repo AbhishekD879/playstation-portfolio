@@ -31,7 +31,10 @@
     if (ok) { counts.ok++; } else { counts.fail++; recent.unshift({ path: path, status: reason || "failed" }); if (recent.length > 20) recent.pop(); post(); }
   }
   function elog(path, reason) { activity.unshift({ path: path, ok: true, reason: reason || "", t: Date.now() - T0 }); if (activity.length > 200) activity.pop(); }
-  function addErr(msg, at) { errors.unshift({ msg: String(msg).slice(0, 280), at: at || "" }); if (errors.length > 10) errors.pop(); post(); }
+  // 900 not 280: a wasm trap's value is its stack, and the engine now ships a
+  // name section precisely so those frames carry function names — truncating
+  // them away would undo that.
+  function addErr(msg, at) { errors.unshift({ msg: String(msg).slice(0, 900), at: at || "" }); if (errors.length > 10) errors.pop(); post(); }
   function begin(u) { var id = ++seq; pending[id] = { path: rel(u), t0: Date.now() }; return id; }
   function fin(id, status, emsg) { var e = pending[id]; if (!e) return; delete pending[id]; var ok = status >= 200 && status < 400; logAct(e.path, ok, ok ? "" : (emsg || status || "error")); }
 
@@ -55,7 +58,15 @@
     if (t && t.tagName && /^(IMG|VIDEO|AUDIO|SOURCE|SCRIPT|LINK)$/.test(t.tagName)) {
       logAct(rel(t.currentSrc || t.src || t.href || ("(" + t.tagName + ")")), false, t.tagName.toLowerCase() + " load failed"); return;
     }
-    addErr(ev.message || (ev.error && ev.error.message) || "Script error", (ev.filename ? rel(ev.filename) : "") + (ev.lineno ? (":" + ev.lineno) : ""));
+    var m = ev.message || (ev.error && ev.error.message) || "Script error";
+    // Keep the first stack frames. Emscripten rethrows worker exceptions on the
+    // main thread with the real Error attached, so a trap inside the emulator
+    // arrives here with a stack — the only artifact that names the culprit.
+    if (ev.error && ev.error.stack) {
+      var frames = String(ev.error.stack).split("\n").slice(0, 8).join("\n");
+      if (frames && frames !== m) m += "\n" + frames;
+    }
+    addErr(m, (ev.filename ? rel(ev.filename) : "") + (ev.lineno ? (":" + ev.lineno) : ""));
   }, true);
 
   // console capture — WASM/emscripten reports aborts & RuntimeErrors only here.
