@@ -2,7 +2,7 @@
 // our own PlayStation-style UI: disc-insert screen, spinning-disc load, full-
 // bleed canvas, Xbox-pad → PS2 mapping via the gamepad bridge (same-origin
 // iframe, so synthesized keys reach the emulator). ISOs are read locally.
-import { For, Show, createSignal, onCleanup, onMount } from "solid-js";
+import { For, Show, createEffect, createSignal, onCleanup, onMount } from "solid-js";
 import InputProbe from "./InputProbe";
 import PadLadder from "./PadLadder";
 import { freedPads, reconcileSeats, remoteSlots, type SeatMap } from "../ps2/netSeats";
@@ -17,8 +17,11 @@ import { Icon } from "./icons";
 import { startHost, startJoinerResilient, type HostHandle, type ResilientJoiner } from "../ps2mp/webrtc";
 import { captureLocalInput, makeInjector, type PadState } from "../ps2mp/input";
 import { bumpPlays, resolveGameFile, type GameRecord } from "../gamesdb";
+import { clockDen, engineUrl, readClock, readEngine } from "../ps2/engineChoice";
 
 type Stage = "insert" | "reading" | "playing" | "error";
+/** A real PS2's field rate. Speed is measured against this, not against 60. */
+const NTSC_HZ = 59.94;
 
 export default function Ps2(props: {
   /** how many controllers to boot with — chosen on the PS2 home screen */
@@ -38,21 +41,31 @@ export default function Ps2(props: {
   // boot path stay byte-identical to the 2-player build that works. An earlier
   // attempt put this in a step BETWEEN the disc and the boot; that broke player
   // one, so the rule now is: never add anything to the boot gesture.
-  // ★ PARKED: the multitap engine is not wired into the UI.
+  // ★ UNPARKED: the fork is now the default engine.
   //
-  // It repeatedly broke player one and cost the user hours of testing. It stays
-  // out of every default path until it is proven, by me, against a real game —
-  // not shipped for someone else to discover. Reach it with ?engine=multitap.
-  // Everything else here is main's, unchanged.
+  // It was kept out of every default path until proven against a real game,
+  // because it had repeatedly broken player one. That condition is met: six
+  // players verified on a real SmackDown disc, and player one verified booting
+  // and taking input on this build.
+  //
+  // What forced the change is that the fork carries codegen fixes the stock
+  // build does not — the extern-function registrations for the TLB set, without
+  // which any game that installs a TLB exception handler (Shadow of the
+  // Colossus) dies mid-boot on a module the browser rejects. While stock was the
+  // 1-2 player default, that fix was unreachable in normal use and those games
+  // simply would not boot. ?engine=stock still forces upstream for comparison.
   const q = new URLSearchParams(location.search);
-  // Snapshotted ONCE, rendered as a plain string. A reactive iframe src re-sets
-  // the attribute, which reloads the frame and strands the bridge on a canvas
-  // from a destroyed document.
-  const engineSrc = (Number(q.get("players")) || props.players || 1) > 2 || q.get("engine") === "multitap"
-    ? "/play-mt/index.html" : "/play/index.html";
-  // Player count comes from the URL too, never the UI. The experiment has to be
-  // runnable to be finished, but it must not be reachable by accident: a normal
-  // boot is 1 player on the stock engine, byte-identical to main.
+  // Read ONCE at mount, deliberately NOT reactive. Re-setting the iframe's src
+  // reloads the frame, which would strand the input bridge on a canvas from a
+  // destroyed document — so the choice is made on PS2 home before a disc spins,
+  // and by the time this component exists the answer is already settled.
+  const engine = readEngine();
+  const engineSrc = engineUrl(engine);
+  // Same read-once rule as the engine: the clock is applied at boot, so it is
+  // settled on PS2 home before this component exists.
+  const eeClockDen = clockDen(readClock());
+  // A normal boot is still 1 player; the fork only enables a tap above two, so
+  // one- and two-player sessions behave exactly as they did on stock.
   // Prop first (the PS2 home picker), URL as an override for testing.
   const players = () => Math.max(1, Math.min(6, Number(q.get("players")) || props.players || 1));
   const [mtInfo, setMtInfo] = createSignal("");
@@ -70,6 +83,60 @@ export default function Ps2(props: {
   const requestSave = () => frame?.contentWindow?.postMessage({ type: "play-save", saveKey }, location.origin);
   const [saveNote, setSaveNote] = createSignal("");
   const [showDiag, setShowDiag] = createSignal(false); // diagnostics/share-log panel
+
+  // —— speed readout ————————————————————————————————————————————————————
+  // Two numbers, because they answer different questions and either one alone
+  // misleads. FPS is how often the game presents a frame; SPEED is how fast the
+  // emulated machine is running against a real PS2's field rate. A 30fps title
+  // at full speed reads "30 FPS · 100%", while a 60fps title struggling reads
+  // "30 FPS · 50%" — same FPS, completely different problem. Both come from
+  // counters the advanced build exports; the native build has neither.
+  const [perf, setPerf] = createSignal<{ fps: number; speed: number } | null>(null);
+  const [showPerf, setShowPerf] = createSignal((() => {
+    try { return localStorage.getItem("asp.ps2.fps") === "1"; } catch { return false; }
+  })());
+  let perfTimer: ReturnType<typeof setInterval> | null = null;
+  let perfPrev: { f: number; v: number; t: number } | null = null;
+  const sampleCounters = () => {
+    // same-origin iframe, so the module is directly reachable
+    const m = (frame?.contentWindow as any)?.__mod;
+    if (!m || typeof m.getFrameCount !== "function" || typeof m.getVblankCount !== "function") return null;
+    return { f: m.getFrameCount(), v: m.getVblankCount(), t: performance.now() };
+  };
+  const stopPerf = () => {
+    if (perfTimer) clearInterval(perfTimer);
+    perfTimer = null; perfPrev = null; setPerf(null);
+  };
+  const startPerf = () => {
+    if (perfTimer) return;
+    perfPrev = null;
+    perfTimer = setInterval(() => {
+      const s = sampleCounters();
+      if (!s) { setPerf(null); return; }   // native engine, or not booted yet
+      // Rates need two samples; the first only establishes the baseline.
+      if (perfPrev) {
+        const dt = (s.t - perfPrev.t) / 1000;
+        if (dt > 0) {
+          setPerf({
+            fps: Math.max(0, Math.round((s.f - perfPrev.f) / dt)),
+            speed: Math.max(0, Math.round(((s.v - perfPrev.v) / dt / NTSC_HZ) * 100)),
+          });
+        }
+      }
+      perfPrev = s;
+    }, 1000);
+  };
+  const togglePerf = () => {
+    sfx.tickH();
+    const on = !showPerf();
+    setShowPerf(on);
+    try { localStorage.setItem("asp.ps2.fps", on ? "1" : "0"); } catch {}
+  };
+  createEffect(() => {
+    if (showPerf() && stage() === "playing") startPerf();
+    else stopPerf();
+  });
+  onCleanup(stopPerf);
 
   // —— multiplayer (host-authoritative WebRTC streaming) ————————————————————
   // Host: streams the emulator canvas to a joiner and injects the joiner's
@@ -316,7 +383,7 @@ export default function Ps2(props: {
 
   function bootNow(f: File) {
     pending = null;
-    frame.contentWindow?.postMessage({ type: "play-boot", file: f, saveKey, players: players() }, location.origin);
+    frame.contentWindow?.postMessage({ type: "play-boot", file: f, saveKey, players: players(), eeClockDen }, location.origin);
   }
 
   function insert(f: File) {
@@ -460,6 +527,8 @@ export default function Ps2(props: {
               <Show when={mpRole() === "host"}>
                 <button class="ghost-btn" onClick={stopHost}>Close the room</button>
               </Show>
+              <button class="ghost-btn" classList={{ on: showPerf() }} aria-pressed={showPerf()}
+                onClick={togglePerf}>▤ fps</button>
               <button class="ghost-btn" onClick={() => requestSave()}>▪ save card</button>
               <button class="ghost-btn" classList={{ on: showDiag() }} onClick={() => setShowDiag((v) => !v)}>🩺 diagnostics</button>
               <button class="ghost-btn" onClick={goFullscreen}>⛶ full screen</button>
@@ -510,6 +579,26 @@ export default function Ps2(props: {
                 </p>
               </div>
             </Show>
+          </Show>
+          {/* Top-right: the party rail is centred at 56px and the save note is
+              bottom-centre, so this corner is free. */}
+          <Show when={showPerf()}>
+            <div class="ps2-perf" role="status">
+              {/* perf() is also null for the first second on the advanced
+                  engine, while the second sample is collected — so the reason
+                  comes from the engine, not from the absence of a reading. */}
+              <Show when={perf()} fallback={
+                <span class="ps2-perf-na">
+                  {engine === "native" ? "no speed counters on the native engine" : "measuring…"}
+                </span>
+              }>
+                <span class="ps2-perf-n">{perf()!.fps}</span>
+                <span class="ps2-perf-u">FPS</span>
+                <i class="ps2-perf-sep" />
+                <span class="ps2-perf-n">{perf()!.speed}</span>
+                <span class="ps2-perf-u">% SPEED</span>
+              </Show>
+            </div>
           </Show>
           <Show when={saveNote()}><div class="ps2-savenote">{saveNote()}</div></Show>
           {/* touch pad → bridge keys into the emulator iframe. ANALOG flips the
@@ -562,6 +651,7 @@ export default function Ps2(props: {
                 <p>A game image <b>you own</b> — .iso, .cso, .chd, .isz, .bin or .elf. It's read locally by the emulator, never uploaded. No BIOS needed.</p>
                 <button class="ps2-launch" onClick={() => fileInput.click()}>⏏ &nbsp;INSERT DISC</button>
                 <button class="ps2-join-btn" onClick={() => { sfx.tickH(); setJoinStage("code"); setJoinInput(""); }}>🎮 &nbsp;JOIN A 2-PLAYER GAME</button>
+
                 <p class="ps2-warn">Experimental core — many titles run slowly or not at all. 🎮 Xbox pad mapped: A=✕ B=◯ X=◻ Y=△ · sticks work · Start/Back = Start/Select.</p>
               </div>
             </Show>

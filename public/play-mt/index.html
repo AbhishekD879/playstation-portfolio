@@ -243,6 +243,14 @@
         const players = Math.max(1, Math.min(MAX_LOCAL_PLAYERS, Number(e.data.players) || 2));
         const pads = enableMultitap(players);
         tell("play-multitap", { players, pads });
+        // Performance: scale the emulated EE clock down so slow hosts reach
+        // real-time speed (the game's own framerate drops instead — no slow
+        // motion). Must be set before the boot; the engine re-applies the
+        // stored ratio across the reset that booting performs.
+        if (mod.setEeFreqScale) {
+          const den = [1, 2, 3].includes(e.data.eeClockDen) ? e.data.eeClockDen : 1;
+          mod.setEeFreqScale(1, den);
+        }
         await restore(e.data.saveKey); // bring back this profile's memory card first
         const f = e.data.file, name = f.name;
         if (name.toLowerCase().endsWith(".elf")) {

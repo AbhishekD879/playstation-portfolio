@@ -1104,6 +1104,26 @@ img.status-avatar, img.ptile-avatar { object-fit: cover; border: 1px solid rgba(
   color: var(--text); animation: fadeIn 0.2s ease-out;
 }
 
+/* —— PS2 speed readout ————————————————————————————————————————————————
+   A hairline band with a lit left edge, not a rounded badge: it sits over the
+   game and has to read as console chrome. Top-right is free — the party rail is
+   centred at 56px and the save note is bottom-centre. pointer-events off so it
+   can never eat a click meant for the game. */
+.ps2-perf {
+  position: absolute; top: 58px; right: 16px; z-index: 8;
+  display: flex; align-items: baseline; gap: 6px;
+  padding: 5px 13px 6px;
+  background: linear-gradient(180deg, rgba(6,10,20,0.78), rgba(6,10,20,0.46));
+  border-left: 1px solid color-mix(in oklab, var(--xmb-tint) 70%, transparent);
+  box-shadow: -10px 0 24px -14px color-mix(in oklab, var(--xmb-tint) 60%, transparent);
+  font-variant-numeric: tabular-nums;
+  pointer-events: none;
+}
+.ps2-perf-n { font-size: 17px; font-weight: 300; letter-spacing: 0.02em; color: var(--text); }
+.ps2-perf-u { font-size: 9.5px; letter-spacing: 0.16em; color: var(--dim); }
+.ps2-perf-sep { width: 1px; height: 12px; margin: 0 4px; align-self: center; background: rgba(255,255,255,0.22); }
+.ps2-perf-na { font-size: 10.5px; letter-spacing: 0.09em; color: var(--dim); }
+
 /* —— Reader Browser —— */
 .browser { position: fixed; inset: 0; z-index: 32; display: flex; flex-direction: column;
   background: linear-gradient(200deg, rgba(6,10,22,0.98), rgba(2,4,12,0.99)); }

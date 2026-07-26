@@ -29,6 +29,7 @@ import Guide from "./Guide";
 import Photos from "./Photos";
 import GamepadTest from "./GamepadTest";
 import Ps2 from "./Ps2";
+import Ps2EnginePick from "./Ps2EnginePick";
 import PcApp from "./PcApp";
 import Guestbook from "./Guestbook";
 import Browser from "./Browser";
@@ -2251,6 +2252,10 @@ export default function XMB(props: {
                   which meant you could not find the feature without already
                   knowing it existed. */}
               <button class="ghost-btn ghost-btn-key" onClick={() => { sfx.confirm(); setPs2Lobby(true); }}>Play online</button>
+              {/* Which emulator discs boot on. Here rather than on the player,
+                  because every launch passes through this screen and the choice
+                  has to be made before a disc spins. */}
+              <Ps2EnginePick />
             </>
           )}
         />
