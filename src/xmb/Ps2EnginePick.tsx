@@ -46,7 +46,10 @@ const CLOCKS: { id: Ps2Clock; title: string; sub: string }[] = [
   {
     id: "third",
     title: "Fast",
-    sub: "Console CPU at a third. For games that crawl — near real-time speed with console-era framerate.",
+    // the aggressive setting is honest about its cost: cycle-count-sensitive
+    // games can crash under a deep underclock (the same trade PCSX2's
+    // cyclerate hack makes) — that is the player's call to make, informed
+    sub: "Console CPU at a third. For games that crawl — near real-time speed with console-era framerate. Some games may be unstable this low; drop to Balanced if one crashes.",
   },
 ];
 
