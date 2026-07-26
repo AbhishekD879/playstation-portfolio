@@ -1838,9 +1838,14 @@ export default function XMB(props: {
   // full-screen game players bring their OWN on-screen controls (RpgPlayer FABs,
   // the .gpad for PS2/DOOM), so the shell touch-controller stays out of their way.
   const GAME_TOUCH = new Set(["rpgmaker", "renpy", "godot", "unity", "html5", "ps2", "doom", "doomrtx", "scummvm", "pc"]);
+  // Horizon shelves are entirely tappable — tiles, hero actions and the Control
+  // Center are all real buttons — so a virtual d-pad adds nothing, and its face
+  // buttons land squarely on top of the Control Center bar on a phone.
+  const TAP_NATIVE = new Set(["ps2home", "ps1home", "psphome", "retrohome"]);
   // show the on-screen controller once you're INSIDE something (an app/panel) —
   // that's where back/select/move-focus are needed; the bare crossbar is swipe+tap.
-  const touchNavHidden = () => !overlayOpen() || GAME_TOUCH.has(app() ?? "");
+  const touchNavHidden = () =>
+    !overlayOpen() || GAME_TOUCH.has(app() ?? "") || TAP_NATIVE.has(app() ?? "");
   // touch: on the bare crossbar, a swipe navigates natively (horizontal =
   // categories, vertical = items) and a tap opens — no virtual d-pad needed.
   // Inside an app/modal the swipe is off (that surface handles its own touch).
