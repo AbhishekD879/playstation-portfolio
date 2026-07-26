@@ -8,7 +8,13 @@
 //    TURN_KEY_ID + TURN_API_TOKEN). TURN relays the ~10-20% of connections that
 //    STUN can't punch through (symmetric NAT).
 
+interface RateLimiter { limit(o: { key: string }): Promise<{ success: boolean }> }
+
 interface Env {
+  RL_TURN: RateLimiter;   // TURN credential minting — the one that costs money
+  RL_CONN: RateLimiter;   // room / socket creation
+  RL_LOG: RateLimiter;    // debug-log writes
+  RL_READ: RateLimiter;   // cheap reads
   SIGNAL_ROOM: any; // DurableObjectNamespace
   LOG_STORE: any;   // DurableObjectNamespace (shared debug-log store)
   WATCH_ROOM: any;  // DurableObjectNamespace (synced watch-party rooms)
@@ -16,6 +22,16 @@ interface Env {
   TURN_KEY_ID?: string;
   TURN_API_TOKEN?: string;
   ALLOWED_ORIGINS?: string; // comma-separated override; defaults below
+}
+
+const clientIp = (r: Request) => r.headers.get("CF-Connecting-IP") ?? "unknown";
+const tooMany = (retry = 60) =>
+  new Response("rate limited", { status: 429, headers: { "Retry-After": String(retry) } });
+/** Fail OPEN if the binding is missing (local dev / preview), CLOSED on a real
+ *  limit hit. A missing binding must not take the console down. */
+async function allow(rl: RateLimiter | undefined, key: string): Promise<boolean> {
+  if (!rl?.limit) return true;
+  try { return (await rl.limit({ key })).success; } catch { return true; }
 }
 
 // short share code for uploaded debug logs (base36, 6 chars)
@@ -51,7 +67,10 @@ async function turnIceServers(env: Env): Promise<any[]> {
         {
           method: "POST",
           headers: { Authorization: `Bearer ${env.TURN_API_TOKEN}`, "content-type": "application/json" },
-          body: JSON.stringify({ ttl: 86400 }),
+          // 10 minutes, not 24 hours. Long enough to open a session, short
+        // enough that a scraped credential is worthless by the time it is
+        // resold — TURN relay is billed per GB.
+        body: JSON.stringify({ ttl: 600 }),
         },
       );
       if (r.ok) {
@@ -76,6 +95,9 @@ export default {
       if (origin && !originAllowed(origin, allowed)) return new Response("forbidden origin", { status: 403 });
       const room = (url.searchParams.get("room") || "").toUpperCase();
       if (!/^[A-Z0-9]{1,8}$/.test(room)) return new Response("bad room code", { status: 400 });
+      // every distinct code spins up a Durable Object, so unbounded joins are
+      // unbounded object creation
+      if (!(await allow(env.RL_CONN, clientIp(request)))) return tooMany();
       const stub = env.SIGNAL_ROOM.get(env.SIGNAL_ROOM.idFromName(room));
       return stub.fetch(request);
     }
@@ -90,6 +112,7 @@ export default {
       if (origin && !originAllowed(origin, allowed)) return new Response("forbidden origin", { status: 403 });
       const room = (url.searchParams.get("room") || "").toUpperCase();
       if (!/^[A-Z0-9]{1,8}$/.test(room)) return new Response("bad room code", { status: 400 });
+      if (!(await allow(env.RL_CONN, clientIp(request)))) return tooMany();
       const stub = env.WATCH_ROOM.get(env.WATCH_ROOM.idFromName(room));
       return stub.fetch(request);
     }
@@ -100,6 +123,7 @@ export default {
     // a private 2-player game never lists you.
     if (url.pathname === "/live") {
       if (request.method === "OPTIONS") return new Response(null, { headers: cors(origin, allowed) });
+      if (!(await allow(env.RL_READ, clientIp(request)))) return tooMany();
       const stub = env.DIRECTORY.get(env.DIRECTORY.idFromName("live"));
       const r = await stub.fetch("https://do/list");
       return new Response(await r.text(), {
@@ -112,7 +136,10 @@ export default {
       // TURN creds cost real money per relayed GB — don't mint them for curl
       // or foreign origins. (Origin is spoofable outside browsers; this stops
       // drive-by abuse. Real fix if ever needed: issue creds over signaling.)
+      // Origin is a browser convention, not a control — curl sets it freely.
+      // The real guard is the per-IP budget behind it.
       if (!originAllowed(origin, allowed)) return new Response("forbidden origin", { status: 403 });
+      if (!(await allow(env.RL_TURN, clientIp(request)))) return tooMany();
       const iceServers = await turnIceServers(env);
       return new Response(JSON.stringify({ iceServers }), {
         headers: { ...cors(origin, allowed), "content-type": "application/json" },
@@ -127,7 +154,8 @@ export default {
       if (request.method === "OPTIONS") return new Response(null, { headers: cors(origin, allowed) });
       if (request.method !== "POST") return new Response("method not allowed", { status: 405, headers: cors(origin, allowed) });
       if (!originAllowed(origin, allowed)) return new Response("forbidden origin", { status: 403, headers: cors(origin, allowed) });
-      const text = (await request.text()).slice(0, 1024 * 1024); // 1MB cap
+      if (!(await allow(env.RL_LOG, clientIp(request)))) return tooMany();
+      const text = (await request.text()).slice(0, 256 * 1024); // 256KB cap
       const code = shortCode();
       const stub = env.LOG_STORE.get(env.LOG_STORE.idFromName("logs"));
       await stub.fetch(`https://do/put?code=${code}`, { method: "PUT", body: text });
@@ -135,6 +163,7 @@ export default {
     }
     const logGet = url.pathname.match(/^\/log\/([a-z0-9]{1,16})$/);
     if (logGet) { // OPEN GET (no origin check) so the maintainer can curl it
+      if (!(await allow(env.RL_READ, clientIp(request)))) return tooMany();
       const stub = env.LOG_STORE.get(env.LOG_STORE.idFromName("logs"));
       const r = await stub.fetch(`https://do/get?code=${logGet[1]}`);
       return new Response(await r.text(), { status: r.status, headers: { "content-type": "text/plain; charset=utf-8", "Access-Control-Allow-Origin": "*" } });
