@@ -5,7 +5,6 @@ export const OWNER = {
   title: "SDE 3 · AI",
   location: "Hyderabad, India",
   email: "abhishekdiwate879@gmail.com",
-  phone: "+91 9834597155",
   linkedin: "https://linkedin.com/in/abhishekd879",
 };
 
@@ -404,7 +403,11 @@ export const CATEGORIES: XmbCategory[] = [
     items: [
       { id: "email", title: "Send Mail", sub: OWNER.email, icon: "mail", action: { type: "link", href: `mailto:${OWNER.email}` } },
       { id: "linkedin", title: "LinkedIn", sub: "abhishekd879", icon: "link", action: { type: "link", href: OWNER.linkedin } },
-      { id: "phone", title: "Call", sub: OWNER.phone, icon: "phone", action: { type: "link", href: `tel:${OWNER.phone.replace(/\s/g, "")}` } },
+      // No number, and no tel: link. A public portfolio that hands out a
+      // personal mobile invites cold calls and scrapers; asking by mail costs
+      // a genuine contact nothing and leaves the number private.
+      { id: "callback", title: "Request a call", sub: "Ask by mail and I'll ring you back", icon: "phone",
+        action: { type: "link", href: `mailto:${OWNER.email}?subject=${encodeURIComponent("Can we talk?")}&body=${encodeURIComponent("Hi Abhishek — happy to jump on a call. My number: \n\nBest time to reach me: \n")}` } },
     ],
   },
   {

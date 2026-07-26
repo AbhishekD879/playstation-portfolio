@@ -567,7 +567,6 @@ function AiWidget(props: { w: Widget }) {
         <div class="ai-widget ai-w-contactrow">
           <a class="ps2-launch ai-w-btn" href={`mailto:${OWNER.email}`}><span class="ai-ico"><Icon name="mail" /></span>Email</a>
           <a class="ps2-launch ai-w-btn" href={OWNER.linkedin} target="_blank"><span class="ai-ico"><Icon name="link" /></span>LinkedIn</a>
-          <a class="ps2-launch ai-w-btn" href={`tel:${OWNER.phone.replace(/\s/g, "")}`}><span class="ai-ico"><Icon name="phone" /></span>Call</a>
         </div>
       </Match>
       <Match when={w.t === "sources"}>
