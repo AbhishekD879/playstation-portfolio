@@ -6,6 +6,7 @@ import { ytSearch, ytTrending, type YtVideo } from "../apps";
 import type { NavAction } from "../input";
 import * as sfx from "../audio";
 import TileGrid, { COLS } from "./TileGrid";
+import HzScreen from "./HzScreen";
 
 const fmtLen = (s: number) => (s >= 3600 ? `${Math.floor(s / 3600)}:${String(Math.floor((s % 3600) / 60)).padStart(2, "0")}` : `${Math.floor(s / 60)}`) + ":" + String(s % 60).padStart(2, "0");
 const fmtViews = (v?: number) => (v == null ? "" : v >= 1e6 ? `${(v / 1e6).toFixed(1)}M views` : v >= 1e3 ? `${Math.round(v / 1e3)}K views` : `${v} views`);
@@ -16,7 +17,7 @@ export default function YouTubeApp(props: { onClose: () => void; bind: (nav: (a:
   const [q, setQ] = createSignal("");
   const [sel, setSel] = createSignal(0);
   const [playing, setPlaying] = createSignal<YtVideo | null>(null);
-  let input!: HTMLInputElement;
+  let input: HTMLInputElement | undefined;
   let searchSeq = 0;
   let lastSearched = "";
 
@@ -83,7 +84,7 @@ export default function YouTubeApp(props: { onClose: () => void; bind: (nav: (a:
   });
 
   return (
-    <div class="guide">
+    <div class="artwrap">
       <Show
         when={!playing()}
         fallback={
@@ -98,27 +99,22 @@ export default function YouTubeApp(props: { onClose: () => void; bind: (nav: (a:
           </div>
         }
       >
-        <div class="guide-head">
-          <div>
-            <div class="panel-tag">YOUTUBE — TRENDING & SEARCH VIA THE INVIDIOUS NETWORK · PLAYBACK OFFICIAL EMBED</div>
-            <input
-              ref={input}
-              class="guide-search"
-              placeholder="Search YouTube… or paste any video link"
-              value={q()}
-              onInput={(e) => setQ(e.currentTarget.value)}
-              onKeyDown={(e) => {
-                e.stopPropagation();
-                if (e.key === "ArrowDown") { e.preventDefault(); e.currentTarget.blur(); } // drop into the grid
-                if (e.key === "Enter") { const t = q().trim(); if (t && t !== lastSearched) runSearch(t); else play(); }
-                if (e.key === "Escape") { sfx.back(); e.currentTarget.blur(); } // step out of the field; next Esc closes the app
-              }}
-            />
-          </div>
-          <div class="guide-count"><Show when={vids()}>{vids()!.length} videos</Show></div>
-        </div>
-        <Show when={vids()} fallback={<div class="guide-loading">Asking the network…</div>}>
-          <Show when={vids()!.length} fallback={<div class="guide-loading">{note() || "Nothing found."}</div>}>
+        <HzScreen
+          kick="YouTube · trending & search"
+          count={vids() ? `${vids()!.length} video${vids()!.length === 1 ? "" : "s"}` : ""}
+          hints="✕ play · ○ back"
+          sub="↓ then arrows to browse · playback uses the official embed"
+          onClose={props.onClose}
+          search={{
+            value: q(),
+            placeholder: "search, or paste any video link…",
+            onInput: setQ,
+            ref: (el) => (input = el),
+            onEnter: () => { const t = q().trim(); if (t && t !== lastSearched) runSearch(t); else play(); },
+          }}
+        >
+        <Show when={vids()} fallback={<p class="hz-note">Asking the network…</p>}>
+          <Show when={vids()!.length} fallback={<p class="hz-note">{note() || "Nothing found."}</p>}>
             <TileGrid
               tiles={vids()!.map((v) => ({
                 img: `https://i.ytimg.com/vi/${v.id}/mqdefault.jpg`,
@@ -133,9 +129,7 @@ export default function YouTubeApp(props: { onClose: () => void; bind: (nav: (a:
             />
           </Show>
         </Show>
-        <div class="panel-hint guide-hint">
-          type + ENTER to search · ↓ then arrows to browse · <span class="btn-x" /> play · <span class="btn-o" /> back
-        </div>
+        </HzScreen>
       </Show>
     </div>
   );

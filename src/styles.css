@@ -4790,7 +4790,17 @@ img.status-avatar, img.ptile-avatar { object-fit: cover; border: 1px solid rgba(
     [ccbar]  var(--hz-cc-h);
 }
 .hz-browse .hz-top { grid-row: status; }
-.hz-head { grid-row: head; padding: clamp(10px, 1.2cqw, 20px) clamp(18px, 2.6cqw, 46px) 0; }
+.hz-head {
+  grid-row: head; padding: clamp(10px, 1.2cqw, 20px) clamp(18px, 2.6cqw, 46px) 0;
+  display: flex; align-items: center; gap: clamp(10px, 1.2cqw, 18px); flex-wrap: wrap;
+}
+.hz-head .ghost-btn {
+  border: 0; border-radius: 999px; font-family: inherit; color: var(--text); cursor: pointer;
+  font-size: clamp(12px, 0.98cqw, 15px); padding: clamp(8px, 0.8cqw, 13px) clamp(14px, 1.4cqw, 22px);
+  background: var(--glass); box-shadow: inset 0 0 0 1px var(--glassline);
+  backdrop-filter: blur(14px) saturate(1.3);
+}
+.hz-head .ghost-btn:hover { background: rgba(158,190,235,0.17); }
 .hz-body {
   grid-row: body; min-height: 0; overflow-y: auto; overscroll-behavior: contain;
   padding: clamp(14px, 1.6cqw, 26px) clamp(18px, 2.6cqw, 46px) clamp(10px, 1.2cqw, 20px);

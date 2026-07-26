@@ -8,6 +8,7 @@ import * as sfx from "../audio";
 import { setNavEnabled } from "../input";
 import { startBridge, stopBridge } from "../gamepadBridge";
 import TileGrid, { COLS } from "./TileGrid";
+import HzScreen from "./HzScreen";
 
 declare global {
   interface Window { RufflePlayer?: { newest: () => { createPlayer: () => any } } }
@@ -21,7 +22,7 @@ export default function Flash(props: { onClose: () => void; bind: (nav: (a: NavA
   const [embed, setEmbed] = createSignal<IAItem | null>(null); // archive game via their player
   const [loading, setLoading] = createSignal("");
   const [fsKey, setFsKey] = createSignal(1); // bump → remount iframe at new size
-  let input!: HTMLInputElement;
+  let input: HTMLInputElement | undefined;
   let mount!: HTMLDivElement;
   let player: any = null;
   let fileInput!: HTMLInputElement;
@@ -174,28 +175,22 @@ export default function Flash(props: { onClose: () => void; bind: (nav: (a: NavA
           </Show>
         }
       >
-        <div class="guide-head">
-          <div>
-            <div class="panel-tag">FLASH ARCADE — LIVE FROM THE INTERNET ARCHIVE · RUFFLE WASM</div>
-            <input
-              ref={input}
-              class="guide-search"
-              placeholder="Search flash games…"
-              value={q()}
-              onInput={(e) => { setQ(e.currentTarget.value); runSearch(e.currentTarget.value); }}
-              onKeyDown={(e) => {
-                e.stopPropagation();
-                if (e.key === "ArrowDown") { e.preventDefault(); e.currentTarget.blur(); }
-                if (e.key === "Enter") { const it = items()?.[sel()]; if (it) play(it); }
-                if (e.key === "Escape") { sfx.back(); props.onClose(); }
-              }}
-            />
-          </div>
-          <div class="guide-count">
-            <button class="ghost-btn" onClick={() => fileInput.click()}>run your own .swf</button>
-          </div>
-        </div>
-        <Show when={items()} fallback={<div class="guide-loading">Rummaging through the archive…</div>}>
+        <HzScreen
+          kick="Flash Arcade · Internet Archive"
+          count={items() ? `${items()!.length} game${items()!.length === 1 ? "" : "s"}` : ""}
+          hints="✕ play · ○ back"
+          sub="games stream to memory and vanish on exit — nothing is installed"
+          onClose={props.onClose}
+          action={() => <button class="ghost-btn" onClick={() => fileInput.click()}>run your own .swf</button>}
+          search={{
+            value: q(),
+            placeholder: "search flash games…",
+            onInput: (v) => { setQ(v); runSearch(v); },
+            ref: (el) => (input = el),
+            onEnter: () => { const it = items()?.[sel()]; if (it) play(it); },
+          }}
+        >
+        <Show when={items()} fallback={<p class="hz-note">Rummaging through the archive…</p>}>
           <TileGrid
             tiles={items()!.map((it) => ({ img: `https://archive.org/services/img/${it.id}`, title: it.title }))}
             sel={sel()}
@@ -206,9 +201,7 @@ export default function Flash(props: { onClose: () => void; bind: (nav: (a: NavA
           />
         </Show>
         <Show when={loading()}><div class="fullapp-status">{loading()}</div></Show>
-        <div class="panel-hint guide-hint">
-          games stream to memory & vanish on exit — nothing is installed · <span class="btn-x" /> play · <span class="btn-o" /> back
-        </div>
+        </HzScreen>
         <input
           type="file" ref={fileInput} hidden accept=".swf"
           onChange={async (e) => {

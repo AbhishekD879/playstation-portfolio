@@ -5,6 +5,7 @@ import { searchPodcasts, fetchEpisodes, type Episode, type Podcast } from "../ap
 import type { NavAction } from "../input";
 import * as sfx from "../audio";
 import TileGrid, { COLS } from "./TileGrid";
+import HzScreen from "./HzScreen";
 
 export default function Podcasts(props: {
   onPlayAudio: (url: string, label: string) => void;
@@ -16,7 +17,7 @@ export default function Podcasts(props: {
   const [show, setShow] = createSignal<Podcast | null>(null);
   const [q, setQ] = createSignal("");
   const [sel, setSel] = createSignal(0);
-  let input!: HTMLInputElement;
+  let input: HTMLInputElement | undefined;
   let listEl!: HTMLDivElement;
   let searchSeq = 0;
   let lastSearched = "";
@@ -84,30 +85,21 @@ export default function Podcasts(props: {
   });
 
   return (
-    <div class="guide">
-      <div class="guide-head">
-        <div>
-          <div class="panel-tag">
-            PODCASTS{show() ? ` — ${show()!.title.toUpperCase()}` : " — SEARCH ANY SHOW"}
-          </div>
-          <Show when={!show()} fallback={<div class="pod-author">{show()!.author} · pick an episode</div>}>
-            <input
-              ref={input}
-              class="guide-search"
-              placeholder="Search podcasts…"
-              value={q()}
-              onInput={(e) => setQ(e.currentTarget.value)}
-              onKeyDown={(e) => {
-                e.stopPropagation();
-                if (e.key === "ArrowDown") { e.preventDefault(); e.currentTarget.blur(); }
-                if (e.key === "Enter") { const t = q().trim(); if (t && t !== lastSearched) runSearch(t); else pick(); }
-                if (e.key === "Escape") back();
-              }}
-            />
-          </Show>
-        </div>
-      </div>
-      <Show when={list()} fallback={<div class="guide-loading">{show() ? "Fetching episodes…" : "Searching…"}</div>}>
+    <HzScreen
+      kick={show() ? `Podcasts · ${show()!.title}` : "Podcasts · search any show"}
+      count={show() ? show()!.author : list() ? `${shows()?.length ?? 0} shows` : ""}
+      hints="✕ select · ○ back"
+      sub={show() ? "plays in the background while you browse" : "type and press Enter to search"}
+      onClose={props.onClose}
+      search={show() ? undefined : {
+        value: q(),
+        placeholder: "search any show…",
+        onInput: setQ,
+        ref: (el) => (input = el),
+        onEnter: () => { const t = q().trim(); if (t && t !== lastSearched) runSearch(t); else pick(); },
+      }}
+    >
+      <Show when={list()} fallback={<p class="hz-note">{show() ? "Fetching episodes…" : "Searching…"}</p>}>
         <Show
           when={!show()}
           fallback={
@@ -137,9 +129,6 @@ export default function Podcasts(props: {
           />
         </Show>
       </Show>
-      <div class="panel-hint guide-hint">
-        {show() ? "plays in the background while you browse" : "type + ENTER to search"} · <span class="btn-x" /> select · <span class="btn-o" /> back
-      </div>
-    </div>
+    </HzScreen>
   );
 }

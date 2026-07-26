@@ -26,6 +26,9 @@ export default function HzScreen(props: {
   };
   /** right-hand readout, e.g. "21 works" */
   count?: string;
+  /** an app-level control that sits beside the search, e.g. Flash's "run your
+   *  own .swf". Not per-item: those belong on the item. */
+  action?: () => any;
   /** Control Center label: the bold line names the buttons that do something */
   hints: string;
   sub?: string;
@@ -68,6 +71,7 @@ export default function HzScreen(props: {
                 }}
               />
             </label>
+            <Show when={props.action}>{props.action!()}</Show>
           </div>
         </Show>
 
