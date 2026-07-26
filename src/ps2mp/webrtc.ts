@@ -34,7 +34,7 @@ export async function iceConfig(): Promise<RTCIceServer[]> {
   return [{ urls: "stun:stun.cloudflare.com:3478" }];
 }
 
-import { backoffMs, classify, retryLabel, shouldRetry, type Health } from "./reconnect";
+import { GONE_ATTEMPTS, backoffMs, classify, retryLabel, shouldRetry, type Health } from "./reconnect";
 
 export interface Signaling {
   send(msg: Record<string, unknown>): void;
@@ -273,7 +273,17 @@ export function startJoinerResilient(opts: {
           attempt = 0;
           return;
         }
-        if (!shouldRetry(h)) return;
+        if (!shouldRetry(h, attempt)) {
+          // out of patience on a host that is not coming back: report it once
+          // as terminal and stop, rather than leaving a dead session on screen
+          if (h === "gone") {
+            stopped = true;
+            try { inner?.stop(); } catch { /* already gone */ }
+            inner = null;
+            opts.onHealth?.("gone", attempt, retryLabel("gone", GONE_ATTEMPTS));
+          }
+          return;
+        }
         // one retry in flight at a time — several status events can report the
         // same drop, and each must not start its own timer
         if (timer) return;

@@ -16,13 +16,24 @@ export type Health = "connected" | "connecting" | "dropped" | "gone" | "closed";
 export function classify(status: string): Health {
   const s = status.toLowerCase();
   if (s === "closed" || s.includes("cancel")) return "closed";
-  if (s.includes("host left")) return "gone";
+  // The room is torn down the moment its host disconnects, so a retry lands on
+  // "no such room". That used to fall through to "connecting", which retries
+  // nothing and reports nothing — the joiner sat on a frozen last frame and the
+  // game looked like it was still running.
+  if (s.includes("host left") || s.includes("no such room") || s.includes("room full")) return "gone";
   if (s.includes("fail") || s.includes("disconnect") || s.includes("signaling closed")) return "dropped";
   if (s === "connected" || s.includes("complete")) return "connected";
   return "connecting";
 }
 
-export const shouldRetry = (h: Health) => h === "dropped" || h === "gone";
+/** A host who is only reloading comes back within a couple of seconds; one who
+ *  quit never does. Keep trying briefly, then stop — waiting forever is what
+ *  makes a dead session look live. */
+export const GONE_ATTEMPTS = 6;
+export function shouldRetry(h: Health, attempt = 0): boolean {
+  if (h === "gone") return attempt < GONE_ATTEMPTS;
+  return h === "dropped";
+}
 
 /**
  * Backoff in ms for attempt n (1-based): 0.5s, 1s, 2s, 4s, then 8s forever.
@@ -38,6 +49,9 @@ export function backoffMs(attempt: number): number {
 
 /** Human status for the reconnect banner. */
 export function retryLabel(h: Health, attempt: number): string {
-  if (h === "gone") return attempt === 1 ? "Host disconnected — waiting for them to come back…" : `Waiting for the host… (try ${attempt})`;
+  if (h === "gone") {
+    if (attempt >= GONE_ATTEMPTS) return "The host closed the room.";
+    return attempt === 1 ? "Host disconnected — waiting for them to come back…" : `Waiting for the host… (try ${attempt})`;
+  }
   return attempt === 1 ? "Connection lost — reconnecting…" : `Reconnecting… (try ${attempt})`;
 }

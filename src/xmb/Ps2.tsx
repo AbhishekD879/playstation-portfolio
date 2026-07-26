@@ -212,7 +212,10 @@ export default function Ps2(props: {
         // Reconnect keeps trying, but a host who closed the room is not coming
         // back. Rather than hold someone on a frozen last frame forever, hand
         // them to Open rooms after a few tries so they can pick another game.
-        if (h === "gone" && n >= 4) { setRejoin(""); props.onClose(); }
+        // The retry loop is what keeps the session alive on screen, so leaving
+        // has to stop it — closing the app alone left the handle reconnecting
+        // in the background.
+        if (h === "gone" && n >= 4) { setRejoin(""); leaveJoin(); props.onClose(); }
       },
       room: code,
       onStream: (stream) => {

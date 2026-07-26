@@ -1,7 +1,7 @@
 // Self-check for reconnection rules.
 // Run: npx tsx src/ps2mp/reconnect.test.ts
 import { strict as assert } from "node:assert";
-import { backoffMs, classify, retryLabel, shouldRetry } from "./reconnect";
+import { backoffMs, classify, retryLabel, shouldRetry, GONE_ATTEMPTS } from "./reconnect";
 
 // —— classification ——
 assert.equal(classify("connected"), "connected");
@@ -42,3 +42,15 @@ assert.match(retryLabel("dropped", 4), /try 4/, "later attempts show the count")
 assert.notEqual(retryLabel("gone", 2), retryLabel("dropped", 2), "causes read differently");
 
 console.log("reconnect: retry rules ok");
+
+// —— a host who quits must end the session, not hang it ——
+// The room dies with its host, so the retry lands on "no such room". That used
+// to classify as "connecting": no retry, no report, and a joiner left staring
+// at a frozen frame that looked like a live game.
+assert.equal(classify("error: no such room"), "gone", "a hostless room is gone, not connecting");
+assert.equal(classify("error: room full"), "gone", "no seat to come back to");
+assert.equal(shouldRetry("gone", 1), true, "a reloading host is worth a short wait");
+assert.equal(shouldRetry("gone", GONE_ATTEMPTS), false, "but not an unbounded one");
+assert.equal(shouldRetry("dropped", 99), true, "a network blip always keeps trying");
+assert.match(retryLabel("gone", GONE_ATTEMPTS), /closed the room/, "the last word says it is over");
+console.log("host-quit path OK");
