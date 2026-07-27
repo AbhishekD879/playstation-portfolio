@@ -250,7 +250,14 @@ export default function XMB(props: {
     const reduced = matchMedia("(prefers-reduced-motion: reduce)").matches;
     if (typeof doc.startViewTransition !== "function" || reduced) return setAppRaw(v);
     let out: any;
-    doc.startViewTransition(() => { out = setAppRaw(v); });
+    // A transition superseded by the next one rejects with AbortError, which is
+    // normal (open an app, close it quickly) but surfaced as an unhandled
+    // rejection in every visitor's console. The DOM change has already been
+    // applied by then, so there is nothing to recover — just don't log noise.
+    const t = doc.startViewTransition(() => { out = setAppRaw(v); });
+    t?.finished?.catch?.(() => {});
+    t?.updateCallbackDone?.catch?.(() => {});
+    t?.ready?.catch?.(() => {});
     return out;
   }) as typeof setAppRaw;
   const [ps2Boot, setPs2Boot] = createSignal<GameRecord | null>(null);
