@@ -219,7 +219,10 @@
   Play({
     canvas,
     locateFile: (f) => "/play-mt/" + f,
-    mainScriptUrlOrBlob: location.origin + "/play-mt/Play.js",
+    // The shim installs a trap-stack reporter inside each pthread worker and
+    // then imports Play.js — see worker-trap-shim.js for why the stack cannot
+    // be captured from the page side.
+    mainScriptUrlOrBlob: location.origin + "/play-mt/worker-trap-shim.js",
   }).then((m) => {
     mod = m;
     window.__mod = m; // debug/stats handle (same-origin parent can read fps)
@@ -233,6 +236,14 @@
     mod.ccall("initVm", "", [], []);
     tell("play-ready");
   }).catch((e) => tell("play-error", { message: String(e).slice(0, 200) }));
+
+  // Named stack frames from a worker trap, broadcast by worker-trap-shim.js.
+  // console.error is deliberate: the diagnostics collector captures it into the
+  // shareable error list, which is where crash reports come from.
+  new BroadcastChannel("play-trap").addEventListener("message", (e) => {
+    console.error("EMULATOR TRAP\n" + e.data);
+    tell("play-error", { message: String(e.data).slice(0, 200) });
+  });
 
   addEventListener("message", async (e) => {
     if (e.origin !== location.origin || !e.data) return;
