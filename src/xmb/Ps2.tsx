@@ -14,10 +14,14 @@ import { holdWakeLock } from "../wakelock";
 import TouchPad, { type TB } from "./TouchPad";
 import DiagOverlay from "./DiagOverlay";
 import { Icon } from "./icons";
-import { startHost, startJoinerResilient, type HostHandle, type ResilientJoiner } from "../ps2mp/webrtc";
+import { makeRoomCode, startHost, startJoinerResilient, type HostHandle, type ResilientJoiner } from "../ps2mp/webrtc";
 import { captureLocalInput, makeInjector, type PadState } from "../ps2mp/input";
 import { bumpPlays, resolveGameFile, type GameRecord } from "../gamesdb";
 import { clockDen, engineUrl, readClock, readEngine } from "../ps2/engineChoice";
+import PartyPanel, { type MicState } from "./PartyPanel";
+import { buildRoster, cleanName, cleanText, confirmLine, lineId, pushLine, type ChatLine, type Member } from "../ps2mp/party";
+import { createHostVoice, createJoinerVoice, openMic, type HostVoice, type JoinerVoice } from "../ps2mp/voice";
+import { loadProfiles } from "../profiles";
 
 type Stage = "insert" | "reading" | "playing" | "error";
 /** A real PS2's field rate. Speed is measured against this, not against 60. */
@@ -30,7 +34,12 @@ export default function Ps2(props: {
   /** the room's game, so the connecting screen can name it */
   initialJoinTitle?: string;
   /** picked "host this" on the Online screen — open the room as soon as it boots */
-  autoHost?: boolean }) {
+  autoHost?: boolean;
+  /** listed in Open rooms, decided on the Online screen before the room exists */
+  isPublic?: boolean;
+  /** the room's code, minted on the Online screen so the invite link exists
+   *  before anyone is in the room to receive it */
+  roomCode?: string }) {
   const isDesktop = matchMedia("(pointer: fine)").matches && innerWidth >= 900 && typeof WebAssembly === "object";
   const isolated = (globalThis as any).crossOriginIsolated === true;
   const canEmulate = isDesktop && isolated;
@@ -147,9 +156,42 @@ export default function Ps2(props: {
   const [mpCode, setMpCode] = createSignal("");
   const [mpStatus, setMpStatus] = createSignal("");
   const [mpPlayers, setMpPlayers] = createSignal(0);
-  const [mpPublic, setMpPublic] = createSignal(true);   // listed in the lobby
+  // ★ Decided on the Online screen, before anyone arrives — it used to be a pair
+  // of tabs on a panel over the running game, which is after everybody has
+  // already found the room or failed to. One home for the decision.
+  const mpPublic = () => props.isPublic !== false;
   const [rejoin, setRejoin] = createSignal("");          // reconnect banner
   const [joinTitle, setJoinTitle] = createSignal("");     // what we are joining
+
+  // —— party: who joined, what they said, who is talking ————————————————————
+  // Rides the input data channel (see ../ps2mp/party.ts). The host is the only
+  // authority: joiners send, the host stamps and fans out, so nobody's screen
+  // can disagree about who is in the room.
+  const [members, setMembers] = createSignal<Member[]>([]);
+  const [chat, setChat] = createSignal<ChatLine[]>([]);
+  const [mic, setMic] = createSignal<MicState>(navigator.mediaDevices ? "off" : "unsupported");
+  const [myLevel, setMyLevel] = createSignal(0);
+  const [roomCap, setRoomCap] = createSignal(2);
+  // The host mints joiner ids, so a joiner can't know which roster row is its
+  // own until told. One message at channel-open beats matching on name, which
+  // two players called "ABHI" would get wrong.
+  const [meId, setMeId] = createSignal("host");
+  // Open when it is useful and not before: the code board owns the empty room,
+  // this column owns the room once there is somebody to talk to.
+  const [chatOverride, setChatOverride] = createSignal<boolean | null>(null);
+  // On a phone the column is a bottom sheet, and the bottom is where the touch
+  // pad lives — so there it opens only when asked for.
+  const isPhone = matchMedia("(max-width: 720px)").matches;
+  const chatOpen = () => chatOverride()
+    ?? (!isPhone && (mpRole() === "host" ? mpPlayers() > 0 : joinStage() === "live"));
+  const myName = () => cleanName(loadProfiles().find((p) => p.id === props.profileId)?.name);
+  let hostVoice: HostVoice | null = null;
+  let joinerVoice: JoinerVoice | null = null;
+  let micStream: MediaStream | null = null;
+  let levelTimer: ReturnType<typeof setInterval> | undefined;
+  const jNames = new Map<string, string>();   // joiner id -> name
+  const jMics = new Map<string, boolean>();   // joiner id -> mic open
+  let voiceAudio: HTMLAudioElement | undefined; // joiner: the host's mix
 
   // ★ WHEN the party board is on screen — the whole design question here.
   //
@@ -182,10 +224,9 @@ export default function Ps2(props: {
   const [netSeats, setNetSeats] = createSignal<SeatMap>(new Map());
   let joinVideo: HTMLVideoElement | undefined;
 
-  const genCode = () => {
-    const A = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"; // no ambiguous 0/O/1/I
-    return Array.from({ length: 4 }, () => A[Math.floor(Math.random() * A.length)]).join("");
-  };
+  // The code is handed down from the Online screen when there is one, so the
+  // link you copied before hosting is the link people actually arrive on.
+  const genCode = () => props.roomCode || makeRoomCode();
 
   // —— on-screen touch pad (local play: bridge keys · joiner: window keys) ——
   const [analog, setAnalog] = createSignal(false); // d-pad drives d-pad or left stick
@@ -206,6 +247,33 @@ export default function Ps2(props: {
     window.dispatchEvent(new KeyboardEvent(on ? "keydown" : "keyup", { code, bubbles: true, cancelable: true }));
   const JOIN_DPAD = { up: "ArrowUp", down: "ArrowDown", left: "ArrowLeft", right: "ArrowRight" };
   const JOIN_FACE: Record<number, string> = { 0: "KeyZ", 1: "KeyX", 2: "KeyA", 3: "KeyS" };
+
+  // —— host side of the party ————————————————————————————————————————————
+  // Roster is rebuilt from netSeats(), the SAME map that routes input, so the
+  // list on screen can never claim a pad the game isn't actually giving them.
+  let lastRoster = "";
+  const pushRoster = (force = false) => {
+    const levels = hostVoice?.levels() ?? new Map<string, number>();
+    const list = buildRoster({
+      hostName: myName(), hostMic: mic() === "on", hostLevel: levels.get("host") ?? 0,
+      seats: netSeats(), names: jNames, mics: jMics, levels,
+    });
+    // Quantise the level before deciding to send. A ring only has a few visible
+    // thicknesses, so a room where nobody talks sends nothing at all, and a
+    // room where somebody does sends a handful of small frames a second.
+    const key = JSON.stringify(list.map((m) => [m.id, m.name, m.pad, !!m.mic, Math.round((m.level ?? 0) * 4)]));
+    if (!force && key === lastRoster) return;
+    lastRoster = key;
+    setMembers(list);
+    hostHandle?.broadcast({ t: "roster", members: list, cap: players() });
+  };
+
+  /** Host says a line: it is authoritative the moment it exists locally. */
+  const hostSay = (from: string, text: string, system = false) => {
+    const line: ChatLine = { id: lineId(), from, text, at: Date.now(), system: system || undefined };
+    setChat((l) => pushLine(l, line));
+    hostHandle?.broadcast({ t: "said", from, text, at: line.at, system });
+  };
 
   function hostGame() {
     const canvas = frame.contentDocument?.getElementById("outputCanvas") as HTMLCanvasElement | null;
@@ -230,6 +298,15 @@ export default function Ps2(props: {
     };
     const code = genCode();
     setMpCode(code); setMpRole("host"); setMpPlayers(0); setNetSeats(new Map());
+    setMembers([]); setChat([]); jNames.clear(); jMics.clear(); lastRoster = "";
+    hostVoice = createHostVoice();
+    // 8Hz is enough for a ring that reads as speech; the read is skipped
+    // entirely while every mic in the room is closed.
+    levelTimer = setInterval(() => {
+      if (mic() !== "on" && ![...jMics.values()].some(Boolean)) return;
+      pushRoster();
+      setMyLevel(hostVoice?.levels().get("host") ?? 0);
+    }, 120);
     hostHandle = startHost({
       room: code, max: slots, stream,
       // ★ Public by default. A room nobody can find is a room nobody joins, and
@@ -237,6 +314,22 @@ export default function Ps2(props: {
       // `listing` is what puts it in the lobby; Private omits it entirely.
       listing: mpPublic() ? { title: disc()?.name?.replace(/\.[^.]+$/, "") || "PlayStation 2", kind: "ps2" } : undefined,
       onJoinerInput: (id, data: any) => {
+        // Everything a joiner can say arrives here. Text from someone else's
+        // browser is cleaned before it is stored, let alone re-broadcast.
+        if (data?.t === "hello") {
+          const name = cleanName(data.name);
+          const first = !jNames.has(id);
+          jNames.set(id, name);
+          if (first) hostSay(name, `${name} joined`, true);
+          pushRoster(true);
+          return;
+        }
+        if (data?.t === "say") {
+          const text = cleanText(data.text);
+          if (text) hostSay(jNames.get(id) ?? "Player", text);
+          return;
+        }
+        if (data?.t === "mic") { jMics.set(id, !!data.on); pushRoster(true); return; }
         if (data?.t !== "input") return;
         const pad = netSeats().get(id);
         if (pad === undefined) return;          // connected, but over capacity
@@ -255,19 +348,86 @@ export default function Ps2(props: {
         setNetSeats(next);
       },
       onStatus: (s) => setMpStatus(s),
+      // ★ Voice: the host is a MIXER, not a forwarder. This track is created
+      // before the first offer and never replaced, so joining, leaving, muting
+      // and unmuting never renegotiate the connection carrying the game.
+      onJoinerReady: (id) => hostHandle?.send(id, { t: "you", id }),
+      voiceTrackFor: (id) => hostVoice?.trackFor(id) ?? null,
+      onJoinerAudio: (id, stream) => { hostVoice?.addRemote(id, stream); pushRoster(true); },
+      onJoinerLeft: (id) => {
+        const name = jNames.get(id);
+        hostVoice?.removeRemote(id);
+        jNames.delete(id); jMics.delete(id);
+        if (name) hostSay(name, `${name} left`, true);
+        pushRoster(true);
+      },
     });
   }
 
   function stopHost() {
     hostHandle?.stop(); hostHandle = null;
+    clearInterval(levelTimer); levelTimer = undefined;
+    hostVoice?.stop(); hostVoice = null;
+    closeMic();
+    setMembers([]); setChat([]); jNames.clear(); jMics.clear(); setChatOverride(null);
     injector?.release(); injector = null;
     for (const inj of netInjectors.values()) inj.release();
     netInjectors.clear(); setNetSeats(new Map());
     setMpRole("none"); setMpCode(""); setMpStatus(""); setMpPlayers(0);
   }
 
+  // —— microphone ————————————————————————————————————————————————————————
+  // One toggle for both roles. The stream is stopped rather than just muted on
+  // close, so the browser's own recording indicator goes out — a mic that says
+  // "off" on screen while the tab still shows a red dot is not off.
+  function closeMic() {
+    micStream?.getTracks().forEach((t) => t.stop());
+    micStream = null;
+    joinerVoice?.stop(); joinerVoice = null;
+    hostVoice?.setLocalMic(null);
+    joinerHandle?.setMic(null);
+    setMic((m) => (m === "on" ? "off" : m));
+    setMyLevel(0);
+  }
+
+  async function toggleMic() {
+    if (mic() === "unsupported") return;
+    sfx.tickH();
+    if (mic() === "on") {
+      closeMic();
+      if (mpRole() === "host") pushRoster(true);
+      else joinerHandle?.send({ t: "mic", on: false });
+      return;
+    }
+    const stream = await openMic();
+    if (!stream) { setMic("blocked"); return; }   // denied: say why, don't fail silently
+    micStream = stream;
+    setMic("on");
+    if (mpRole() === "host") {
+      hostVoice?.setLocalMic(stream);
+      pushRoster(true);
+    } else {
+      joinerHandle?.setMic(stream.getAudioTracks()[0] ?? null);
+      joinerVoice = createJoinerVoice(stream);
+      joinerHandle?.send({ t: "mic", on: true });
+    }
+  }
+
+  /** Anyone's line, said from this screen. Host stamps its own; a joiner shows
+   *  it immediately as pending and the host's echo confirms it. */
+  function say(text: string) {
+    const clean = cleanText(text);
+    if (!clean) return;
+    if (mpRole() === "host") { hostSay(myName(), clean); return; }
+    setChat((l) => pushLine(l, { id: lineId(), from: myName(), text: clean, at: Date.now(), pending: true }));
+    joinerHandle?.send({ t: "say", text: clean });
+  }
+
   function joinGame(code: string) {
     if (!code) return;
+    // A second Join without leaving the first would leave the old session alive
+    // and holding a seat — the host would show the same person twice.
+    if (joinerHandle) leaveJoin();
     sfx.confirm();
     setMpRole("joiner"); setMpCode(code); setJoinStage("connecting"); setMpStatus("connecting…");
     setNavEnabled(false); // controller/keys belong to the remote game now
@@ -285,6 +445,44 @@ export default function Ps2(props: {
         if (h === "gone" && n >= 4) { setRejoin(""); leaveJoin(); props.onClose(); }
       },
       room: code,
+      // Every (re)connect gets a fresh channel and a fresh mic sender, so both
+      // the announcement and the live mic are re-applied here rather than
+      // remembered by the transport.
+      onReady: () => {
+        joinerHandle?.send({ t: "hello", name: myName() });
+        if (mic() === "on" && micStream) {
+          joinerHandle?.setMic(micStream.getAudioTracks()[0] ?? null);
+          joinerHandle?.send({ t: "mic", on: true });
+        }
+      },
+      // The host is another browser: clean its roster and its chat on arrival,
+      // exactly as the host cleans ours.
+      onMessage: (data: any) => {
+        if (data?.t === "you" && typeof data.id === "string") { setMeId(data.id); return; }
+        if (data?.t === "roster" && Array.isArray(data.members)) {
+          setRoomCap(Number(data.cap) || data.members.length);
+          setMembers(data.members.slice(0, 8).map((m: any): Member => ({
+            id: String(m.id ?? ""), name: cleanName(m.name), pad: Number(m.pad) || 1,
+            host: !!m.host, mic: !!m.mic, level: Math.min(1, Math.max(0, Number(m.level) || 0)),
+          })));
+          return;
+        }
+        if (data?.t === "said") {
+          const text = cleanText(data.text);
+          if (!text) return;
+          const line: ChatLine = {
+            id: lineId(), from: cleanName(data.from), text,
+            at: Number(data.at) || Date.now(), system: data.system ? true : undefined,
+          };
+          setChat((l) => confirmLine(l, line));
+        }
+      },
+      onAudio: (stream) => {
+        // Plain playback, no graph: this is already everyone-but-us, mixed.
+        if (!voiceAudio) return;
+        voiceAudio.srcObject = stream;
+        voiceAudio.play().catch(() => { /* resumes on the next gesture */ });
+      },
       onStream: (stream) => {
         setJoinStage("live"); setMpStatus("connected");
         if (joinVideo) { joinVideo.srcObject = stream; joinVideo.play().catch(() => {}); }
@@ -292,15 +490,46 @@ export default function Ps2(props: {
       onStatus: (s) => setMpStatus(s),
     });
     stopCapture = captureLocalInput((state) => joinerHandle?.sendInput({ t: "input", down: state.down, axes: state.axes }));
+    // Our own ring is driven locally, so it lights the instant we speak instead
+    // of waiting for the host's next roster frame.
+    levelTimer = setInterval(() => { if (joinerVoice) setMyLevel(joinerVoice.level()); }, 120);
   }
 
   function leaveJoin() {
     sfx.back();
     stopCapture?.(); stopCapture = null;
+    clearInterval(levelTimer); levelTimer = undefined;
+    closeMic();
     joinerHandle?.stop(); joinerHandle = null;
+    setMembers([]); setChat([]); setChatOverride(null); setMeId("host");
     setJoinStage(""); setMpRole("none"); setMpCode(""); setMpStatus("");
     setNavEnabled(true);
   }
+
+  /** The party column. One component for host and joiner: the difference
+   *  between them is who is authoritative, which the panel doesn't need to know. */
+  const partyColumn = () => (
+    <Show when={chatOpen()}>
+      <PartyPanel
+        code={mpCode()}
+        capacity={mpRole() === "host" ? players() : roomCap()}
+        members={members()}
+        log={chat()}
+        meId={meId()}
+        mic={mic()}
+        talking={myLevel() > 0}
+        myLevel={myLevel()}
+        onSay={say}
+        onToggleMic={toggleMic}
+        onClose={() => setChatOverride(false)}
+      />
+    </Show>
+  );
+
+  // SHARE is rendered outside this app and fixed to the same corner, so the
+  // signal that the column is open has to reach it at body level.
+  createEffect(() => document.body.classList.toggle("party-col", chatOpen()));
+  onCleanup(() => document.body.classList.remove("party-col"));
 
   const goFullscreen = () => {
     const el = container as any;
@@ -373,6 +602,11 @@ export default function Ps2(props: {
       stopBridge();
       releaseLock?.();
       stopCapture?.();
+      // Closing the app must also close the mic and the audio graph, or the
+      // browser keeps showing this tab as recording after the game is gone.
+      clearInterval(levelTimer);
+      closeMic();
+      hostVoice?.stop();
       hostHandle?.stop();
       joinerHandle?.stop();
       injector?.release();
@@ -488,12 +722,23 @@ export default function Ps2(props: {
                 <div class="session-reading-name">{mpStatus() || "connecting"}</div>
               </div>
             </Show>
+            {/* the host's voice mix — everyone in the room except us */}
+            <audio ref={voiceAudio} autoplay style={{ display: "none" }} />
             <div class="ps2-bar">
-              <span class="flash-now">🎮 Player 2 · room {mpCode()} · {mpStatus()}</span>
+              {/* the real pad, from the host's roster — "Player 2" was a guess
+                  that was simply wrong for anyone past the second seat */}
+              <span class="flash-now">🎮 Player {members().find((m) => m.id === meId())?.pad ?? 2} · room {mpCode()} · {mpStatus()}</span>
               <span class="flash-bar-btns">
+                <Show when={joinStage() === "live"}>
+                  <button class="ghost-btn" classList={{ on: chatOpen() }} aria-pressed={chatOpen()}
+                    onClick={() => { sfx.tickH(); setChatOverride(!chatOpen()); }}>
+                    Party · {members().length || 1}
+                  </button>
+                </Show>
                 <button class="ghost-btn" onClick={leaveJoin}>⏏ leave</button>
               </span>
             </div>
+            {partyColumn()}
             {/* touch pad → the same keys captureLocalInput reads from a keyboard.
                 ponytail: no touch analog — the keyboard vocabulary has none */}
             <Show when={joinStage() === "live"}>
@@ -525,6 +770,10 @@ export default function Ps2(props: {
                 <button class="ghost-btn" onClick={hostGame}>Play online · seats {players()}</button>
               </Show>
               <Show when={mpRole() === "host"}>
+                <button class="ghost-btn" classList={{ on: chatOpen() }} aria-pressed={chatOpen()}
+                  onClick={() => { sfx.tickH(); setChatOverride(!chatOpen()); }}>
+                  Party · {members().length || 1}
+                </button>
                 <button class="ghost-btn" onClick={stopHost}>Close the room</button>
               </Show>
               <button class="ghost-btn" classList={{ on: showPerf() }} aria-pressed={showPerf()}
@@ -565,12 +814,6 @@ export default function Ps2(props: {
                 </div>
                 <span class="party-code">{mpCode()}</span>
                 <PadLadder count={players()} showPorts showWho slots={partySlots()} />
-                <div class="party-vis" role="group" aria-label="Who can join">
-                  <button class="party-tab" classList={{ on: mpPublic() }} aria-pressed={mpPublic()}
-                    onClick={() => setMpPublic(true)}>Anyone can join</button>
-                  <button class="party-tab" classList={{ on: !mpPublic() }} aria-pressed={!mpPublic()}
-                    onClick={() => setMpPublic(false)}>Invite only</button>
-                </div>
                 <p class="party-how">
                   {mpPublic()
                     ? "Listed in Open rooms — anyone on the console can find this game. They can also type the code."
@@ -579,6 +822,7 @@ export default function Ps2(props: {
                 </p>
               </div>
             </Show>
+            {partyColumn()}
           </Show>
           {/* Top-right: the party rail is centred at 56px and the save note is
               bottom-centre, so this corner is free. */}

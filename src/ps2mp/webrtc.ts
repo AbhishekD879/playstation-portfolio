@@ -70,6 +70,13 @@ export function connectSignaling(room: string): Signaling {
 // classic WebRTC race), and flushes them once it is.
 export function makePeer(iceServers: RTCIceServer[], onIce: (c: RTCIceCandidate) => void) {
   const pc = new RTCPeerConnection({ iceServers });
+  // DEV: a bounded ring of live connections, so getStats() is reachable from a
+  // test without threading a handle out of every caller. Stripped from prod.
+  if (import.meta.env?.DEV) {
+    const pcs = ((globalThis as any).__pcs ??= []) as RTCPeerConnection[];
+    pcs.push(pc);
+    if (pcs.length > 8) pcs.shift();
+  }
   const pending: RTCIceCandidateInit[] = [];
   let remoteSet = false;
   pc.onicecandidate = (e) => { if (e.candidate) onIce(e.candidate); };
@@ -89,6 +96,10 @@ export interface HostHandle {
   joiners(): string[];
   /** how many people are watching without playing */
   watchers(): number;
+  /** send on one joiner's channel; silently drops if it isn't open yet */
+  send(joinerId: string, msg: unknown): void;
+  /** send to every connected player */
+  broadcast(msg: unknown): void;
   stop(): void;
 }
 
@@ -100,11 +111,26 @@ export function startHost(opts: {
   listing?: { title: string; kind: string };
   onJoinerInput: (joinerId: string, data: any) => void;
   onJoinerChange?: (ids: string[]) => void;
+  /** that joiner's channel is open — safe to send them the roster */
+  onJoinerReady?: (joinerId: string) => void;
+  /** Per-joiner voice mix track, added to the FIRST offer alongside the video.
+   *  Returning it up front is what avoids ever renegotiating: mute, join and
+   *  leave become WebAudio edges instead of offer/answer round trips. */
+  voiceTrackFor?: (joinerId: string) => MediaStreamTrack | null;
+  /** that joiner's microphone arrived */
+  onJoinerAudio?: (joinerId: string, stream: MediaStream) => void;
+  /** joiner gone — drop them from the voice mix and the roster */
+  onJoinerLeft?: (joinerId: string) => void;
   onWatcherChange?: (n: number) => void;
   onStatus?: (s: string) => void;
 }): HostHandle {
   const sig = connectSignaling(opts.room);
   const peers = new Map<string, ReturnType<typeof makePeer>>();
+  // The input channel is bidirectional and was previously write-only from the
+  // joiner side. Keeping the host's end lets roster and chat ride the same
+  // channel instead of opening a second one — no extra negotiation, and a
+  // player who can send input can always be talked to.
+  const channels = new Map<string, RTCDataChannel>();
   // Spectators live in the same peer map (they need the same offer/ICE dance)
   // but are tracked separately so they never look like players to the caller.
   const watching = new Set<string>();
@@ -129,16 +155,33 @@ export function startHost(opts: {
       notify();
       // host is the media sender + offerer (video only when a stream exists)
       if (opts.stream) for (const track of opts.stream.getTracks()) peer.pc.addTrack(track, opts.stream);
+      // voice: this joiner's own mix (everyone but them), and their mic back
+      if (!isWatcher) {
+        const voice = opts.voiceTrackFor?.(id);
+        if (voice) peer.pc.addTrack(voice, new MediaStream([voice]));
+        peer.pc.ontrack = (e) => {
+          // A joiner's mic arrives with NO msid: it is put on the transceiver the
+          // offer created, not added with a stream of its own, so e.streams is
+          // empty here. Wrapping the track ourselves is what makes the mic
+          // audible at all — requiring a stream silently dropped every joiner.
+          if (e.track.kind !== "audio") return;
+          opts.onJoinerAudio?.(id, e.streams[0] ?? new MediaStream([e.track]));
+        };
+      }
       // A spectator gets NO input channel — the point of watching is that you
       // can't touch the game. Not creating it is the enforcement, not a UI rule.
       if (!isWatcher) {
         const dc = peer.pc.createDataChannel("input", { ordered: true });
+        channels.set(id, dc);
+        dc.onopen = () => opts.onJoinerReady?.(id);
         dc.onmessage = (e) => { try { opts.onJoinerInput(id, JSON.parse(e.data)); } catch { /* ignore */ } };
       }
       peer.pc.onconnectionstatechange = () => {
         opts.onStatus?.(`${isWatcher ? "watcher" : "player"} ${id}: ${peer.pc.connectionState}`);
         if (["failed", "closed", "disconnected"].includes(peer.pc.connectionState)) {
-          peers.delete(id); watching.delete(id); notify();
+          peers.delete(id); watching.delete(id); channels.delete(id);
+          opts.onJoinerLeft?.(id);
+          notify();
         }
       };
       const offer = await peer.pc.createOffer();
@@ -155,18 +198,33 @@ export function startHost(opts: {
       return;
     }
 
-    if (m.t === "peer-left") { peers.get(m.id)?.pc.close(); peers.delete(m.id); watching.delete(m.id); notify(); }
+    if (m.t === "peer-left") {
+      peers.get(m.id)?.pc.close(); peers.delete(m.id); watching.delete(m.id); channels.delete(m.id);
+      opts.onJoinerLeft?.(m.id);
+      notify();
+    }
   });
 
+  const sendTo = (id: string, msg: unknown) => {
+    const dc = channels.get(id);
+    if (dc && dc.readyState === "open") { try { dc.send(JSON.stringify(msg)); } catch { /* channel died mid-send */ } }
+  };
   return {
     joiners: () => [...peers.keys()].filter((id) => !watching.has(id)),
     watchers: () => watcherCount,
-    stop: () => { for (const p of peers.values()) p.pc.close(); peers.clear(); watching.clear(); sig.close(); },
+    send: sendTo,
+    broadcast: (msg) => { for (const id of channels.keys()) sendTo(id, msg); },
+    stop: () => { for (const p of peers.values()) p.pc.close(); peers.clear(); watching.clear(); channels.clear(); sig.close(); },
   };
 }
 
 export interface JoinerHandle {
   sendInput(data: Record<string, unknown>): void;
+  /** same channel as input, for roster/chat traffic */
+  send(msg: unknown): void;
+  /** Put a live mic on the slot reserved at connect time. Safe to call any
+   *  time, including before the connection is up; null stops sending. */
+  setMic(track: MediaStreamTrack | null): void;
   stop(): void;
 }
 
@@ -174,12 +232,19 @@ export function startJoiner(opts: {
   room: string;
   onStream: (stream: MediaStream) => void;
   onStatus?: (s: string) => void;
+  /** host -> joiner traffic on the input channel (roster, chat) */
+  onMessage?: (data: any) => void;
+  /** fires once the channel is open, so the joiner can announce itself */
+  onReady?: () => void;
+  /** the host's voice mix for us — play it, don't graph it */
+  onAudio?: (stream: MediaStream) => void;
   /** watch-only: takes no player slot and gets no input channel */
   watch?: boolean;
 }): JoinerHandle {
   const sig = connectSignaling(opts.room);
   let dc: RTCDataChannel | null = null;
   let peer: ReturnType<typeof makePeer> | null = null;
+  let micSender: RTCRtpSender | null = null;
   const early: any[] = []; // signals that arrive before ICE config resolves
 
   const handle = async (m: any) => {
@@ -190,6 +255,18 @@ export function startJoiner(opts: {
     if (!peer) { early.push(m); return; } // buffer until the peer exists
     if (m.data.sdp) { // the offer
       await peer.setRemote(m.data.sdp);
+      // ★ Claim the mic slot from the OFFER, never before it.
+      //
+      // Adding our own audio transceiver ahead of setRemoteDescription would
+      // put an m-line in the answer that the offer never had — illegal, and it
+      // breaks every host that offers no audio at all (the phone controller and
+      // retro netplay both do exactly that). Adopting the transceiver the offer
+      // created costs no renegotiation and leaves voice-less hosts negotiating
+      // byte-for-byte as they did before.
+      if (!opts.watch) {
+        const t = peer.pc.getTransceivers().find((x) => x.receiver.track?.kind === "audio");
+        if (t) { try { t.direction = "sendrecv"; micSender = t.sender; } catch { /* older engine */ } }
+      }
       const answer = await peer.pc.createAnswer();
       await peer.pc.setLocalDescription(answer);
       sig.send({ t: "signal", to: "host", data: { sdp: peer.pc.localDescription } });
@@ -200,8 +277,17 @@ export function startJoiner(opts: {
 
   iceConfig().then((ice) => {
     peer = makePeer(ice, (c) => sig.send({ t: "signal", to: "host", data: { candidate: c } }));
-    peer.pc.ontrack = (e) => { if (e.streams[0]) opts.onStream(e.streams[0]); };
-    peer.pc.ondatachannel = (e) => { dc = e.channel; };
+    peer.pc.ontrack = (e) => {
+      // the game canvas and the voice mix arrive as separate streams
+      if (e.track.kind === "audio") { opts.onAudio?.(e.streams[0] ?? new MediaStream([e.track])); return; }
+      if (e.streams[0]) opts.onStream(e.streams[0]);
+    };
+    peer.pc.ondatachannel = (e) => {
+      dc = e.channel;
+      dc.onmessage = (ev) => { try { opts.onMessage?.(JSON.parse(ev.data)); } catch { /* ignore */ } };
+      if (dc.readyState === "open") opts.onReady?.();
+      else dc.onopen = () => opts.onReady?.();
+    };
     peer.pc.onconnectionstatechange = () => peer && opts.onStatus?.(peer.pc.connectionState);
     for (const m of early.splice(0)) handle(m); // drain buffered offers/candidates
   });
@@ -210,13 +296,27 @@ export function startJoiner(opts: {
   sig.onClose(() => opts.onStatus?.("signaling closed"));
   sig.onMessage(handle);
 
+  const send = (data: unknown) => {
+    if (dc && dc.readyState === "open") { try { dc.send(JSON.stringify(data)); } catch { /* ignore */ } }
+  };
   return {
-    sendInput: (data) => { if (dc && dc.readyState === "open") dc.send(JSON.stringify(data)); },
+    sendInput: send,
+    send,
+    setMic: (track) => { micSender?.replaceTrack(track).catch(() => {}); },
     stop: () => { peer?.pc.close(); sig.close(); },
   };
 }
 
 // —— Console TV directory ——————————————————————————————————————————————————
+/** A room code: four characters from an alphabet with no ambiguous 0/O or 1/I,
+ *  because the first thing anyone does with one is read it out loud. */
+export function makeRoomCode(): string {
+  const A = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+  const r = new Uint32Array(4);
+  crypto.getRandomValues(r);
+  return Array.from(r, (n) => A[n % A.length]).join("");
+}
+
 export interface LiveRoom { code: string; title: string; kind: string; since: number; watchers: number; seats: number; max: number }
 export interface Marquee { live: LiveRoom[]; recent: { title: string; kind: string; at: number }[] }
 
@@ -251,6 +351,11 @@ export function startJoinerResilient(opts: {
   onStatus?: (s: string) => void;
   /** fires whenever the link drops or comes back, for the reconnect banner */
   onHealth?: (h: Health, attempt: number, label: string) => void;
+  onMessage?: (data: any) => void;
+  /** fires on every (re)connect, so the joiner re-announces itself and the
+   *  host can rebuild a roster entry it dropped during the outage */
+  onReady?: () => void;
+  onAudio?: (stream: MediaStream) => void;
   watch?: boolean;
 }): ResilientJoiner {
   let inner: JoinerHandle | null = null;
@@ -264,6 +369,9 @@ export function startJoinerResilient(opts: {
       room: opts.room,
       watch: opts.watch,
       onStream: opts.onStream,
+      onMessage: opts.onMessage,
+      onReady: opts.onReady,
+      onAudio: opts.onAudio,
       onStatus: (raw) => {
         opts.onStatus?.(raw);
         if (stopped) return;
@@ -303,6 +411,10 @@ export function startJoinerResilient(opts: {
 
   return {
     sendInput: (data) => inner?.sendInput(data),
+    send: (msg) => inner?.send(msg),
+    // a rebuilt session has a brand-new sender, so the mic is re-applied by the
+    // caller on every onReady rather than remembered here
+    setMic: (track) => inner?.setMic(track),
     attempt: () => attempt,
     stop: () => {
       stopped = true;                       // classify() treats this as final

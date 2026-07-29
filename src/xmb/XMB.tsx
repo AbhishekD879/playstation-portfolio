@@ -71,6 +71,7 @@ import RetroJoin from "./RetroJoin";
 import BoardGames from "./BoardGames";
 import ShareBar from "./ShareBar";
 import ConsoleTv from "./ConsoleTv";
+import { makeRoomCode } from "../ps2mp/webrtc";
 import Analytics from "./Analytics";
 import SplatView, { isSplatFile } from "./SplatView";
 import UpscaleLayer from "./UpscaleLayer";
@@ -101,8 +102,13 @@ const ROUTE_APPS = new Set(["doom","doomrtx","chess","trivia","flash","cinema","
 const routeSlug = (a: string) => (a === "ps2" ? "ps2home" : a);
 export const appRouteHash = (a: string | null, catId: string) => (a ? `#/app/${routeSlug(a)}` : `#/${catId}`);
 /** Parse a location hash → what it addresses. null = not an app/category route (empty, or a #setup= link). */
-export function parseRouteHash(hash: string): { app?: string } | { cat: string } | null {
+export function parseRouteHash(hash: string): { app?: string } | { cat: string } | { room: string } | null {
   if (!hash || /^#setup=/.test(hash)) return null;
+  // ★ A room's own address. Codes are minted from an unambiguous alphabet, so
+  // anything else in those four characters is not a room and is ignored rather
+  // than opening an empty session.
+  const rm = hash.match(/^#\/room\/([A-Z0-9]{4})$/i);
+  if (rm) return { room: rm[1].toUpperCase() };
   const am = hash.match(/^#\/app\/([a-z0-9-]+)/i);
   if (am) { const id = routeSlug(am[1].toLowerCase()); return ROUTE_APPS.has(id) ? { app: id } : null; }
   const cm = hash.match(/^#\/([a-z0-9-]+)$/i);
@@ -268,6 +274,13 @@ export default function XMB(props: {
   // earlier version put this in a step BETWEEN the disc and the boot, which
   // broke player one; that space stays empty permanently.
   const [ps2Players, setPs2Players] = createSignal(1);
+  // Who can join is decided on the Online screen now, before anyone arrives —
+  // it used to be a panel over the running game, which is after the fact.
+  const [ps2Public, setPs2Public] = createSignal(true);
+  // Minted here, before the room exists, so the invite link on the Online screen
+  // is the link people actually arrive on. A fresh one per room.
+  const [ps2Code, setPs2Code] = createSignal(makeRoomCode());
+  const [tvCode, setTvCode] = createSignal<string | null>(null);
   const [ps2Lobby, setPs2Lobby] = createSignal(false);
   // armed by "host this" on the Online screen; Ps2 opens the room once the
   // game is actually running, since hosting streams the emulator's canvas
@@ -283,6 +296,29 @@ export default function XMB(props: {
     if (g.sys === "ps2") { setPs2Boot(g); setPs2Join(false); setApp("ps2"); }
     else props.onPlay(g);
   }
+  // DEV ONLY. Boots a disc straight into the PS2 app, bypassing the library so
+  // a 4GB ISO is never copied into IndexedDB. Exists because the two real entry
+  // points — showOpenFilePicker and a library record — cannot be driven from an
+  // automated browser, which made the multiplayer paths untestable without a
+  // human clicking through an OS file dialog. Stripped from production builds.
+  if (import.meta.env.DEV) onMount(() => {
+    const i = document.createElement("input");
+    i.type = "file"; i.id = "devdisc"; i.hidden = true;
+    i.onchange = () => {
+      const f = i.files?.[0];
+      if (!f) return;
+      // data-players on the input picks the seat count the Online screen would
+      setPs2Players(Math.max(1, Math.min(6, Number(i.dataset.players) || 1)));
+      setPs2Boot({
+        id: "dev", profileId: props.profile.id, name: f.name, core: "ps2", sys: "ps2",
+        size: f.size, addedAt: Date.now(), plays: 0, kind: "copy", blob: f,
+      } as GameRecord);
+      setPs2Join(false); setApp("ps2");
+    };
+    document.body.appendChild(i);
+    onCleanup(() => i.remove());
+  });
+
   let appNav: ((a: Parameters<Parameters<typeof onNav>[0]>[0]) => void) | undefined;
   const [apod, setApod] = createSignal<{ loading: boolean; data?: Apod } | null>(null);
   const [dict, setDict] = createSignal<{ result?: Definition | null; looking: boolean } | null>(null);
@@ -424,6 +460,14 @@ export default function XMB(props: {
   const applyRoute = () => {
     const r = parseRouteHash(location.hash);
     if (!r) return;
+    if ("room" in r) {
+      // Someone sent a link. Join as a player; the host's seat map decides
+      // whether that is possible, exactly as the code box would.
+      if (app() === "ps2") return;
+      setPs2AutoHost(false); setPs2Boot(null); setPs2JoinTitle("");
+      setPs2Join(r.room); setApp("ps2");
+      return;
+    }
     if ("app" in r && r.app) {
       // respect the Labs gate so a shared #/app/<hidden> link can't reveal an
       // opt-in easter egg (e.g. "privacy") on a console that hasn't enabled it
@@ -2208,7 +2252,10 @@ export default function XMB(props: {
         />
       </Show>
       <Show when={app() === "consoletv"}>
-        <ConsoleTv code={new URLSearchParams(location.search).get("tv")?.toUpperCase() || undefined} onClose={() => setApp(null)} />
+        <ConsoleTv
+          code={tvCode() ?? new URLSearchParams(location.search).get("tv")?.toUpperCase() ?? undefined}
+          onClose={() => { setTvCode(null); setApp(null); }}
+        />
       </Show>
       <Show when={app() === "board"}><BoardGames onClose={() => setApp(null)} onTrophy={awardT} /></Show>
       <Show when={app() === "voiceavatar"}><VoiceAvatar onClose={() => setApp(null)} /></Show>
@@ -2217,7 +2264,7 @@ export default function XMB(props: {
       </Show>
       <Show when={app() === "privacy"}><Privacy onClose={() => setApp(null)} /></Show>
       <Show when={app() === "watch"}><WatchParty userName={props.profile.name} onClose={() => setApp(null)} /></Show>
-      <Show when={app() === "ps2"}><Ps2 profileId={props.profile.id} players={ps2Players()} initialJoinTitle={ps2JoinTitle()} initialGame={ps2Boot() ?? undefined} initialJoin={ps2Join()} autoHost={ps2AutoHost()} onClose={() => { setPs2AutoHost(false); setPs2Boot(null); setPs2Join(false); setApp(games().some((g) => g.sys === "ps2") ? "ps2home" : null); }} /></Show>
+      <Show when={app() === "ps2"}><Ps2 profileId={props.profile.id} players={ps2Players()} isPublic={ps2Public()} roomCode={ps2Code()} initialJoinTitle={ps2JoinTitle()} initialGame={ps2Boot() ?? undefined} initialJoin={ps2Join()} autoHost={ps2AutoHost()} onClose={() => { setPs2AutoHost(false); setPs2Boot(null); setPs2Join(false); setApp(games().some((g) => g.sys === "ps2") ? "ps2home" : null); }} /></Show>
       <Show when={app() === "pc"}><PcApp onClose={() => setApp(null)} /></Show>
       <Show when={app() === "guestbook"}><Guestbook userName={props.profile.name} onClose={() => setApp(null)} /></Show>
       <Show when={app() === "browser"}><Browser onClose={() => setApp(null)} /></Show>
@@ -2271,9 +2318,14 @@ export default function XMB(props: {
         <Online
           players={ps2Players()}
           onPlayers={(n) => { sfx.tickH(); setPs2Players(n); }}
+          isPublic={ps2Public()}
+          onPublic={setPs2Public}
+          code={ps2Code()}
+          onNewCode={() => setPs2Code(makeRoomCode())}
+          onWatch={(code) => { sfx.confirm(); setPs2Lobby(false); setTvCode(code); setApp("consoletv"); }}
           onClose={() => setPs2Lobby(false)}
           library={games().filter((g) => g.sys === "ps2")
-            .map((g) => ({ id: g.id, title: g.name.replace(/\.[^.]+$/, "") }))}
+            .map((g) => ({ id: g.id, title: g.name.replace(/\.[^.]+$/, ""), plays: g.plays, size: g.size }))}
           onHost={(id) => {
             const g = games().find((x) => x.id === id);
             if (!g) return;
