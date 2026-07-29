@@ -4699,6 +4699,11 @@ body.party-col .share-btn { right: calc(var(--pty-w) + clamp(12px, 2vw, 22px)); 
          font-size: 9.5px; letter-spacing: 0.12em; text-transform: uppercase;
          color: rgba(255,255,255,0.36); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .sp-brace b { color: rgba(255,255,255,0.62); font-weight: 400; }
+.sp-braces.tight { display: grid; grid-template-columns: 1fr; gap: 5px; }
+.sp-braces.tight .sp-brace-1, .sp-braces.tight .sp-brace-2 { flex: none; border-top: 0; padding-top: 0; }
+.sp-braces.tight .sp-brace-1 { padding-top: 5px; border-top: 1px solid rgba(255,255,255,0.14); }
+.sp-braces.tight .sp-brace-gap { display: none; }
+
 @media (max-width: 560px) {
   /* braces stop being braces when they are narrower than their own words */
   .sp-braces { display: grid; grid-template-columns: 1fr; gap: 5px; }

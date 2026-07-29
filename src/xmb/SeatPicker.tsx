@@ -84,7 +84,9 @@ export default function SeatPicker(props: {
       </div>
 
       <Show when={!props.compact}>
-        <div class="sp-braces" aria-hidden="true">
+        {/* One seat per port leaves a brace narrower than its own label, so it
+            stacks instead of truncating. */}
+        <div class="sp-braces" classList={{ tight: plan().ports[0].seats.length < 3 }} aria-hidden="true">
           <span class="sp-brace sp-brace-1"><b>Port 1</b> · {plan().ports[0].needs}</span>
           <span class="sp-brace-gap" />
           <span class="sp-brace sp-brace-2"><b>Port 2</b> · {plan().ports[1].needs}</span>
