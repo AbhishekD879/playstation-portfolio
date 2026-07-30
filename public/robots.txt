@@ -1,0 +1,18 @@
+# https://abhishekstation.pages.dev
+User-agent: *
+Allow: /
+
+# Emulator iframe hosts — real pages, but not pages a person should ever land on
+Disallow: /play/
+Disallow: /play-mt/
+Disallow: /pc/
+
+# Large binary payloads: wasm cores, 3D models, voices, chess tablebases
+Disallow: /cesium/
+Disallow: /models/
+Disallow: /stockfish/
+Disallow: /rpgm/
+Disallow: /ludo/
+Disallow: /rtx/
+
+Sitemap: https://abhishekstation.pages.dev/sitemap.xml

@@ -6,7 +6,8 @@
   "scripts": {
     "dev": "vite --port 5300 --strictPort",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "prebuild": "node scripts/seo.mjs"
   },
   "dependencies": {
     "@dimforge/rapier3d-compat": "^0.19.3",
