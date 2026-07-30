@@ -1217,6 +1217,15 @@ body.party-col .ps2-bar { padding-right: calc(var(--pty-w) + 14px); }
 body.party-col .ps2-perf { right: calc(var(--pty-w) + 16px); }
 body.party-col .share-btn { right: calc(var(--pty-w) + clamp(12px, 2vw, 22px)); }
 
+/* the first-run name prompt, inside the column */
+.pty-name { padding: 12px 14px 4px; border-bottom: 1px solid rgba(255,255,255,0.08); }
+.pty-name .pname.inline { width: auto; margin: 0; }
+.pty-name .pname.asking { padding: 12px 13px 11px; }
+.pty-name .pname-field { flex: 1 1 100%; max-width: none; font-size: 13.5px; padding: 9px 11px; }
+.pty-name .pname-k { font-size: 10px; margin-bottom: 9px; }
+.pty-name .pname-note { font-size: 11px; margin-top: 9px; }
+.pty-name .pname-ok { padding: 9px 12px; font-size: 10.5px; }
+
 /* phone: the column becomes a bottom sheet so the game keeps the top */
 @media (max-width: 720px) {
   .pty { top: auto; left: 0; width: auto; height: min(62vh, 460px);
@@ -4636,6 +4645,54 @@ body.party-col .share-btn { right: calc(var(--pty-w) + clamp(12px, 2vw, 22px)); 
 .online-btn:focus-visible { outline: none; box-shadow: 0 0 0 3px #fff; }
 .online-btn.ghost { background: rgba(255,255,255,0.08); box-shadow: none; }
 .online-note { font-size: 12px; line-height: 1.6; color: rgba(255,255,255,0.4); margin: 0; max-width: 44ch; }
+
+/* ——— the name you appear as ——————————————————————————————————————————
+   Loud the first time, because it has a question. Quiet afterwards, because it
+   is only telling you what you are called. Never a modal: a wall in front of a
+   room is a wall in front of the thing the visitor came for. */
+.pname { margin: 0 0 22px; }
+.pname.asking {
+  padding: 16px 18px 15px;
+  background: linear-gradient(180deg, color-mix(in oklab, var(--xmb-tint) 16%, transparent), color-mix(in oklab, var(--xmb-tint) 5%, transparent));
+  border-top: 2px solid color-mix(in oklab, var(--xmb-tint) 85%, transparent);
+}
+.pname-k { font-size: 11px; letter-spacing: 0.16em; text-transform: uppercase;
+           color: rgba(255,255,255,0.44); margin: 0 0 11px; }
+.pname-row { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 12px; }
+.pname-field {
+  flex: 1 1 220px; min-width: 0; max-width: 340px; padding: 11px 13px;
+  font: inherit; font-size: 15px; letter-spacing: 0.02em; color: var(--text);
+  background: rgba(0,0,0,0.34); border: 1px solid rgba(255,255,255,0.14);
+}
+.pname-field::placeholder { color: rgba(255,255,255,0.3); }
+.pname-field:focus-visible { outline: none; border-color: color-mix(in oklab, var(--xmb-tint) 85%, transparent); }
+.pname-ok {
+  display: inline-flex; align-items: center; gap: 8px; flex: none; cursor: pointer;
+  padding: 11px 16px; font: inherit; font-size: 11.5px; letter-spacing: 0.14em;
+  text-transform: uppercase; color: #fff; background: var(--xmb-tint); border: 0;
+}
+.pname-ok:hover:not(:disabled) { filter: brightness(1.14); }
+.pname-ok:disabled { opacity: 0.34; cursor: default; }
+.pname-ok:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
+.pname-skip { font-size: 11px; letter-spacing: 0.14em; }
+.pname-note { margin: 11px 0 0; font-size: 12px; line-height: 1.6; color: rgba(255,255,255,0.4); max-width: 56ch; }
+.pname-note b { color: rgba(255,255,255,0.72); font-weight: 400; }
+
+/* the settled state: a line, not a form */
+.pname-as {
+  display: inline-flex; align-items: baseline; gap: 11px; cursor: pointer;
+  padding: 6px 0; font: inherit; background: none; border: 0; text-align: left;
+}
+.pname-as .pname-k { margin: 0; }
+.pname-v { font-size: 14px; letter-spacing: 0.04em; color: var(--text); }
+.pname-edit { font-size: 10px; letter-spacing: 0.16em; text-transform: uppercase;
+              color: color-mix(in oklab, var(--xmb-tint) 60%, #fff); }
+.pname-as:hover .pname-edit, .pname-as:focus-visible .pname-edit { color: #fff; }
+.pname-as:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
+
+/* over the connecting screen: the room is already dialling behind it */
+.pname.inline { margin: 22px auto 0; width: min(430px, 88vw); text-align: left; }
+.pname.inline .pname-note { max-width: none; }
 
 /* ——— seat picker ————————————————————————————————————————————————————
    Replaces the six 22px rungs in the host card. The value is the headline, the

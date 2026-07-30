@@ -1,6 +1,7 @@
 import { For, Show, createSignal, onCleanup, onMount } from "solid-js";
 import { fetchLive, type LiveRoom } from "../ps2mp/webrtc";
 import SeatPicker from "./SeatPicker";
+import PartyName from "./PartyName";
 import { seatPlan } from "../ps2/seatPlan";
 import * as sfx from "../audio";
 
@@ -40,6 +41,10 @@ export default function Online(props: {
   /** listed in Open rooms, or code-and-link only */
   isPublic: boolean;
   onPublic: (v: boolean) => void;
+  /** what the room will call you, and whether that is only a fallback */
+  name: string;
+  nameIsFallback: boolean;
+  onName: (n: string) => void;
   /** the room's code, minted before the room exists so the link is real */
   code: string;
   onNewCode: () => void;
@@ -103,6 +108,11 @@ export default function Online(props: {
           </div>
           <button class="ps-act online-x" onClick={props.onClose}>close</button>
         </div>
+
+        {/* Before any of it: who the room calls you. Optional, asked once, and
+            it applies whether you host or join — a host is a row in the roster
+            like everyone else. */}
+        <PartyName name={props.name} isFallback={props.nameIsFallback} onChange={props.onName} />
 
         {/* ── your room ─────────────────────────────────────────────── */}
         <p class="online-k">Your room</p>

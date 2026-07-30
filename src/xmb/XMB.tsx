@@ -72,6 +72,7 @@ import BoardGames from "./BoardGames";
 import ShareBar from "./ShareBar";
 import ConsoleTv from "./ConsoleTv";
 import { makeRoomCode } from "../ps2mp/webrtc";
+import { readPartyName } from "../ps2mp/partyName";
 import Analytics from "./Analytics";
 import SplatView, { isSplatFile } from "./SplatView";
 import UpscaleLayer from "./UpscaleLayer";
@@ -280,6 +281,9 @@ export default function XMB(props: {
   // Minted here, before the room exists, so the invite link on the Online screen
   // is the link people actually arrive on. A fresh one per room.
   const [ps2Code, setPs2Code] = createSignal(makeRoomCode());
+  // The name a room calls you: chosen on this device, profile name as fallback.
+  const [partyName, setPartyName] = createSignal(readPartyName(""));
+  const roomName = () => partyName() || props.profile.name;
   const [tvCode, setTvCode] = createSignal<string | null>(null);
   const [ps2Lobby, setPs2Lobby] = createSignal(false);
   // armed by "host this" on the Online screen; Ps2 opens the room once the
@@ -2264,7 +2268,7 @@ export default function XMB(props: {
       </Show>
       <Show when={app() === "privacy"}><Privacy onClose={() => setApp(null)} /></Show>
       <Show when={app() === "watch"}><WatchParty userName={props.profile.name} onClose={() => setApp(null)} /></Show>
-      <Show when={app() === "ps2"}><Ps2 profileId={props.profile.id} players={ps2Players()} isPublic={ps2Public()} roomCode={ps2Code()} initialJoinTitle={ps2JoinTitle()} initialGame={ps2Boot() ?? undefined} initialJoin={ps2Join()} autoHost={ps2AutoHost()} onClose={() => { setPs2AutoHost(false); setPs2Boot(null); setPs2Join(false); setApp(games().some((g) => g.sys === "ps2") ? "ps2home" : null); }} /></Show>
+      <Show when={app() === "ps2"}><Ps2 profileId={props.profile.id} players={ps2Players()} isPublic={ps2Public()} roomCode={ps2Code()} partyName={partyName()} onPartyName={setPartyName} initialJoinTitle={ps2JoinTitle()} initialGame={ps2Boot() ?? undefined} initialJoin={ps2Join()} autoHost={ps2AutoHost()} onClose={() => { setPs2AutoHost(false); setPs2Boot(null); setPs2Join(false); setApp(games().some((g) => g.sys === "ps2") ? "ps2home" : null); }} /></Show>
       <Show when={app() === "pc"}><PcApp onClose={() => setApp(null)} /></Show>
       <Show when={app() === "guestbook"}><Guestbook userName={props.profile.name} onClose={() => setApp(null)} /></Show>
       <Show when={app() === "browser"}><Browser onClose={() => setApp(null)} /></Show>
@@ -2322,6 +2326,9 @@ export default function XMB(props: {
           onPublic={setPs2Public}
           code={ps2Code()}
           onNewCode={() => setPs2Code(makeRoomCode())}
+          name={roomName()}
+          nameIsFallback={!partyName()}
+          onName={setPartyName}
           onWatch={(code) => { sfx.confirm(); setPs2Lobby(false); setTvCode(code); setApp("consoletv"); }}
           onClose={() => setPs2Lobby(false)}
           library={games().filter((g) => g.sys === "ps2")

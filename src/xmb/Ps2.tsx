@@ -20,6 +20,8 @@ import { bumpPlays, resolveGameFile, type GameRecord } from "../gamesdb";
 import { clockDen, engineUrl, readClock, readEngine } from "../ps2/engineChoice";
 import PartyPanel, { type MicState } from "./PartyPanel";
 import { buildRoster, cleanName, cleanText, confirmLine, lineId, pushLine, type ChatLine, type Member } from "../ps2mp/party";
+import { partyNameAsked } from "../ps2mp/partyName";
+import PartyName from "./PartyName";
 import { createHostVoice, createJoinerVoice, openMic, type HostVoice, type JoinerVoice } from "../ps2mp/voice";
 import { loadProfiles } from "../profiles";
 
@@ -39,7 +41,10 @@ export default function Ps2(props: {
   isPublic?: boolean;
   /** the room's code, minted on the Online screen so the invite link exists
    *  before anyone is in the room to receive it */
-  roomCode?: string }) {
+  roomCode?: string;
+  /** the name chosen on this device, or "" to fall back to the profile's */
+  partyName?: string;
+  onPartyName?: (n: string) => void }) {
   const isDesktop = matchMedia("(pointer: fine)").matches && innerWidth >= 900 && typeof WebAssembly === "object";
   const isolated = (globalThis as any).crossOriginIsolated === true;
   const canEmulate = isDesktop && isolated;
@@ -172,6 +177,10 @@ export default function Ps2(props: {
   const [mic, setMic] = createSignal<MicState>(navigator.mediaDevices ? "off" : "unsupported");
   const [myLevel, setMyLevel] = createSignal(0);
   const [roomCap, setRoomCap] = createSignal(2);
+  // Whether the column still has a name to ask for. A signal because
+  // localStorage is not reactive — reading partyNameAsked() in the view left the
+  // answered prompt sitting in the column forever.
+  const [askName, setAskName] = createSignal(!partyNameAsked());
   // The host mints joiner ids, so a joiner can't know which roster row is its
   // own until told. One message at channel-open beats matching on name, which
   // two players called "ABHI" would get wrong.
@@ -184,7 +193,10 @@ export default function Ps2(props: {
   const isPhone = matchMedia("(max-width: 720px)").matches;
   const chatOpen = () => chatOverride()
     ?? (!isPhone && (mpRole() === "host" ? mpPlayers() > 0 : joinStage() === "live"));
-  const myName = () => cleanName(loadProfiles().find((p) => p.id === props.profileId)?.name);
+  // What the room calls you. Owned by the console (XMB) so a rename made here,
+  // on the connecting screen, is the same name the Online screen shows.
+  const profileName = () => cleanName(loadProfiles().find((p) => p.id === props.profileId)?.name);
+  const myName = () => cleanName(props.partyName || profileName());
   let hostVoice: HostVoice | null = null;
   let joinerVoice: JoinerVoice | null = null;
   let micStream: MediaStream | null = null;
@@ -413,6 +425,15 @@ export default function Ps2(props: {
     }
   }
 
+  /** A new name has to reach the room, not just this screen. The host rebuilds
+   *  its roster; a joiner re-sends hello, which the host already treats as
+   *  idempotent (only the first one prints a "joined" line). */
+  function renameMe(name: string) {
+    props.onPartyName?.(name);
+    if (mpRole() === "host") pushRoster(true);
+    else joinerHandle?.send({ t: "hello", name: cleanName(name || profileName()) });
+  }
+
   /** Anyone's line, said from this screen. Host stamps its own; a joiner shows
    *  it immediately as pending and the host's echo confirms it. */
   function say(text: string) {
@@ -512,6 +533,10 @@ export default function Ps2(props: {
     <Show when={chatOpen()}>
       <PartyPanel
         code={mpCode()}
+        name={myName()}
+        nameIsFallback={!props.partyName}
+        onName={askName() ? renameMe : undefined}
+        onNameDone={() => setAskName(false)}
         capacity={mpRole() === "host" ? players() : roomCap()}
         members={members()}
         log={chat()}
@@ -720,6 +745,13 @@ export default function Ps2(props: {
                 <div class="session-disc ps2-spin"><div class="session-disc-hole" /></div>
                 <div class="session-reading-text">{joinTitle() ? `Joining ${joinTitle()}` : `Joining room ${mpCode()}`}…</div>
                 <div class="session-reading-name">{mpStatus() || "connecting"}</div>
+                {/* Asked here because a link skips the Online screen entirely.
+                    The connection is already running behind this — the name is
+                    announced when it lands, and again if it changes. */}
+                <Show when={askName()}>
+                  <PartyName name={myName()} isFallback={!props.partyName} onChange={renameMe}
+                    onDone={() => setAskName(false)} inline />
+                </Show>
               </div>
             </Show>
             {/* the host's voice mix — everyone in the room except us */}

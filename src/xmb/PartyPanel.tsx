@@ -14,11 +14,20 @@
 import { For, Show, createEffect, createSignal, onCleanup } from "solid-js";
 import * as sfx from "../audio";
 import { MAX_TEXT, rosterRows, type ChatLine, type Member } from "../ps2mp/party";
+import PartyName from "./PartyName";
 
 export type MicState = "off" | "on" | "blocked" | "unsupported";
 
 export default function PartyPanel(props: {
   code: string;
+  /** first-run name prompt, shown here because the connecting screen it used to
+   *  live on can be gone in under a second on a fast link */
+  name?: string;
+  nameIsFallback?: boolean;
+  /** undefined once the question has been answered — the roster row below then
+   *  shows your name with "you" beside it, so a second copy is furniture */
+  onName?: (n: string) => void;
+  onNameDone?: () => void;
   /** total seats in this room, so empty ones can show as open */
   capacity: number;
   members: Member[];
@@ -79,6 +88,16 @@ export default function PartyPanel(props: {
         <span class="pty-room">{props.code}</span>
         <button class="ps-act pty-hide" onClick={() => { sfx.back(); props.onClose(); }}>hide</button>
       </div>
+
+      {/* Only while it has something to ask. Once answered, the roster row below
+          already shows your name with "you" next to it — a second copy would be
+          furniture. */}
+      <Show when={props.onName}>
+        <div class="pty-name">
+          <PartyName name={props.name ?? "Player"} isFallback={props.nameIsFallback}
+            onChange={props.onName!} onDone={props.onNameDone} inline />
+        </div>
+      </Show>
 
       <div class="pty-roster" role="list">
         <For each={rosterRows(props.members, props.capacity)}>{(row) => (
