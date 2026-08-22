@@ -178,7 +178,7 @@ const NW_SHIM = `<script>(function(){
 // audio buffers, fonts and the effekseer wasm, which are the things that stall.
 // Bump whenever a shim changes — a log that cannot name its own version wastes
 // a capture, which is exactly what happened once.
-const SHIM_V = "12";
+const SHIM_V = "13";
 const DIAG_SHIM = `<script>(function(){
   var T0=Date.now(), seq=0, pending={}, recent=[], errors=[], counts={ok:0,fail:0}, activity=[], xfer=[];
   // MOVEMENT channel — map transfers (doors/stairs) + event triggers get their
@@ -313,9 +313,30 @@ const DIAG_SHIM = `<script>(function(){
     }catch(e){}
   }
   function glLoad(){
-    return "uploads="+texN+" ~"+Math.round(texMB)+"MB total"
+    return "uploads="+texN+" ~"+Math.round(texMB)+"MB total forcedAfterPause="+vfix
       +" ctxLost="+ctxLost
       +(texErr.length?" · ERRORS: "+texErr.join(" | "):" · no upload errors");
+  }
+  var vfix=0;
+  function patchVideoTextures(){
+    try{
+      var P=window.PIXI;
+      if(!P || !P.VideoBaseTexture || P.VideoBaseTexture.__diagFix) return;
+      var proto=P.VideoBaseTexture.prototype;
+      if(!proto || typeof proto._onPlayStop!=="function") return;
+      P.VideoBaseTexture.__diagFix=1;
+      var stop=proto._onPlayStop;
+      proto._onPlayStop=function(){
+        var self=this, n=0;
+        var push=function(){
+          try{ self.update(); vfix++; }catch(e){}
+          if(++n<4) requestAnimationFrame(push);
+        };
+        try{ requestAnimationFrame(push); }catch(e){}
+        return stop.apply(this, arguments);
+      };
+      elog("PIXI video-pause texture fix installed","engine img");
+    }catch(e){}
   }
   function canvasInfo(){
     try{
@@ -489,7 +510,7 @@ const DIAG_SHIM = `<script>(function(){
     var BM=window.Bitmap;
     if(BM && !BM.__diag){ BM.__diag=1;
       if(typeof BM.load==="function"){ var bl=BM.load; BM.load=function(url){ elog("Bitmap.load("+url+")","engine img"); return bl.apply(this,arguments); }; } }
-    hookGL();
+    hookGL(); patchVideoTextures();
     var GR=window.Graphics;
     if(GR && !GR.__diagCap && typeof GR.render==="function"){ GR.__diagCap=1;
       var grf=GR.render; GR.render=function(){ var out=grf.apply(this,arguments);
