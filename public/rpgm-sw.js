@@ -213,9 +213,15 @@ const DIAG_SHIM = `<script>(function(){
     return {source:"rpgm-diag", up:now-T0, scene:scene, spinner:spinner,
       booted:!!(canvas&&!spinner&&(scene?scene!=="Scene_Boot":true)), canvas:canvas,
       pending:pend.slice(0,12), recent:recent.slice(0,20), counts:counts, errors:errors.slice(0,10), activity:activity.slice(0,400), xfer:xfer.slice(0,60), manifest:manifest,
-      probe:(probe||(probed?"":"no VAnim global — defined inside a plugin closure"))}; }
+      probe:(probe||(probed?"":"no VAnim global — defined inside a plugin closure")), codecs:codecs}; }
   // One-shot source probe for globals whose art never loads. Captured lazily
   // because a plugin defining them may not have run at startup.
+  var codecs="";
+  try{ var _v=document.createElement("video");
+    codecs="codecs: webm/vp8="+(_v.canPlayType('video/webm; codecs="vp8"')||"NO")
+      +" · webm/vp9="+(_v.canPlayType('video/webm; codecs="vp9"')||"NO")
+      +" · webm(any)="+(_v.canPlayType("video/webm")||"NO")
+      +" · mp4/h264="+(_v.canPlayType('video/mp4; codecs="avc1.42E01E"')||"NO"); }catch(e){}
   var probed=false, probe="";
   function runProbe(){ if(probed) return;
     try{
@@ -224,7 +230,7 @@ const DIAG_SHIM = `<script>(function(){
       probed=true;
       probe=keys.slice(0,4).map(function(k){ var v=window[k];
         return k+" = "+(typeof v==="function"
-          ? String(v).replace(/\s+/g," ").slice(0,320)
+          ? String(v).replace(/\\s+/g," ").slice(0,600)
           : typeof v); }).join("   ||   ");
     }catch(e){ probed=true; probe="probe threw: "+(e&&e.message); }
   }
@@ -259,6 +265,18 @@ const DIAG_SHIM = `<script>(function(){
         if(!r0||r0===location.href) return; }
       logAct(rel(el.currentSrc||el.src||"(media)"), false, "load failed"); }, false);
     return el; }; W.prototype=Native.prototype; return W; }
+  // Video art (VPLAYER-style plugins) never touched the wrapped Image/Audio
+  // constructors, and media faults report on their own channel — so the log was
+  // silent by construction. Trace creation, readiness and failure here.
+  try{ var CE=document.createElement.bind(document);
+    document.createElement=function(t){ var el=CE.apply(null,arguments);
+      try{ if(String(t).toLowerCase()==="video"){
+        elog("video element created","engine video");
+        el.addEventListener("loadeddata",function(){ logAct(rel(el.currentSrc||el.src||"(video)"), true, "video ready"); },false);
+        el.addEventListener("error",function(){ var e=el.error;
+          logAct(rel(el.currentSrc||el.src||"(video)"), false, "video error"+(e?" code "+e.code:"")); },false);
+      } }catch(e2){}
+      return el; }; }catch(e){}
   try{ window.Image=wrapMediaCtor(window.Image); }catch(e){}
   try{ if(window.Audio) window.Audio=wrapMediaCtor(window.Audio); }catch(e){}
   // ENGINE TRACE (a real debugger): wrap RPG Maker's subsystems so the feed
