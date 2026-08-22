@@ -79,6 +79,21 @@ const NW_SHIM = `<script>(function(){
   var fsUrl=function(p){ p=relPath(p); try{ return new URL(p, location.href).href; }catch(e){ return null; } };
   var fsHas=function(p){ var n=relPath(p); try{n=n.normalize("NFKC");}catch(e){} n=n.toLowerCase();
     return !!(window.__rpgmFS && window.__rpgmFS.has(n)); };
+  // A directory exists if anything in the manifest sits under it. Manifest paths
+  // are game-root-relative and NFKC-lowercased (see manifestFor), so normalise
+  // the query the same way fsHas does.
+  var fsKey=function(p){ var n=relPath(p); try{n=n.normalize("NFKC");}catch(e){} return n.toLowerCase(); };
+  var fsIsDir=function(p){ var n=fsKey(p); if(n && n.slice(-1)!=="/") n+="/";
+    var S=window.__rpgmFS; if(!S) return false; if(!n) return true;
+    var hit=false; S.forEach(function(k){ if(!hit && k.lastIndexOf(n,0)===0) hit=true; }); return hit; };
+  // Immediate children only, like the real readdirSync: names, not paths, and a
+  // subdirectory appears once rather than once per file inside it.
+  var fsList=function(p){ var n=fsKey(p); if(n && n.slice(-1)!=="/") n+="/";
+    var S=window.__rpgmFS; if(!S) return [];
+    var seen={}; S.forEach(function(k){ if(n && k.lastIndexOf(n,0)!==0) return;
+      var rest=k.slice(n.length); if(!rest) return;
+      var i=rest.indexOf("/"); seen[i<0?rest:rest.slice(0,i)]=1; });
+    return Object.keys(seen); };
   var fsRead=function(p, enc){ var u=fsUrl(p);
     return fetch(u).then(function(r){ if(!r.ok) throw new Error("ENOENT: "+p);
       return enc ? r.text() : r.arrayBuffer().then(function(ab){
@@ -88,7 +103,10 @@ const NW_SHIM = `<script>(function(){
   var dl=function(p,r){ try{ if(window.__diaglog) window.__diaglog(p,r); }catch(e){} };
   var fs={existsSync:function(p){var ok=fsHas(p);dl("fs.existsSync "+p,ok?"scaffold →true (in manifest)":(window.__rpgmFS?"scaffold →false (not in manifest)":"scaffold →false (no manifest)"));return ok;},readFileSync:function(p){dl("fs.readFileSync "+p,"scaffold sync-unavailable");throw new Error("fs sync reads unavailable in browser: "+p);},
     writeFileSync:noop,appendFileSync:noop,mkdirSync:noop,rmdirSync:noop,unlinkSync:noop,renameSync:noop,copyFileSync:noop,
-    readdirSync:function(){return [];},statSync:function(){return{isDirectory:ret(false),isFile:ret(false),size:0};},
+    readdirSync:function(p){var r=fsList(p);dl("fs.readdirSync "+p,"scaffold →"+r.length+" entries");return r;},
+    statSync:function(p){var f=fsHas(p),d=!f&&fsIsDir(p);
+      if(!f&&!d){dl("fs.statSync "+p,"scaffold →ENOENT");var e=new Error("ENOENT: "+p);e.code="ENOENT";throw e;}
+      return{isDirectory:ret(d),isFile:ret(f),isSymbolicLink:ret(false),size:0,mtime:new Date(0),mtimeMs:0};},
     writeFile:function(){var cb=arguments[arguments.length-1];if(typeof cb==="function")cb(null);},
     readFile:function(p,opt,cb){ if(typeof opt==="function"){cb=opt;opt=null;}
       var enc=typeof opt==="string"?opt:(opt&&opt.encoding);
@@ -217,7 +235,14 @@ const DIAG_SHIM = `<script>(function(){
   function wrapMediaCtor(Native){ var W=function(a,b){ var el=new Native(a,b);
     el.addEventListener("load", function(){ logAct(rel(el.currentSrc||el.src), true); }, false);
     el.addEventListener("loadeddata", function(){ logAct(rel(el.currentSrc||el.src), true); }, false);
-    el.addEventListener("error", function(){ logAct(rel(el.currentSrc||el.src||"(media)"), false, "load failed"); }, false);
+    el.addEventListener("error", function(){
+      // src="" resolves to the DOCUMENT url and still fires error. RPG Maker
+      // clears bitmaps that way after a decrypted image loads, so this is
+      // cleanup — logging it buried the real failures under phantom
+      // "index.html · load failed" lines.
+      if(!el.getAttribute||!el.getAttribute("src")){ var r0=el.currentSrc||el.src||"";
+        if(!r0||r0===location.href) return; }
+      logAct(rel(el.currentSrc||el.src||"(media)"), false, "load failed"); }, false);
     return el; }; W.prototype=Native.prototype; return W; }
   try{ window.Image=wrapMediaCtor(window.Image); }catch(e){}
   try{ if(window.Audio) window.Audio=wrapMediaCtor(window.Audio); }catch(e){}
