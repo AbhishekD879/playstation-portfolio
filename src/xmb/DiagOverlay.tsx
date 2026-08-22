@@ -46,6 +46,9 @@ export type DiagSnap = {
    *  — an out-of-memory upload fails silently, and this game is 1169x826 with
    *  several full-frame videos at the same size */
   glLoad?: string;
+  /** what PIXI actually exposes — v4 has VideoBaseTexture, v5+ renamed it to
+   *  resources.VideoResource, and a game can bundle its own build */
+  pixi?: string;
 };
 
 const LOG_HOST = "https://abhishekstation-mp.abhishekdiwate879.workers.dev";
@@ -98,6 +101,7 @@ export default function DiagOverlay(props: {
     if (d.gl) L.push(`gl upload: ${d.gl}`);
     if (d.canv) L.push(`canvases: ${d.canv}`);
     if (d.glLoad) L.push(`gl load: ${d.glLoad}`);
+    if (d.pixi) L.push(`pixi: ${d.pixi}`);
     if (d.probe) L.push(`probe: ${d.probe}`);
     const inp = inputs();
     if (inp.length) {

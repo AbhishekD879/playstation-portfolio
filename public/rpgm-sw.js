@@ -178,7 +178,7 @@ const NW_SHIM = `<script>(function(){
 // audio buffers, fonts and the effekseer wasm, which are the things that stall.
 // Bump whenever a shim changes — a log that cannot name its own version wastes
 // a capture, which is exactly what happened once.
-const SHIM_V = "13";
+const SHIM_V = "14";
 const DIAG_SHIM = `<script>(function(){
   var T0=Date.now(), seq=0, pending={}, recent=[], errors=[], counts={ok:0,fail:0}, activity=[], xfer=[];
   // MOVEMENT channel — map transfers (doors/stairs) + event triggers get their
@@ -216,7 +216,7 @@ const DIAG_SHIM = `<script>(function(){
     return {source:"rpgm-diag", up:now-T0, scene:scene, spinner:spinner,
       booted:!!(canvas&&!spinner&&(scene?scene!=="Scene_Boot":true)), canvas:canvas,
       pending:pend.slice(0,12), recent:recent.slice(0,20), counts:counts, errors:errors.slice(0,10), activity:activity.slice(0,400), xfer:xfer.slice(0,60), manifest:manifest,
-      probe:(probe||(probed?"":"no VAnim global — defined inside a plugin closure")), codecs:codecs, shimV:"${SHIM_V}", vids:vidState(), frames:frames, gl:glCompare(), canv:canvasInfo(), glLoad:glLoad()}; }
+      probe:(probe||(probed?"":"no VAnim global — defined inside a plugin closure")), codecs:codecs, shimV:"${SHIM_V}", vids:vidState(), frames:frames, gl:glCompare(), canv:canvasInfo(), glLoad:glLoad(), pixi:pixiInfo()}; }
   // One-shot source probe for globals whose art never loads. Captured lazily
   // because a plugin defining them may not have run at startup.
   var vids=[], wantFrame=false, frames=[];
@@ -288,7 +288,7 @@ const DIAG_SHIM = `<script>(function(){
   }
   // Wrap texImage2D on the live context: count uploads, total bytes, and record
   // any that raise a GL error — an out-of-memory upload fails silently otherwise.
-  var texN=0, texMB=0, texErr=[], texHooked=false, ctxLost=0;
+  var texN=0, texMB=0, texErr=[], texHooked=false, ctxLost=0, texKind={};
   function hookGL(){
     if(texHooked) return;
     try{
@@ -302,6 +302,8 @@ const DIAG_SHIM = `<script>(function(){
         var a=arguments, src=a[a.length-1], w=0,h=0;
         try{ if(src&&src.videoWidth){ w=src.videoWidth; h=src.videoHeight; }
              else if(src&&src.width){ w=src.width|0; h=src.height|0; } }catch(e){}
+        try{ var k=(src&&src.constructor&&src.constructor.name)||(src===null?"null":typeof src);
+             texKind[k]=(texKind[k]||0)+1; }catch(e){}
         var r=ti.apply(this,a);
         try{
           texN++; if(w&&h) texMB+=(w*h*4)/1048576;
@@ -309,11 +311,19 @@ const DIAG_SHIM = `<script>(function(){
           if(e && texErr.length<6) texErr.push("err"+e+"@"+w+"x"+h+" (upload #"+texN+")");
         }catch(e2){}
         return r; };
+      var tsi=proto.texSubImage2D;
+      if(typeof tsi==="function"){ proto.texSubImage2D=function(){
+        var a=arguments, src=a[a.length-1];
+        try{ var k="sub:"+((src&&src.constructor&&src.constructor.name)||typeof src);
+             texKind[k]=(texKind[k]||0)+1; }catch(e){}
+        return tsi.apply(this,a); }; }
       gc.addEventListener("webglcontextlost", function(){ ctxLost++; elog("WEBGL CONTEXT LOST","error"); }, false);
     }catch(e){}
   }
   function glLoad(){
+    var ks=[]; try{ for(var k in texKind) ks.push(k+"="+texKind[k]); }catch(e){}
     return "uploads="+texN+" ~"+Math.round(texMB)+"MB total forcedAfterPause="+vfix
+      +" · sources["+ks.join(" ")+"]"
       +" ctxLost="+ctxLost
       +(texErr.length?" · ERRORS: "+texErr.join(" | "):" · no upload errors");
   }
@@ -337,6 +347,18 @@ const DIAG_SHIM = `<script>(function(){
       };
       elog("PIXI video-pause texture fix installed","engine img");
     }catch(e){}
+  }
+  function pixiInfo(){
+    try{
+      var P=window.PIXI;
+      if(!P) return "window.PIXI ABSENT — module-scoped or a custom renderer";
+      var have=[];
+      ["VideoBaseTexture","VideoResource","BaseTexture","Texture","Sprite"].forEach(function(n){
+        if(P[n]) have.push(n); });
+      var r=P.resources ? Object.keys(P.resources).filter(function(k){ return /video/i.test(k); }) : [];
+      return "PIXI "+(P.VERSION||"?")+" · has["+have.join(",")+"]"
+        +" · resources.video["+(r.join(",")||"none")+"]";
+    }catch(e){ return "pixiInfo threw: "+(e&&e.message); }
   }
   function canvasInfo(){
     try{
