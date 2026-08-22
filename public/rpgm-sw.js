@@ -204,7 +204,7 @@ const DIAG_SHIM = `<script>(function(){
   function begin(u){ var id=++seq; pending[id]={path:rel(u), t0:Date.now()}; return id; }
   function fin(id, status, emsg){ var e=pending[id]; if(!e) return; delete pending[id];
     var ok=status>=200&&status<400; logAct(e.path, ok, ok?"":(emsg||status||"error")); }
-  function snap(){ var now=Date.now(), pend=[];
+  function snap(){ var now=Date.now(), pend=[]; runProbe();
     for(var k in pending){ pend.push({path:pending[k].path, age: now-pending[k].t0}); }
     pend.sort(function(a,b){return b.age-a.age;});
     var sp=document.getElementById("loadingSpinner"), spinner=!!(sp&&getComputedStyle(sp).display!=="none");
@@ -212,7 +212,22 @@ const DIAG_SHIM = `<script>(function(){
     var canvas=!!document.querySelector("canvas");
     return {source:"rpgm-diag", up:now-T0, scene:scene, spinner:spinner,
       booted:!!(canvas&&!spinner&&(scene?scene!=="Scene_Boot":true)), canvas:canvas,
-      pending:pend.slice(0,12), recent:recent.slice(0,20), counts:counts, errors:errors.slice(0,10), activity:activity.slice(0,400), xfer:xfer.slice(0,60), manifest:manifest}; }
+      pending:pend.slice(0,12), recent:recent.slice(0,20), counts:counts, errors:errors.slice(0,10), activity:activity.slice(0,400), xfer:xfer.slice(0,60), manifest:manifest,
+      probe:(probe||(probed?"":"no VAnim global — defined inside a plugin closure"))}; }
+  // One-shot source probe for globals whose art never loads. Captured lazily
+  // because a plugin defining them may not have run at startup.
+  var probed=false, probe="";
+  function runProbe(){ if(probed) return;
+    try{
+      var keys=Object.keys(window).filter(function(k){ return /vanim/i.test(k); });
+      if(!keys.length) return;                 // not defined yet — try again next tick
+      probed=true;
+      probe=keys.slice(0,4).map(function(k){ var v=window[k];
+        return k+" = "+(typeof v==="function"
+          ? String(v).replace(/\s+/g," ").slice(0,320)
+          : typeof v); }).join("   ||   ");
+    }catch(e){ probed=true; probe="probe threw: "+(e&&e.message); }
+  }
   function post(){ try{ parent.postMessage(snap(), "*"); }catch(e){} }
   function addErr(msg, at){ errors.unshift({msg:String(msg).slice(0,280), at:at||""}); if(errors.length>10) errors.pop(); post(); }
   window.addEventListener("unhandledrejection", function(ev){ var r=ev&&ev.reason; addErr("Unhandled: "+((r&&r.message)||r), ""); });

@@ -20,6 +20,9 @@ export type DiagSnap = {
    *  game's own existsSync checks all return false, which makes it skip assets
    *  silently with no error to log */
   manifest?: string;
+  /** source of the game's own function when its art never loads — the engine
+   *  never requesting an image means the bail-out is in the game's code */
+  probe?: string;
 };
 
 const LOG_HOST = "https://abhishekstation-mp.abhishekdiwate879.workers.dev";
@@ -67,6 +70,7 @@ export default function DiagOverlay(props: {
     L.push(`scene ${d.scene || "?"} · up ${Math.round(d.up / 1000)}s · ok ${d.counts.ok} / fail ${d.counts.fail} · booted ${d.booted}`);
     L.push(`ua: ${navigator.userAgent}`);
     if (d.manifest) L.push(d.manifest);
+    if (d.probe) L.push(`probe: ${d.probe}`);
     const inp = inputs();
     if (inp.length) {
       L.push("", "-- INPUT (parent) --");
