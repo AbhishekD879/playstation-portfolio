@@ -717,9 +717,35 @@ export function ensureRpgSw(): Promise<void> {
   swReady = (async () => {
     if (!("serviceWorker" in navigator)) throw new Error("no service worker");
     const reg = await navigator.serviceWorker.register("/rpgm-sw.js", { scope: "/rpgm/" });
+    // ★ An ALREADY-ACTIVE worker used to short-circuit straight out of here, so a
+    // device kept whatever worker it first installed until the browser decided to
+    // re-check on its own — and Safari throttles that hard. The worker injects the
+    // game's HTML shims, so a stale one silently serves stale shims for weeks.
+    // Cost a whole debugging round-trip: a capture came back from code two
+    // deploys old, and only an unrelated typo in the output revealed it.
+    //
+    // Since this runs BEFORE the iframe src is set, pulling the update here means
+    // a fix lands on THIS launch instead of the one after. Bounded: an offline or
+    // slow check must never block starting the game.
+    if (reg.active) {
+      try {
+        await Promise.race([reg.update(), new Promise((r) => setTimeout(r, 2500))]);
+        const fresh = reg.installing || reg.waiting;
+        if (fresh) {
+          await Promise.race([
+            new Promise<void>((res) => {
+              const check = () => { if (fresh.state === "activated" || fresh.state === "redundant") res(); };
+              fresh.addEventListener("statechange", check);
+              check();
+            }),
+            new Promise((r) => setTimeout(r, 2500)),
+          ]);
+        }
+      } catch { /* offline, or the update check failed — the active worker still serves */ }
+      return;
+    }
     // Wait on THIS registration's own activation — not navigator.serviceWorker.ready,
     // which tracks the page's scope ("/") and never resolves for our /rpgm-fs/ worker.
-    if (reg.active) return;
     const w = reg.installing || reg.waiting;
     if (!w) return;
     await new Promise<void>((res, rej) => {

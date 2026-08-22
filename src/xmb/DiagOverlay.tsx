@@ -26,6 +26,9 @@ export type DiagSnap = {
   /** what this browser can actually decode — RPG Maker ships VP8/VP9 webm
    *  because MV targets Chromium, and iOS Safari's support is partial */
   codecs?: string;
+  /** which shim built this log — a stale service worker silently serves stale
+   *  shims, and a log that cannot name its version wastes a capture */
+  shimV?: string;
 };
 
 const LOG_HOST = "https://abhishekstation-mp.abhishekdiwate879.workers.dev";
@@ -71,7 +74,7 @@ export default function DiagOverlay(props: {
     if (!d) return "";
     const L: string[] = ["=== DIAG ===", `target: ${props.label}`];
     L.push(`scene ${d.scene || "?"} · up ${Math.round(d.up / 1000)}s · ok ${d.counts.ok} / fail ${d.counts.fail} · booted ${d.booted}`);
-    L.push(`ua: ${navigator.userAgent}`);
+    L.push(`ua: ${navigator.userAgent}${d.shimV ? ` · shim v${d.shimV}` : " · shim PRE-VERSIONING (stale worker?)"}`);
     if (d.manifest) L.push(d.manifest);
     if (d.codecs) L.push(d.codecs);
     if (d.probe) L.push(`probe: ${d.probe}`);
