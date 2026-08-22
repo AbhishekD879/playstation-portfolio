@@ -178,7 +178,7 @@ const NW_SHIM = `<script>(function(){
 // audio buffers, fonts and the effekseer wasm, which are the things that stall.
 // Bump whenever a shim changes — a log that cannot name its own version wastes
 // a capture, which is exactly what happened once.
-const SHIM_V = "6";
+const SHIM_V = "7";
 const DIAG_SHIM = `<script>(function(){
   var T0=Date.now(), seq=0, pending={}, recent=[], errors=[], counts={ok:0,fail:0}, activity=[], xfer=[];
   // MOVEMENT channel — map transfers (doors/stairs) + event triggers get their
@@ -216,9 +216,18 @@ const DIAG_SHIM = `<script>(function(){
     return {source:"rpgm-diag", up:now-T0, scene:scene, spinner:spinner,
       booted:!!(canvas&&!spinner&&(scene?scene!=="Scene_Boot":true)), canvas:canvas,
       pending:pend.slice(0,12), recent:recent.slice(0,20), counts:counts, errors:errors.slice(0,10), activity:activity.slice(0,400), xfer:xfer.slice(0,60), manifest:manifest,
-      probe:(probe||(probed?"":"no VAnim global — defined inside a plugin closure")), codecs:codecs, shimV:"${SHIM_V}"}; }
+      probe:(probe||(probed?"":"no VAnim global — defined inside a plugin closure")), codecs:codecs, shimV:"${SHIM_V}", vids:vidState()}; }
   // One-shot source probe for globals whose art never loads. Captured lazily
   // because a plugin defining them may not have run at startup.
+  var vids=[];
+  function vidState(){ try{
+    return vids.filter(function(v){ return v.src||v.currentSrc; }).slice(0,8).map(function(v){
+      var n=(v.currentSrc||v.src||"").split("/").pop();
+      return n+" "+(v.paused?"PAUSED":"playing")+" t="+(v.currentTime||0).toFixed(1)
+        +" rs="+v.readyState+" "+(v.videoWidth||0)+"x"+(v.videoHeight||0)
+        +(v.muted?" muted":"")+(v.error?" ERR"+v.error.code:"");
+    }).join("  |  ");
+  }catch(e){ return "vid state failed"; } }
   var codecs="";
   try{ var _v=document.createElement("video");
     codecs="codecs: webm/vp8="+(_v.canPlayType('video/webm; codecs="vp8"')||"NO")
@@ -275,6 +284,7 @@ const DIAG_SHIM = `<script>(function(){
     document.createElement=function(t){ var el=CE.apply(null,arguments);
       try{ if(String(t).toLowerCase()==="video"){
         elog("video element created","engine video");
+        try{ if(vids.length<12) vids.push(el); }catch(e3){}
         el.addEventListener("loadeddata",function(){ logAct(rel(el.currentSrc||el.src||"(video)"), true, "video ready"); },false);
         el.addEventListener("error",function(){ var e=el.error;
           logAct(rel(el.currentSrc||el.src||"(video)"), false, "video error"+(e?" code "+e.code:"")); },false);
@@ -475,7 +485,12 @@ const AUDIO_STUB = `<script>(function(){
 // lets a real tap through), and auto-retries blocked media on that tap.
 const MEDIA_SHIM = `<script>(function(){
   var blocked=[];
-  function notify(kind,msg){ try{ parent.postMessage({source:"rpgm-media",kind:kind,msg:String(msg||"").slice(0,200)},"*"); }catch(e){} }
+  function notify(kind,msg){
+    try{ parent.postMessage({source:"rpgm-media",kind:kind,msg:String(msg||"").slice(0,200)},"*"); }catch(e){}
+    // ALSO into the shared diagnostics feed: a play() rejection reported only to
+    // the host UI is invisible in a shared log, which is where it is needed.
+    try{ if(window.__diaglog) window.__diaglog("media."+kind+" "+String(msg||"").slice(0,120), kind==="unlocked"?"ok":"media"); }catch(e){}
+  }
   function unlock(){ var list=blocked.splice(0);
     list.forEach(function(el){ try{ var p=el.play(); if(p&&p.catch)p.catch(function(){}); }catch(e){} });
     if(list.length) notify("unlocked",""); }

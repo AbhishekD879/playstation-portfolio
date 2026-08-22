@@ -29,6 +29,10 @@ export type DiagSnap = {
   /** which shim built this log — a stale service worker silently serves stale
    *  shims, and a log that cannot name its version wastes a capture */
   shimV?: string;
+  /** live state of the game's video elements — a currentTime stuck at 0 means it
+   *  never played; advancing while the screen stays empty means the frames never
+   *  reach the canvas */
+  vids?: string;
 };
 
 const LOG_HOST = "https://abhishekstation-mp.abhishekdiwate879.workers.dev";
@@ -77,6 +81,7 @@ export default function DiagOverlay(props: {
     L.push(`ua: ${navigator.userAgent}${d.shimV ? ` · shim v${d.shimV}` : " · shim PRE-VERSIONING (stale worker?)"}`);
     if (d.manifest) L.push(d.manifest);
     if (d.codecs) L.push(d.codecs);
+    if (d.vids) L.push(`video: ${d.vids}`);
     if (d.probe) L.push(`probe: ${d.probe}`);
     const inp = inputs();
     if (inp.length) {
