@@ -1,0 +1,135 @@
+- generic [ref=f13e2]:
+  - link "Skip to content" [ref=f13e3] [cursor=pointer]:
+    - /url: "#main-content"
+  - banner [ref=f13e5]:
+    - link "Game Hub home" [ref=f13e6] [cursor=pointer]:
+      - /url: /
+      - generic [ref=f13e10]:
+        - strong [ref=f13e11]: Game Hub
+        - generic [ref=f13e12]: Local console
+    - navigation "Primary navigation" [ref=f13e13]:
+      - link "Home" [ref=f13e14] [cursor=pointer]:
+        - /url: /
+      - link "Library" [ref=f13e19] [cursor=pointer]:
+        - /url: /library
+      - link "Live" [ref=f13e24] [cursor=pointer]:
+        - /url: /live
+      - link "Controllers" [ref=f13e32] [cursor=pointer]:
+        - /url: /controllers
+      - link "Saves" [ref=f13e35] [cursor=pointer]:
+        - /url: /saves
+    - generic [ref=f13e41]:
+      - generic [ref=f13e44]:
+        - text: On this device
+        - generic [ref=f13e45]: Private & ready
+      - button "Open player menu" [ref=f13e46] [cursor=pointer]:
+        - generic [ref=f13e52]:
+          - strong [ref=f13e53]: Checking session
+          - generic [ref=f13e54]: Loading profile
+  - main [ref=f13e57]:
+    - generic [ref=f13e58]:
+      - generic [ref=f13e59]:
+        - generic [ref=f13e60]:
+          - paragraph [ref=f13e61]: Input laboratory
+          - heading "Controller Lab" [level=1] [ref=f13e62]
+          - paragraph [ref=f13e63]: Create a separate mapping for every emulator and system you play.
+        - button [ref=f13e66] [cursor=pointer]
+      - generic [ref=f13e71]:
+        - generic [ref=f13e72]:
+          - generic [ref=f13e73]:
+            - generic [ref=f13e74]:
+              - paragraph [ref=f13e75]: Live device
+              - heading "Waiting for a controller" [level=2] [ref=f13e76]
+              - paragraph [ref=f13e77]: Connect a controller, then press any button.
+            - generic "3D controller model" [ref=f13e78]:
+              - button "DualSense" [pressed] [ref=f13e79] [cursor=pointer]
+              - button "Xbox" [ref=f13e80] [cursor=pointer]
+          - generic [ref=f13e81]:
+            - paragraph [ref=f13e83]: Preparing 3D studio…
+            - generic [ref=f13e84]:
+              - generic [ref=f13e85]: Active input
+              - strong [ref=f13e86]: No device
+          - generic "Controller axis signals" [ref=f13e87]:
+            - generic [ref=f13e88]:
+              - generic [ref=f13e89]:
+                - text: Axis 1
+                - status [ref=f13e90]: "0.000"
+              - meter "Axis 1" [ref=f13e91]
+            - generic [ref=f13e94]:
+              - generic [ref=f13e95]:
+                - text: Axis 2
+                - status [ref=f13e96]: "0.000"
+              - meter "Axis 2" [ref=f13e97]
+            - generic [ref=f13e100]:
+              - generic [ref=f13e101]:
+                - text: Axis 3
+                - status [ref=f13e102]: "0.000"
+              - meter "Axis 3" [ref=f13e103]
+            - generic [ref=f13e106]:
+              - generic [ref=f13e107]:
+                - text: Axis 4
+                - status [ref=f13e108]: "0.000"
+              - meter "Axis 4" [ref=f13e109]
+          - paragraph [ref=f13e112]:
+            - text: "3D model:"
+            - link "Jayakrishnan Marath" [ref=f13e113] [cursor=pointer]:
+              - /url: https://sketchfab.com/jayhystic22
+            - text: · CC BY 4.0
+          - paragraph [ref=f13e114]: Ready to map PlayStation 2
+        - generic [ref=f13e115]:
+          - paragraph [ref=f13e116]: Active profile
+          - heading "PlayStation 2" [level=2] [ref=f13e117]
+          - generic [ref=f13e118]:
+            - generic [ref=f13e119]: Emulator and system
+            - combobox "Emulator and system" [ref=f13e120] [cursor=pointer]:
+              - generic: PlayStation 2 · Play!
+            - generic [ref=f13e123]: Standard browser mapping until customized
+          - generic [ref=f13e124]:
+            - generic [ref=f13e125]: Neutral signal
+            - strong [ref=f13e126]: 0.0%
+          - generic [ref=f13e128]:
+            - generic [ref=f13e129]:
+              - text: Stick dead zone
+              - status "Stick dead zone 12" [ref=f13e130]: 12%
+            - slider [ref=f13e131]: "12"
+          - generic [ref=f13e132]:
+            - generic [ref=f13e133]:
+              - text: Stick sensitivity
+              - status "Stick sensitivity 1" [ref=f13e134]: 1.00×
+            - slider [ref=f13e135]: "1"
+          - generic [ref=f13e136]:
+            - generic [ref=f13e137]:
+              - text: Rumble test
+              - generic [ref=f13e142]: Check haptic feedback
+            - button "Pulse" [disabled] [ref=f13e143]
+          - generic [ref=f13e145]:
+            - generic [ref=f13e146]:
+              - text: Stick drift
+              - generic [ref=f13e150]: Keep both sticks untouched for 10 seconds.
+            - button "Run test" [disabled] [ref=f13e151]
+          - button [ref=f13e153] [cursor=pointer]
+      - generic [ref=f13e157]:
+        - generic [ref=f13e159]:
+          - heading "Keyboard & mouse" [level=3] [ref=f13e162]
+          - paragraph [ref=f13e163]: See the exact keys applied by PlayStation 2 · Play!; game-defined runtimes are labelled clearly.
+          - button [ref=f13e164] [cursor=pointer]
+        - article [ref=f13e168]:
+          - heading "Phone as controller" [level=3] [ref=f13e171]
+          - paragraph [ref=f13e172]: Pairs through a short-lived room capability; no account is required.
+          - link "Create a room" [ref=f13e173] [cursor=pointer]:
+            - /url: /live
+        - article [ref=f13e175]:
+          - heading "Seat assignment" [level=3] [ref=f13e178]
+          - paragraph [ref=f13e179]: Connect a device before assigning a seat.
+          - generic [ref=f13e180]: No seats assigned
+  - complementary "Controller shortcuts":
+    - generic:
+      - generic: Primary
+      - text: Select
+    - generic:
+      - generic: Back
+      - text: Return
+    - generic:
+      - generic: Guide
+      - text: Quick menu
+    - generic: Sections

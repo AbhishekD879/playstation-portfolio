@@ -168,8 +168,9 @@ const DIAG_SHIM = `<script>(function(){
     xfer.unshift({m:m, n:1, t:Date.now()-T0}); if(xfer.length>60) xfer.pop(); post(); }
   // startup: record the fs manifest so a still-failing existsSync can be compared
   // against the REAL stored picture paths (case/prefix/naming mismatches show here).
+  var manifest="manifest: (not read)";
   try{ var _fs=window.__rpgmFS, _s=[]; if(_fs){ var _it=_fs.values(), _v; while(_s.length<6){ _v=_it.next(); if(_v.done) break; if(/pictures/.test(_v.value)) _s.push(_v.value); } }
-    activity.push({path:"manifest: "+(_fs?_fs.size+" files":"MISSING — existsSync will be false")+(_s.length?" · sample: "+_s.join(" | "):""), ok:!!_fs, reason:"startup", t:0}); }catch(e){}
+    manifest="manifest: "+(_fs?_fs.size+" files":"MISSING — existsSync will be false")+(_s.length?" · sample: "+_s.join(" | "):""); }catch(e){}
   function rel(u){ try{ var pp=new URL(u, location.href).pathname; var i=pp.indexOf("/rpgm/");
     if(i<0) return pp; var parts=pp.slice(i+6).split("/");
     if(parts[0]==="fs") return parts.slice(2).join("/");
@@ -193,7 +194,7 @@ const DIAG_SHIM = `<script>(function(){
     var canvas=!!document.querySelector("canvas");
     return {source:"rpgm-diag", up:now-T0, scene:scene, spinner:spinner,
       booted:!!(canvas&&!spinner&&(scene?scene!=="Scene_Boot":true)), canvas:canvas,
-      pending:pend.slice(0,12), recent:recent.slice(0,20), counts:counts, errors:errors.slice(0,10), activity:activity.slice(0,400), xfer:xfer.slice(0,60)}; }
+      pending:pend.slice(0,12), recent:recent.slice(0,20), counts:counts, errors:errors.slice(0,10), activity:activity.slice(0,400), xfer:xfer.slice(0,60), manifest:manifest}; }
   function post(){ try{ parent.postMessage(snap(), "*"); }catch(e){} }
   function addErr(msg, at){ errors.unshift({msg:String(msg).slice(0,280), at:at||""}); if(errors.length>10) errors.pop(); post(); }
   window.addEventListener("unhandledrejection", function(ev){ var r=ev&&ev.reason; addErr("Unhandled: "+((r&&r.message)||r), ""); });
@@ -203,7 +204,13 @@ const DIAG_SHIM = `<script>(function(){
   // images with new Image(), whose failures never touched fetch/XHR.
   window.addEventListener("error", function(ev){ var t=ev.target;
     if(t&&t.tagName&&/^(IMG|VIDEO|AUDIO|SOURCE|SCRIPT|LINK)$/.test(t.tagName)){
-      logAct(rel(t.currentSrc||t.src||t.href||("("+t.tagName+")")), false, t.tagName.toLowerCase()+" load failed"); return; }
+      var raw=t.currentSrc||t.src||t.href||"";
+      // An element with NO src resolves src to the document URL and still fires
+      // error. RPG Maker clears bitmaps that way (Bitmap._clearImgInstance sets
+      // src=""), so this is cleanup, not a failed asset — recording it buries
+      // the real failures under phantoms named "index.html".
+      if(!t.getAttribute||!t.getAttribute("src")){ if(!raw||raw===location.href) return; }
+      logAct(rel(raw||("("+t.tagName+")")), false, t.tagName.toLowerCase()+" load failed"); return; }
     addErr(ev.message||(ev.error&&ev.error.message)||"Script error", (ev.filename?rel(ev.filename):"")+(ev.lineno?(":"+ev.lineno):"")); }, true);
   // wrap new Image()/new Audio() to catch DETACHED elements (not in the DOM, so
   // the window listener above never sees them) — the common RPG Maker path.

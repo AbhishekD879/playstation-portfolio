@@ -5218,3 +5218,14 @@ body.party-col .share-btn { right: calc(var(--pty-w) + clamp(12px, 2vw, 22px)); 
 
 /* the viewer state still needs a full-screen ground; HzScreen supplies its own */
 .artwrap { position: fixed; inset: 0; z-index: 25; }
+
+/* ———— World Drive ———— */
+.wd-hud {
+  position: absolute; left: 24px; bottom: 56px; z-index: 2;
+  display: flex; flex-direction: column; gap: 2px;
+  color: #fff; text-shadow: 0 1px 6px rgba(0,0,0,0.7);
+  pointer-events: none;
+}
+.wd-speed { font-size: 44px; font-weight: 700; letter-spacing: 0.02em; line-height: 1; font-variant-numeric: tabular-nums; }
+.wd-speed i { font-style: normal; font-size: 15px; font-weight: 400; opacity: 0.75; margin-left: 4px; }
+.wd-place { font-size: 13px; opacity: 0.8; border-top: 1px solid rgba(255,255,255,0.25); padding-top: 5px; margin-top: 6px; }

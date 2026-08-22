@@ -19,3 +19,4 @@ public/ludo/*.hdr
 
 # CC0 photogrammetry chess set — see public/models/README.md
 public/models/chess/
+.chrome-profile/

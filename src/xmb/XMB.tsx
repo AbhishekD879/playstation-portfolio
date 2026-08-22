@@ -42,6 +42,7 @@ import PadLadder from "./PadLadder";
 import Online from "./Online";
 import Doom from "./Doom";
 import DoomRtx from "./DoomRtx";
+import WorldDrive from "./WorldDrive";
 import Karaoke from "./Karaoke";
 import SettingsApp from "./SettingsApp";
 import VideoPlayer from "./VideoPlayer";
@@ -98,7 +99,7 @@ function fmtPlaytime(sec: number): string {
   const h = Math.floor(sec / 3600), m = Math.round((sec % 3600) / 60);
   return h ? `${h}h ${m}m` : `${m}m`;
 }
-const ROUTE_APPS = new Set(["doom","doomrtx","chess","trivia","flash","cinema","podcasts","library","map","ai","webamp","youtube","timemachine","art","wiki","lichess","ps2","pc","guestbook","browser","visualizer","studio","code","manual","ps2home","ps1home","psphome","retrohome","scummvm","karaoke","strudel","settingshub","videoplayer","reporewind","rpgmaker","renpy","godot","unity","html5","privacy","watch","syscity","cs","party","board","voiceavatar","retrojoin","consoletv","analytics"]);
+const ROUTE_APPS = new Set(["doom","doomrtx","worlddrive","chess","trivia","flash","cinema","podcasts","library","map","ai","webamp","youtube","timemachine","art","wiki","lichess","ps2","pc","guestbook","browser","visualizer","studio","code","manual","ps2home","ps1home","psphome","retrohome","scummvm","karaoke","strudel","settingshub","videoplayer","reporewind","rpgmaker","renpy","godot","unity","html5","privacy","watch","syscity","cs","party","board","voiceavatar","retrojoin","consoletv","analytics"]);
 // a live PS2 emulator/MP session can't be resumed cold → route it to its library home.
 const routeSlug = (a: string) => (a === "ps2" ? "ps2home" : a);
 export const appRouteHash = (a: string | null, catId: string) => (a ? `#/app/${routeSlug(a)}` : `#/${catId}`);
@@ -245,7 +246,7 @@ export default function XMB(props: {
   const [vListening, setVListening] = createSignal(false); // XMB voice command
   const [padTest, setPadTest] = createSignal(false);
   const [splatFile, setSplatFile] = createSignal<File | null>(null);
-  const [app, setAppRaw] = createSignal<null | "doom" | "doomrtx" | "chess" | "trivia" | "flash" | "cinema" | "podcasts" | "library" | "map" | "ai" | "webamp" | "youtube" | "timemachine" | "art" | "wiki" | "lichess" | "ps2" | "pc" | "guestbook" | "browser" | "visualizer" | "studio" | "code" | "manual" | "ps2home" | "ps1home" | "psphome" | "retrohome" | "scummvm" | "karaoke" | "strudel" | "settingshub" | "videoplayer" | "reporewind" | "rpgmaker" | "renpy" | "godot" | "unity" | "html5" | "privacy" | "watch" | "syscity" | "cs" | "party" | "retrojoin" | "board" | "voiceavatar" | "consoletv" | "analytics">(null);
+  const [app, setAppRaw] = createSignal<null | "doom" | "doomrtx" | "worlddrive" | "chess" | "trivia" | "flash" | "cinema" | "podcasts" | "library" | "map" | "ai" | "webamp" | "youtube" | "timemachine" | "art" | "wiki" | "lichess" | "ps2" | "pc" | "guestbook" | "browser" | "visualizer" | "studio" | "code" | "manual" | "ps2home" | "ps1home" | "psphome" | "retrohome" | "scummvm" | "karaoke" | "strudel" | "settingshub" | "videoplayer" | "reporewind" | "rpgmaker" | "renpy" | "godot" | "unity" | "html5" | "privacy" | "watch" | "syscity" | "cs" | "party" | "retrojoin" | "board" | "voiceavatar" | "consoletv" | "analytics">(null);
 
   // Opening/closing an app goes through the native View Transitions API (now
   // Baseline for same-document), so the console cross-fades like real system
@@ -358,6 +359,7 @@ export default function XMB(props: {
   const gameItems = createMemo<XmbItem[]>(() => [
     { id: "doom", title: "DOOM", sub: "Built-in game · the 1993 shareware, playable now", icon: "skull", action: { type: "doom" } },
     ...(hasWebGPU() ? [{ id: "doomrtx", title: "DOOM RTX", sub: "E1M1 path-traced in real time — WebGPU ray tracing", icon: "lightning", action: { type: "doom-rtx" as const } }] : []),
+    { id: "worlddrive", title: "World Drive", sub: "Drive the real Earth — any street, any mountain pass, from open maps", icon: "globe", action: { type: "worlddrive" as const } },
     { id: "chess", title: "Chess vs Stockfish", sub: "Built-in game · the real engine, on this device", icon: "knight", action: { type: "chess" } },
     { id: "trivia", title: "Trivia Arcade", sub: "Built-in game · 10 questions, endless rounds", icon: "question", action: { type: "trivia" } },
     { id: "flash", title: "Flash Arcade", sub: "Built-in arcade · classic Flash games, streamed", icon: "lightning", action: { type: "flash" } },
@@ -804,6 +806,11 @@ export default function XMB(props: {
       case "doom-rtx":
         sfx.confirm();
         setApp("doomrtx");
+        break;
+      case "worlddrive":
+        sfx.confirm();
+        awardT("worlddriver");
+        setApp("worlddrive");
         break;
       case "chess":
         sfx.confirm();
@@ -1579,7 +1586,7 @@ export default function XMB(props: {
     if (padTest()) { if (action === "back") setPadTest(false); return; }
     if (app()) {
       // bound apps route their own nav; the rest are keyboard-driven owner apps
-      if (["chess", "trivia", "flash", "cinema", "podcasts", "library", "youtube", "art", "wiki", "ps2home", "ps1home", "psphome", "retrohome", "karaoke", "settingshub", "videoplayer", "reporewind", "rpgmaker", "renpy", "godot", "unity", "html5", "syscity"].includes(app()!)) appNav?.(action);
+      if (["chess", "trivia", "flash", "cinema", "podcasts", "library", "youtube", "art", "wiki", "ps2home", "ps1home", "psphome", "retrohome", "karaoke", "settingshub", "videoplayer", "reporewind", "rpgmaker", "renpy", "godot", "unity", "html5", "syscity", "worlddrive"].includes(app()!)) appNav?.(action);
       else if (app() === "lichess" && action === "back") { sfx.back(); setApp(null); }
       else if (src === "pad" || src === "gesture") {
         // owner apps (map/globe, lichess…) listen to the KEYBOARD — turn pad
@@ -2193,6 +2200,9 @@ export default function XMB(props: {
       {/* ———— the wild apps ———— */}
       <Show when={app() === "doom"}><Doom onClose={() => setApp(null)} /></Show>
       <Show when={app() === "doomrtx"}><DoomRtx onClose={() => setApp(null)} /></Show>
+      <Show when={app() === "worlddrive"}>
+        <WorldDrive bind={(f) => (appNav = f)} onClose={() => setApp(null)} />
+      </Show>
       <Show when={app() === "chess"}>
         <ChessApp bind={(f) => (appNav = f)} onWin={() => awardT("tactician")} onClose={() => setApp(null)} />
       </Show>

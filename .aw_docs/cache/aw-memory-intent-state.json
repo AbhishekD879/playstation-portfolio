@@ -1,0 +1,16 @@
+{
+  "status": "captured",
+  "namespace": "ai",
+  "repoName": "playstation-portfolio",
+  "branch": "main",
+  "result": {
+    "content": [
+      {
+        "type": "text",
+        "text": "{\n  \"stored\": 0,\n  \"updated\": 0,\n  \"skipped\": 2,\n  \"candidates\": [\n    {\n      \"content\": \"User preference: always headed (`headed: true`), never headless 2.\",\n      \"type\": \"preference\",\n      \"confidence\": 0.91,\n      \"subject\": \"always-headed-headed-true\",\n      \"skipped_reason\": \"duplicate_hash\"\n    },\n    {\n      \"content\": \"User preference: always available on open sessions) These require an active headed `playwright-cli` session (not headless).\",\n      \"type\": \"preference\",\n      \"confidence\": 0.91,\n      \"subject\": \"always-available-open-sessions\",\n      \"skipped_reason\": \"duplicate_hash\"\n    }\n  ],\n  \"memories\": [],\n  \"skipped_reasons\": [\n    \"duplicate_hash\",\n    \"duplicate_hash\"\n  ]\n}"
+      }
+    ]
+  },
+  "error": null,
+  "updatedAt": "2026-08-13T18:08:51.108Z"
+}

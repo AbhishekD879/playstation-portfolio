@@ -16,6 +16,10 @@ export type DiagSnap = {
   errors: { msg: string; at: string }[];
   activity?: { path: string; ok: boolean; reason: string; t: number; n?: number }[];
   xfer?: { m: string; t: number; n?: number }[];   // map transfers (doors/stairs) + event triggers
+  /** the stored file list the fs shim hands existsSync — MISSING here means the
+   *  game's own existsSync checks all return false, which makes it skip assets
+   *  silently with no error to log */
+  manifest?: string;
 };
 
 const LOG_HOST = "https://abhishekstation-mp.abhishekdiwate879.workers.dev";
@@ -62,6 +66,7 @@ export default function DiagOverlay(props: {
     const L: string[] = ["=== DIAG ===", `target: ${props.label}`];
     L.push(`scene ${d.scene || "?"} · up ${Math.round(d.up / 1000)}s · ok ${d.counts.ok} / fail ${d.counts.fail} · booted ${d.booted}`);
     L.push(`ua: ${navigator.userAgent}`);
+    if (d.manifest) L.push(d.manifest);
     const inp = inputs();
     if (inp.length) {
       L.push("", "-- INPUT (parent) --");

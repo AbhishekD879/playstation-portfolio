@@ -40,6 +40,7 @@ export interface XmbItem {
     | { type: "photo" }
     | { type: "doom" }
     | { type: "doom-rtx" }
+    | { type: "worlddrive" }
     | { type: "ps1-home" }
     | { type: "scummvm" }
     | { type: "karaoke" }
@@ -233,6 +234,7 @@ export const TROPHIES: TrophyDef[] = [
   { id: "shutterbug", tier: "bronze", name: "Shutterbug", desc: "Added photos to the gallery" },
   { id: "konami", tier: "silver", name: "The Old Ways", desc: "↑↑↓↓←→←→BA" },
   { id: "doomguy", tier: "gold", name: "Rip and Tear", desc: "Booted DOOM on the console" },
+  { id: "worlddriver", tier: "silver", name: "Gran Turismo", desc: "Drove real streets in World Drive" },
   { id: "tactician", tier: "silver", name: "Tactician", desc: "Played chess against Stockfish" },
   { id: "quizmaster", tier: "silver", name: "Quizmaster", desc: "Scored 8+ in the trivia arcade" },
   { id: "cinephile", tier: "bronze", name: "Cinephile", desc: "Watched something from the archive" },
