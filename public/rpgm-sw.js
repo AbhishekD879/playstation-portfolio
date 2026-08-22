@@ -178,7 +178,7 @@ const NW_SHIM = `<script>(function(){
 // audio buffers, fonts and the effekseer wasm, which are the things that stall.
 // Bump whenever a shim changes — a log that cannot name its own version wastes
 // a capture, which is exactly what happened once.
-const SHIM_V = "10";
+const SHIM_V = "11";
 const DIAG_SHIM = `<script>(function(){
   var T0=Date.now(), seq=0, pending={}, recent=[], errors=[], counts={ok:0,fail:0}, activity=[], xfer=[];
   // MOVEMENT channel — map transfers (doors/stairs) + event triggers get their
@@ -216,7 +216,7 @@ const DIAG_SHIM = `<script>(function(){
     return {source:"rpgm-diag", up:now-T0, scene:scene, spinner:spinner,
       booted:!!(canvas&&!spinner&&(scene?scene!=="Scene_Boot":true)), canvas:canvas,
       pending:pend.slice(0,12), recent:recent.slice(0,20), counts:counts, errors:errors.slice(0,10), activity:activity.slice(0,400), xfer:xfer.slice(0,60), manifest:manifest,
-      probe:(probe||(probed?"":"no VAnim global — defined inside a plugin closure")), codecs:codecs, shimV:"${SHIM_V}", vids:vidState(), frames:frames, gl:glCompare()}; }
+      probe:(probe||(probed?"":"no VAnim global — defined inside a plugin closure")), codecs:codecs, shimV:"${SHIM_V}", vids:vidState(), frames:frames, gl:glCompare(), canv:canvasInfo()}; }
   // One-shot source probe for globals whose art never loads. Captured lazily
   // because a plugin defining them may not have run at startup.
   var vids=[], wantFrame=false, frames=[];
@@ -285,10 +285,36 @@ const DIAG_SHIM = `<script>(function(){
         +" · via-2D-canvas " + ew + "x" + eh + "[" + viaCanvas + "]";
     }catch(e){ return "probe threw: "+(e&&e.message); }
   }
+  function canvasInfo(){
+    try{
+      var all=document.querySelectorAll("canvas"), gc=(window.Graphics&&Graphics._canvas)||null, out=[];
+      for(var i=0;i<all.length && i<6;i++){ var c=all[i];
+        var st=getComputedStyle(c);
+        out.push("#"+i+" "+c.width+"x"+c.height
+          +(c===gc?" [ENGINE]":"")
+          +(c.id?" id="+c.id:"")
+          +" css="+Math.round(c.getBoundingClientRect().width)+"x"+Math.round(c.getBoundingClientRect().height)
+          +" vis="+(st.display==="none"?"none":st.visibility)
+          +" z="+(st.zIndex||"auto"));
+      }
+      return all.length+" canvas"+(all.length===1?"":"es")+": "+out.join(" | ")
+        +" · Graphics="+((window.Graphics&&Graphics.width)||"?")+"x"+((window.Graphics&&Graphics.height)||"?")
+        +" · dpr="+(window.devicePixelRatio||1);
+    }catch(e){ return "canvasInfo threw: "+(e&&e.message); }
+  }
   function grabAll(){
     frames=[];
-    try{ var cv=document.querySelector("canvas");
-      if(cv) frames.push(shot(cv, cv.width, cv.height, "canvas (what you see)", true)); }catch(e){}
+    // EVERY canvas, largest first — the engine's is the one that matters and it
+    // is not necessarily the first in the DOM.
+    try{
+      var all=[].slice.call(document.querySelectorAll("canvas"));
+      var gc=(window.Graphics&&Graphics._canvas)||null;
+      all.sort(function(a,b){ return (b.width*b.height)-(a.width*a.height); });
+      all.slice(0,3).forEach(function(c,i){
+        frames.push(shot(c, c.width, c.height,
+          "canvas "+c.width+"x"+c.height+(c===gc?" [ENGINE — what you see]":" [other #"+i+"]"), true));
+      });
+    }catch(e){}
     vids.slice(0,3).forEach(function(v){
       try{ if(v.videoWidth) frames.push(shot(v, v.videoWidth, v.videoHeight,
         "video "+((v.currentSrc||v.src||"").split("/").pop()))); }catch(e){}

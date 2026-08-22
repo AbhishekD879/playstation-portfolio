@@ -39,6 +39,9 @@ export type DiagSnap = {
   /** direct video-to-texture upload vs the same frame via a 2D canvas — tests
    *  the proposed fix on the real device before it is written */
   gl?: string;
+  /** every canvas in the game frame, and which one is the engine's — the first
+   *  in the DOM is not necessarily the surface the player sees */
+  canv?: string;
 };
 
 const LOG_HOST = "https://abhishekstation-mp.abhishekdiwate879.workers.dev";
@@ -89,6 +92,7 @@ export default function DiagOverlay(props: {
     if (d.codecs) L.push(d.codecs);
     if (d.vids) L.push(`video: ${d.vids}`);
     if (d.gl) L.push(`gl upload: ${d.gl}`);
+    if (d.canv) L.push(`canvases: ${d.canv}`);
     if (d.probe) L.push(`probe: ${d.probe}`);
     const inp = inputs();
     if (inp.length) {
