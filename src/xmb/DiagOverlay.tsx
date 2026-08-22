@@ -42,6 +42,10 @@ export type DiagSnap = {
   /** every canvas in the game frame, and which one is the engine's — the first
    *  in the DOM is not necessarily the surface the player sees */
   canv?: string;
+  /** the ENGINE's own texture uploads: count, total megabytes and any GL errors
+   *  — an out-of-memory upload fails silently, and this game is 1169x826 with
+   *  several full-frame videos at the same size */
+  glLoad?: string;
 };
 
 const LOG_HOST = "https://abhishekstation-mp.abhishekdiwate879.workers.dev";
@@ -93,6 +97,7 @@ export default function DiagOverlay(props: {
     if (d.vids) L.push(`video: ${d.vids}`);
     if (d.gl) L.push(`gl upload: ${d.gl}`);
     if (d.canv) L.push(`canvases: ${d.canv}`);
+    if (d.glLoad) L.push(`gl load: ${d.glLoad}`);
     if (d.probe) L.push(`probe: ${d.probe}`);
     const inp = inputs();
     if (inp.length) {

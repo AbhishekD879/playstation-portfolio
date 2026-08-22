@@ -178,7 +178,7 @@ const NW_SHIM = `<script>(function(){
 // audio buffers, fonts and the effekseer wasm, which are the things that stall.
 // Bump whenever a shim changes — a log that cannot name its own version wastes
 // a capture, which is exactly what happened once.
-const SHIM_V = "11";
+const SHIM_V = "12";
 const DIAG_SHIM = `<script>(function(){
   var T0=Date.now(), seq=0, pending={}, recent=[], errors=[], counts={ok:0,fail:0}, activity=[], xfer=[];
   // MOVEMENT channel — map transfers (doors/stairs) + event triggers get their
@@ -216,7 +216,7 @@ const DIAG_SHIM = `<script>(function(){
     return {source:"rpgm-diag", up:now-T0, scene:scene, spinner:spinner,
       booted:!!(canvas&&!spinner&&(scene?scene!=="Scene_Boot":true)), canvas:canvas,
       pending:pend.slice(0,12), recent:recent.slice(0,20), counts:counts, errors:errors.slice(0,10), activity:activity.slice(0,400), xfer:xfer.slice(0,60), manifest:manifest,
-      probe:(probe||(probed?"":"no VAnim global — defined inside a plugin closure")), codecs:codecs, shimV:"${SHIM_V}", vids:vidState(), frames:frames, gl:glCompare(), canv:canvasInfo()}; }
+      probe:(probe||(probed?"":"no VAnim global — defined inside a plugin closure")), codecs:codecs, shimV:"${SHIM_V}", vids:vidState(), frames:frames, gl:glCompare(), canv:canvasInfo(), glLoad:glLoad()}; }
   // One-shot source probe for globals whose art never loads. Captured lazily
   // because a plugin defining them may not have run at startup.
   var vids=[], wantFrame=false, frames=[];
@@ -228,6 +228,7 @@ const DIAG_SHIM = `<script>(function(){
       var sw=Math.min(cap, w||cap), sh=Math.round((h||150)*(sw/(w||cap)));
       var c=document.createElement("canvas"); c.width=sw; c.height=sh;
       var g=c.getContext("2d"); if(!g) return null;
+      g.fillStyle="#808080"; g.fillRect(0,0,sw,sh);   // transparent != black
       g.drawImage(src, 0, 0, sw, sh);
       var d=g.getImageData(0,0,sw,sh).data, n=d.length/4, dark=0, red=0, sum=0;
       for(var i=0;i<d.length;i+=4){ var r=d[i],gg=d[i+1],b=d[i+2];
@@ -284,6 +285,37 @@ const DIAG_SHIM = `<script>(function(){
         +" · direct-video[" + direct + "]"
         +" · via-2D-canvas " + ew + "x" + eh + "[" + viaCanvas + "]";
     }catch(e){ return "probe threw: "+(e&&e.message); }
+  }
+  // Wrap texImage2D on the live context: count uploads, total bytes, and record
+  // any that raise a GL error — an out-of-memory upload fails silently otherwise.
+  var texN=0, texMB=0, texErr=[], texHooked=false, ctxLost=0;
+  function hookGL(){
+    if(texHooked) return;
+    try{
+      var gc=(window.Graphics&&Graphics._canvas)||document.querySelector("canvas");
+      if(!gc) return;
+      var proto=window.WebGLRenderingContext&&WebGLRenderingContext.prototype;
+      if(!proto||proto.__diagTex) return;
+      proto.__diagTex=1; texHooked=true;
+      var ti=proto.texImage2D;
+      proto.texImage2D=function(){
+        var a=arguments, src=a[a.length-1], w=0,h=0;
+        try{ if(src&&src.videoWidth){ w=src.videoWidth; h=src.videoHeight; }
+             else if(src&&src.width){ w=src.width|0; h=src.height|0; } }catch(e){}
+        var r=ti.apply(this,a);
+        try{
+          texN++; if(w&&h) texMB+=(w*h*4)/1048576;
+          var e=this.getError&&this.getError();
+          if(e && texErr.length<6) texErr.push("err"+e+"@"+w+"x"+h+" (upload #"+texN+")");
+        }catch(e2){}
+        return r; };
+      gc.addEventListener("webglcontextlost", function(){ ctxLost++; elog("WEBGL CONTEXT LOST","error"); }, false);
+    }catch(e){}
+  }
+  function glLoad(){
+    return "uploads="+texN+" ~"+Math.round(texMB)+"MB total"
+      +" ctxLost="+ctxLost
+      +(texErr.length?" · ERRORS: "+texErr.join(" | "):" · no upload errors");
   }
   function canvasInfo(){
     try{
@@ -457,6 +489,7 @@ const DIAG_SHIM = `<script>(function(){
     var BM=window.Bitmap;
     if(BM && !BM.__diag){ BM.__diag=1;
       if(typeof BM.load==="function"){ var bl=BM.load; BM.load=function(url){ elog("Bitmap.load("+url+")","engine img"); return bl.apply(this,arguments); }; } }
+    hookGL();
     var GR=window.Graphics;
     if(GR && !GR.__diagCap && typeof GR.render==="function"){ GR.__diagCap=1;
       var grf=GR.render; GR.render=function(){ var out=grf.apply(this,arguments);
