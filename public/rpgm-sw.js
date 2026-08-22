@@ -178,7 +178,7 @@ const NW_SHIM = `<script>(function(){
 // audio buffers, fonts and the effekseer wasm, which are the things that stall.
 // Bump whenever a shim changes — a log that cannot name its own version wastes
 // a capture, which is exactly what happened once.
-const SHIM_V = "8";
+const SHIM_V = "9";
 const DIAG_SHIM = `<script>(function(){
   var T0=Date.now(), seq=0, pending={}, recent=[], errors=[], counts={ok:0,fail:0}, activity=[], xfer=[];
   // MOVEMENT channel — map transfers (doors/stairs) + event triggers get their
@@ -222,9 +222,10 @@ const DIAG_SHIM = `<script>(function(){
   var vids=[], wantFrame=false, frames=[];
   // Stats travel with every thumbnail so a conclusion never rests on my reading
   // of a small JPEG: near-black share and strong-red share are computed here.
-  function shot(src, w, h, label){
+  function shot(src, w, h, label, wide){
     try{
-      var sw=Math.min(220, w||220), sh=Math.round((h||150)*(sw/(w||220)));
+      var cap=wide?560:220;
+      var sw=Math.min(cap, w||cap), sh=Math.round((h||150)*(sw/(w||cap)));
       var c=document.createElement("canvas"); c.width=sw; c.height=sh;
       var g=c.getContext("2d"); if(!g) return null;
       g.drawImage(src, 0, 0, sw, sh);
@@ -235,13 +236,13 @@ const DIAG_SHIM = `<script>(function(){
         if(r>90 && r>gg*2 && r>b*2) red++; }
       return { label:label, w:sw, h:sh,
         stats:"mean="+Math.round(sum/n)+" black="+Math.round(100*dark/n)+"% red="+Math.round(100*red/n)+"%",
-        url:c.toDataURL("image/jpeg", 0.45) };
+        url:c.toDataURL("image/jpeg", wide?0.6:0.45) };
     }catch(e){ return { label:label, stats:"capture threw: "+(e&&e.message), url:"" }; }
   }
   function grabAll(){
     frames=[];
     try{ var cv=document.querySelector("canvas");
-      if(cv) frames.push(shot(cv, cv.width, cv.height, "canvas (what you see)")); }catch(e){}
+      if(cv) frames.push(shot(cv, cv.width, cv.height, "canvas (what you see)", true)); }catch(e){}
     vids.slice(0,3).forEach(function(v){
       try{ if(v.videoWidth) frames.push(shot(v, v.videoWidth, v.videoHeight,
         "video "+((v.currentSrc||v.src||"").split("/").pop()))); }catch(e){}
