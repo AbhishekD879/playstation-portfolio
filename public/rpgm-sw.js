@@ -178,7 +178,7 @@ const NW_SHIM = `<script>(function(){
 // audio buffers, fonts and the effekseer wasm, which are the things that stall.
 // Bump whenever a shim changes — a log that cannot name its own version wastes
 // a capture, which is exactly what happened once.
-const SHIM_V = "9";
+const SHIM_V = "10";
 const DIAG_SHIM = `<script>(function(){
   var T0=Date.now(), seq=0, pending={}, recent=[], errors=[], counts={ok:0,fail:0}, activity=[], xfer=[];
   // MOVEMENT channel — map transfers (doors/stairs) + event triggers get their
@@ -216,7 +216,7 @@ const DIAG_SHIM = `<script>(function(){
     return {source:"rpgm-diag", up:now-T0, scene:scene, spinner:spinner,
       booted:!!(canvas&&!spinner&&(scene?scene!=="Scene_Boot":true)), canvas:canvas,
       pending:pend.slice(0,12), recent:recent.slice(0,20), counts:counts, errors:errors.slice(0,10), activity:activity.slice(0,400), xfer:xfer.slice(0,60), manifest:manifest,
-      probe:(probe||(probed?"":"no VAnim global — defined inside a plugin closure")), codecs:codecs, shimV:"${SHIM_V}", vids:vidState(), frames:frames}; }
+      probe:(probe||(probed?"":"no VAnim global — defined inside a plugin closure")), codecs:codecs, shimV:"${SHIM_V}", vids:vidState(), frames:frames, gl:glCompare()}; }
   // One-shot source probe for globals whose art never loads. Captured lazily
   // because a plugin defining them may not have run at startup.
   var vids=[], wantFrame=false, frames=[];
@@ -238,6 +238,52 @@ const DIAG_SHIM = `<script>(function(){
         stats:"mean="+Math.round(sum/n)+" black="+Math.round(100*dark/n)+"% red="+Math.round(100*red/n)+"%",
         url:c.toDataURL("image/jpeg", wide?0.6:0.45) };
     }catch(e){ return { label:label, stats:"capture threw: "+(e&&e.message), url:"" }; }
+  }
+  // Upload the source to a texture, attach it to a framebuffer, read a patch back.
+  // No shader needed, and readPixels is confined to 32x32 so a 1169x826 frame
+  // never costs 15MB.
+  function texProbe(gl, src, w, h){
+    var t=gl.createTexture();
+    gl.bindTexture(gl.TEXTURE_2D, t);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+    while(gl.getError()!==gl.NO_ERROR){}                     // clear stale errors
+    try{ gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA,gl.RGBA,gl.UNSIGNED_BYTE,src); }
+    catch(e){ return "threw:"+(e&&e.name); }
+    var e1=gl.getError(); if(e1!==gl.NO_ERROR) return "glErr:"+e1;
+    var fb=gl.createFramebuffer();
+    gl.bindFramebuffer(gl.FRAMEBUFFER, fb);
+    gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, t, 0);
+    if(gl.checkFramebufferStatus(gl.FRAMEBUFFER)!==gl.FRAMEBUFFER_COMPLETE){
+      gl.bindFramebuffer(gl.FRAMEBUFFER,null); return "fb-incomplete"; }
+    var sw=32, sh=32, px=new Uint8Array(sw*sh*4);
+    // sample from the middle, where a character sprite actually has pixels
+    gl.readPixels(Math.max(0,(w>>1)-16), Math.max(0,(h>>1)-16), sw, sh, gl.RGBA, gl.UNSIGNED_BYTE, px);
+    gl.bindFramebuffer(gl.FRAMEBUFFER,null);
+    var sum=0, nz=0;
+    for(var i=0;i<px.length;i+=4){ var l=(px[i]*299+px[i+1]*587+px[i+2]*114)/1000; sum+=l; if(l>12) nz++; }
+    return "mean="+Math.round(sum/(sw*sh))+" lit="+Math.round(100*nz/(sw*sh))+"%";
+  }
+  function glCompare(){
+    try{
+      var v=null;
+      for(var i=0;i<vids.length;i++){ if(vids[i].videoWidth){ v=vids[i]; break; } }
+      if(!v) return "no video with dimensions yet";
+      var c=document.createElement("canvas"); c.width=64; c.height=64;
+      var gl=c.getContext("webgl")||c.getContext("experimental-webgl");
+      if(!gl) return "no webgl context";
+      var vw=v.videoWidth, vh=v.videoHeight;
+      var direct=texProbe(gl, v, vw, vh);
+      // the proposed fix: even dimensions, via a 2D canvas
+      var ew=vw-(vw%2), eh=vh-(vh%2);
+      var mid=document.createElement("canvas"); mid.width=ew; mid.height=eh;
+      var g2=mid.getContext("2d"); g2.drawImage(v,0,0,ew,eh);
+      var viaCanvas=texProbe(gl, mid, ew, eh);
+      return vw+"x"+vh+(vw%2?" (ODD width)":" (even)")
+        +" · direct-video[" + direct + "]"
+        +" · via-2D-canvas " + ew + "x" + eh + "[" + viaCanvas + "]";
+    }catch(e){ return "probe threw: "+(e&&e.message); }
   }
   function grabAll(){
     frames=[];
