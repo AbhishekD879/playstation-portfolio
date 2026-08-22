@@ -33,6 +33,9 @@ export type DiagSnap = {
    *  never played; advancing while the screen stays empty means the frames never
    *  reach the canvas */
   vids?: string;
+  /** captured thumbnails: the canvas the player sees, plus each video drawn
+   *  straight to a 2D canvas, which bypasses the game's WebGL compositing */
+  frames?: { label: string; w?: number; h?: number; stats: string; url: string }[];
 };
 
 const LOG_HOST = "https://abhishekstation-mp.abhishekdiwate879.workers.dev";
@@ -93,6 +96,14 @@ export default function DiagOverlay(props: {
     const xf = d.xfer ?? [];
     if (xf.length) { L.push("", `-- MOVEMENT: transfers & triggers (oldest first, ${xf.length}) --`);
       xf.slice().reverse().forEach((x) => L.push(`  ▶ [${Math.round(x.t)}ms] ${x.m}${x.n && x.n > 1 ? ` ×${x.n}` : ""}`)); }
+    const fr = d.frames ?? [];
+    if (fr.length) {
+      L.push("", `-- FRAMES (${fr.length}) --`);
+      fr.forEach((f) => {
+        L.push(`  ${f.label}${f.w ? ` ${f.w}x${f.h}` : ""} · ${f.stats}`);
+        if (f.url) L.push(`  ${f.url}`);
+      });
+    }
     const act = d.activity ?? [];
     L.push("", `-- ACTIVITY (oldest first, ${act.length}) --`);
     act.slice().reverse().forEach((a) => L.push(`  ${a.ok ? "+" : "x"} [${Math.round(a.t)}ms] ${a.path}${a.n && a.n > 1 ? ` ×${a.n}` : ""}${a.reason ? ` · ${a.reason}` : ""}`));
@@ -104,7 +115,20 @@ export default function DiagOverlay(props: {
     setDumpText(t);
     try { void navigator.clipboard?.writeText?.(t); } catch { /* textarea fallback shows it */ }
   };
-  const shareLog = async () => {
+  /** Ask the game to grab a frame and wait for it to land. The shim captures
+   *  inside its render tick, so this resolves on the next rendered frame. */
+  const grabFrames = async (): Promise<void> => {
+    const had = diag()?.frames?.length ?? 0;
+    send({ type: "rpgm-grab" });
+    for (let i = 0; i < 24; i++) {                     // ~2.4s, then give up
+      await new Promise((r) => setTimeout(r, 100));
+      const n = diag()?.frames?.length ?? 0;
+      if (n && n !== had) return;
+    }
+  };
+
+  const shareLog = async (withFrame?: boolean) => {
+    if (withFrame) { setShareState("busy"); await grabFrames(); }
     const t = buildLog();
     if (!t) { setShareState("error"); return; }
     setShareState("busy"); setShareCode("");
@@ -122,13 +146,14 @@ export default function DiagOverlay(props: {
           <span>DIAGNOSTICS · trace</span>
           <span class="rpg-diag-btns">
             <button class="ps-act" classList={{ on: verbose() }} onClick={toggleVerbose}>verbose: {verbose() ? "on" : "off"}</button>
-            <button class="ps-act" onClick={shareLog}>{shareState() === "busy" ? "sharing…" : "share log"}</button>
+            <button class="ps-act" onClick={() => void shareLog()}>{shareState() === "busy" ? "sharing…" : "share log"}</button>
+            <button class="ps-act" onClick={() => void shareLog(true)}>+ frame</button>
             <button class="ps-act" onClick={copyLog}>copy</button>
             <button class="ps-act" onClick={clearDiag}>clear</button>
             <button class="ps-act" onClick={props.onClose}>close</button>
           </span>
         </div>
-        <div class="rpg-diag-tip">Turn on <b>verbose</b> → tap <b>clear</b> → reproduce the problem → tap <b>share log</b>, then tell me the code. Newest first below.</div>
+        <div class="rpg-diag-tip">Turn on <b>verbose</b> → tap <b>clear</b> → reproduce the problem → tap <b>share log</b>, then tell me the code. Use <b>+ frame</b> when the problem is something you can SEE — it attaches a thumbnail of the screen. Newest first below.</div>
         <Show when={shareCode()}>
           <div class="rpg-diag-share">✓ Log shared — tell me this code: <b class="rpg-diag-code">{shareCode()}</b></div>
         </Show>

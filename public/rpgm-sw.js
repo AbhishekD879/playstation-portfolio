@@ -178,7 +178,7 @@ const NW_SHIM = `<script>(function(){
 // audio buffers, fonts and the effekseer wasm, which are the things that stall.
 // Bump whenever a shim changes — a log that cannot name its own version wastes
 // a capture, which is exactly what happened once.
-const SHIM_V = "7";
+const SHIM_V = "8";
 const DIAG_SHIM = `<script>(function(){
   var T0=Date.now(), seq=0, pending={}, recent=[], errors=[], counts={ok:0,fail:0}, activity=[], xfer=[];
   // MOVEMENT channel — map transfers (doors/stairs) + event triggers get their
@@ -216,10 +216,38 @@ const DIAG_SHIM = `<script>(function(){
     return {source:"rpgm-diag", up:now-T0, scene:scene, spinner:spinner,
       booted:!!(canvas&&!spinner&&(scene?scene!=="Scene_Boot":true)), canvas:canvas,
       pending:pend.slice(0,12), recent:recent.slice(0,20), counts:counts, errors:errors.slice(0,10), activity:activity.slice(0,400), xfer:xfer.slice(0,60), manifest:manifest,
-      probe:(probe||(probed?"":"no VAnim global — defined inside a plugin closure")), codecs:codecs, shimV:"${SHIM_V}", vids:vidState()}; }
+      probe:(probe||(probed?"":"no VAnim global — defined inside a plugin closure")), codecs:codecs, shimV:"${SHIM_V}", vids:vidState(), frames:frames}; }
   // One-shot source probe for globals whose art never loads. Captured lazily
   // because a plugin defining them may not have run at startup.
-  var vids=[];
+  var vids=[], wantFrame=false, frames=[];
+  // Stats travel with every thumbnail so a conclusion never rests on my reading
+  // of a small JPEG: near-black share and strong-red share are computed here.
+  function shot(src, w, h, label){
+    try{
+      var sw=Math.min(220, w||220), sh=Math.round((h||150)*(sw/(w||220)));
+      var c=document.createElement("canvas"); c.width=sw; c.height=sh;
+      var g=c.getContext("2d"); if(!g) return null;
+      g.drawImage(src, 0, 0, sw, sh);
+      var d=g.getImageData(0,0,sw,sh).data, n=d.length/4, dark=0, red=0, sum=0;
+      for(var i=0;i<d.length;i+=4){ var r=d[i],gg=d[i+1],b=d[i+2];
+        var l=(r*299+gg*587+b*114)/1000; sum+=l;
+        if(l<12) dark++;
+        if(r>90 && r>gg*2 && r>b*2) red++; }
+      return { label:label, w:sw, h:sh,
+        stats:"mean="+Math.round(sum/n)+" black="+Math.round(100*dark/n)+"% red="+Math.round(100*red/n)+"%",
+        url:c.toDataURL("image/jpeg", 0.45) };
+    }catch(e){ return { label:label, stats:"capture threw: "+(e&&e.message), url:"" }; }
+  }
+  function grabAll(){
+    frames=[];
+    try{ var cv=document.querySelector("canvas");
+      if(cv) frames.push(shot(cv, cv.width, cv.height, "canvas (what you see)")); }catch(e){}
+    vids.slice(0,3).forEach(function(v){
+      try{ if(v.videoWidth) frames.push(shot(v, v.videoWidth, v.videoHeight,
+        "video "+((v.currentSrc||v.src||"").split("/").pop()))); }catch(e){}
+    });
+    post();
+  }
   function vidState(){ try{
     return vids.filter(function(v){ return v.src||v.currentSrc; }).slice(0,8).map(function(v){
       var n=(v.currentSrc||v.src||"").split("/").pop();
@@ -247,6 +275,11 @@ const DIAG_SHIM = `<script>(function(){
     }catch(e){ probed=true; probe="probe threw: "+(e&&e.message); }
   }
   function post(){ try{ parent.postMessage(snap(), "*"); }catch(e){} }
+  window.addEventListener("message", function(ev){
+    try{ if(ev.data && ev.data.type==="rpgm-grab"){ wantFrame=true;
+      // No renderer running (or none wrapped yet) — grab now rather than never.
+      setTimeout(function(){ if(wantFrame){ wantFrame=false; grabAll(); } }, 700); } }catch(e){}
+  }, false);
   function addErr(msg, at){ errors.unshift({msg:String(msg).slice(0,280), at:at||""}); if(errors.length>10) errors.pop(); post(); }
   window.addEventListener("unhandledrejection", function(ev){ var r=ev&&ev.reason; addErr("Unhandled: "+((r&&r.message)||r), ""); });
   // ONE capture-phase error listener catches BOTH script errors AND resource
@@ -351,6 +384,11 @@ const DIAG_SHIM = `<script>(function(){
     var BM=window.Bitmap;
     if(BM && !BM.__diag){ BM.__diag=1;
       if(typeof BM.load==="function"){ var bl=BM.load; BM.load=function(url){ elog("Bitmap.load("+url+")","engine img"); return bl.apply(this,arguments); }; } }
+    var GR=window.Graphics;
+    if(GR && !GR.__diagCap && typeof GR.render==="function"){ GR.__diagCap=1;
+      var grf=GR.render; GR.render=function(){ var out=grf.apply(this,arguments);
+        if(wantFrame){ wantFrame=false; try{ grabAll(); }catch(e){} }
+        return out; }; }
     if(GI && GI.prototype && !GI.prototype.__diag){ GI.prototype.__diag=1;
       var ec=GI.prototype.executeCommand; GI.prototype.executeCommand=function(){ try{ var c=this._list&&this._list[this._index];
         if(c&&c.code===355){
