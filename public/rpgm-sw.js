@@ -299,8 +299,12 @@ const DIAG_SHIM = `<script>(function(){
   var hkTries=0, hkIv=setInterval(function(){
     var IM=window.ImageManager, GI=window.Game_Interpreter, DM=window.DataManager, AM=window.AudioManager, SM=window.SceneManager;
     if(IM && !IM.__diag){ IM.__diag=1;
-      ["loadPicture","loadCharacter","loadFace","loadBattleback1","loadBattleback2","loadParallax","loadTileset","loadSystem"].forEach(function(m){
+      ["loadPicture","loadCharacter","loadFace","loadBattleback1","loadBattleback2","loadParallax","loadTileset","loadSystem",
+       "loadBitmap","loadNormalBitmap","reserveBitmap","loadSvActor","loadEnemy","loadAnimation"].forEach(function(m){
         if(typeof IM[m]!=="function")return; var o=IM[m]; IM[m]=function(){ var a=Array.prototype.slice.call(arguments).filter(function(x){return typeof x==="string";}).join("/"); elog("img."+m+"("+a+")","engine img"); return o.apply(this,arguments); }; }); }
+    var BM=window.Bitmap;
+    if(BM && !BM.__diag){ BM.__diag=1;
+      if(typeof BM.load==="function"){ var bl=BM.load; BM.load=function(url){ elog("Bitmap.load("+url+")","engine img"); return bl.apply(this,arguments); }; } }
     if(GI && GI.prototype && !GI.prototype.__diag){ GI.prototype.__diag=1;
       var ec=GI.prototype.executeCommand; GI.prototype.executeCommand=function(){ try{ var c=this._list&&this._list[this._index];
         if(c&&c.code===355){
