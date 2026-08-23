@@ -1774,19 +1774,26 @@ body.party-col .share-btn { right: calc(var(--pty-w) + clamp(12px, 2vw, 22px)); 
   padding-right: max(min(5vw, 60px), env(safe-area-inset-right));
 }
 .rpgplay-menufab { display: none; }
+/* A small draggable widget, not a bar: parked bottom-right by default and moved
+   with a drag, so it never has to sit over a dialogue box or a choice list.
+   touch-action: none so a drag isn't stolen by the page's own scrolling. */
 .rpgplay.touch .rpgplay-menufab {
-  display: flex; align-items: center; gap: 6px;
-  position: absolute; left: 50%; transform: translateX(-50%);
-  bottom: calc(16px + env(safe-area-inset-bottom, 0px)); z-index: 10; /* above the sheet scrim so "close" stays tappable */
-  padding: 10px 18px; min-height: 44px; border-radius: 999px; cursor: pointer;
-  font-family: inherit; font-size: 14px; letter-spacing: 0.04em; color: #fff;
+  display: flex; align-items: center; justify-content: center;
+  position: absolute; z-index: 10; /* above the sheet scrim so close stays tappable */
+  width: 46px; height: 46px; border-radius: 50%; cursor: grab;
+  font-family: inherit; font-size: 18px; color: #fff;
   background: rgba(6,10,20,0.5); border: 1px solid rgba(255,255,255,0.32);
   box-shadow: 0 4px 20px rgba(0,0,0,0.45); text-shadow: 0 1px 3px rgba(0,0,0,0.6);
-  -webkit-user-select: none; user-select: none; touch-action: manipulation;
+  -webkit-user-select: none; user-select: none; touch-action: none;
+  transition: opacity 0.4s ease, transform 0.2s ease;
 }
+/* Fades back once untouched, so it stops competing with the art it sits over —
+   still a full 46px target, only the paint changes. */
+.rpgplay.touch .rpgplay-menufab.idle { opacity: 0.28; }
+.rpgplay.touch .rpgplay-menufab.idle:active { opacity: 1; }
 .rpgplay-menufab .padfab-ico { font-size: 15px; line-height: 1; }
 .rpgplay-menufab.on { background: color-mix(in oklab, var(--xmb-tint) 42%, rgba(6,10,20,0.7)); border-color: color-mix(in oklab, var(--xmb-tint) 60%, #fff); }
-.rpgplay-menufab:active { transform: translateX(-50%) scale(0.95); }
+.rpgplay-menufab:active { transform: scale(0.92); }
 
 /* touch: the top bar is replaced by the menu sheet (opened from the ☰ FAB) —
    a full horizontal bar over a landscape game is cramped and notch-prone. */
@@ -1815,6 +1822,7 @@ body.party-col .share-btn { right: calc(var(--pty-w) + clamp(12px, 2vw, 22px)); 
 .rpgplay-sheet-lbl { flex: 1; }
 .rpgplay-sheet-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; background: color-mix(in oklab, var(--xmb-tint) 80%, #fff); }
 .rpgplay-toast {
+  pointer-events: none;   /* transient text must never eat a tap */
   position: absolute; left: 50%; transform: translateX(-50%);
   top: calc(60px + env(safe-area-inset-top, 0px)); z-index: 11;
   padding: 10px 20px; border-radius: 999px; font-size: 14px; letter-spacing: 0.02em; color: #fff;

@@ -52,6 +52,57 @@ export default function RpgPlayer(props: {
     (typeof navigator !== "undefined" && navigator.maxTouchPoints > 0) ||
     (typeof matchMedia === "function" && matchMedia("(any-pointer: coarse)").matches);
 
+  // The menu button used to sit at bottom-centre, which is exactly where a
+  // visual novel puts its dialogue box and choice buttons — so it ate the taps
+  // meant for the game. It is now a small floating widget the player can drag
+  // anywhere, parked bottom-right by default and remembered per device. Nothing
+  // else is added over the frame, so every other pixel belongs to the game.
+  const FAB_KEY = "asp.rpgfab";
+  const FAB = 46;                                    // widget size, px
+  const clampFab = (x: number, y: number) => ({
+    x: Math.max(8, Math.min(x, Math.max(8, window.innerWidth - FAB - 8))),
+    y: Math.max(8, Math.min(y, Math.max(8, window.innerHeight - FAB - 8))),
+  });
+  const [fab, setFab] = createSignal(clampFab(
+    (() => { try { return JSON.parse(localStorage.getItem(FAB_KEY) ?? "null")?.x ?? 1e9; } catch { return 1e9; } })(),
+    (() => { try { return JSON.parse(localStorage.getItem(FAB_KEY) ?? "null")?.y ?? 1e9; } catch { return 1e9; } })(),
+  ));
+  const [fabIdle, setFabIdle] = createSignal(false);
+  let fabIdleTimer: ReturnType<typeof setTimeout> | undefined;
+  const wakeFab = () => {
+    setFabIdle(false);
+    clearTimeout(fabIdleTimer);
+    fabIdleTimer = setTimeout(() => setFabIdle(true), 4000);
+  };
+  // A drag and a tap start identically, so only movement past a threshold counts
+  // as a drag — otherwise a slightly imprecise tap would silently do nothing.
+  let fabDrag: { dx: number; dy: number; moved: boolean } | null = null;
+  const fabDown = (e: PointerEvent) => {
+    wakeFab();
+    const t = e.currentTarget as HTMLElement;
+    t.setPointerCapture?.(e.pointerId);
+    fabDrag = { dx: e.clientX - fab().x, dy: e.clientY - fab().y, moved: false };
+  };
+  const fabMove = (e: PointerEvent) => {
+    if (!fabDrag) return;
+    const next = clampFab(e.clientX - fabDrag.dx, e.clientY - fabDrag.dy);
+    if (Math.abs(next.x - fab().x) > 3 || Math.abs(next.y - fab().y) > 3) fabDrag.moved = true;
+    setFab(next);
+  };
+  const fabUp = () => {
+    if (!fabDrag) return;
+    const dragged = fabDrag.moved;
+    fabDrag = null;
+    if (dragged) {
+      try { localStorage.setItem(FAB_KEY, JSON.stringify(fab())); } catch { /* private mode */ }
+      return;                                         // a drag must not open the menu
+    }
+    sheetOpen() ? setSheetOpen(false) : openSheet();
+    sfx.tickV();
+  };
+  onMount(() => wakeFab());
+  onCleanup(() => clearTimeout(fabIdleTimer));
+
   const goFullscreen = () => {
     const el = container as unknown as { requestFullscreen?: (o?: object) => Promise<void>; webkitRequestFullscreen?: () => void };
     if (document.fullscreenElement) return;
@@ -314,10 +365,13 @@ export default function RpgPlayer(props: {
           one obvious control over a full-screen game. Hidden on desktop, which
           keeps the top bar. */}
       <Show when={phase() === "ready"}>
-        <button class="rpgplay-menufab" classList={{ on: sheetOpen() }}
-          onClick={() => { sheetOpen() ? setSheetOpen(false) : openSheet(); sfx.tickV(); }}
+        <button class="rpgplay-menufab" classList={{ on: sheetOpen(), idle: fabIdle() && !sheetOpen() }}
+          style={{ left: `${fab().x}px`, top: `${fab().y}px` }}
+          onPointerDown={fabDown} onPointerMove={fabMove} onPointerUp={fabUp}
+          onPointerCancel={() => { fabDrag = null; }}
+          title="Game menu — drag to move"
           aria-label="Game menu">
-          <span class="padfab-ico">☰</span>{sheetOpen() ? "close" : "menu"}
+          <span class="padfab-ico">{sheetOpen() ? "✕" : "☰"}</span>
         </button>
       </Show>
 
