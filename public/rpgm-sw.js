@@ -178,7 +178,7 @@ const NW_SHIM = `<script>(function(){
 // audio buffers, fonts and the effekseer wasm, which are the things that stall.
 // Bump whenever a shim changes — a log that cannot name its own version wastes
 // a capture, which is exactly what happened once.
-const SHIM_V = "22";
+const SHIM_V = "23";
 const DIAG_SHIM = `<script>(function(){
   var T0=Date.now(), seq=0, pending={}, recent=[], errors=[], counts={ok:0,fail:0}, activity=[], xfer=[];
   // MOVEMENT channel — map transfers (doors/stairs) + event triggers get their
@@ -218,6 +218,8 @@ const DIAG_SHIM = `<script>(function(){
       pending:pend.slice(0,12), recent:recent.slice(0,20), counts:counts, errors:errors.slice(0,10), activity:activity.slice(0,400), xfer:xfer.slice(0,60), manifest:manifest,
       probe:(probe||(probed?"":"no VAnim global — defined inside a plugin closure")), codecs:codecs, shimV:"${SHIM_V}", vids:vidState(), frames:frames, gl:glCompare(), canv:canvasInfo(), glLoad:glLoad(), pixi:pixiInfo(), stage:stageDump(), pics:pictureDump(),
       esc:ecHits.length?ecHits.join(" ;; "):(ecHooked?"drawText hooked, no raw escape code seen":"drawText not hooked"),
+      conv:(ecConvHooked?("codes["+(Object.keys(ecCodes).map(function(k){ return k+"x"+ecCodes[k]; }).join(",")||"NONE CALLED")+"] "
+        +(ecConv.length?ecConv.join(" ;; "):"no backslash reached convertEscapeCharacters")):"convertEscapeCharacters not hooked"),
       vkey:"alpha["+vkWhy+"] keyed="+vkApplied+" overlays="+vkOverlays+" lit["+vkFracs.join(" ")+"]",
       selftest:stOut ? stOut+(stRun?" · STILL RUNNING":" · complete") : ""}; }
   // One-shot source probe for globals whose art never loads. Captured lazily
@@ -415,7 +417,7 @@ const DIAG_SHIM = `<script>(function(){
    *  ships alongside, so the true values are unrecoverable and this is an
    *  approximation. Tell the two apart by how much of the frame is lit, and give
    *  the sparse one a fraction of the opacity. */
-  var VK_OVERLAY_ALPHA=0.42, VK_SPARSE_MAX=0.10;
+  var VK_OVERLAY_ALPHA=0.25, VK_SPARSE_MAX=0.10;
   function nonBlackFrac(v){
     try{
       var c=document.createElement("canvas"); c.width=48; c.height=34;
@@ -472,6 +474,34 @@ const DIAG_SHIM = `<script>(function(){
         var k=node.children||[];
         for(var i=0;i<k.length;i++) walk(k[i]);
       })(root);
+    }catch(e){}
+  }
+  var ecConv=[], ecCodes={}, ecConvHooked=false;
+  function hookConvert(){
+    try{
+      var W=window.Window_Base;
+      if(ecConvHooked || !W || !W.prototype || !W.prototype.convertEscapeCharacters) return;
+      ecConvHooked=true;
+      var BS=String.fromCharCode(92);
+      var oc=W.prototype.convertEscapeCharacters;
+      W.prototype.convertEscapeCharacters=function(text){
+        var out=oc.apply(this, arguments);
+        try{
+          var inp=String(text==null?"":text);
+          if(ecConv.length<5 && inp.indexOf(BS)>=0){
+            ecConv.push("in="+JSON.stringify(inp.slice(0,90))
+              +" out="+JSON.stringify(String(out).slice(0,90)));
+          }
+        }catch(e){}
+        return out;
+      };
+      if(W.prototype.processEscapeCharacter){
+        var op=W.prototype.processEscapeCharacter;
+        W.prototype.processEscapeCharacter=function(code){
+          try{ ecCodes[code]=(ecCodes[code]||0)+1; }catch(e){}
+          return op.apply(this, arguments);
+        };
+      }
     }catch(e){}
   }
   var ecHits=[], ecHooked=false;
@@ -865,7 +895,7 @@ const DIAG_SHIM = `<script>(function(){
     if(GR && !GR.__diagCap && typeof GR.render==="function"){ GR.__diagCap=1;
       var grf=GR.render; GR.render=function(){ var out=grf.apply(this,arguments);
         keyVideoSprites();   // every frame: a 20-frame gap showed as black
-        hookEscapeText();
+        hookEscapeText(); hookConvert();
         if(wantFrame){ wantFrame=false; try{ grabAll(); }catch(e){} }
         return out; }; }
     if(GI && GI.prototype && !GI.prototype.__diag){ GI.prototype.__diag=1;

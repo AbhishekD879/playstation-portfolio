@@ -51,6 +51,9 @@ export type DiagSnap = {
   vkey?: string;
   /** Raw MV escape codes caught reaching drawText, which never expands them. */
   esc?: string;
+  /** What convertEscapeCharacters was handed and what it returned — the only
+   *  place that can say whether \c[n] arrived doubled. */
+  conv?: string;
   /** direct video-to-texture upload vs the same frame via a 2D canvas — tests
    *  the proposed fix on the real device before it is written */
   gl?: string;
@@ -123,6 +126,7 @@ export default function DiagOverlay(props: {
     if (d.pics) L.push("", "-- PICTURES (asked for vs what arrived) --", `  ${d.pics}`);
     if (d.vkey) L.push(`video alpha: ${d.vkey}`);
     if (d.esc) L.push("", "-- RAW ESCAPE CODES (drawn unexpanded) --", `  ${d.esc}`);
+    if (d.conv) L.push("", "-- ESCAPE CONVERSION (in -> out) --", `  ${d.conv}`);
     const inp = inputs();
     if (inp.length) {
       L.push("", "-- INPUT (parent) --");
