@@ -178,7 +178,7 @@ const NW_SHIM = `<script>(function(){
 // audio buffers, fonts and the effekseer wasm, which are the things that stall.
 // Bump whenever a shim changes — a log that cannot name its own version wastes
 // a capture, which is exactly what happened once.
-const SHIM_V = "32";
+const SHIM_V = "33";
 const DIAG_SHIM = `<script>(function(){
   var T0=Date.now(), seq=0, pending={}, recent=[], errors=[], counts={ok:0,fail:0}, activity=[], xfer=[];
   // MOVEMENT channel — map transfers (doors/stairs) + event triggers get their
@@ -853,6 +853,25 @@ const DIAG_SHIM = `<script>(function(){
         +" · dpr="+(window.devicePixelRatio||1);
     }catch(e){ return "canvasInfo threw: "+(e&&e.message); }
   }
+  var rafHooked=false;
+  function hookRaf(){
+    try{
+      if(rafHooked || typeof window.requestAnimationFrame !== "function") return;
+      rafHooked=true;
+      var orig=window.requestAnimationFrame.bind(window);
+      window.requestAnimationFrame=function(cb){
+        return orig(function(t){
+          var r;
+          try{ r=cb(t); }
+          finally{
+            // after the engine has drawn, before the buffer is discarded
+            if(wantFrame){ wantFrame=false; try{ grabAll(); }catch(e){} }
+          }
+          return r;
+        });
+      };
+    }catch(e){}
+  }
   function grabAll(){
     frames=[];
     // EVERY canvas, largest first — the engine's is the one that matters and it
@@ -863,7 +882,8 @@ const DIAG_SHIM = `<script>(function(){
       all.sort(function(a,b){ return (b.width*b.height)-(a.width*a.height); });
       all.slice(0,3).forEach(function(c,i){
         frames.push(shot(c, c.width, c.height,
-          "canvas "+c.width+"x"+c.height+(c===gc?" [ENGINE — what you see]":" [other #"+i+"]"), true));
+          "canvas "+c.width+"x"+c.height
+            +((c===gc || c.id==="canvas") ? " [ENGINE — what you see]" : " [other #"+i+"]"), true));
       });
     }catch(e){}
     var live=vids.filter(function(v){ return v.videoWidth; }).slice(0,6);
@@ -903,7 +923,7 @@ const DIAG_SHIM = `<script>(function(){
   function post(){ try{ parent.postMessage(snap(), "*"); }catch(e){} }
   window.addEventListener("message", function(ev){
     try{ if(ev.data && ev.data.type==="rpgm-selftest"){ selfTest(); return; } }catch(e){}
-    try{ if(ev.data && ev.data.type==="rpgm-grab"){ wantFrame=true;
+    try{ if(ev.data && ev.data.type==="rpgm-grab"){ wantFrame=true; hookRaf();
       // No renderer running (or none wrapped yet) — grab now rather than never.
       setTimeout(function(){ if(wantFrame){ wantFrame=false; grabAll(); } }, 700); } }catch(e){}
   }, false);
@@ -1034,6 +1054,7 @@ const DIAG_SHIM = `<script>(function(){
     if(GR && !GR.__diagCap && typeof GR.render==="function"){ GR.__diagCap=1;
       var grf=GR.render; GR.render=function(){ var out=grf.apply(this,arguments);
         keyVideoSprites();   // every frame: a 20-frame gap showed as black
+        hookRaf();
         hookEscapeText(); hookConvert();
         if(wantFrame){ wantFrame=false; try{ grabAll(); }catch(e){} }
         return out; }; }
