@@ -6,11 +6,13 @@
 // conversion is: work out the version, fetch the matching prebuilt engine, and
 // hand it the game/ tree as game.zip.
 //
-// This lands the engine as LOOSE files in the game's OPFS dir. The service
-// worker resolves loose first and the pack second, so the engine answers
-// /rpgm/renpy/<id>/index.html while the game's own assets keep streaming out of
-// the pack at /rpgm/renpy/<id>/game/... — which is exactly what the remote-file
-// manifest needs, with no extra serving code.
+// This lands the engine as LOOSE files under the archive's own root in the game's
+// OPFS dir. The service worker resolves loose first and the pack second, and
+// prepends .rpgmroot to BOTH, so the engine answers /rpgm/renpy/<id>/index.html
+// while the game's own assets keep streaming out of the pack at
+// /rpgm/renpy/<id>/game/... — no extra serving code. Writing the engine at the
+// game-dir root instead looks right and 404s, because that prefix is not
+// optional.
 import { Zip, ZipPassThrough, unzipSync } from "fflate";
 import { trace } from "./importTrace";
 import { decodeRpaIndex, parseRpaHeader, type RpaEntry } from "./rpaIndex";
@@ -112,7 +114,12 @@ export async function convertRenpyDesktop(
   if (!engineNames.some((n) => /\.wasm$/.test(n))) throw new Error("The downloaded engine package contains no .wasm — its layout is unrecognised.");
   trace("convert: engine unpacked", { files: engineNames.length,
     names: engineNames.map((n) => n.replace(/^web\//, "")).join(",").slice(0, 200) });
-  for (const name of engineNames) await io.write(name.replace(/^web\//, ""), engine[name]);
+  // Written UNDER the archive root. The service worker prepends .rpgmroot to
+  // EVERY loose lookup, not only pack lookups — opfsFile resolves (root + path)
+  // — so engine files written at the game-dir root are invisible to it, which is
+  // exactly how a successful conversion still 404'd on index.html.
+  for (const name of engineNames) await io.write(root + name.replace(/^web\//, ""), engine[name]);
+  trace("convert: engine written", { under: root });
 
   // —— split the game tree ————————————————————————————————————————————————
   const gamePrefix = `${root}game/`;
@@ -185,7 +192,7 @@ export async function convertRenpyDesktop(
   // memory is one slice, not the whole archive — the previous version built the
   // entire zip in RAM and then let zipSync copy it, which is twice the total.
   say("sorting game files", 22);
-  const sink = await io.openWrite("game.zip");
+  const sink = await io.openWrite(`${root}game.zip`);
   let pending: Uint8Array[] = [];
   let zipErr: Error | null = null;
   const zip = new Zip((err, chunk, _final) => {
@@ -290,7 +297,7 @@ export async function convertRenpyDesktop(
 
   if (archives.length) {
     // The map the service worker resolves archive-backed requests through.
-    await io.write(".rpaindex", new TextEncoder().encode(JSON.stringify({ v: 1, a: archives, f: rpaFiles })));
+    await io.write(`${root}.rpaindex`, new TextEncoder().encode(JSON.stringify({ v: 1, a: archives, f: rpaFiles })));
     trace("rpa: sidecar written", { archives: archives.length, files: Object.keys(rpaFiles).length });
   }
 
@@ -312,11 +319,21 @@ export async function convertRenpyDesktop(
     notes.push(`${Math.round(videoBytes / 1048576)} MB of video is fetched on demand but not freed after playing.`);
   }
 
+  // Verify the engine is reachable at the path the service worker will use.
+  // A conversion that reports success but serves 404 is the worst outcome, and
+  // this is one read.
+  const check = await io.readHead(`${root}index.html`, 64);
+  if (!check?.length) {
+    throw new Error("The engine was written but index.html can't be read back — the conversion would 404.");
+  }
+  trace("convert: index.html verified", { bytes: check.length });
+
   say("ready", 100);
 
-  // Report the archive's own root back: the pack keys carry it, so the service
-  // worker needs it to resolve the on-demand game/... fetches. Engine files are
-  // loose and are found without it.
+  // Report the archive's own root back. It is recorded as .rpgmroot, and the
+  // service worker prepends it to every lookup — loose and packed alike — so the
+  // engine files written under it and the pack's game/... entries both resolve
+  // through the same prefix.
   return {
     version: used, entry: "index.html", root,
     inZip: plan.localFiles, remote: remote.length,
