@@ -178,7 +178,7 @@ const NW_SHIM = `<script>(function(){
 // audio buffers, fonts and the effekseer wasm, which are the things that stall.
 // Bump whenever a shim changes — a log that cannot name its own version wastes
 // a capture, which is exactly what happened once.
-const SHIM_V = "28";
+const SHIM_V = "29";
 const DIAG_SHIM = `<script>(function(){
   var T0=Date.now(), seq=0, pending={}, recent=[], errors=[], counts={ok:0,fail:0}, activity=[], xfer=[];
   // MOVEMENT channel — map transfers (doors/stairs) + event triggers get their
@@ -569,9 +569,21 @@ const DIAG_SHIM = `<script>(function(){
           if(txt && txt.length) out.push(f+" ("+txt.length+"B):"+NL+txt.slice(-2200));
         }catch(e){ /* absent */ }
       });
+      var head="";
+      try{
+        var mp=FSx.readFile("/main.py", {encoding:"utf8"}) || "";
+        head=" · main.py["+(mp.indexOf("AbhishekStation")>=0 ? "SHIMMED" : "raw bootstrap")
+          +" "+mp.length+"B: "+mp.slice(0, 48).split(NL)[0]+"]";
+      }catch(e){ head=" · main.py[UNREADABLE]"; }
+      var boot="";
+      try{ FSx.stat("/_asp_bootstrap.py"); boot=" · _asp_bootstrap.py present"; }
+      catch(e){ boot=" · _asp_bootstrap.py ABSENT"; }
       var listing="";
-      try{ listing=" · root["+FSx.readdir("/").filter(function(n){ return n!=="." && n!==".."; }).join(",").slice(0,300)+"]"; }catch(e){}
-      return (out.length ? out.join(NL+"---"+NL) : "no log.txt/errors.txt written") + listing;
+      try{
+        var names=FSx.readdir("/").filter(function(n){ return n!=="." && n!==".."; });
+        listing=" · root("+names.length+")["+names.join(",").slice(0,600)+"]";
+      }catch(e){}
+      return (out.length ? out.join(NL+"---"+NL) : "no log.txt/errors.txt written") + head + boot + listing;
     }catch(e){ return "renpyLogs threw: "+(e&&e.message); }
   }
   function stageDump(){

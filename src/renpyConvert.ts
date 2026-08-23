@@ -112,8 +112,9 @@ def _asp_install():
 
 try:
     _asp_install()
+    _asp_sys.stderr.write("ASP: browser import fallback installed" + chr(10))
 except Exception:
-    pass
+    _asp_sys.stderr.write("ASP: browser import fallback FAILED" + chr(10))
 
 # The real bootstrap is executed from its own file so its encoding declaration
 # still lands in the first two lines, where Python 2 requires it.
