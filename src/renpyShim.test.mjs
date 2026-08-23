@@ -66,6 +66,14 @@ execFileSync("python3", ["-c", "import ast,sys; ast.parse(sys.stdin.read())"], {
 assert.match(rpy, /config\.missing_image_callback = _asp_missing_image/);
 assert.match(rpy, /renpy\.display\.im\.Image\(alt\)/, "must return an image, not a path");
 assert.match(rpy, /except TypeError/, "loadable's signature differs across versions");
+// An image failure must never put up the error screen: im.py raises only when
+// raise_image_load_exceptions is true, and with it false the message is drawn in
+// place of the image and play continues.
+assert.match(rpy, /config\.raise_image_load_exceptions = False/);
+assert.match(rpy, /hasattr\(config, "raise_image_load_exceptions"\)/,
+  "setting a config name the engine version does not know is itself an error");
+// and a last-resort image, so the callback never re-raises by returning None
+assert.match(rpy, /_missing_image\.png/, "fall back to Ren'Py's own marker graphic");
 for (const v of ["phone", "tablet", "touch"]) assert.ok(rpy.includes(`"${v}"`), `${v} variant`);
 assert.match(src, /game\/_asp_web_compat\.rpy/, "must be packed into game/");
 

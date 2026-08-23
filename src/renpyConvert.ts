@@ -158,27 +158,44 @@ const PLACEHOLDER_PNG_B64 =
 const WEB_COMPAT_RPY = `# Injected by AbhishekStation: browser/touch compatibility.
 init -1500 python hide:
 
+    # Ren'Py adds a "phone" variant on touch devices and looks for
+    # gui/phone/x.png before gui/x.png. A game that declares phone variants
+    # without shipping the images works on desktop and stops dead on a phone, so
+    # drop the variant segment and use the base asset — which is what the variant
+    # system means anyway.
     def _asp_missing_image(name):
-        # Strip a device-variant directory and retry the base path.
         variants = ("phone", "tablet", "touch", "small", "medium", "large")
         parts = name.split("/")
+
+        def loadable(p):
+            try:
+                return renpy.loader.loadable(p, directory="images")
+            except TypeError:
+                return renpy.loader.loadable(p)      # older signature
+            except Exception:
+                return False
+
         for v in variants:
             if v not in parts:
                 continue
             alt = "/".join([p for p in parts if p != v])
-            if alt == name:
-                continue
-            try:
-                ok = renpy.loader.loadable(alt, directory="images")
-            except TypeError:
-                ok = renpy.loader.loadable(alt)   # older signature
-            except Exception:
-                ok = False
-            if ok:
+            if alt != name and loadable(alt):
                 return renpy.display.im.Image(alt)
+
+        # Last resort: Ren'Py's own missing-image graphic, which im.py itself
+        # falls back to. Showing a marker beats halting the game.
+        if loadable("_missing_image.png"):
+            return renpy.display.im.Image("_missing_image.png")
         return None
 
     config.missing_image_callback = _asp_missing_image
+
+    # And never let an image failure put up the error screen. im.py raises only
+    # when this is true; with it false the message is drawn in place of the image
+    # and the game carries on. Guarded with hasattr because setting a config name
+    # this engine version does not know is itself an error.
+    if hasattr(config, "raise_image_load_exceptions"):
+        config.raise_image_load_exceptions = False
 `;
 
 export interface ConvertIO {
