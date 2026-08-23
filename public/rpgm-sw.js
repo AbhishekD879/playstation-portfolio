@@ -178,7 +178,7 @@ const NW_SHIM = `<script>(function(){
 // audio buffers, fonts and the effekseer wasm, which are the things that stall.
 // Bump whenever a shim changes — a log that cannot name its own version wastes
 // a capture, which is exactly what happened once.
-const SHIM_V = "31";
+const SHIM_V = "32";
 const DIAG_SHIM = `<script>(function(){
   var T0=Date.now(), seq=0, pending={}, recent=[], errors=[], counts={ok:0,fail:0}, activity=[], xfer=[];
   // MOVEMENT channel — map transfers (doors/stairs) + event triggers get their
@@ -567,11 +567,35 @@ const DIAG_SHIM = `<script>(function(){
         var size=-1;
         try{ size=FSx.stat(f).size; }catch(e){ return; }        // genuinely absent
         var txt=null, why="";
+        var detail=function(e){
+          if(!e) return "?";
+          var bits=[];
+          if(e.errno!==undefined) bits.push("errno="+e.errno);
+          if(e.name) bits.push(e.name);
+          if(e.message && e.message!=="FS error") bits.push(e.message);
+          return bits.length?bits.join(" "):"FS error (no errno)";
+        };
         try{ txt=FSx.readFile(f, {encoding:"utf8"}); }
-        catch(e){ why="utf8 read threw: "+(e&&(e.message||e.code||e)); }
+        catch(e){ why="readFile: "+detail(e); }
+        if((!txt || !txt.length) && typeof FSx.open==="function" && typeof FSx.read==="function"){
+          // read the stream directly: readFile wraps open/read/close and can
+          // fail in ways the primitives do not
+          var st=null;
+          try{
+            st=FSx.open(f, "r");
+            var want=Math.min(size, 4096), buf=new Uint8Array(want);
+            var from=Math.max(0, size-want);
+            FSx.read(st, buf, 0, want, from);
+            var parts=[];
+            for(var k=0;k<buf.length;k+=4096) parts.push(String.fromCharCode.apply(null, buf.subarray(k, k+4096)));
+            txt=parts.join("");
+            why+=(why?" · ":"")+"recovered via open/read";
+          }catch(e3){ why+=(why?" · ":"")+"open/read: "+detail(e3); }
+          finally{ if(st){ try{ FSx.close(st); }catch(e4){} } }
+        }
         if(!txt || !txt.length){
           try{
-            var b=FSx.readFile(f);                              // raw bytes fallback
+            var b=FSx.readFile(f);                              // raw bytes attempt
             if(b && b.length){
               var chunks=[];
               for(var i=Math.max(0,b.length-2200);i<b.length;i+=4096){
@@ -579,7 +603,7 @@ const DIAG_SHIM = `<script>(function(){
               }
               txt=chunks.join("");
             }
-          }catch(e2){ why+=(why?" · ":"")+"byte read threw: "+(e2&&(e2.message||e2.code||e2)); }
+          }catch(e2){ why+=(why?" · ":"")+"bytes: "+detail(e2); }
         }
         if(txt && txt.length) out.push(f+" ("+size+"B on disk):"+NL+txt.slice(-2200));
         else out.push(f+" ("+size+"B on disk) UNREADABLE"+(why?" — "+why:""));
