@@ -7,6 +7,7 @@ globalThis.btoa ??= (b) => Buffer.from(b, "binary").toString("base64");
 import {
   parseRenpyVersion, webZipCandidates, placeFile, buildRemoteManifest, imageSize, INLINE_MAX,
   planSplit, budgetRefusal, LOCAL_BUDGET, archiveKey, toBase64, isEngineTreeFile,
+  hasPhoneVariantAssets,
 } from "./renpyPack.ts";
 
 // —— version ——————————————————————————————————————————————————————————————
@@ -182,3 +183,17 @@ assert.equal(isEngineTreeFile("LewdIsland.py"), false, "the bootstrap is added a
 assert.equal(isEngineTreeFile("myrenpy/x.py"), false, "must be the renpy/ segment, not a prefix match");
 
 console.log("renpy pack ok · version, placement, manifest, 5 image formats, budget gate");
+
+// Whether to suppress Ren'Py's phone/small variants is decided from the file
+// list, not from the platform: a game shipping real phone art keeps its phone
+// layout, and only a game that declares the variant without the assets is
+// forced back to the layout it actually has.
+assert.equal(hasPhoneVariantAssets(["gui/phone/overlay/gm.png", "script.rpyc"]), true);
+assert.equal(hasPhoneVariantAssets(["phone/bg.png"]), true, "a top-level variant dir counts");
+assert.equal(hasPhoneVariantAssets(["gui/small/frame.png"]), true, "small is a variant too");
+assert.equal(hasPhoneVariantAssets(["gui/overlay/gm.png", "images/bg.png"]), false);
+assert.equal(hasPhoneVariantAssets(["images/telephone/ring.png"]), false,
+  "must match a path segment, not a substring");
+assert.equal(hasPhoneVariantAssets(["images/smallish/x.png"]), false);
+assert.equal(hasPhoneVariantAssets([]), false);
+console.log("phone-variant detection ok");

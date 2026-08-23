@@ -17,8 +17,9 @@ import { Zip, ZipPassThrough, unzipSync } from "fflate";
 import { trace } from "./importTrace";
 import { decodeRpaIndex, parseRpaHeader, type RpaEntry } from "./rpaIndex";
 import {
-  archiveKey, budgetRefusal, buildRemoteManifest, findGameRoot, imageSize, isEngineTreeFile,
-  parseRenpyVersion, placeFile, planSplit, toBase64, webZipCandidates, type RemoteEntry,
+  archiveKey, budgetRefusal, buildRemoteManifest, findGameRoot, hasPhoneVariantAssets, imageSize,
+  isEngineTreeFile, parseRenpyVersion, placeFile, planSplit, toBase64, webZipCandidates,
+  type RemoteEntry,
 } from "./renpyPack";
 
 const PROXY = "https://abhishekstation-mp.abhishekdiwate879.workers.dev/renpy-web";
@@ -126,6 +127,19 @@ try:
 except Exception:
     _asp_sys.stderr.write("ASP: browser import fallback FAILED" + chr(10))
 
+`;
+
+// Ren'Py reads RENPY_VARIANT in renpy.main.choose_variants and returns
+// immediately, before any init block, so this is the supported way to decide the
+// variant list rather than fighting init ordering. "touch" and "mobile" stay, so
+// touch affordances are unaffected — only the phone/small size classes are
+// dropped, and only for a build that ships nothing for them.
+const NO_PHONE_VARIANT = `
+import os as _asp_os
+_asp_os.environ["RENPY_VARIANT"] = "web touch mobile"
+`;
+
+const BOOTSTRAP_TAIL = `
 # The real bootstrap is executed from its own file so its encoding declaration
 # still lands in the first two lines, where Python 2 requires it.
 execfile("_asp_bootstrap.py")
@@ -424,7 +438,17 @@ export async function convertRenpyDesktop(
   // shim prepended to it — prepending would push the bootstrap's own coding
   // declaration past line 2, where Python 2 stops looking for it.
   {
-    const shim = new TextEncoder().encode(WEB_IMPORT_SHIM);
+    const phoneAssets = hasPhoneVariantAssets([
+      ...gameFiles.map((f) => f.path.slice(gamePrefix.length)),
+      ...rpaOwned.keys(),
+    ]);
+    trace("convert: phone variant", { assets: phoneAssets, action: phoneAssets ? "kept" : "suppressed" });
+    if (!phoneAssets) {
+      notes.push("This build declares no phone-specific art, so the desktop layout is used "
+        + "— its phone layout would reference images it doesn't ship.");
+    }
+    const shim = new TextEncoder().encode(
+      WEB_IMPORT_SHIM + (phoneAssets ? "" : NO_PHONE_VARIANT) + BOOTSTRAP_TAIL);
     const mainEntry = new ZipPassThrough("main.py");
     zip.add(mainEntry);
     mainEntry.push(shim, true);

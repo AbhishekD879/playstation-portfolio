@@ -278,3 +278,20 @@ export function isEngineTreeFile(rel: string): boolean {
   const ext = i < 0 ? "" : rel.slice(i + 1).toLowerCase();
   return !ENGINE_TREE_SKIP.has(ext);
 }
+
+/** Does this build ship assets for Ren'Py's phone/small screen variants?
+ *
+ *  On a phone, renpy.main.choose_variants inserts "phone" and "small", and the
+ *  game then selects a GUI designed for variant assets. A build that declares
+ *  those variants without shipping the images renders a layout whose pieces are
+ *  missing — scattered text, options in the wrong place — and errors on load.
+ *  Checked from the file list so the decision is evidence, not a platform guess:
+ *  a game with real phone assets keeps its phone layout. */
+export function hasPhoneVariantAssets(rels: string[]): boolean {
+  for (const rel of rels) {
+    const lower = rel.toLowerCase();
+    if (lower.startsWith("phone/") || lower.includes("/phone/")
+      || lower.startsWith("small/") || lower.includes("/small/")) return true;
+  }
+  return false;
+}

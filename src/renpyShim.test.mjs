@@ -47,7 +47,20 @@ assert.match(py, /mod\.HTTPS_PORT = 443/);
 
 // the bootstrap must be executed from its own file: prepending the shim to it
 // would push its coding declaration past line 2, where Python 2 stops looking
-assert.match(py, /execfile\("_asp_bootstrap\.py"\)/);
+const tail = src.match(/const BOOTSTRAP_TAIL = `([\s\S]*?)`;/);
+assert.ok(tail, "BOOTSTRAP_TAIL not found");
+assert.match(tail[1], /execfile\("_asp_bootstrap\.py"\)/);
+
+// The variant override must keep touch and drop only the size classes, and it
+// must be applied ONLY when the game ships no phone art — a game with real phone
+// assets keeps its phone layout.
+const variant = src.match(/const NO_PHONE_VARIANT = `([\s\S]*?)`;/);
+assert.ok(variant, "NO_PHONE_VARIANT not found");
+execFileSync("python3", ["-c", "import ast,sys; ast.parse(sys.stdin.read())"], { input: variant[1] });
+assert.match(variant[1], /RENPY_VARIANT/);
+assert.match(variant[1], /"web touch mobile"/, "touch must survive; only phone/small go");
+assert.ok(!/phone/.test(variant[1].split("=")[1] ?? ""), "the value must not re-add phone");
+assert.match(src, /phoneAssets \? "" : NO_PHONE_VARIANT/, "applied only when there is no phone art");
 assert.match(src, /addFile\("_asp_bootstrap\.py", bootstrap\.path/);
 assert.ok(!/addFile\("main\.py", bootstrap\.path/.test(src),
   "main.py must be the shim, not the raw bootstrap");
