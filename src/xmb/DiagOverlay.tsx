@@ -41,6 +41,8 @@ export type DiagSnap = {
    *  measuring at each step. Answers the video questions without the player
    *  having to reach any particular scene. */
   selftest?: string;
+  /** Every node on the live PIXI stage with its transform, alpha and texture. */
+  stage?: string;
   /** direct video-to-texture upload vs the same frame via a 2D canvas — tests
    *  the proposed fix on the real device before it is written */
   gl?: string;
@@ -109,6 +111,7 @@ export default function DiagOverlay(props: {
     if (d.pixi) L.push(`pixi: ${d.pixi}`);
     if (d.probe) L.push(`probe: ${d.probe}`);
     if (d.selftest) L.push("", "-- SELF-TEST (probe suite, no gameplay) --", `  ${d.selftest}`);
+    if (d.stage) L.push("", "-- STAGE (what PIXI is actually drawing) --", `  ${d.stage}`);
     const inp = inputs();
     if (inp.length) {
       L.push("", "-- INPUT (parent) --");
@@ -156,7 +159,7 @@ export default function DiagOverlay(props: {
     send({ type: "rpgm-selftest" });
     for (let i = 0; i < 140; i++) {                    // ~14s, then give up
       await new Promise((r) => setTimeout(r, 100));
-      if (diag()?.selftest) return;
+      if (diag()?.selftest?.includes("complete")) return;
     }
   };
 
