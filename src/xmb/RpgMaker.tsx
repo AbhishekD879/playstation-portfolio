@@ -195,7 +195,11 @@ export default function RpgMaker(props: { profile: { id: string }; family: Famil
               <button class="ps-act" onClick={close}><span class="btn-o" /> back</button>
             </div>
             <div class="rpgplay-msg">
-              {isRenpyDesktop ? <>This is a Ren'Py <b>desktop</b> build — it can't run in a browser.</> : <>{ENGINE_LABEL[g.engine]} isn't supported yet.</>}<br />
+              {isRenpyDesktop
+                ? <>This is a Ren'Py <b>desktop</b> build — its engine is native code, so it can't run as-is.<br />
+                    Turn on <b>Ren'Py Desktop Conversion</b> in Labs and re-import: the console will pair
+                    this game with the official WebAssembly engine for its Ren'Py version.</>
+                : <>{ENGINE_LABEL[g.engine]} isn't supported yet.</>}<br />
               <span class="rpgplay-dim">
                 {isRenpyDesktop
                   ? "Ren'Py's engine ships as platform-native code and its scripts are locked to one engine version, so no single in-browser runtime can play arbitrary desktop games. Open the game in the Ren'Py launcher and Build → Web, then import that zip — web builds play here."

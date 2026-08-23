@@ -12,6 +12,8 @@
 //   · xp / vx / vxace  → mkxp (WASM, RGSS) — RPG Maker XP / VX / VX Ace.
 import { Inflate } from "fflate";
 import { checkEntry, entryDataStart, isAudioPath, runtimeSkipper, zipEntries, zipReadError } from "./zipcd";
+import { convertRenpyDesktop, type ConvertIO, type ConvertResult } from "./renpyConvert";
+import { labEnabled } from "./labs";
 
 export type RpgEngine =
   | "mz" | "mv" | "rm2k3" | "rm2k" | "vxace" | "vx" | "xp"
@@ -230,8 +232,13 @@ function detect(paths: string[]): Detected {
   // The whole game/ tree is packed inside game.zip, so there are no loose .rpyc.
   // Web builds use only relative paths, so they run from our /rpgm/renpy/<id>/
   // subpath with no rewriting and need no cross-origin isolation.
-  const renpyWasm = find((p) => /(^|\/)(renpy|index)\.wasm(\.gz)?$/.test(p));
-  const renpyLoader = find((p) => /(^|\/)renpy\.js$/.test(p)) || find((p) => /(^|\/)game\.zip$/.test(p));
+  // Accept the compressed shapes too: hosts commonly serve the engine
+  // pre-compressed, and a .wasm.br build was slipping past this check entirely
+  // and getting misrouted to the generic HTML5 branch. Same reason the Unity
+  // matcher below allows br/gz/unityweb. The data blob is game.zip on 7.x and
+  // may be game.data, so accept both — this only runs once the wasm matched.
+  const renpyWasm = find((p) => /(^|\/)(renpy|index)\.wasm(\.(gz|br))?$/.test(p));
+  const renpyLoader = find((p) => /(^|\/)renpy\.js$/.test(p)) || find((p) => /(^|\/)game\.(zip|data)$/.test(p));
   if (renpyWasm && renpyLoader) {
     const root = dirOf(renpyWasm);
     const idx = find((p) => p.toLowerCase() === `${root}index.html`.toLowerCase()) ?? `${root}index.html`;
@@ -551,8 +558,30 @@ async function doImport(
     }
   }
 
+  // —— Ren'Py desktop → web, in place ————————————————————————————————————————
+  // A desktop build's native engine can't run here, but Ren'Py publishes the
+  // same engine compiled to WebAssembly for every version since 7.4, and its
+  // loader takes the game as a plain zip. So fetch the matching engine and pair
+  // it with this build's game/ tree. Experimental and opt-in; any failure leaves
+  // the game exactly as it was, still showing the honest desktop notice, so a
+  // conversion that doesn't work can never be worse than not trying.
+  let renpyNotes: string[] = [];
+  if (det.engine === "renpydesktop" && labEnabled("renpyconvert")) {
+    try {
+      const res: ConvertResult = await convertRenpyDesktop(
+        renpyIO(id), (_phase, pct) => onProgress?.({ phase: "extracting", pct }),
+      );
+      det = { engine: "renpy", root: res.root, entry: res.entry };
+      renpyNotes = res.notes;
+    } catch (e) {
+      // Deliberately swallowed: the fallback is the pre-existing behaviour.
+      console.warn("[renpy] conversion skipped:", e instanceof Error ? e.message : e);
+    }
+  }
+
   // record the game root so the SW can prepend it (we didn't strip the tree)
   await writeMarker(dir, ".rpgmroot", det.root);
+  if (renpyNotes.length) await writeMarker(dir, ".renpynotes", renpyNotes.join("\n"));
   // lite install → the SW injects an AudioManager stub so the game never asks
   // for the audio we skipped (a missing BGM would otherwise crash MV/MZ)
   if (opts?.skipAudio) await writeMarker(dir, ".rpgmlite", "noaudio");
@@ -571,6 +600,39 @@ async function doImport(
     : { id, profileId, title, engine: det.engine, entry: det.entry, root: det.root, addedAt: Date.now(), fileCount: paths.length, bytes, cover };
   await putGame(game);
   return game;
+}
+
+/** OPFS/pack adapter for the Ren'Py converter, so it deals in paths and bytes
+ *  and knows nothing about how an install is stored. */
+function renpyIO(id: string): ConvertIO {
+  return {
+    list: async () => {
+      const pack = await packOf(id);
+      if (pack) return [...pack.map.values()].map((e) => ({ path: e.name, size: e.uncompSize }));
+      return (await readAllGameFiles(id)).map((f) => ({ path: f.path, size: f.bytes.length }));
+    },
+    read: async (path) => {
+      const f = await readGameFile(id, path);
+      return f ? new Uint8Array(await f.arrayBuffer()) : null;
+    },
+    write: async (path, bytes) => {
+      const { dir, name } = await ensurePath(await gameDir(id, true), path);
+      const fh = await dir.getFileHandle(name, { create: true });
+      const w = await fh.createWritable();
+      await w.write(new Blob([bytes as BlobPart]));
+      await w.close();
+    },
+  };
+}
+
+/** Caveats recorded by the Ren'Py conversion (memory pressure, engine version
+ *  substitution) — shown before the game starts, since that is when they can
+ *  still change what the player decides to do. */
+export async function renpyNotes(id: string): Promise<string[]> {
+  try {
+    const f = await readGameFile(id, ".renpynotes");
+    return f ? (await f.text()).split("\n").filter(Boolean) : [];
+  } catch { return []; }
 }
 
 async function writeMarker(dir: FileSystemDirectoryHandle, name: string, text: string): Promise<void> {

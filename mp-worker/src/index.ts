@@ -169,6 +169,40 @@ export default {
       return new Response(await r.text(), { status: r.status, headers: { "content-type": "text/plain; charset=utf-8", "Access-Control-Allow-Origin": "*" } });
     }
 
+    // Prebuilt Ren'Py web engine, proxied because renpy.org sends no CORS header.
+    //
+    // Deliberately NOT a URL passthrough: the client sends a version only, the
+    // target is built here from a strict pattern, and the host is a constant.
+    // A proxy that forwarded a client-supplied URL would be an open SSRF relay
+    // against anything this worker can reach.
+    if (url.pathname === "/renpy-web") {
+      if (request.method === "OPTIONS") return new Response(null, { headers: cors(origin, allowed) });
+      if (!originAllowed(origin, allowed)) return new Response("forbidden origin", { status: 403, headers: cors(origin, allowed) });
+      if (!(await allow(env.RL_READ, clientIp(request)))) return tooMany();
+      const v = url.searchParams.get("v") ?? "";
+      // 7.4+ only — earlier releases have no web package at all
+      if (!/^(7\.(?:[4-9]|[1-9]\d)\.\d{1,2}|[89]\.\d{1,2}\.\d{1,2})$/.test(v)) {
+        return new Response("bad version", { status: 400, headers: cors(origin, allowed) });
+      }
+      const target = `https://www.renpy.org/dl/${v}/renpy-${v}-web.zip`;
+      // One engine serves every game on that version, so cache it at the edge
+      // rather than pulling it from renpy.org per import (4.4MB on 7.x, ~12MB on 8.x).
+      const cache = caches.default;
+      const key = new Request(target, { method: "GET" });
+      let hit = await cache.match(key);
+      if (!hit) {
+        const up = await fetch(target, { cf: { cacheEverything: true, cacheTtl: 86400 } });
+        if (!up.ok) return new Response(`engine ${v} unavailable`, { status: up.status === 404 ? 404 : 502, headers: cors(origin, allowed) });
+        hit = new Response(up.body, up);
+        hit.headers.set("Cache-Control", "public, max-age=86400");
+        await cache.put(key, hit.clone());
+      }
+      const out = new Response(hit.body, hit);
+      for (const [k, val] of Object.entries(cors(origin, allowed))) out.headers.set(k, val);
+      out.headers.set("Content-Type", "application/zip");
+      return out;
+    }
+
     if (url.pathname === "/") return new Response("abhishekstation-mp: ok", { status: 200 });
     return new Response("not found", { status: 404 });
   },

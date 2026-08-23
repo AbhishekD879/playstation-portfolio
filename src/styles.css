@@ -5229,3 +5229,12 @@ body.party-col .share-btn { right: calc(var(--pty-w) + clamp(12px, 2vw, 22px)); 
 .wd-speed { font-size: 44px; font-weight: 700; letter-spacing: 0.02em; line-height: 1; font-variant-numeric: tabular-nums; }
 .wd-speed i { font-style: normal; font-size: 15px; font-weight: 400; opacity: 0.75; margin-left: 4px; }
 .wd-place { font-size: 13px; opacity: 0.8; border-top: 1px solid rgba(255,255,255,0.25); padding-top: 5px; margin-top: 6px; }
+
+/* Caveats from a converted Ren'Py desktop build — shown above the player so the
+   memory warnings land before a heavy game is started, not after it dies. */
+.rpg-renpy-notes { position: absolute; z-index: 6; left: 50%; transform: translateX(-50%); top: 56px;
+  max-width: min(680px, 92vw); font-size: 12px; line-height: 1.5; color: var(--dim);
+  background: color-mix(in oklab, #e8c46a 9%, rgba(0,0,0,0.72)); border: 1px solid color-mix(in oklab, #e8c46a 28%, transparent);
+  border-radius: 10px; padding: 9px 13px; backdrop-filter: blur(8px); pointer-events: none; }
+.rpg-renpy-notes b { color: #eef3ff; }
+.rpg-renpy-notes ul { margin: 5px 0 0; padding-left: 17px; display: flex; flex-direction: column; gap: 3px; }

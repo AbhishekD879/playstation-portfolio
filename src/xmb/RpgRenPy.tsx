@@ -1,21 +1,36 @@
-// Ren'Py host (experimental) — plays a Ren'Py WEB build (exported from the
-// Ren'Py launcher's "Web" build). It's self-contained HTML5 + CPython/SDL WASM
-// with all-relative paths, so RpgPlayer just points a sandboxed iframe at it,
-// served from OPFS by the /rpgm/renpy/ service-worker route. Desktop Ren'Py
-// builds can't run in a browser (see rpgm.ts detect) and never reach here.
+// Ren'Py host (experimental) — plays a Ren'Py WEB build: self-contained HTML5 +
+// CPython/SDL WASM with all-relative paths, so RpgPlayer just points a sandboxed
+// iframe at it, served from OPFS by the /rpgm/renpy/ service-worker route.
+//
+// Two kinds of game arrive here. One was exported for the web by its author. The
+// other was a desktop build that the importer converted, by pairing its game/
+// tree with the official WebAssembly engine for its Ren'Py version (see
+// src/renpyConvert.ts). A converted build can carry caveats the player should
+// read before starting — chiefly that .rpa archives and video have to live in
+// memory — so they are surfaced here rather than buried in a log.
+import { createResource, Show } from "solid-js";
 import type { NavAction } from "../input";
-import type { RpgGame } from "../rpgm";
+import { renpyNotes, type RpgGame } from "../rpgm";
 import RpgPlayer from "./RpgPlayer";
 
 export default function RpgRenPy(props: { game: RpgGame; onClose: () => void; bind: (nav: (a: NavAction) => void) => void }) {
+  const [notes] = createResource(() => props.game.id, renpyNotes);
   return (
-    <RpgPlayer
-      game={props.game}
-      src={`/rpgm/renpy/${props.game.id}/${props.game.entry || "index.html"}`}
-      sublabel="Ren'Py · experimental"
-      bootNote="first run downloads the ~35 MB Ren'Py engine"
-      onClose={props.onClose}
-      bind={props.bind}
-    />
+    <>
+      <Show when={(notes() ?? []).length > 0}>
+        <div class="rpg-renpy-notes">
+          <b>Converted from a desktop build.</b>
+          <ul>{(notes() ?? []).map((n) => <li>{n}</li>)}</ul>
+        </div>
+      </Show>
+      <RpgPlayer
+        game={props.game}
+        src={`/rpgm/renpy/${props.game.id}/${props.game.entry || "index.html"}`}
+        sublabel="Ren'Py · experimental"
+        bootNote="first run unpacks the Ren'Py engine"
+        onClose={props.onClose}
+        bind={props.bind}
+      />
+    </>
   );
 }
