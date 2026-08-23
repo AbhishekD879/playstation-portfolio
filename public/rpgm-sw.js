@@ -178,7 +178,7 @@ const NW_SHIM = `<script>(function(){
 // audio buffers, fonts and the effekseer wasm, which are the things that stall.
 // Bump whenever a shim changes — a log that cannot name its own version wastes
 // a capture, which is exactly what happened once.
-const SHIM_V = "20";
+const SHIM_V = "21";
 const DIAG_SHIM = `<script>(function(){
   var T0=Date.now(), seq=0, pending={}, recent=[], errors=[], counts={ok:0,fail:0}, activity=[], xfer=[];
   // MOVEMENT channel — map transfers (doors/stairs) + event triggers get their
@@ -650,9 +650,11 @@ const DIAG_SHIM = `<script>(function(){
           "canvas "+c.width+"x"+c.height+(c===gc?" [ENGINE — what you see]":" [other #"+i+"]"), true));
       });
     }catch(e){}
-    vids.slice(0,3).forEach(function(v){
-      try{ if(v.videoWidth) frames.push(shot(v, v.videoWidth, v.videoHeight,
-        "video "+((v.currentSrc||v.src||"").split("/").pop()))); }catch(e){}
+    var live=vids.filter(function(v){ return v.videoWidth; }).slice(0,6);
+    live.forEach(function(v){
+      try{ frames.push(shot(v, v.videoWidth, v.videoHeight,
+        "video "+((v.currentSrc||v.src||"").split("/").pop())
+        +(v.paused?" PAUSED":" playing"))); }catch(e){}
     });
     post();
   }
@@ -800,7 +802,7 @@ const DIAG_SHIM = `<script>(function(){
     var GR=window.Graphics;
     if(GR && !GR.__diagCap && typeof GR.render==="function"){ GR.__diagCap=1;
       var grf=GR.render; GR.render=function(){ var out=grf.apply(this,arguments);
-        if((++vkTick % 20)===0) keyVideoSprites();
+        keyVideoSprites();   // every frame: a 20-frame gap showed as black
         if(wantFrame){ wantFrame=false; try{ grabAll(); }catch(e){} }
         return out; }; }
     if(GI && GI.prototype && !GI.prototype.__diag){ GI.prototype.__diag=1;
