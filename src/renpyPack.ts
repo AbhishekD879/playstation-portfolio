@@ -59,7 +59,7 @@ export const INLINE_MAX = 4 * 1024;
 
 export type Placement =
   | { where: "zip" }
-  | { where: "remote"; rtype: "image" | "music" | "voice" | "other" };
+  | { where: "remote"; rtype: "image" | "music" | "voice" | "video" };
 
 /** Decide whether a game/ file travels inside game.zip or is fetched on demand.
  *  `rel` is relative to game/. */
@@ -74,8 +74,11 @@ export function placeFile(rel: string, size: number): Placement {
     const l = rel.toLowerCase();
     return { where: "remote", rtype: /(^|\/)(voice|voices|vo)\//.test(l) ? "voice" : "music" };
   }
-  if (VIDEO_EXT.has(ext)) return { where: "remote", rtype: "other" };
-  return { where: "remote", rtype: "other" };
+  if (VIDEO_EXT.has(ext)) return { where: "remote", rtype: "video" };
+  // Nothing else goes remote. An unrecognised rtype falls through Ren'Py's audio
+  // path to a silence placeholder in renpy/common, so anything not clearly an
+  // image, sound or video is safer inlined than guessed at.
+  return { where: "zip" };
 }
 
 export interface RemoteEntry { rel: string; rtype: string; size: number; w?: number; h?: number }

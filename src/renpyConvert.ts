@@ -131,6 +131,17 @@ except Exception:
 execfile("_asp_bootstrap.py")
 `;
 
+// im.py, on DownloadNeeded, does open(os.path.join("_placeholders", relpath))
+// and then transform_scale()s the result to the size carried in the manifest. So
+// every remote image needs a real file there — a missing one is a hard IOError
+// mid-render, which is what stopped the splash screen:
+//   IOError: [Errno 44] No such file or directory:
+//     '_placeholders/images/gui/splash_xred.png'
+// Because the size is forced, the content can be one 1x1 transparent PNG reused
+// for every entry: 68 bytes each, and stored, so the cost is mostly zip overhead.
+const PLACEHOLDER_PNG_B64 =
+  "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAAC0lEQVR4nGNgAAIAAAUAAXpeqz8AAAAASUVORK5CYII=";
+
 export interface ConvertIO {
   /** Every file in the install, with its uncompressed size. */
   list: () => Promise<{ path: string; size: number }[]>;
@@ -434,6 +445,20 @@ export async function convertRenpyDesktop(
       await drain();
     }
   }
+
+  // Placeholders for every remote image, or the first one to render throws.
+  const phBytes = Uint8Array.from(atob(PLACEHOLDER_PNG_B64), (c) => c.charCodeAt(0));
+  let placeholders = 0;
+  for (const r of remote) {
+    if (r.rtype !== "image") continue;         // music/voice retry, video is a URL
+    const entry = new ZipPassThrough(`_placeholders/${r.rel}`);
+    zip.add(entry);
+    entry.push(phBytes, true);
+    placeholders++;
+    if ((placeholders & 255) === 0) await drain();
+  }
+  await drain();
+  trace("convert: placeholders written", { images: placeholders });
 
   const manifest = buildRemoteManifest(remote);
   if (manifest) {

@@ -38,7 +38,13 @@ assert.deepEqual(placeFile("audio/theme.ogg", big), { where: "remote", rtype: "m
 // distinction is real memory, not cosmetic
 assert.deepEqual(placeFile("voice/ch1/line1.ogg", big), { where: "remote", rtype: "voice" });
 assert.deepEqual(placeFile("audio/voices/x.opus", big), { where: "remote", rtype: "voice" });
-assert.deepEqual(placeFile("movies/op.webm", big), { where: "remote", rtype: "other" });
+// video is its own rtype: renpy/audio/audio.py returns a URL for it, so the
+// browser fetches it directly and no placeholder is involved
+assert.deepEqual(placeFile("movies/op.webm", big), { where: "remote", rtype: "video" });
+// an unrecognised rtype falls through Ren'Py's audio path to a silence
+// placeholder in renpy/common, so unknown types are inlined rather than guessed
+assert.deepEqual(placeFile("data/blob.bin", big), { where: "zip" },
+  "an unknown large file must not become a remote entry with no placeholder");
 
 // —— manifest format ——————————————————————————————————————————————————————
 const man = buildRemoteManifest([
@@ -98,6 +104,7 @@ assert.equal(modest.localBytes, 8 * MB, "a remote image costs no resident memory
 assert.deepEqual(modest.localByExt, [{ ext: "rpyc", mb: 8 }]);
 assert.deepEqual(modest.localByDir, [{ dir: "(root)", mb: 8 }]);
 assert.equal(modest.videoBytes, 300 * MB);
+assert.equal(modest.remoteFiles, 2, "image and video are remote, the script is not");
 assert.equal(budgetRefusal(modest), null, "8 MB resident is fine");
 
 // an .rpa is one blob, so it cannot be fetched per file and must stay resident
