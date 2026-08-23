@@ -5241,3 +5241,5 @@ body.party-col .share-btn { right: calc(var(--pty-w) + clamp(12px, 2vw, 22px)); 
 .rpg-renpy-why { margin-top: 9px; padding: 8px 11px; border-radius: 8px; font-size: 12px; line-height: 1.5;
   color: color-mix(in oklab, var(--dim) 74%, #e8c46a); background: color-mix(in oklab, #e8c46a 8%, transparent);
   border: 1px solid color-mix(in oklab, #e8c46a 26%, transparent); text-align: left; }
+.rpgplay-eng { display: block; margin-top: 7px; font-size: 11px; color: color-mix(in oklab, var(--dim) 80%, transparent); }
+.rpgplay-eng code { font-family: ui-monospace, monospace; background: rgba(255,255,255,0.08); padding: 1px 5px; border-radius: 5px; }

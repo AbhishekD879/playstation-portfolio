@@ -206,7 +206,11 @@ export default function RpgMaker(props: { profile: { id: string }; family: Famil
                       <div class="rpg-renpy-why">{(why() ?? []).map((n) => <div>{n}</div>)}</div>
                     </Show>
                   </>
-                : <>{ENGINE_LABEL[g.engine]} isn't supported yet.</>}<br />
+                : <>{ENGINE_LABEL[g.engine] ?? g.engine} isn't supported yet.</>}<br />
+              <span class="rpgplay-eng">engine: <code>{g.engine}</code>{g.root ? <> · root <code>{g.root}</code></> : null}{g.entry ? <> · entry <code>{g.entry}</code></> : null}</span>
+              <Show when={!isRenpyDesktop && (why() ?? []).length > 0}>
+                <div class="rpg-renpy-why">{(why() ?? []).map((n) => <div>{n}</div>)}</div>
+              </Show>
               <span class="rpgplay-dim">
                 {isRenpyDesktop
                   ? "Ren'Py's engine ships as platform-native code and its scripts are locked to one engine version, so no single in-browser runtime can play arbitrary desktop games. Open the game in the Ren'Py launcher and Build → Web, then import that zip — web builds play here."
