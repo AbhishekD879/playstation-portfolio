@@ -46,6 +46,9 @@ export type DiagSnap = {
   /** The game's own record of every picture it asked to show, paired with the
    *  bitmap that actually arrived. */
   pics?: string;
+  /** Whether this browser honours the WebM alpha channel, and how many video
+   *  sprites needed the black keyed back out. */
+  vkey?: string;
   /** direct video-to-texture upload vs the same frame via a 2D canvas — tests
    *  the proposed fix on the real device before it is written */
   gl?: string;
@@ -116,6 +119,7 @@ export default function DiagOverlay(props: {
     if (d.selftest) L.push("", "-- SELF-TEST (probe suite, no gameplay) --", `  ${d.selftest}`);
     if (d.stage) L.push("", "-- STAGE (what PIXI is actually drawing) --", `  ${d.stage}`);
     if (d.pics) L.push("", "-- PICTURES (asked for vs what arrived) --", `  ${d.pics}`);
+    if (d.vkey) L.push(`video alpha: ${d.vkey}`);
     const inp = inputs();
     if (inp.length) {
       L.push("", "-- INPUT (parent) --");

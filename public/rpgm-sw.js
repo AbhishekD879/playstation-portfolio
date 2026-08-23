@@ -178,7 +178,7 @@ const NW_SHIM = `<script>(function(){
 // audio buffers, fonts and the effekseer wasm, which are the things that stall.
 // Bump whenever a shim changes — a log that cannot name its own version wastes
 // a capture, which is exactly what happened once.
-const SHIM_V = "19";
+const SHIM_V = "20";
 const DIAG_SHIM = `<script>(function(){
   var T0=Date.now(), seq=0, pending={}, recent=[], errors=[], counts={ok:0,fail:0}, activity=[], xfer=[];
   // MOVEMENT channel — map transfers (doors/stairs) + event triggers get their
@@ -217,6 +217,7 @@ const DIAG_SHIM = `<script>(function(){
       booted:!!(canvas&&!spinner&&(scene?scene!=="Scene_Boot":true)), canvas:canvas,
       pending:pend.slice(0,12), recent:recent.slice(0,20), counts:counts, errors:errors.slice(0,10), activity:activity.slice(0,400), xfer:xfer.slice(0,60), manifest:manifest,
       probe:(probe||(probed?"":"no VAnim global — defined inside a plugin closure")), codecs:codecs, shimV:"${SHIM_V}", vids:vidState(), frames:frames, gl:glCompare(), canv:canvasInfo(), glLoad:glLoad(), pixi:pixiInfo(), stage:stageDump(), pics:pictureDump(),
+      vkey:"alpha["+vkWhy+"] keyed="+vkApplied,
       selftest:stOut ? stOut+(stRun?" · STILL RUNNING":" · complete") : ""}; }
   // One-shot source probe for globals whose art never loads. Captured lazily
   // because a plugin defining them may not have run at startup.
@@ -380,6 +381,64 @@ const DIAG_SHIM = `<script>(function(){
    *  So the fault is in how the sprites are placed, not in the pixels. Walk the
    *  live stage and report every node's transform, alpha and texture, which
    *  makes a wrong scale, offset, clip or alpha visible as numbers. */
+  /** iOS Safari decodes VP8/VP9 but ignores the WebM alpha channel, so a
+   *  transparent character video arrives as an opaque black rectangle. Measured,
+   *  not assumed: the frame capture pre-fills grey and the videos still read
+   *  mean=18 black=73%, and the stage holds three full-canvas video sprites
+   *  stacked over the map — which is the black screen.
+   *
+   *  Never guess the platform. Draw the video's top-left corner over magenta and
+   *  look: magenta surviving means real transparency, black means the alpha was
+   *  dropped. Only key the black out when it was actually dropped, so a browser
+   *  with working alpha is left alone. */
+  var vkAlpha=null, vkWhy="not probed", vkFilter=null, vkApplied=0, vkTick=0;
+  function alphaWorks(v){
+    if(vkAlpha!==null) return vkAlpha;
+    try{
+      if(!v.videoWidth) return null;
+      var c=document.createElement("canvas"); c.width=8; c.height=8;
+      var g=c.getContext("2d"); if(!g) return null;
+      g.fillStyle="#ff00ff"; g.fillRect(0,0,8,8);
+      g.drawImage(v, 0,0,8,8, 0,0,8,8);          // native-scale corner, not a downscale
+      var d=g.getImageData(0,0,1,1).data;
+      vkAlpha=(d[0]>200 && d[2]>200 && d[1]<80);  // magenta survived
+      vkWhy="corner rgb("+d[0]+","+d[1]+","+d[2]+") -> "+(vkAlpha?"alpha OK":"ALPHA DROPPED");
+      return vkAlpha;
+    }catch(e){ vkWhy="probe threw: "+(e&&e.message); return null; }
+  }
+  function videoKeyFilter(){
+    if(vkFilter) return vkFilter;
+    var P=window.PIXI; if(!P || !P.Filter) return null;
+    var NL=String.fromCharCode(10);
+    var frag=[
+      "varying vec2 vTextureCoord;",
+      "uniform sampler2D uSampler;",
+      "void main(void){",
+      "  vec4 c = texture2D(uSampler, vTextureCoord);",
+      "  float l = max(max(c.r, c.g), c.b);",
+      "  float a = smoothstep(0.02, 0.14, l);",
+      "  gl_FragColor = vec4(c.rgb * a, a);",     // PIXI 4 wants premultiplied
+      "}"].join(NL);
+    try{ vkFilter=new P.Filter(null, frag); }catch(e){ vkFilter=null; vkWhy+=" · filter failed: "+(e&&e.message); }
+    return vkFilter;
+  }
+  function keyVideoSprites(){
+    try{
+      var root=window.SceneManager && SceneManager._scene; if(!root) return;
+      (function walk(node){
+        if(!node) return;
+        var t=node.texture, src=t && t.baseTexture && t.baseTexture.source;
+        if(src && src.videoWidth!==undefined && !node.__vkeyed){
+          if(alphaWorks(src)===false){
+            var f=videoKeyFilter();
+            if(f){ node.filters=(node.filters||[]).concat([f]); node.__vkeyed=true; vkApplied++; }
+          }
+        }
+        var k=node.children||[];
+        for(var i=0;i<k.length;i++) walk(k[i]);
+      })(root);
+    }catch(e){}
+  }
   function stageDump(){
     try{
       var SM=window.SceneManager, root=SM && SM._scene;
@@ -741,6 +800,7 @@ const DIAG_SHIM = `<script>(function(){
     var GR=window.Graphics;
     if(GR && !GR.__diagCap && typeof GR.render==="function"){ GR.__diagCap=1;
       var grf=GR.render; GR.render=function(){ var out=grf.apply(this,arguments);
+        if((++vkTick % 20)===0) keyVideoSprites();
         if(wantFrame){ wantFrame=false; try{ grabAll(); }catch(e){} }
         return out; }; }
     if(GI && GI.prototype && !GI.prototype.__diag){ GI.prototype.__diag=1;
