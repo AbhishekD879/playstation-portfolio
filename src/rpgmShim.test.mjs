@@ -40,4 +40,34 @@ assert.ok(movies, "the movies/ regex lost its escaped slash");
 assert.ok(diag.includes("selftest"), "the self-test result must reach the snapshot");
 assert.ok(/addEventListener\("pause"/.test(diag), "the pause listener is the fix under test");
 
+
+// fixStrayEscapes carries a real rule (drop an UNPAIRED trailing backslash, keep
+// an even run) and it rewrites player-visible dialogue, so it gets a check.
+// Extracted from the emitted shim rather than duplicated, so the test exercises
+// what the device actually runs.
+const fnSrc = diag.match(/function fixStrayEscapes\(t\)\{[\s\S]*?\n  \}/);
+assert.ok(fnSrc, "fixStrayEscapes not found in the emitted shim");
+// ecFixed is the shim's diagnostic counter; supply it so the extracted
+// function runs unmodified rather than being edited to suit the test.
+const fixStrayEscapes = new Function("var ecFixed=0;" + fnSrc[0] + "; return fixStrayEscapes;")();
+
+const BS = String.fromCharCode(92), NL = "\n";
+for (const [name, input, want] of [
+  // the exact shape measured on device: a lone backslash ending the line, which
+  // the word-wrap plugin would otherwise glue onto the next line's \c[0]
+  ["drops a lone trailing backslash", `[a]${BS}${NL}<W>${BS}c[0]hi`, `[a]${NL}<W>${BS}c[0]hi`],
+  // the sibling line in the same capture, which already worked
+  ["leaves a clean line alone", `[a]${NL}<W>${BS}c[0]hi`, `[a]${NL}<W>${BS}c[0]hi`],
+  // an even run is a deliberate escaped backslash
+  ["keeps an escaped pair", `[a]${BS}${BS}${NL}x`, `[a]${BS}${BS}${NL}x`],
+  ["keeps three, drops one", `[a]${BS}${BS}${BS}${NL}x`, `[a]${BS}${BS}${NL}x`],
+  // only end-of-line backslashes are suspect
+  ["never touches mid-line codes", `a${BS}c[0]b`, `a${BS}c[0]b`],
+  ["handles trailing spaces", `[a]${BS}  ${NL}x`, `[a]  ${NL}x`],
+  ["end of string counts as end of line", `[a]${BS}`, "[a]"],
+]) {
+  assert.equal(fixStrayEscapes(input), want, name);
+}
+console.log("fixStrayEscapes ok · 7 cases");
+
 console.log(`rpgm shim ok · SHIM_V ${SHIM_V} · diag ${diag.length}b · nw ${nw.length}b`);

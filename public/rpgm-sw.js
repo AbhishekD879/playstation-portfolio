@@ -178,7 +178,7 @@ const NW_SHIM = `<script>(function(){
 // audio buffers, fonts and the effekseer wasm, which are the things that stall.
 // Bump whenever a shim changes — a log that cannot name its own version wastes
 // a capture, which is exactly what happened once.
-const SHIM_V = "24";
+const SHIM_V = "25";
 const DIAG_SHIM = `<script>(function(){
   var T0=Date.now(), seq=0, pending={}, recent=[], errors=[], counts={ok:0,fail:0}, activity=[], xfer=[];
   // MOVEMENT channel — map transfers (doors/stairs) + event triggers get their
@@ -218,7 +218,7 @@ const DIAG_SHIM = `<script>(function(){
       pending:pend.slice(0,12), recent:recent.slice(0,20), counts:counts, errors:errors.slice(0,10), activity:activity.slice(0,400), xfer:xfer.slice(0,60), manifest:manifest,
       probe:(probe||(probed?"":"no VAnim global — defined inside a plugin closure")), codecs:codecs, shimV:"${SHIM_V}", vids:vidState(), frames:frames, gl:glCompare(), canv:canvasInfo(), glLoad:glLoad(), pixi:pixiInfo(), stage:stageDump(), pics:pictureDump(),
       esc:ecHits.length?ecHits.join(" ;; "):(ecHooked?"drawText hooked, no raw escape code seen":"drawText not hooked"),
-      conv:(ecConvHooked?("codes["+(Object.keys(ecCodes).map(function(k){ return k+"x"+ecCodes[k]; }).join(",")||"NONE CALLED")+"] "
+      conv:(ecConvHooked?("fixed="+ecFixed+" codes["+(Object.keys(ecCodes).map(function(k){ return k+"x"+ecCodes[k]; }).join(",")||"NONE CALLED")+"] "
         +(ecConv.length?ecConv.join(" ;; "):"no backslash reached convertEscapeCharacters")):"convertEscapeCharacters not hooked"),
       vkey:"alpha["+vkWhy+"] keyed="+vkApplied+" overlays="+vkOverlays+" lit["+vkFracs.join(" ")+"]",
       selftest:stOut ? stOut+(stRun?" · STILL RUNNING":" · complete") : ""}; }
@@ -476,7 +476,31 @@ const DIAG_SHIM = `<script>(function(){
       })(root);
     }catch(e){}
   }
-  var ecConv=[], ecCodes={}, ecConvHooked=false;
+  var ecConv=[], ecCodes={}, ecConvHooked=false, ecFixed=0;
+  /** A lone backslash at end of line means nothing in MV, but the word-wrap
+   *  plugin strips the newline and the <WordWrap> tag that follow it, which
+   *  glues that stray backslash onto the next line's \c[n]. MV's own rule then
+   *  reads the resulting pair as an escaped literal backslash and prints
+   *  "\c[0]" as visible text. Measured, both halves in one capture:
+   *    works:  "...]\n<WordWrap>\c[0](There's..."  -> "...]\x1bc[0](There's..."
+   *    breaks: "...]\\n<WordWrap>\c[0](No way!?)" -> "...]\\c[0](No way!?)"
+   *  Drop only an unpaired trailing backslash — an even run is a legitimate
+   *  escaped backslash and must survive. */
+  function fixStrayEscapes(t){
+    var BS=String.fromCharCode(92), NL=String.fromCharCode(10);
+    if(t.indexOf(BS)<0) return t;
+    var out="", i=0;
+    while(i<t.length){
+      if(t.charAt(i)!==BS){ out+=t.charAt(i); i++; continue; }
+      var j=i; while(j<t.length && t.charAt(j)===BS) j++;
+      var run=j-i, k=j;
+      while(k<t.length && (t.charAt(k)===" " || t.charAt(k)==="\t")) k++;
+      if((k>=t.length || t.charAt(k)===NL) && (run%2)===1){ run--; ecFixed++; }
+      for(var n=0;n<run;n++) out+=BS;
+      i=j;
+    }
+    return out;
+  }
   function hookConvert(){
     try{
       var W=window.Window_Base;
@@ -485,9 +509,9 @@ const DIAG_SHIM = `<script>(function(){
       var BS=String.fromCharCode(92);
       var oc=W.prototype.convertEscapeCharacters;
       W.prototype.convertEscapeCharacters=function(text){
-        var out=oc.apply(this, arguments);
+        var inp=String(text==null?"":text);
+        var out=oc.call(this, fixStrayEscapes(inp));
         try{
-          var inp=String(text==null?"":text);
           if(ecConv.length<5 && inp.indexOf(BS)>=0){
             ecConv.push("in="+JSON.stringify(inp.slice(0,90))
               +" out="+JSON.stringify(String(out).slice(0,90)));
