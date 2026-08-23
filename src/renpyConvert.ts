@@ -17,8 +17,8 @@ import { Zip, ZipPassThrough, unzipSync } from "fflate";
 import { trace } from "./importTrace";
 import { decodeRpaIndex, parseRpaHeader, type RpaEntry } from "./rpaIndex";
 import {
-  archiveKey, budgetRefusal, buildRemoteManifest, findGameRoot, imageSize, parseRenpyVersion,
-  placeFile, planSplit, toBase64, webZipCandidates, type RemoteEntry,
+  archiveKey, budgetRefusal, buildRemoteManifest, findGameRoot, imageSize, isEngineTreeFile,
+  parseRenpyVersion, placeFile, planSplit, toBase64, webZipCandidates, type RemoteEntry,
 } from "./renpyPack";
 
 const PROXY = "https://abhishekstation-mp.abhishekdiwate879.workers.dev/renpy-web";
@@ -130,6 +130,26 @@ export async function convertRenpyDesktop(
   const gameFiles = all.filter((f) => f.path.startsWith(gamePrefix) && !f.path.endsWith("/"));
   if (!gameFiles.length) throw new Error("The game/ folder is empty.");
 
+  // Ren'Py's own Python tree and its common scripts, which the prebuilt engine
+  // does NOT contain, plus the bootstrap the wasm runs as main.py. All are
+  // needed by Python's import machinery before anything renders, so all are
+  // local by definition — none of this can be fetched on demand.
+  const engineTree = all.filter((f) => !f.path.endsWith("/")
+    && isEngineTreeFile(f.path.startsWith(root) ? f.path.slice(root.length) : f.path));
+  // The desktop bootstrap is renpy.py renamed after the game; it is the only
+  // top-level .py beside game/ and renpy/.
+  const bootstrap = all.find((f) => {
+    const rel = f.path.startsWith(root) ? f.path.slice(root.length) : f.path;
+    return /^[^/]+\.py$/.test(rel);
+  });
+  const engineTreeBytes = engineTree.reduce((n, f) => n + f.size, 0) + (bootstrap?.size ?? 0);
+  trace("convert: engine tree", { files: engineTree.length,
+    mb: Math.round(engineTreeBytes / 1048576), bootstrap: bootstrap ? bootstrap.path.slice(root.length) : "MISSING" });
+  if (!engineTree.length || !bootstrap) {
+    throw new Error("This build is missing Ren'Py's own renpy/ folder or its bootstrap .py, "
+      + "which the web engine doesn't ship and can't run without. Only a full desktop build converts.");
+  }
+
   // —— open the .rpa archives ————————————————————————————————————————————
   // Left whole, an .rpa forces its entire contents to be resident. But it is
   // just a container: a zlib-deflated pickled index at a known offset, and each
@@ -196,6 +216,9 @@ export async function convertRenpyDesktop(
     .map((f) => ({ rel: f.path.slice(gamePrefix.length), size: f.size }));
   for (const [rel, o] of rpaOwned) rels.push({ rel, size: o.entry.size });
   const plan = planSplit(rels);
+  // The engine tree is unconditionally resident, so it belongs in the budget.
+  plan.localBytes += engineTreeBytes;
+  plan.localFiles += engineTree.length + 1;
   trace("convert: plan", { localFiles: plan.localFiles, localMB: Math.round(plan.localBytes / 1048576),
     remoteFiles: plan.remoteFiles, rpaMB: Math.round(plan.rpaBytes / 1048576),
     videoMB: Math.round(plan.videoBytes / 1048576),
@@ -238,6 +261,13 @@ export async function convertRenpyDesktop(
       await drain();
     }
   };
+
+  // Bootstrap first: index.wasm runs /main.py, so its absence is fatal.
+  await addFile("main.py", bootstrap.path, bootstrap.size);
+  for (const f of engineTree) {
+    await addFile(f.path.startsWith(root) ? f.path.slice(root.length) : f.path, f.path, f.size);
+  }
+  trace("convert: engine tree packed", { files: engineTree.length + 1 });
 
   const remote: RemoteEntry[] = [];
   let done = 0, videoBytes = 0;

@@ -6,7 +6,7 @@ import assert from "node:assert/strict";
 globalThis.btoa ??= (b) => Buffer.from(b, "binary").toString("base64");
 import {
   parseRenpyVersion, webZipCandidates, placeFile, buildRemoteManifest, imageSize, INLINE_MAX,
-  planSplit, budgetRefusal, LOCAL_BUDGET, archiveKey, toBase64,
+  planSplit, budgetRefusal, LOCAL_BUDGET, archiveKey, toBase64, isEngineTreeFile,
 } from "./renpyPack.ts";
 
 // —— version ——————————————————————————————————————————————————————————————
@@ -150,5 +150,28 @@ assert.equal(archiveKey("x/", "other/game/a.rpa"), "other/game/a.rpa");
 const wide = new Uint8Array(200_000).fill(65);
 assert.equal(toBase64(wide).length, Math.ceil(wide.length / 3) * 4);
 assert.equal(toBase64(new Uint8Array([104, 105])), "aGk=");
+
+// —— the engine tree ————————————————————————————————————————————————————————
+// The prebuilt package ships the Cython half in index.wasm and the stdlib in
+// pyapp.data, and contains no /renpy* files at all. So Ren'Py's Python tree and
+// common scripts must travel in game.zip or the engine stops at
+// "fopen: No such file or directory" with nothing to run.
+for (const f of [
+  "renpy/__init__.py", "renpy/bootstrap.py", "renpy/common/00console.rpy",
+  "renpy/common/_compat/gamemenu.rpyc", "renpy/display/core.py", "renpy/common/DejaVuSans.ttf",
+]) assert.ok(isEngineTreeFile(f), `the engine needs ${f}`);
+
+// native modules and Cython sources are already compiled into the wasm, so
+// shipping them would only cost resident memory
+for (const f of [
+  "renpy/display/render.so", "renpy/uguu/gl.pyd", "renpy/text/textsupport.pyx",
+  "renpy/display/matrix.pxd", "renpy/gl2/gl2mesh.c", "renpy/audio/renpysound.h",
+]) assert.ok(!isEngineTreeFile(f), `must not ship ${f}`);
+
+// only the renpy/ tree — game files and the bootstrap are handled separately
+assert.equal(isEngineTreeFile("game/script.rpyc"), false);
+assert.equal(isEngineTreeFile("lib/py2-linux-x86_64/libpython.so"), false);
+assert.equal(isEngineTreeFile("LewdIsland.py"), false, "the bootstrap is added as main.py, not here");
+assert.equal(isEngineTreeFile("myrenpy/x.py"), false, "must be the renpy/ segment, not a prefix match");
 
 console.log("renpy pack ok · version, placement, manifest, 5 image formats, budget gate");

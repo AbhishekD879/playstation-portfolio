@@ -254,3 +254,24 @@ export function toBase64(bytes: Uint8Array): string {
   }
   return btoa(out);
 }
+
+// The prebuilt engine package ships the Cython half inside index.wasm and the
+// Python standard library in pyapp.data/pythonhome.data — and nothing else. It
+// contains no /renpy* files at all, verified by reading both data manifests. So
+// Ren'Py's pure-Python tree and its built-in common scripts have to travel in
+// game.zip, alongside main.py, which index.wasm runs from the filesystem root.
+// Without them the engine extracts game.zip, finds no bootstrap, and stops with
+// "fopen: No such file or directory" — which is exactly what it did.
+const ENGINE_TREE_SKIP = new Set([
+  "so", "pyd", "dll", "dylib", "pyx", "pxd", "c", "h", "cpp", "cc", "a", "o", "lib", "exp",
+]);
+
+/** Is this a file from the desktop build's renpy/ tree that the web engine needs?
+ *  Native modules and Cython sources are excluded: the compiled equivalents are
+ *  already in the wasm, and shipping them only costs memory. */
+export function isEngineTreeFile(rel: string): boolean {
+  if (!rel.startsWith("renpy/")) return false;
+  const i = rel.lastIndexOf(".");
+  const ext = i < 0 ? "" : rel.slice(i + 1).toLowerCase();
+  return !ENGINE_TREE_SKIP.has(ext);
+}
