@@ -29,6 +29,7 @@ const FEATURE_GROUPS: FlagGroup[] = [
       { id: "portstate", title: "Portable Save Data", desc: "Export game saves & settings to a folder, or share your setup as a link — photos never leave this device" },
       { id: "privacylabel", title: "Privacy Nutrition Label", desc: "See every byte the console stores and every domain it talked to — plus a full wipe button" },
       { id: "renpyconvert", title: "Ren'Py Desktop Conversion (experimental)", desc: "Import a Ren'Py PC build and the console pairs its game files with the matching official WebAssembly engine — no re-export needed" },
+      { id: "engineerrors", title: "Engine Error Overlay", desc: "Let a game engine show its own error banner over the picture. Off by default — a single failed asset otherwise covers the whole game; errors are still recorded in the diagnostics either way" },
     ],
   },
   {
@@ -57,7 +58,7 @@ const FEATURE_GROUPS: FlagGroup[] = [
 ];
 
 /** Flags that ship OFF and are opted INTO via Labs (experimental tier). */
-const DEFAULT_OFF = new Set(["crt", "galaxyboot", "privacy", "cobrowse", "syscity", "renpyconvert"]); // opt-in: full-console CRT, GPU galaxy boot, hidden Privacy Toolkit, Watch Party shared browser (costs $ + needs API key), System City learning hub (in development)
+const DEFAULT_OFF = new Set(["crt", "galaxyboot", "privacy", "cobrowse", "syscity", "renpyconvert", "engineerrors"]); // opt-in: full-console CRT, GPU galaxy boot, hidden Privacy Toolkit, Watch Party shared browser (costs $ + needs API key), System City learning hub (in development)
 
 // —— apps (each id matches the XmbItem id it hides on the crossbar) ——
 const APPS: { id: string; title: string; cat: string }[] = [

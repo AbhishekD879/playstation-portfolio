@@ -10,6 +10,7 @@
 // memory — so they are surfaced here rather than buried in a log.
 import { createResource, Show } from "solid-js";
 import type { NavAction } from "../input";
+import { labEnabled } from "../labs";
 import { renpyNotes, type RpgGame } from "../rpgm";
 import RpgPlayer from "./RpgPlayer";
 
@@ -25,7 +26,10 @@ export default function RpgRenPy(props: { game: RpgGame; onClose: () => void; bi
       </Show>
       <RpgPlayer
         game={props.game}
-        src={`/rpgm/renpy/${props.game.id}/${props.game.entry || "index.html"}`}
+        // The engine's own error banner is suppressed unless asked for. Passed in
+        // the URL because the service worker injects the shim that acts on it and
+        // cannot read the app's settings itself.
+        src={`/rpgm/renpy/${props.game.id}/${props.game.entry || "index.html"}${labEnabled("engineerrors") ? "?engineErrors=1" : ""}`}
         sublabel="Ren'Py · experimental"
         bootNote="first run unpacks the Ren'Py engine"
         onClose={props.onClose}

@@ -178,7 +178,7 @@ const NW_SHIM = `<script>(function(){
 // audio buffers, fonts and the effekseer wasm, which are the things that stall.
 // Bump whenever a shim changes — a log that cannot name its own version wastes
 // a capture, which is exactly what happened once.
-const SHIM_V = "35";
+const SHIM_V = "36";
 const DIAG_SHIM = `<script>(function(){
   var T0=Date.now(), seq=0, pending={}, recent=[], errors=[], counts={ok:0,fail:0}, activity=[], xfer=[];
   // MOVEMENT channel — map transfers (doors/stairs) + event triggers get their
@@ -1297,6 +1297,31 @@ const RENPY_SHIM = `<script>(function(){
       };
     }
   } catch(e){}
+  try {
+    if (!window.__aspEngineErrors) {
+      var looksBad = function(t){ return /error|exception|failed|sorry/i.test(t || ""); };
+      var quiet = function(){
+        var el = document.getElementById("status");
+        if (el && looksBad(el.textContent)) {
+          // keep the text: the diagnostics read the console, and losing the
+          // reason would be worse than showing it
+          try { console.warn("[engine status suppressed] " + el.textContent); } catch(e){}
+          el.textContent = "";
+          var bar = document.getElementById("statusbar_container") || el.parentNode;
+          if (bar && bar.style) bar.style.display = "none";
+        }
+      };
+      var start = function(){
+        quiet();
+        var el = document.getElementById("status");
+        if (el && window.MutationObserver) {
+          new MutationObserver(quiet).observe(el, { childList: true, characterData: true, subtree: true });
+        }
+      };
+      if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", start);
+      else start();
+    }
+  } catch(e){}
   // Ren'Py stops redrawing once it is idle — at a menu or an error screen — so a
   // capture that waits for the next frame gets a buffer that was already
   // discarded, which is why every screenshot read back fully transparent. Ask for
@@ -1653,7 +1678,9 @@ self.addEventListener("fetch", (e) => {
       // RPG Maker: hand the fs shim the real file list so existsSync is truthful.
       let manifest = "";
       if (isMvMz) { try { manifest = "<script>window.__rpgmFS=new Set(" + JSON.stringify(await manifestFor(gameId)) + ")</script>"; } catch { /* existsSync stays false */ } }
-      const shims = manifest + headShim + audioStub + DIAG_SHIM + MEDIA_SHIM + isolationShim(gameId);
+      const engineErrors = url.searchParams.get("engineErrors") === "1";
+      const errFlag = `<script>window.__aspEngineErrors=${engineErrors ? "true" : "false"}</` + `script>`;
+      const shims = errFlag + manifest + headShim + audioStub + DIAG_SHIM + MEDIA_SHIM + isolationShim(gameId);
       const html = /<head[^>]*>/i.test(raw)
         ? raw.replace(/<head[^>]*>/i, (m) => m + shims)
         : shims + raw;

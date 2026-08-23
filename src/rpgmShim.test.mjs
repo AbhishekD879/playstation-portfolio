@@ -82,4 +82,15 @@ assert.match(renpy, /attrs\.preserveDrawingBuffer === undefined/,
 assert.ok(!/preserveDrawingBuffer\s*=/.test(diag),
   "the shared probe must NOT force it: other engines would pay a per-frame copy");
 
+// The engine's own error banner covers the picture, so it is suppressed unless
+// the Labs flag asks for it — but the text must still reach the console, or the
+// diagnostics lose the reason along with the banner.
+assert.match(renpy, /window\.__aspEngineErrors/, "must be gated on the flag");
+assert.match(renpy, /console\.warn\("\[engine status suppressed\] "/,
+  "the reason must survive even when the banner does not");
+assert.match(renpy, /MutationObserver/, "the engine rewrites the status after we clear it");
+assert.match(src, /window\.__aspEngineErrors=\$\{engineErrors/,
+  "the worker must inject the flag it reads from the URL");
+assert.match(src, /searchParams\.get\("engineErrors"\)/);
+
 console.log(`rpgm shim ok · SHIM_V ${SHIM_V} · diag ${diag.length}b · nw ${nw.length}b`);
