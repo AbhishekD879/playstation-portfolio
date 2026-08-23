@@ -11,10 +11,10 @@
 // /rpgm/renpy/<id>/index.html while the game's own assets keep streaming out of
 // the pack at /rpgm/renpy/<id>/game/... — which is exactly what the remote-file
 // manifest needs, with no extra serving code.
-import { unzipSync, zipSync } from "fflate";
+import { Zip, ZipPassThrough, unzipSync } from "fflate";
 import {
-  buildRemoteManifest, findGameRoot, imageSize, parseRenpyVersion, placeFile, webZipCandidates,
-  type RemoteEntry,
+  budgetRefusal, buildRemoteManifest, findGameRoot, imageSize, parseRenpyVersion, placeFile,
+  planSplit, webZipCandidates, type RemoteEntry,
 } from "./renpyPack";
 
 const PROXY = "https://abhishekstation-mp.abhishekdiwate879.workers.dev/renpy-web";
@@ -41,7 +41,13 @@ export interface ConvertIO {
   /** Every file in the install, with its uncompressed size. */
   list: () => Promise<{ path: string; size: number }[]>;
   read: (path: string) => Promise<Uint8Array | null>;
+  /** Leading bytes only — an image's dimensions are in its header, and reading a
+   *  20MB PNG to learn them is what made this run out of memory on a phone. */
+  readHead: (path: string, n: number) => Promise<Uint8Array | null>;
+  readSlice: (path: string, start: number, end: number) => Promise<Uint8Array | null>;
   write: (path: string, bytes: Uint8Array) => Promise<void>;
+  /** Sequential sink, so game.zip is never held in memory in full. */
+  openWrite: (path: string) => Promise<{ write: (c: Uint8Array) => Promise<void>; close: () => Promise<void> }>;
 }
 
 export interface ConvertResult {
@@ -105,57 +111,95 @@ export async function convertRenpyDesktop(
   const gameFiles = all.filter((f) => f.path.startsWith(gamePrefix) && !f.path.endsWith("/"));
   if (!gameFiles.length) throw new Error("The game/ folder is empty.");
 
-  const zipEntries: Record<string, Uint8Array> = {};
+  // —— refuse the impossible before touching a single byte ————————————————
+  // Everything game.zip carries is extracted into emscripten's in-memory
+  // filesystem and never freed, so an oversized game does not import slowly, it
+  // kills the tab. Decide from the listing, where it costs nothing to be wrong.
+  const rels = gameFiles.map((f) => ({ rel: f.path.slice(gamePrefix.length), size: f.size }));
+  const plan = planSplit(rels);
+  const refusal = budgetRefusal(plan);
+  if (refusal) throw new Error(refusal);
+
+  // —— stream game.zip ——————————————————————————————————————————————————————
+  // One file at a time, in slices, with each chunk written straight out. Peak
+  // memory is one slice, not the whole archive — the previous version built the
+  // entire zip in RAM and then let zipSync copy it, which is twice the total.
+  say("sorting game files", 22);
+  const sink = await io.openWrite("game.zip");
+  let pending: Uint8Array[] = [];
+  let zipErr: Error | null = null;
+  const zip = new Zip((err, chunk, _final) => {
+    if (err) zipErr = err instanceof Error ? err : new Error(String(err));
+    if (chunk?.length) pending.push(chunk);
+  });
+  const drain = async () => {
+    if (zipErr) throw zipErr;
+    const out = pending;
+    pending = [];
+    for (const c of out) await sink.write(c);
+  };
+  // Store rather than deflate: the assets are already compressed, and this zip
+  // is unpacked and discarded seconds later, so CPU here only delays the boot.
+  const addFile = async (name: string, path: string, size: number) => {
+    const entry = new ZipPassThrough(name);
+    zip.add(entry);
+    const STEP = 4 * 1024 * 1024;
+    if (size === 0) { entry.push(new Uint8Array(0), true); await drain(); return; }
+    for (let off = 0; off < size; off += STEP) {
+      const end = Math.min(off + STEP, size);
+      const part = await io.readSlice(path, off, end);
+      if (!part) throw new Error(`Couldn't read ${name} out of the install.`);
+      entry.push(part, end >= size);
+      await drain();
+    }
+  };
+
   const remote: RemoteEntry[] = [];
-  let rpaBytes = 0, videoBytes = 0, done = 0;
+  let done = 0, videoBytes = 0;
 
   for (const f of gameFiles) {
     const rel = f.path.slice(gamePrefix.length);
     let place = placeFile(rel, f.size);
 
     if (place.where === "remote" && place.rtype === "image") {
-      // The engine draws a correctly-sized placeholder while the real image is
+      // The engine draws a placeholder at the real pixel size while the file is
       // in flight, so an image entry without true dimensions is worse than
-      // keeping the file local. Read the header only, never the whole file.
-      const head = await io.read(f.path);
-      const dim = head ? imageSize(head.subarray(0, Math.min(head.length, 65536))) : null;
+      // keeping it local. Header only — 64KB reaches every format's size field.
+      const head = await io.readHead(f.path, 65536);
+      const dim = head ? imageSize(head) : null;
       if (dim) remote.push({ rel, rtype: "image", size: f.size, w: dim.w, h: dim.h });
       else place = { where: "zip" };
     } else if (place.where === "remote") {
       remote.push({ rel, rtype: place.rtype, size: f.size });
+      if (/\.(webm|mp4|ogv|mkv|avi|mov)$/i.test(rel)) videoBytes += f.size;
     }
 
-    if (place.where === "zip") {
-      const bytes = await io.read(f.path);
-      if (bytes) {
-        zipEntries[`game/${rel}`] = bytes;
-        if (/\.rpa$/i.test(rel)) rpaBytes += bytes.length;
-      }
-    } else if (/\.(webm|mp4|ogv|mkv|avi|mov)$/i.test(rel)) {
-      videoBytes += f.size;
-    }
+    if (place.where === "zip") await addFile(`game/${rel}`, f.path, f.size);
 
-    if ((++done & 63) === 0) say("sorting game files", 20 + Math.round((done / gameFiles.length) * 55));
+    if ((++done & 31) === 0) say("packing game files", 22 + Math.round((done / gameFiles.length) * 60));
   }
 
   const manifest = buildRemoteManifest(remote);
-  if (manifest) zipEntries["game/renpyweb_remote_files.txt"] = new TextEncoder().encode(manifest);
+  if (manifest) {
+    const bytes = new TextEncoder().encode(manifest);
+    const entry = new ZipPassThrough("game/renpyweb_remote_files.txt");
+    zip.add(entry);
+    entry.push(bytes, true);
+    await drain();
+  }
 
-  // Everything in game.zip is extracted into emscripten's in-memory filesystem
-  // and stays there, so these two are the difference between running and dying.
-  if (rpaBytes > 64 * 1024 * 1024) {
-    notes.push(`${Math.round(rpaBytes / 1048576)} MB of .rpa archives must stay in memory — `
-      + "an .rpa is one blob and can't be fetched per file. This game may be too heavy for a phone.");
+  say("finishing game.zip", 92);
+  zip.end();
+  await drain();
+  await sink.close();
+
+  if (plan.rpaBytes > 0) {
+    notes.push(`${Math.round(plan.rpaBytes / 1048576)} MB of .rpa archives have to stay in memory — `
+      + "an .rpa is one blob and can't be fetched per file.");
   }
   if (videoBytes > 0) {
     notes.push(`${Math.round(videoBytes / 1048576)} MB of video is fetched on demand but not freed after playing.`);
   }
-
-  say("building game.zip", 82);
-  // Store, don't deflate: assets are already compressed and this zip is thrown
-  // away seconds later, so spending CPU on it only delays the boot.
-  const gameZip = zipSync(zipEntries, { level: 0 });
-  await io.write("game.zip", gameZip);
 
   say("ready", 100);
 
@@ -164,7 +208,7 @@ export async function convertRenpyDesktop(
   // loose and are found without it.
   return {
     version: used, entry: "index.html", root,
-    inZip: Object.keys(zipEntries).length, remote: remote.length,
-    zipBytes: gameZip.length, notes,
+    inZip: plan.localFiles, remote: remote.length,
+    zipBytes: plan.localBytes, notes,
   };
 }

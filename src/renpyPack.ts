@@ -148,3 +148,58 @@ export function findGameRoot(paths: string[]): string | null {
   }
   return best;
 }
+
+export interface SplitPlan {
+  localBytes: number;    // ends up inside game.zip, and so in memory at runtime
+  localFiles: number;
+  remoteFiles: number;
+  rpaBytes: number;
+  videoBytes: number;
+  biggestLocal: { rel: string; size: number } | null;
+}
+
+/** Budget for everything game.zip carries. The engine extracts it into
+ *  emscripten's in-memory filesystem and never frees it, so this is a hard
+ *  runtime ceiling, not a preference — and on a phone the tab is killed rather
+ *  than told. Checked from the file LISTING, before a single byte is read, so an
+ *  impossible game is refused with a message instead of crashing the import. */
+export const LOCAL_BUDGET = 96 * 1024 * 1024;
+
+/** What the split will look like, computed from sizes alone. Images are assumed
+ *  remote here; a few may fall back to local when their header can't be parsed,
+ *  which only ever moves the estimate down-ish, so the budget check stays sound
+ *  for the thing it guards against — archives and script bulk. */
+export function planSplit(files: { rel: string; size: number }[]): SplitPlan {
+  const plan: SplitPlan = {
+    localBytes: 0, localFiles: 0, remoteFiles: 0, rpaBytes: 0, videoBytes: 0, biggestLocal: null,
+  };
+  for (const f of files) {
+    const p = placeFile(f.rel, f.size);
+    if (p.where === "zip") {
+      plan.localBytes += f.size;
+      plan.localFiles++;
+      if (/\.rpa$/i.test(f.rel)) plan.rpaBytes += f.size;
+      if (!plan.biggestLocal || f.size > plan.biggestLocal.size) plan.biggestLocal = { rel: f.rel, size: f.size };
+    } else {
+      plan.remoteFiles++;
+      if (/\.(webm|mp4|ogv|mkv|avi|mov)$/i.test(f.rel)) plan.videoBytes += f.size;
+    }
+  }
+  return plan;
+}
+
+const mb = (n: number): string => `${Math.round(n / 1048576)} MB`;
+
+/** Why this game can't be converted, or null when it can. */
+export function budgetRefusal(plan: SplitPlan): string | null {
+  if (plan.localBytes <= LOCAL_BUDGET) return null;
+  if (plan.rpaBytes > LOCAL_BUDGET / 2) {
+    return `This build keeps ${mb(plan.rpaBytes)} of its assets in .rpa archives. `
+      + "An .rpa is a single blob, so it can't be fetched piece by piece — the web engine would have to "
+      + `hold all of it in memory at once, and the browser would kill the tab. Total that must stay resident: ${mb(plan.localBytes)}, `
+      + `and the safe limit is ${mb(LOCAL_BUDGET)}.`;
+  }
+  return `This build needs ${mb(plan.localBytes)} of scripts and data resident in memory `
+    + `(safe limit ${mb(LOCAL_BUDGET)}), which the browser won't survive. `
+    + (plan.biggestLocal ? `Largest single file: ${plan.biggestLocal.rel} at ${mb(plan.biggestLocal.size)}.` : "");
+}

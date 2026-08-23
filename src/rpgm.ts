@@ -574,8 +574,12 @@ async function doImport(
       det = { engine: "renpy", root: res.root, entry: res.entry };
       renpyNotes = res.notes;
     } catch (e) {
-      // Deliberately swallowed: the fallback is the pre-existing behaviour.
-      console.warn("[renpy] conversion skipped:", e instanceof Error ? e.message : e);
+      // Never fatal: the fallback is the pre-existing desktop-build behaviour.
+      // But say WHY on the game's own screen — a silent skip is indistinguishable
+      // from the import having failed outright.
+      const why = e instanceof Error ? e.message : String(e);
+      console.warn("[renpy] conversion skipped:", why);
+      renpyNotes = [`Conversion didn't run: ${why}`];
     }
   }
 
@@ -614,6 +618,25 @@ function renpyIO(id: string): ConvertIO {
     read: async (path) => {
       const f = await readGameFile(id, path);
       return f ? new Uint8Array(await f.arrayBuffer()) : null;
+    },
+    // Slice the Blob rather than reading it: only the requested range is
+    // materialised, which is what keeps a 20MB image from costing 20MB.
+    readHead: async (path, n) => {
+      const f = await readGameFile(id, path);
+      return f ? new Uint8Array(await f.slice(0, n).arrayBuffer()) : null;
+    },
+    readSlice: async (path, start, end) => {
+      const f = await readGameFile(id, path);
+      return f ? new Uint8Array(await f.slice(start, end).arrayBuffer()) : null;
+    },
+    openWrite: async (path) => {
+      const { dir, name } = await ensurePath(await gameDir(id, true), path);
+      const fh = await dir.getFileHandle(name, { create: true });
+      const w = await fh.createWritable();
+      return {
+        write: async (c) => { await w.write(c as BlobPart); },
+        close: async () => { await w.close(); },
+      };
     },
     write: async (path, bytes) => {
       const { dir, name } = await ensurePath(await gameDir(id, true), path);

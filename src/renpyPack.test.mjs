@@ -5,6 +5,7 @@
 import assert from "node:assert/strict";
 import {
   parseRenpyVersion, webZipCandidates, placeFile, buildRemoteManifest, imageSize, INLINE_MAX,
+  planSplit, budgetRefusal, LOCAL_BUDGET,
 } from "./renpyPack.ts";
 
 // —— version ——————————————————————————————————————————————————————————————
@@ -76,4 +77,39 @@ assert.deepEqual(imageSize(webp), { w: 400, h: 300 }, "WebP lossy");
 assert.equal(imageSize(new Uint8Array([1, 2, 3, 4])), null, "unknown format must not guess");
 assert.equal(imageSize(new Uint8Array(0)), null);
 
-console.log("renpy pack ok · version, placement, manifest, 5 image formats");
+// —— the budget gate ——————————————————————————————————————————————————————
+// Everything game.zip carries is extracted into emscripten's in-memory FS and
+// never freed, so this is what stands between a clear refusal and the tab being
+// killed mid-import. It must decide from sizes ALONE — before any file is read.
+const MB = 1048576;
+const modest = planSplit([
+  { rel: "script.rpyc", size: 8 * MB },
+  { rel: "images/bg.png", size: 40 * MB },
+  { rel: "movies/op.webm", size: 300 * MB },
+]);
+assert.equal(modest.localFiles, 1, "only the script is local");
+assert.equal(modest.localBytes, 8 * MB, "a remote image costs no resident memory");
+assert.equal(modest.videoBytes, 300 * MB);
+assert.equal(budgetRefusal(modest), null, "8 MB resident is fine");
+
+// an .rpa is one blob, so it cannot be fetched per file and must stay resident
+const archived = planSplit([{ rel: "archive.rpa", size: 700 * MB }]);
+assert.equal(archived.rpaBytes, 700 * MB);
+assert.equal(archived.localBytes, 700 * MB, ".rpa is forced local");
+const rpaWhy = budgetRefusal(archived);
+assert.ok(rpaWhy, "700 MB resident must be refused, not attempted");
+assert.match(rpaWhy, /\.rpa/, "the message must name the actual cause");
+assert.match(rpaWhy, /700 MB/, "and quote the real number");
+
+// script bulk without archives gets the other explanation
+const bulky = planSplit(Array.from({ length: 400 }, (_, i) => ({ rel: `s${i}.rpyc`, size: 1 * MB })));
+const bulkWhy = budgetRefusal(bulky);
+assert.ok(bulkWhy && !/\.rpa/.test(bulkWhy), "no archives, so do not blame archives");
+assert.match(bulkWhy, /Largest single file/);
+
+// right at the edge: at the limit is allowed, one byte over is not
+assert.equal(budgetRefusal(planSplit([{ rel: "a.rpyc", size: LOCAL_BUDGET }])), null);
+assert.ok(budgetRefusal(planSplit([{ rel: "a.rpyc", size: LOCAL_BUDGET + 1 }])));
+assert.equal(budgetRefusal(planSplit([])), null, "an empty plan is not a refusal");
+
+console.log("renpy pack ok · version, placement, manifest, 5 image formats, budget gate");

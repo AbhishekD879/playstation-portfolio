@@ -4,12 +4,12 @@
 // 2000/2003 via EasyRPG, XP/VX/Ace detected-only) and Ren'Py (web builds play,
 // desktop builds detected-only). Games live in OPFS, per profile, never
 // uploaded — same ethos as the emulator ROM shelf.
-import { For, Match, Show, Switch, createSignal, onMount } from "solid-js";
+import { For, Match, Show, Switch, createResource, createSignal, onMount } from "solid-js";
 import * as sfx from "../audio";
 import type { NavAction } from "../input";
 import { Icon } from "./icons";
 import {
-  ENGINE_LABEL, engineFamily, engineKind, estimateRuntimeMB, importRpgZip, listRpgGames, looksHeavy, reimportRpgZip, removeRpgGame,
+  ENGINE_LABEL, engineFamily, engineKind, estimateRuntimeMB, importRpgZip, listRpgGames, looksHeavy, reimportRpgZip, removeRpgGame, renpyNotes,
   type ImportProgress, type RpgGame,
 } from "../rpgm";
 import RpgHtml5 from "./RpgHtml5";
@@ -188,6 +188,9 @@ export default function RpgMaker(props: { profile: { id: string }; family: Famil
         //  · XP/VX/VX Ace (mkxp): only web build is mruby, needs per-game script
         //    porting + a MIDI synth, so it can't run arbitrary games.
         const isRenpyDesktop = g.engine === "renpydesktop";
+        // A conversion that was tried and refused must say so here: leaving the
+        // screen unchanged is indistinguishable from the import having failed.
+        const [why] = createResource(() => g.id, renpyNotes);
         return (
           <div class="rpgplay">
             <div class="rpgplay-bar">
@@ -198,7 +201,11 @@ export default function RpgMaker(props: { profile: { id: string }; family: Famil
               {isRenpyDesktop
                 ? <>This is a Ren'Py <b>desktop</b> build — its engine is native code, so it can't run as-is.<br />
                     Turn on <b>Ren'Py Desktop Conversion</b> in Labs and re-import: the console will pair
-                    this game with the official WebAssembly engine for its Ren'Py version.</>
+                    this game with the official WebAssembly engine for its Ren'Py version.
+                    <Show when={(why() ?? []).length > 0}>
+                      <div class="rpg-renpy-why">{(why() ?? []).map((n) => <div>{n}</div>)}</div>
+                    </Show>
+                  </>
                 : <>{ENGINE_LABEL[g.engine]} isn't supported yet.</>}<br />
               <span class="rpgplay-dim">
                 {isRenpyDesktop

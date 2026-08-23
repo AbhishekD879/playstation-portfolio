@@ -5238,3 +5238,6 @@ body.party-col .share-btn { right: calc(var(--pty-w) + clamp(12px, 2vw, 22px)); 
   border-radius: 10px; padding: 9px 13px; backdrop-filter: blur(8px); pointer-events: none; }
 .rpg-renpy-notes b { color: #eef3ff; }
 .rpg-renpy-notes ul { margin: 5px 0 0; padding-left: 17px; display: flex; flex-direction: column; gap: 3px; }
+.rpg-renpy-why { margin-top: 9px; padding: 8px 11px; border-radius: 8px; font-size: 12px; line-height: 1.5;
+  color: color-mix(in oklab, var(--dim) 74%, #e8c46a); background: color-mix(in oklab, #e8c46a 8%, transparent);
+  border: 1px solid color-mix(in oklab, #e8c46a 26%, transparent); text-align: left; }
