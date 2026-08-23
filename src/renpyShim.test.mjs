@@ -20,17 +20,30 @@ assert.match(py, /return None/, "must return None when the real module is found"
 assert.ok(py.indexOf("_imp.find_module(top)") < py.indexOf("return self"),
   "the existence check must come before claiming the import");
 
-// network modules only — ctypes is deliberately excluded, Ren'Py already handles
-// its absence and stubbing it pushes steam init down a path it cannot finish
-for (const n of ["httplib", "mimetools", "socket", "ssl", "ftplib", "smtplib"]) {
+// Only modules whose absence is FATAL. urllib2 imports httplib unconditionally,
+// so missing it kills the game.
+for (const n of ["httplib", "mimetools"]) {
   assert.ok(py.includes(`"${n}"`), `${n} should be covered`);
 }
-assert.ok(!/["']ctypes["']/.test(py), "ctypes must NOT be stubbed");
-
-// urllib2 touches these on import, so they have to exist on the stub
-for (const attr of ["HTTPConnection", "HTTPSConnection", "HTTPException", "BadStatusLine", "responses"]) {
-  assert.ok(py.includes(attr), `urllib2 needs ${attr}`);
+// These are imported by the stdlib inside try/except ImportError, so absence is
+// already handled. Stubbing _ssl turned a handled failure into an unhandled one:
+// "import _ssl" succeeded, then "from _ssl import RAND_add" blew up.
+for (const n of ["ctypes", "_ssl", "ssl", "socket"]) {
+  assert.ok(!new RegExp(`["']${n}["']`).test(py),
+    `${n} must NOT be stubbed — its absence is already handled gracefully`);
 }
+
+// A stub has to answer ANY attribute, or one ImportError just becomes another.
+assert.match(py, /def __getattr__\(self, attr\)/, "the stub must answer any attribute");
+assert.match(py, /\(Exception,\)/, "attributes must work in an except clause and as a constructor");
+assert.match(py, /raise AttributeError\(attr\)/, "dunder lookups must still fail normally");
+
+// Names are answered generically by __getattr__, so no list to keep in sync —
+// but the ones used as MAPPINGS rather than classes must be real values, since an
+// Exception subclass would not survive a subscript.
+assert.match(py, /mod\.responses = \{\}/, "httplib.responses is indexed, not called");
+assert.match(py, /mod\.HTTP_PORT = 80/);
+assert.match(py, /mod\.HTTPS_PORT = 443/);
 
 // the bootstrap must be executed from its own file: prepending the shim to it
 // would push its coding declaration past line 2, where Python 2 stops looking

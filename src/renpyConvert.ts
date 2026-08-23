@@ -57,19 +57,45 @@ const engineWanted = (name: string): boolean =>
 // Not ctypes: Ren'Py already handles its absence ("Failed to initialize steam"),
 // and stubbing it would push that code further down a path it cannot finish.
 const WEB_IMPORT_SHIM = `# Injected by AbhishekStation: browser import fallback.
+#
+# Two rules, both learned the hard way.
+#
+# 1. Only stub modules whose absence is FATAL. socket, ssl and _ssl are imported
+#    by the standard library inside try/except ImportError, so their absence is
+#    already handled gracefully. Stubbing _ssl made "import _ssl" succeed, the
+#    stdlib went on to "from _ssl import RAND_add", and a handled failure became
+#    an unhandled one. Same reason ctypes is left alone: Ren'Py already reports
+#    "Failed to initialize steam" and carries on.
+#
+# 2. A stub must answer ANY attribute. Turning one ImportError into a different
+#    ImportError is no better than the original.
 import sys as _asp_sys
 
 def _asp_install():
-    _names = ("httplib", "mimetools", "ssl", "_ssl", "socket", "ftplib",
-              "smtplib", "telnetlib", "poplib", "imaplib")
-    import types as _types
+    # py2-only HTTP plumbing that urllib2 imports unconditionally: missing it
+    # takes the whole game down, over code that is usually just telemetry.
+    _names = ("httplib", "mimetools", "rfc822")
+
     try:
         import imp as _imp
     except ImportError:
         return
 
-    class _Unavailable(Exception):
-        pass
+    class _Stub(object):
+        def __init__(self, name):
+            self.__name__ = name
+            self.__file__ = "<unavailable in browser>"
+            self._asp_cache = {}
+
+        def __getattr__(self, attr):
+            if attr.startswith("__") and attr.endswith("__"):
+                raise AttributeError(attr)
+            cache = self.__dict__.setdefault("_asp_cache", {})
+            if attr not in cache:
+                # An Exception subclass is usable both in an except clause and as
+                # a constructor, which covers how these names actually get used.
+                cache[attr] = type(str(attr), (Exception,), {})
+            return cache[attr]
 
     class _Finder(object):
         def find_module(self, name, path=None):
@@ -85,23 +111,7 @@ def _asp_install():
         def load_module(self, name):
             if name in _asp_sys.modules:
                 return _asp_sys.modules[name]
-            mod = _types.ModuleType(name)
-            mod.__file__ = "<unavailable in browser>"
-            mod.__loader__ = self
-
-            def _die(*a, **k):
-                raise IOError("%s is unavailable in the browser (no networking)" % name)
-
-            class _Stub(object):
-                def __init__(self, *a, **k):
-                    _die()
-                def __getattr__(self, k):
-                    _die()
-
-            for attr in ("HTTPConnection", "HTTPSConnection", "HTTP", "HTTPS", "socket"):
-                setattr(mod, attr, _Stub)
-            for attr in ("HTTPException", "BadStatusLine", "error", "SSLError", "timeout", "gaierror"):
-                setattr(mod, attr, _Unavailable)
+            mod = _Stub(name)
             mod.responses = {}
             mod.HTTP_PORT = 80
             mod.HTTPS_PORT = 443
