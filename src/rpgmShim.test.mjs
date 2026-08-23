@@ -77,7 +77,9 @@ console.log("fixStrayEscapes ok · 7 cases");
 assert.match(renpy, /preserveDrawingBuffer/, "Ren'Py needs a readable buffer at any time");
 assert.match(renpy, /attrs\.preserveDrawingBuffer === undefined/,
   "must not override a value the engine asked for explicitly");
-assert.ok(!/preserveDrawingBuffer/.test(diag),
+// match the assignment, not the word — DIAG_SHIM's comments explain why it does
+// NOT force the flag, and a bare word match hits that explanation
+assert.ok(!/preserveDrawingBuffer\s*=/.test(diag),
   "the shared probe must NOT force it: other engines would pay a per-frame copy");
 
 console.log(`rpgm shim ok · SHIM_V ${SHIM_V} · diag ${diag.length}b · nw ${nw.length}b`);
