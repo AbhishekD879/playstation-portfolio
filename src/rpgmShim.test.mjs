@@ -25,6 +25,7 @@ function emitted(name) {
 }
 
 const diag = emitted("DIAG_SHIM");
+const renpy = emitted("RENPY_SHIM");
 const nw = emitted("NW_SHIM");
 
 // whitespace classes must stay classes, not the bare letter "s"
@@ -69,5 +70,14 @@ for (const [name, input, want] of [
   assert.equal(fixStrayEscapes(input), want, name);
 }
 console.log("fixStrayEscapes ok · 7 cases");
+
+// The Ren'Py route forces preserveDrawingBuffer so a capture works even when the
+// engine has stopped redrawing (idle at a menu, or an error screen) — which is
+// why every earlier screenshot read back fully transparent.
+assert.match(renpy, /preserveDrawingBuffer/, "Ren'Py needs a readable buffer at any time");
+assert.match(renpy, /attrs\.preserveDrawingBuffer === undefined/,
+  "must not override a value the engine asked for explicitly");
+assert.ok(!/preserveDrawingBuffer/.test(diag),
+  "the shared probe must NOT force it: other engines would pay a per-frame copy");
 
 console.log(`rpgm shim ok · SHIM_V ${SHIM_V} · diag ${diag.length}b · nw ${nw.length}b`);

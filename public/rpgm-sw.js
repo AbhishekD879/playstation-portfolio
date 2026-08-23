@@ -178,7 +178,7 @@ const NW_SHIM = `<script>(function(){
 // audio buffers, fonts and the effekseer wasm, which are the things that stall.
 // Bump whenever a shim changes — a log that cannot name its own version wastes
 // a capture, which is exactly what happened once.
-const SHIM_V = "34";
+const SHIM_V = "35";
 const DIAG_SHIM = `<script>(function(){
   var T0=Date.now(), seq=0, pending={}, recent=[], errors=[], counts={ok:0,fail:0}, activity=[], xfer=[];
   // MOVEMENT channel — map transfers (doors/stairs) + event triggers get their
@@ -1294,6 +1294,27 @@ const RENPY_SHIM = `<script>(function(){
       navigator.serviceWorker.register = function(u){
         if (String(u).indexOf("service-worker") >= 0) return Promise.reject(new Error("host-managed sw"));
         return reg.apply(null, arguments);
+      };
+    }
+  } catch(e){}
+  // Ren'Py stops redrawing once it is idle — at a menu or an error screen — so a
+  // capture that waits for the next frame gets a buffer that was already
+  // discarded, which is why every screenshot read back fully transparent. Ask for
+  // preserveDrawingBuffer instead, which keeps the last frame readable at any
+  // time. Done here rather than in the shared probe because this route is a
+  // visual novel: it redraws on interaction, so the per-frame copy costs little,
+  // and no other engine pays for it.
+  try {
+    var CE = window.HTMLCanvasElement;
+    if (CE && CE.prototype && CE.prototype.getContext) {
+      var og = CE.prototype.getContext;
+      CE.prototype.getContext = function(kind, attrs){
+        if (/webgl/i.test(String(kind))) {
+          attrs = attrs || {};
+          if (attrs.preserveDrawingBuffer === undefined) attrs.preserveDrawingBuffer = true;
+          return og.call(this, kind, attrs);
+        }
+        return og.apply(this, arguments);
       };
     }
   } catch(e){}
