@@ -41,6 +41,85 @@ const ENGINE_SKIP = [
 const engineWanted = (name: string): boolean =>
   name.startsWith("web/") && !name.endsWith("/") && !ENGINE_SKIP.some((re) => re.test(name));
 
+// Games routinely import networking they only use for a phone-home or update
+// check, and the web build's Python has no sockets so those modules are trimmed
+// out. A missing httplib then kills the whole game at init:
+//
+//   File "game/apo.rpy", line 4, in <module>
+//     from urllib2 import urlopen
+//   ImportError: No module named httplib
+//
+// This installs a LAST-RESORT import finder: it returns a stub only for network
+// modules that genuinely cannot be found, so a real module always wins. The
+// import then succeeds and raises only if the game actually makes a request,
+// which for optional telemetry usually means it is simply skipped.
+//
+// Not ctypes: Ren'Py already handles its absence ("Failed to initialize steam"),
+// and stubbing it would push that code further down a path it cannot finish.
+const WEB_IMPORT_SHIM = `# Injected by AbhishekStation: browser import fallback.
+import sys as _asp_sys
+
+def _asp_install():
+    _names = ("httplib", "mimetools", "ssl", "_ssl", "socket", "ftplib",
+              "smtplib", "telnetlib", "poplib", "imaplib")
+    import types as _types
+    try:
+        import imp as _imp
+    except ImportError:
+        return
+
+    class _Unavailable(Exception):
+        pass
+
+    class _Finder(object):
+        def find_module(self, name, path=None):
+            top = name.split(".")[0]
+            if top not in _names:
+                return None
+            try:
+                _imp.find_module(top)
+                return None          # a real one exists, stay out of the way
+            except ImportError:
+                return self
+
+        def load_module(self, name):
+            if name in _asp_sys.modules:
+                return _asp_sys.modules[name]
+            mod = _types.ModuleType(name)
+            mod.__file__ = "<unavailable in browser>"
+            mod.__loader__ = self
+
+            def _die(*a, **k):
+                raise IOError("%s is unavailable in the browser (no networking)" % name)
+
+            class _Stub(object):
+                def __init__(self, *a, **k):
+                    _die()
+                def __getattr__(self, k):
+                    _die()
+
+            for attr in ("HTTPConnection", "HTTPSConnection", "HTTP", "HTTPS", "socket"):
+                setattr(mod, attr, _Stub)
+            for attr in ("HTTPException", "BadStatusLine", "error", "SSLError", "timeout", "gaierror"):
+                setattr(mod, attr, _Unavailable)
+            mod.responses = {}
+            mod.HTTP_PORT = 80
+            mod.HTTPS_PORT = 443
+            _asp_sys.modules[name] = mod
+            return mod
+
+    _asp_sys.meta_path.append(_Finder())
+
+try:
+    _asp_install()
+except Exception:
+    pass
+
+# The real bootstrap is executed from its own file so its encoding declaration
+# still lands in the first two lines, where Python 2 requires it.
+execfile("_asp_bootstrap.py")
+`;
+
 export interface ConvertIO {
   /** Every file in the install, with its uncompressed size. */
   list: () => Promise<{ path: string; size: number }[]>;
@@ -262,8 +341,19 @@ export async function convertRenpyDesktop(
     }
   };
 
-  // Bootstrap first: index.wasm runs /main.py, so its absence is fatal.
-  await addFile("main.py", bootstrap.path, bootstrap.size);
+  // index.wasm runs /main.py, so its absence is fatal. It is written as the
+  // import shim plus an execfile of the untouched bootstrap, rather than the
+  // shim prepended to it — prepending would push the bootstrap's own coding
+  // declaration past line 2, where Python 2 stops looking for it.
+  {
+    const shim = new TextEncoder().encode(WEB_IMPORT_SHIM);
+    const mainEntry = new ZipPassThrough("main.py");
+    zip.add(mainEntry);
+    mainEntry.push(shim, true);
+    await drain();
+    await addFile("_asp_bootstrap.py", bootstrap.path, bootstrap.size);
+    trace("convert: bootstrap wrapped", { from: bootstrap.path.slice(root.length), shimBytes: shim.length });
+  }
   for (const f of engineTree) {
     await addFile(f.path.startsWith(root) ? f.path.slice(root.length) : f.path, f.path, f.size);
   }
