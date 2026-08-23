@@ -178,7 +178,7 @@ const NW_SHIM = `<script>(function(){
 // audio buffers, fonts and the effekseer wasm, which are the things that stall.
 // Bump whenever a shim changes — a log that cannot name its own version wastes
 // a capture, which is exactly what happened once.
-const SHIM_V = "29";
+const SHIM_V = "30";
 const DIAG_SHIM = `<script>(function(){
   var T0=Date.now(), seq=0, pending={}, recent=[], errors=[], counts={ok:0,fail:0}, activity=[], xfer=[];
   // MOVEMENT channel — map transfers (doors/stairs) + event triggers get their
@@ -564,10 +564,25 @@ const DIAG_SHIM = `<script>(function(){
       if(!FSx || typeof FSx.readFile !== "function") return "no emscripten FS";
       var out=[], NL=String.fromCharCode(10);
       ["/log.txt","/errors.txt","/traceback.txt","/game/errors.txt","/game/log.txt"].forEach(function(f){
-        try{
-          var txt=FSx.readFile(f, {encoding:"utf8"});
-          if(txt && txt.length) out.push(f+" ("+txt.length+"B):"+NL+txt.slice(-2200));
-        }catch(e){ /* absent */ }
+        var size=-1;
+        try{ size=FSx.stat(f).size; }catch(e){ return; }        // genuinely absent
+        var txt=null, why="";
+        try{ txt=FSx.readFile(f, {encoding:"utf8"}); }
+        catch(e){ why="utf8 read threw: "+(e&&(e.message||e.code||e)); }
+        if(!txt || !txt.length){
+          try{
+            var b=FSx.readFile(f);                              // raw bytes fallback
+            if(b && b.length){
+              var chunks=[];
+              for(var i=Math.max(0,b.length-2200);i<b.length;i+=4096){
+                chunks.push(String.fromCharCode.apply(null, b.subarray(i, Math.min(i+4096,b.length))));
+              }
+              txt=chunks.join("");
+            }
+          }catch(e2){ why+=(why?" · ":"")+"byte read threw: "+(e2&&(e2.message||e2.code||e2)); }
+        }
+        if(txt && txt.length) out.push(f+" ("+size+"B on disk):"+NL+txt.slice(-2200));
+        else out.push(f+" ("+size+"B on disk) UNREADABLE"+(why?" — "+why:""));
       });
       var head="";
       try{
