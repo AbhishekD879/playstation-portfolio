@@ -14,6 +14,7 @@ import { Inflate } from "fflate";
 import { checkEntry, entryDataStart, isAudioPath, runtimeSkipper, zipEntries, zipReadError } from "./zipcd";
 import { convertRenpyDesktop, type ConvertIO, type ConvertResult } from "./renpyConvert";
 import { labEnabled } from "./labs";
+import { trace, traceError, traceStart } from "./importTrace";
 
 export type RpgEngine =
   | "mz" | "mv" | "rm2k3" | "rm2k" | "vxace" | "vx" | "xp"
@@ -191,6 +192,17 @@ export async function readGameFile(id: string, path: string): Promise<File | nul
 // (the folder that should become the OPFS root, stripping any wrapper folder).
 interface Detected { engine: RpgEngine; root: string; entry: string }
 function detect(paths: string[]): Detected {
+  const seen = (re: RegExp) => paths.filter((p) => re.test(p)).length;
+  trace("detect: renpy markers", {
+    wasm: seen(/(^|\/)(renpy|index)\.wasm(\.(gz|br))?$/),
+    gamezip: seen(/(^|\/)game\.(zip|data)$/),
+    rpa: seen(/\.rpa$/),
+    rpyc: seen(/(^|\/)game\/.*\.rpyc$/),
+    renpyInit: seen(/(^|\/)renpy\/__init__\.py$/),
+    libPy: seen(/(^|\/)lib\/py[0-9]/),
+    exe: seen(/\.exe$/),
+    indexHtml: seen(/(^|\/)index\.html?$/i),
+  });
   const lower = paths.map((p) => p.toLowerCase());
   const find = (pred: (p: string) => boolean) => { const i = lower.findIndex(pred); return i < 0 ? null : paths[i]; };
   const dirOf = (p: string) => { const i = p.lastIndexOf("/"); return i < 0 ? "" : p.slice(0, i + 1); };
@@ -329,6 +341,7 @@ export async function importRpgZip(
 ): Promise<RpgGame> {
   const id = pendingId(file) ?? crypto.randomUUID();
   setPending(file, id);
+  traceStart(`import: ${file.name} · ${Math.round(file.size / 1048576)} MB · lite=${!!opts?.skipAudio}/${!!opts?.compressImages}`);
   const g = await doImport(file, profileId, id, null, onProgress, opts);
   clearPending(file);
   return g;
@@ -342,6 +355,7 @@ export async function importRpgZip(
 export async function reimportRpgZip(
   file: File, game: RpgGame, onProgress?: (p: ImportProgress) => void, opts?: ImportOpts,
 ): Promise<RpgGame> {
+  traceStart(`re-import: ${file.name} · ${Math.round(file.size / 1048576)} MB · into ${game.id} · lite=${!!opts?.skipAudio}/${!!opts?.compressImages}`);
   // keep the partial install when a resume sidecar matches this very zip —
   // the worker will CONTINUE it instead of starting over
   let resume = false;
@@ -527,7 +541,9 @@ async function doImport(
   }
 
   const paths = names.filter((p) => !p.endsWith("/"));
+  trace("extracted", { files: paths.length, sample: paths.slice(0, 6).join(" | ").slice(0, 300) });
   let det = detect(paths);
+  trace("detect: result", { engine: det.engine, root: det.root, entry: det.entry });
   if (det.engine === "unknown") {
     await (await rpgmDir()).removeEntry(id, { recursive: true }).catch(() => {});
     // Give a precise, actionable reason for the most common mistake: dropping a
@@ -566,19 +582,25 @@ async function doImport(
   // the game exactly as it was, still showing the honest desktop notice, so a
   // conversion that doesn't work can never be worse than not trying.
   let renpyNotes: string[] = [];
-  if (det.engine === "renpydesktop" && labEnabled("renpyconvert")) {
+  const convertOn = labEnabled("renpyconvert");
+  trace("renpy convert gate", { engine: det.engine, flagOn: convertOn,
+    willRun: det.engine === "renpydesktop" && convertOn });
+  if (det.engine === "renpydesktop" && convertOn) {
     try {
       const res: ConvertResult = await convertRenpyDesktop(
         renpyIO(id), (_phase, pct) => onProgress?.({ phase: "extracting", pct }),
       );
       det = { engine: "renpy", root: res.root, entry: res.entry };
       renpyNotes = res.notes;
+      trace("renpy convert: OK", { version: res.version, root: res.root, entry: res.entry,
+        inZip: res.inZip, remote: res.remote, zipMB: Math.round(res.zipBytes / 1048576) });
     } catch (e) {
       // Never fatal: the fallback is the pre-existing desktop-build behaviour.
       // But say WHY on the game's own screen — a silent skip is indistinguishable
       // from the import having failed outright.
       const why = e instanceof Error ? e.message : String(e);
       console.warn("[renpy] conversion skipped:", why);
+      traceError("renpy convert", e);
       renpyNotes = [`Conversion didn't run: ${why}`];
     }
   }
@@ -602,6 +624,8 @@ async function doImport(
   const game: RpgGame = existing
     ? { ...existing, engine: det.engine, entry: det.entry, root: det.root, fileCount: paths.length, bytes, cover: cover ?? existing.cover }
     : { id, profileId, title, engine: det.engine, entry: det.entry, root: det.root, addedAt: Date.now(), fileCount: paths.length, bytes, cover };
+  trace("saved game record", { engine: game.engine, root: game.root, entry: game.entry,
+    files: game.fileCount, mb: Math.round(game.bytes / 1048576) });
   await putGame(game);
   return game;
 }

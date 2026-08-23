@@ -12,6 +12,7 @@
 // the pack at /rpgm/renpy/<id>/game/... — which is exactly what the remote-file
 // manifest needs, with no extra serving code.
 import { Zip, ZipPassThrough, unzipSync } from "fflate";
+import { trace } from "./importTrace";
 import {
   budgetRefusal, buildRemoteManifest, findGameRoot, imageSize, parseRenpyVersion, placeFile,
   planSplit, webZipCandidates, type RemoteEntry,
@@ -65,10 +66,12 @@ export async function convertRenpyDesktop(
   io: ConvertIO, onProgress?: (phase: string, pct: number) => void,
 ): Promise<ConvertResult> {
   const say = (phase: string, pct: number) => { try { onProgress?.(phase, pct); } catch { /* cosmetic */ } };
+  trace("convert: start");
   const notes: string[] = [];
 
   const all = await io.list();
   const root = findGameRoot(all.map((f) => f.path));
+  trace("convert: root", { root, files: all.length });
   if (root === null) throw new Error("No game/ folder found in this Ren'Py build — nothing to convert.");
 
   // —— version ————————————————————————————————————————————————————————————
@@ -80,6 +83,7 @@ export async function convertRenpyDesktop(
   }
   const version = parseRenpyVersion(new TextDecoder().decode(initPy));
   if (!version) throw new Error("Couldn't read a Ren'Py version out of renpy/__init__.py.");
+  trace("convert: version", { version });
   const candidates = webZipCandidates(version);
   if (!candidates.length) {
     throw new Error(`This game is Ren'Py ${version}. Web builds only exist for 7.4 and later, `
@@ -98,12 +102,15 @@ export async function convertRenpyDesktop(
     throw new Error(`Couldn't download a Ren'Py web engine for ${version}. `
       + "The conversion needs it once per version — check the connection and retry.");
   }
+  trace("convert: engine downloaded", { used, bytes: engineZip.length });
   if (used !== version) notes.push(`Engine ${used} used for a ${version} game — the nearest published web build.`);
 
   say("unpacking the engine", 18);
   const engine = unzipSync(engineZip, { filter: (f) => engineWanted(f.name) });
   const engineNames = Object.keys(engine);
   if (!engineNames.some((n) => /\.wasm$/.test(n))) throw new Error("The downloaded engine package contains no .wasm — its layout is unrecognised.");
+  trace("convert: engine unpacked", { files: engineNames.length,
+    names: engineNames.map((n) => n.replace(/^web\//, "")).join(",").slice(0, 200) });
   for (const name of engineNames) await io.write(name.replace(/^web\//, ""), engine[name]);
 
   // —— split the game tree ————————————————————————————————————————————————
@@ -117,6 +124,10 @@ export async function convertRenpyDesktop(
   // kills the tab. Decide from the listing, where it costs nothing to be wrong.
   const rels = gameFiles.map((f) => ({ rel: f.path.slice(gamePrefix.length), size: f.size }));
   const plan = planSplit(rels);
+  trace("convert: plan", { localFiles: plan.localFiles, localMB: Math.round(plan.localBytes / 1048576),
+    remoteFiles: plan.remoteFiles, rpaMB: Math.round(plan.rpaBytes / 1048576),
+    videoMB: Math.round(plan.videoBytes / 1048576),
+    biggest: plan.biggestLocal ? `${plan.biggestLocal.rel}:${Math.round(plan.biggestLocal.size / 1048576)}MB` : "none" });
   const refusal = budgetRefusal(plan);
   if (refusal) throw new Error(refusal);
 
@@ -192,6 +203,7 @@ export async function convertRenpyDesktop(
   zip.end();
   await drain();
   await sink.close();
+  trace("convert: game.zip written", { remoteEntries: remote.length });
 
   if (plan.rpaBytes > 0) {
     notes.push(`${Math.round(plan.rpaBytes / 1048576)} MB of .rpa archives have to stay in memory — `

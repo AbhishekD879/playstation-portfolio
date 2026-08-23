@@ -12,6 +12,7 @@ import {
   ENGINE_LABEL, engineFamily, engineKind, estimateRuntimeMB, importRpgZip, listRpgGames, looksHeavy, reimportRpgZip, removeRpgGame, renpyNotes,
   type ImportProgress, type RpgGame,
 } from "../rpgm";
+import { traceText } from "../importTrace";
 import RpgHtml5 from "./RpgHtml5";
 import RpgEasyRpg from "./RpgEasyRpg";
 import RpgRenPy from "./RpgRenPy";
@@ -30,6 +31,22 @@ export default function RpgMaker(props: { profile: { id: string }; family: Famil
   // lite install: skip music & sounds — for phones that can't fit/handle the
   // full game. Applies to Add-a-game AND ↻ re-import while switched on.
   const [lite, setLite] = createSignal(false);
+  // The import trace is written to storage as it goes, so it survives even the
+  // out-of-memory case where the tab is killed mid-import — which is exactly the
+  // failure that left nothing to look at.
+  const [traceState, setTraceState] = createSignal("");
+  const [traceCode, setTraceCode] = createSignal("");
+  const shareTrace = async () => {
+    const text = traceText();
+    if (!text) { setTraceState("empty"); return; }
+    setTraceState("busy"); setTraceCode("");
+    try {
+      const r = await fetch("https://abhishekstation-mp.abhishekdiwate879.workers.dev/log",
+        { method: "POST", headers: { "content-type": "text/plain" }, body: text });
+      const j = await r.json() as { code?: string };
+      if (j.code) { setTraceCode(j.code); setTraceState(""); } else throw new Error("no code");
+    } catch { setTraceState("error"); }
+  };
   let fileInput!: HTMLInputElement;
   let reimportInput!: HTMLInputElement;
   let reimportGame: RpgGame | null = null; // which game the re-import picker targets
@@ -230,9 +247,22 @@ export default function RpgMaker(props: { profile: { id: string }; family: Famil
               title="For phones that can't fit the full game: skips music & sounds and recompresses images (smaller, near-identical). Videos untouched. The game plays silent.">
               ♪ lite install: {lite() ? "on" : "off"}
             </button>
+            <button class="ps-act" onClick={() => void shareTrace()}
+              title="Upload what happened during the last import — every decision, with the numbers behind it">
+              {traceState() === "busy" ? "sharing…" : "⧉ share import log"}
+            </button>
             <button class="ps-act" onClick={() => { sfx.back(); props.onClose(); }}><span class="btn-o" /> back</button>
           </div>
         </div>
+        <Show when={traceCode()}>
+          <div class="rpg-lite-note">✓ Import log shared — the code is <b>{traceCode()}</b></div>
+        </Show>
+        <Show when={traceState() === "empty"}>
+          <div class="rpg-lite-note">No import log yet — import or ↻ re-import a game first, then share.</div>
+        </Show>
+        <Show when={traceState() === "error"}>
+          <div class="rpg-lite-note">Couldn't upload the import log (offline?).</div>
+        </Show>
         <Show when={lite()}>
           <div class="rpg-lite-note">Lite install is on — music &amp; sounds are skipped and images are recompressed (much smaller, near-identical; videos untouched). The game plays silent. Applies to “Add a game” and “↻ re-import”. Import takes a little longer while images convert.</div>
         </Show>
