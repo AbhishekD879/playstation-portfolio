@@ -49,6 +49,8 @@ export type DiagSnap = {
   /** Whether this browser honours the WebM alpha channel, and how many video
    *  sprites needed the black keyed back out. */
   vkey?: string;
+  /** Raw MV escape codes caught reaching drawText, which never expands them. */
+  esc?: string;
   /** direct video-to-texture upload vs the same frame via a 2D canvas — tests
    *  the proposed fix on the real device before it is written */
   gl?: string;
@@ -120,6 +122,7 @@ export default function DiagOverlay(props: {
     if (d.stage) L.push("", "-- STAGE (what PIXI is actually drawing) --", `  ${d.stage}`);
     if (d.pics) L.push("", "-- PICTURES (asked for vs what arrived) --", `  ${d.pics}`);
     if (d.vkey) L.push(`video alpha: ${d.vkey}`);
+    if (d.esc) L.push("", "-- RAW ESCAPE CODES (drawn unexpanded) --", `  ${d.esc}`);
     const inp = inputs();
     if (inp.length) {
       L.push("", "-- INPUT (parent) --");

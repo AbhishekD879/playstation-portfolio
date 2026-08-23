@@ -178,7 +178,7 @@ const NW_SHIM = `<script>(function(){
 // audio buffers, fonts and the effekseer wasm, which are the things that stall.
 // Bump whenever a shim changes — a log that cannot name its own version wastes
 // a capture, which is exactly what happened once.
-const SHIM_V = "21";
+const SHIM_V = "22";
 const DIAG_SHIM = `<script>(function(){
   var T0=Date.now(), seq=0, pending={}, recent=[], errors=[], counts={ok:0,fail:0}, activity=[], xfer=[];
   // MOVEMENT channel — map transfers (doors/stairs) + event triggers get their
@@ -217,7 +217,8 @@ const DIAG_SHIM = `<script>(function(){
       booted:!!(canvas&&!spinner&&(scene?scene!=="Scene_Boot":true)), canvas:canvas,
       pending:pend.slice(0,12), recent:recent.slice(0,20), counts:counts, errors:errors.slice(0,10), activity:activity.slice(0,400), xfer:xfer.slice(0,60), manifest:manifest,
       probe:(probe||(probed?"":"no VAnim global — defined inside a plugin closure")), codecs:codecs, shimV:"${SHIM_V}", vids:vidState(), frames:frames, gl:glCompare(), canv:canvasInfo(), glLoad:glLoad(), pixi:pixiInfo(), stage:stageDump(), pics:pictureDump(),
-      vkey:"alpha["+vkWhy+"] keyed="+vkApplied,
+      esc:ecHits.length?ecHits.join(" ;; "):(ecHooked?"drawText hooked, no raw escape code seen":"drawText not hooked"),
+      vkey:"alpha["+vkWhy+"] keyed="+vkApplied+" overlays="+vkOverlays+" lit["+vkFracs.join(" ")+"]",
       selftest:stOut ? stOut+(stRun?" · STILL RUNNING":" · complete") : ""}; }
   // One-shot source probe for globals whose art never loads. Captured lazily
   // because a plugin defining them may not have run at startup.
@@ -391,7 +392,7 @@ const DIAG_SHIM = `<script>(function(){
    *  look: magenta surviving means real transparency, black means the alpha was
    *  dropped. Only key the black out when it was actually dropped, so a browser
    *  with working alpha is left alone. */
-  var vkAlpha=null, vkWhy="not probed", vkFilter=null, vkApplied=0, vkTick=0;
+  var vkAlpha=null, vkWhy="not probed", vkFilters={}, vkApplied=0, vkOverlays=0, vkTick=0, vkFracs=[];
   function alphaWorks(v){
     if(vkAlpha!==null) return vkAlpha;
     try{
@@ -406,21 +407,47 @@ const DIAG_SHIM = `<script>(function(){
       return vkAlpha;
     }catch(e){ vkWhy="probe threw: "+(e&&e.message); return null; }
   }
-  function videoKeyFilter(){
-    if(vkFilter) return vkFilter;
+  /** A base character is an opaque figure on transparent black, so brightness is
+   *  a fair stand-in for its near-binary alpha. An expression overlay is not:
+   *  character_m_blush.webm is 99% black with one small red streak whose softness
+   *  lived entirely in the discarded alpha channel, so keying it by brightness
+   *  renders it at full strength — the solid red bar. No mask or alpha video
+   *  ships alongside, so the true values are unrecoverable and this is an
+   *  approximation. Tell the two apart by how much of the frame is lit, and give
+   *  the sparse one a fraction of the opacity. */
+  var VK_OVERLAY_ALPHA=0.42, VK_SPARSE_MAX=0.10;
+  function nonBlackFrac(v){
+    try{
+      var c=document.createElement("canvas"); c.width=48; c.height=34;
+      var g=c.getContext("2d"); if(!g) return -1;
+      g.fillStyle="#000000"; g.fillRect(0,0,48,34);
+      g.drawImage(v, 0, 0, 48, 34);
+      var d=g.getImageData(0,0,48,34).data, n=0;
+      for(var i=0;i<d.length;i+=4){ if(d[i]>24||d[i+1]>24||d[i+2]>24) n++; }
+      return n/(48*34);
+    }catch(e){ return -1; }
+  }
+  function videoKeyFilter(strength){
+    var key=String(strength);
+    if(vkFilters[key]) return vkFilters[key];
     var P=window.PIXI; if(!P || !P.Filter) return null;
     var NL=String.fromCharCode(10);
     var frag=[
       "varying vec2 vTextureCoord;",
       "uniform sampler2D uSampler;",
+      "uniform float uStrength;",
       "void main(void){",
       "  vec4 c = texture2D(uSampler, vTextureCoord);",
       "  float l = max(max(c.r, c.g), c.b);",
-      "  float a = smoothstep(0.02, 0.14, l);",
+      "  float a = smoothstep(0.02, 0.14, l) * uStrength;",
       "  gl_FragColor = vec4(c.rgb * a, a);",     // PIXI 4 wants premultiplied
       "}"].join(NL);
-    try{ vkFilter=new P.Filter(null, frag); }catch(e){ vkFilter=null; vkWhy+=" · filter failed: "+(e&&e.message); }
-    return vkFilter;
+    try{
+      var f=new P.Filter(null, frag);
+      f.uniforms.uStrength=strength;
+      vkFilters[key]=f;
+    }catch(e){ vkWhy+=" · filter failed: "+(e&&e.message); return null; }
+    return vkFilters[key];
   }
   function keyVideoSprites(){
     try{
@@ -430,13 +457,48 @@ const DIAG_SHIM = `<script>(function(){
         var t=node.texture, src=t && t.baseTexture && t.baseTexture.source;
         if(src && src.videoWidth!==undefined && !node.__vkeyed){
           if(alphaWorks(src)===false){
-            var f=videoKeyFilter();
-            if(f){ node.filters=(node.filters||[]).concat([f]); node.__vkeyed=true; vkApplied++; }
+            var frac=nonBlackFrac(src);
+            var sparse=(frac>=0 && frac<VK_SPARSE_MAX);
+            var f=videoKeyFilter(sparse?VK_OVERLAY_ALPHA:1);
+            if(f){
+              node.filters=(node.filters||[]).concat([f]);
+              node.__vkeyed=true; vkApplied++;
+              if(sparse) vkOverlays++;
+              if(vkFracs.length<8) vkFracs.push(((src.currentSrc||src.src||"?").split("/").pop())
+                +"="+(frac<0?"?":Math.round(frac*100)+"%")+(sparse?" OVERLAY":" base"));
+            }
           }
         }
         var k=node.children||[];
         for(var i=0;i<k.length;i++) walk(k[i]);
       })(root);
+    }catch(e){}
+  }
+  var ecHits=[], ecHooked=false;
+  function hookEscapeText(){
+    try{
+      if(ecHooked || !window.Bitmap || !Bitmap.prototype || !Bitmap.prototype.drawText) return;
+      ecHooked=true;
+      var BS=String.fromCharCode(92), ESC=String.fromCharCode(27), NL=String.fromCharCode(10);
+      var orig=Bitmap.prototype.drawText;
+      Bitmap.prototype.drawText=function(text){
+        try{
+          var t=String(text==null?"":text);
+          var raw=(t.indexOf(BS+"c")>=0 || t.indexOf(BS+"C")>=0
+                || t.indexOf(BS+"v")>=0 || t.indexOf(BS+"V")>=0 || t.indexOf(ESC)>=0);
+          if(raw && ecHits.length<6){
+            var who="?";
+            try{
+              var lines=((new Error()).stack||"").split(NL);
+              for(var i=1;i<lines.length && i<7;i++){
+                if(lines[i].indexOf("drawText")<0){ who=lines[i].replace(/^[ ]+/,"").slice(0,110); break; }
+              }
+            }catch(e2){}
+            ecHits.push(JSON.stringify(t.slice(0,70))+" <- "+who);
+          }
+        }catch(e){}
+        return orig.apply(this, arguments);
+      };
     }catch(e){}
   }
   function stageDump(){
@@ -803,6 +865,7 @@ const DIAG_SHIM = `<script>(function(){
     if(GR && !GR.__diagCap && typeof GR.render==="function"){ GR.__diagCap=1;
       var grf=GR.render; GR.render=function(){ var out=grf.apply(this,arguments);
         keyVideoSprites();   // every frame: a 20-frame gap showed as black
+        hookEscapeText();
         if(wantFrame){ wantFrame=false; try{ grabAll(); }catch(e){} }
         return out; }; }
     if(GI && GI.prototype && !GI.prototype.__diag){ GI.prototype.__diag=1;
