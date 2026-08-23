@@ -36,6 +36,11 @@ export type DiagSnap = {
   /** captured thumbnails: the canvas the player sees, plus each video drawn
    *  straight to a 2D canvas, which bypasses the game's WebGL compositing */
   frames?: { label: string; w?: number; h?: number; stats: string; url: string }[];
+  /** Result of the in-game probe suite: it builds its own <video> from a movie
+   *  in the manifest and drives it through load, play, pause and GPU upload,
+   *  measuring at each step. Answers the video questions without the player
+   *  having to reach any particular scene. */
+  selftest?: string;
   /** direct video-to-texture upload vs the same frame via a 2D canvas — tests
    *  the proposed fix on the real device before it is written */
   gl?: string;
@@ -103,6 +108,7 @@ export default function DiagOverlay(props: {
     if (d.glLoad) L.push(`gl load: ${d.glLoad}`);
     if (d.pixi) L.push(`pixi: ${d.pixi}`);
     if (d.probe) L.push(`probe: ${d.probe}`);
+    if (d.selftest) L.push("", "-- SELF-TEST (probe suite, no gameplay) --", `  ${d.selftest}`);
     const inp = inputs();
     if (inp.length) {
       L.push("", "-- INPUT (parent) --");
@@ -144,6 +150,16 @@ export default function DiagOverlay(props: {
     }
   };
 
+  /** Run the probe suite and wait for its verdict. It loads and plays real
+   *  media, so it needs a few seconds — far longer than a frame grab. */
+  const runSelfTest = async (): Promise<void> => {
+    send({ type: "rpgm-selftest" });
+    for (let i = 0; i < 140; i++) {                    // ~14s, then give up
+      await new Promise((r) => setTimeout(r, 100));
+      if (diag()?.selftest) return;
+    }
+  };
+
   const shareLog = async (withFrame?: boolean) => {
     if (withFrame) { setShareState("busy"); await grabFrames(); }
     const t = buildLog();
@@ -165,12 +181,13 @@ export default function DiagOverlay(props: {
             <button class="ps-act" classList={{ on: verbose() }} onClick={toggleVerbose}>verbose: {verbose() ? "on" : "off"}</button>
             <button class="ps-act" onClick={() => void shareLog()}>{shareState() === "busy" ? "sharing…" : "share log"}</button>
             <button class="ps-act" onClick={() => void shareLog(true)}>+ frame</button>
+            <button class="ps-act" onClick={() => { setShareState("busy"); void runSelfTest().then(() => shareLog(true)); }}>run tests</button>
             <button class="ps-act" onClick={copyLog}>copy</button>
             <button class="ps-act" onClick={clearDiag}>clear</button>
             <button class="ps-act" onClick={props.onClose}>close</button>
           </span>
         </div>
-        <div class="rpg-diag-tip">Turn on <b>verbose</b> → tap <b>clear</b> → reproduce the problem → tap <b>share log</b>, then tell me the code. Use <b>+ frame</b> when the problem is something you can SEE — it attaches a thumbnail of the screen. Newest first below.</div>
+        <div class="rpg-diag-tip">Turn on <b>verbose</b> → tap <b>clear</b> → reproduce the problem → tap <b>share log</b>, then tell me the code. Use <b>+ frame</b> when the problem is something you can SEE — it attaches a thumbnail of the screen. <b>run tests</b> answers the video questions on its own — no need to reach any particular scene. Newest first below.</div>
         <Show when={shareCode()}>
           <div class="rpg-diag-share">✓ Log shared — tell me this code: <b class="rpg-diag-code">{shareCode()}</b></div>
         </Show>

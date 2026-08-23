@@ -178,7 +178,7 @@ const NW_SHIM = `<script>(function(){
 // audio buffers, fonts and the effekseer wasm, which are the things that stall.
 // Bump whenever a shim changes — a log that cannot name its own version wastes
 // a capture, which is exactly what happened once.
-const SHIM_V = "15";
+const SHIM_V = "16";
 const DIAG_SHIM = `<script>(function(){
   var T0=Date.now(), seq=0, pending={}, recent=[], errors=[], counts={ok:0,fail:0}, activity=[], xfer=[];
   // MOVEMENT channel — map transfers (doors/stairs) + event triggers get their
@@ -216,7 +216,7 @@ const DIAG_SHIM = `<script>(function(){
     return {source:"rpgm-diag", up:now-T0, scene:scene, spinner:spinner,
       booted:!!(canvas&&!spinner&&(scene?scene!=="Scene_Boot":true)), canvas:canvas,
       pending:pend.slice(0,12), recent:recent.slice(0,20), counts:counts, errors:errors.slice(0,10), activity:activity.slice(0,400), xfer:xfer.slice(0,60), manifest:manifest,
-      probe:(probe||(probed?"":"no VAnim global — defined inside a plugin closure")), codecs:codecs, shimV:"${SHIM_V}", vids:vidState(), frames:frames, gl:glCompare(), canv:canvasInfo(), glLoad:glLoad(), pixi:pixiInfo()}; }
+      probe:(probe||(probed?"":"no VAnim global — defined inside a plugin closure")), codecs:codecs, shimV:"${SHIM_V}", vids:vidState(), frames:frames, gl:glCompare(), canv:canvasInfo(), glLoad:glLoad(), pixi:pixiInfo(), selftest:stOut}; }
   // One-shot source probe for globals whose art never loads. Captured lazily
   // because a plugin defining them may not have run at startup.
   var vids=[], wantFrame=false, frames=[];
@@ -374,6 +374,77 @@ const DIAG_SHIM = `<script>(function(){
         +" · resources.video["+(r.join(",")||"none")+"]";
     }catch(e){ return "pixiInfo threw: "+(e&&e.message); }
   }
+  var stRun=false, stOut="";
+  function stLog(k,v){ stOut+=(stOut?" · ":"")+k+"["+v+"]"; }
+  function stSleep(ms){ return new Promise(function(r){ setTimeout(r,ms); }); }
+  function stRaf(){ return new Promise(function(r){ requestAnimationFrame(function(){ r(); }); }); }
+  function stMovies(n){
+    var out=[], S=window.__rpgmFS;
+    try{ if(S) S.forEach(function(k){ if(out.length<n && /^movies\\/.*\\.(webm|mp4)$/.test(k)) out.push(k); }); }catch(e){}
+    return out;
+  }
+  async function selfTest(){
+    if(stRun) return; stRun=true; stOut="";
+    try{
+      var list=stMovies(6);
+      if(!list.length){ stLog("asset","no movies/ entry in the manifest"); stRun=false; post(); return; }
+      stLog("asset", list[0]);
+
+      var v=document.createElement("video");
+      v.muted=true; v.defaultMuted=true; v.playsInline=true;
+      v.setAttribute("muted",""); v.setAttribute("playsinline",""); v.preload="auto";
+      var t0=Date.now(); v.src=list[0];
+      await new Promise(function(res){ var d=false;
+        v.addEventListener("loadeddata", function(){ d=true; res(); });
+        v.addEventListener("error", function(){ d=true; res(); });
+        setTimeout(function(){ if(!d) res(); }, 5000); });
+      stLog("load", (v.readyState>=2?"ok":"FAILED")+" rs="+v.readyState+" "+v.videoWidth+"x"+v.videoHeight+" "+(Date.now()-t0)+"ms");
+      if(!v.videoWidth){ stRun=false; post(); return; }
+
+      var c=document.createElement("canvas"); c.width=64; c.height=64;
+      var gl=c.getContext("webgl")||c.getContext("experimental-webgl");
+      if(gl) stLog("uploadAtFrame0", texProbe(gl, v, v.videoWidth, v.videoHeight));
+
+      try{ await v.play(); }catch(e){ stLog("play","REJECTED "+(e&&e.name)); }
+      await stSleep(400);
+      stLog("state", (v.paused?"paused":"playing")+" t="+v.currentTime.toFixed(2));
+      if(gl) stLog("uploadWhilePlaying", texProbe(gl, v, v.videoWidth, v.videoHeight));
+
+      v.pause(); await stRaf();
+      if(gl) stLog("uploadWhilePaused", texProbe(gl, v, v.videoWidth, v.videoHeight));
+
+      // THE mechanism question: does PIXI stop feeding the texture on pause?
+      try{
+        var P=window.PIXI;
+        if(P && P.VideoBaseTexture){
+          var bt=new P.VideoBaseTexture(v);
+          try{ await v.play(); }catch(e){}
+          await stSleep(300);
+          var au1=!!bt._isAutoUpdating;
+          v.pause(); await stSleep(250);
+          var au2=!!bt._isAutoUpdating;
+          stLog("PIXIautoUpdate","playing="+au1+" afterPause="+au2
+            +(au1&&!au2?" >> STOPS ON PAUSE — mechanism CONFIRMED":" >> keeps updating — mechanism DEAD"));
+          try{ bt.destroy(); }catch(e){}
+        } else stLog("PIXIautoUpdate","VideoBaseTexture absent");
+      }catch(e){ stLog("PIXIautoUpdate","threw "+(e&&e.message)); }
+
+      // how many videos will iOS actually keep decoding at once?
+      try{
+        var vs=list.map(function(u){ var x=document.createElement("video");
+          x.muted=true; x.playsInline=true; x.setAttribute("muted",""); x.setAttribute("playsinline","");
+          x.src=u; return x; });
+        for(var i=0;i<vs.length;i++){ try{ vs[i].play(); }catch(e){} }
+        await stSleep(1500);
+        var live=0; vs.forEach(function(x){ if(!x.paused && x.currentTime>0) live++; });
+        stLog("concurrentDecode", live+" of "+vs.length+" still playing");
+        vs.forEach(function(x){ try{ x.pause(); x.removeAttribute("src"); x.load(); }catch(e){} });
+      }catch(e){ stLog("concurrentDecode","threw"); }
+
+      try{ v.pause(); v.removeAttribute("src"); v.load(); }catch(e){}
+    }catch(e){ stLog("selftest","threw "+(e&&e.message)); }
+    stRun=false; post();
+  }
   function canvasInfo(){
     try{
       var all=document.querySelectorAll("canvas"), gc=(window.Graphics&&Graphics._canvas)||null, out=[];
@@ -438,6 +509,7 @@ const DIAG_SHIM = `<script>(function(){
   }
   function post(){ try{ parent.postMessage(snap(), "*"); }catch(e){} }
   window.addEventListener("message", function(ev){
+    try{ if(ev.data && ev.data.type==="rpgm-selftest"){ selfTest(); return; } }catch(e){}
     try{ if(ev.data && ev.data.type==="rpgm-grab"){ wantFrame=true;
       // No renderer running (or none wrapped yet) — grab now rather than never.
       setTimeout(function(){ if(wantFrame){ wantFrame=false; grabAll(); } }, 700); } }catch(e){}

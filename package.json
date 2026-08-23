@@ -7,7 +7,8 @@
     "dev": "vite --port 5300 --strictPort",
     "build": "vite build",
     "preview": "vite preview",
-    "prebuild": "node scripts/seo.mjs"
+    "prebuild": "node src/rpgmShim.test.mjs && node scripts/seo.mjs",
+    "test": "node src/rpgmShim.test.mjs && node src/rpgmShotStats.test.mjs"
   },
   "dependencies": {
     "@dimforge/rapier3d-compat": "^0.19.3",
