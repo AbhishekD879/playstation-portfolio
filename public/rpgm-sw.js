@@ -178,7 +178,7 @@ const NW_SHIM = `<script>(function(){
 // audio buffers, fonts and the effekseer wasm, which are the things that stall.
 // Bump whenever a shim changes — a log that cannot name its own version wastes
 // a capture, which is exactly what happened once.
-const SHIM_V = "33";
+const SHIM_V = "34";
 const DIAG_SHIM = `<script>(function(){
   var T0=Date.now(), seq=0, pending={}, recent=[], errors=[], counts={ok:0,fail:0}, activity=[], xfer=[];
   // MOVEMENT channel — map transfers (doors/stairs) + event triggers get their
@@ -853,8 +853,51 @@ const DIAG_SHIM = `<script>(function(){
         +" · dpr="+(window.devicePixelRatio||1);
     }catch(e){ return "canvasInfo threw: "+(e&&e.message); }
   }
+  // Reading a WebGL canvas after the frame is composited returns blank, and
+  // preserveDrawingBuffer would make every frame of every game pay a copy just so
+  // a capture is possible. But an engine clears the buffer at the START of each
+  // frame, so the instant before clear() the previous complete frame is still
+  // there. Wrap clear() and read it then: one boolean test per frame, nothing
+  // engine-specific, and no cost until a capture is actually pending.
+  function hookGLCapture(){
+    try{
+      ["WebGLRenderingContext","WebGL2RenderingContext"].forEach(function(n){
+        var C = window[n];
+        if(!C || !C.prototype || C.prototype.__aspClear) return;
+        var oc = C.prototype.clear;
+        if(typeof oc !== "function") return;
+        C.prototype.clear = function(){
+          if(wantFrame){
+            wantFrame = false;
+            try{ grabGL(this); }catch(e){}
+            try{ grabAll(); }catch(e){}
+          }
+          return oc.apply(this, arguments);
+        };
+        C.prototype.__aspClear = true;
+      });
+    }catch(e){}
+  }
+  /** Read the live drawing buffer into a frame. GL origin is bottom-left, so the
+   *  rows are flipped on the way into the 2D canvas. */
+  function grabGL(gl){
+    try{
+      var w = gl.drawingBufferWidth, h = gl.drawingBufferHeight;
+      if(!w || !h || w*h > 12e6) return;
+      var px = new Uint8Array(w*h*4);
+      gl.readPixels(0, 0, w, h, gl.RGBA, gl.UNSIGNED_BYTE, px);
+      var c = document.createElement("canvas"); c.width = w; c.height = h;
+      var g = c.getContext("2d"); if(!g) return;
+      var img = g.createImageData(w, h), row = w*4;
+      for(var y=0; y<h; y++) img.data.set(px.subarray((h-1-y)*row, (h-1-y)*row + row), y*row);
+      g.putImageData(img, 0, 0);
+      var f = shot(c, w, h, "GL buffer "+w+"x"+h+" [ENGINE — what you see]", true);
+      if(f) frames.push(f);
+    }catch(e){}
+  }
   var rafHooked=false;
   function hookRaf(){
+    hookGLCapture();
     try{
       if(rafHooked || typeof window.requestAnimationFrame !== "function") return;
       rafHooked=true;
@@ -923,7 +966,7 @@ const DIAG_SHIM = `<script>(function(){
   function post(){ try{ parent.postMessage(snap(), "*"); }catch(e){} }
   window.addEventListener("message", function(ev){
     try{ if(ev.data && ev.data.type==="rpgm-selftest"){ selfTest(); return; } }catch(e){}
-    try{ if(ev.data && ev.data.type==="rpgm-grab"){ wantFrame=true; hookRaf();
+    try{ if(ev.data && ev.data.type==="rpgm-grab"){ wantFrame=true; hookRaf(); hookGLCapture();
       // No renderer running (or none wrapped yet) — grab now rather than never.
       setTimeout(function(){ if(wantFrame){ wantFrame=false; grabAll(); } }, 700); } }catch(e){}
   }, false);
