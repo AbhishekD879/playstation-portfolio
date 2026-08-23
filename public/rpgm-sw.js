@@ -178,7 +178,7 @@ const NW_SHIM = `<script>(function(){
 // audio buffers, fonts and the effekseer wasm, which are the things that stall.
 // Bump whenever a shim changes — a log that cannot name its own version wastes
 // a capture, which is exactly what happened once.
-const SHIM_V = "30";
+const SHIM_V = "31";
 const DIAG_SHIM = `<script>(function(){
   var T0=Date.now(), seq=0, pending={}, recent=[], errors=[], counts={ok:0,fail:0}, activity=[], xfer=[];
   // MOVEMENT channel — map transfers (doors/stairs) + event triggers get their
@@ -216,7 +216,7 @@ const DIAG_SHIM = `<script>(function(){
     return {source:"rpgm-diag", up:now-T0, scene:scene, spinner:spinner,
       booted:!!(canvas&&!spinner&&(scene?scene!=="Scene_Boot":true)), canvas:canvas,
       pending:pend.slice(0,12), recent:recent.slice(0,20), counts:counts, errors:errors.slice(0,10), activity:activity.slice(0,400), xfer:xfer.slice(0,60), manifest:manifest,
-      probe:(probe||(probed?"":"no VAnim global — defined inside a plugin closure")), codecs:codecs, shimV:"${SHIM_V}", vids:vidState(), frames:frames, gl:glCompare(), canv:canvasInfo(), glLoad:glLoad(), pixi:pixiInfo(), stage:stageDump(), pics:pictureDump(), renpyLog:renpyLogs(), firstErrors:firstErrs,
+      probe:(probe||(probed?"":"no VAnim global — defined inside a plugin closure")), codecs:codecs, shimV:"${SHIM_V}", vids:vidState(), frames:frames, gl:glCompare(), canv:canvasInfo(), glLoad:glLoad(), pixi:pixiInfo(), stage:stageDump(), pics:pictureDump(), renpyLog:renpyLogs(), renpyMissing:renpyMissing(), firstErrors:firstErrs,
       esc:ecHits.length?ecHits.join(" ;; "):(ecHooked?"drawText hooked, no raw escape code seen":"drawText not hooked"),
       conv:(ecConvHooked?("fixed="+ecFixed+" codes["+(Object.keys(ecCodes).map(function(k){ return k+"x"+ecCodes[k]; }).join(",")||"NONE CALLED")+"] "
         +(ecConv.length?ecConv.join(" ;; "):"no backslash reached convertEscapeCharacters")):"convertEscapeCharacters not hooked"),
@@ -600,6 +600,36 @@ const DIAG_SHIM = `<script>(function(){
       }catch(e){}
       return (out.length ? out.join(NL+"---"+NL) : "no log.txt/errors.txt written") + head + boot + listing;
     }catch(e){ return "renpyLogs threw: "+(e&&e.message); }
+  }
+  /** For each file Ren'Py reported missing, say WHERE it should have been: in
+   *  the on-demand manifest, on the filesystem, or with a placeholder — plus what
+   *  its directory actually contains. That distinguishes an asset the conversion
+   *  dropped from one the game never shipped, which need opposite fixes. */
+  var missingPaths = [];
+  function renpyMissing(){
+    try{
+      var FSx = window.FS || (window.Module && window.Module.FS);
+      if(!FSx || typeof FSx.readFile !== "function") return "no emscripten FS";
+      var NL=String.fromCharCode(10), man="";
+      try{ man = FSx.readFile("/game/renpyweb_remote_files.txt", {encoding:"utf8"}) || ""; }catch(e){}
+      var lines = man ? man.split(NL).filter(function(x){ return x.length; }) : [];
+      var out = ["manifest entries=" + Math.floor(lines.length / 2)];
+      if(!missingPaths.length) out.push("no missing-file errors seen");
+      for(var i=0;i<missingPaths.length;i++){
+        var mp=missingPaths[i];
+        var inMan = man.indexOf(NL + mp + NL) >= 0 || man.indexOf(mp + NL) === 0;
+        var onFs=false, ph=false;
+        try{ FSx.stat("/game/" + mp); onFs=true; }catch(e){}
+        try{ FSx.stat("/_placeholders/" + mp); ph=true; }catch(e){}
+        var cut=mp.lastIndexOf("/"), sib="";
+        try{
+          sib = FSx.readdir("/game/" + (cut>0 ? mp.slice(0,cut) : ""))
+            .filter(function(n){ return n!=="." && n!==".."; }).join(",").slice(0,220);
+        }catch(e){ sib="DIRECTORY ABSENT"; }
+        out.push(mp + " -> manifest=" + inMan + " fs=" + onFs + " placeholder=" + ph + " siblings[" + sib + "]");
+      }
+      return out.join(" ;; ");
+    }catch(e){ return "renpyMissing threw: " + (e && e.message); }
   }
   function stageDump(){
     try{
@@ -1086,6 +1116,16 @@ const DIAG_SHIM = `<script>(function(){
   try { var cfmt=function(x){ try{ return (x&&x.stack)?String(x.stack):(x&&typeof x==="object"?JSON.stringify(x):String(x)); }catch(_){ return String(x); } };
     ["log","warn","error"].forEach(function(m){ var o=console[m]; if(typeof o!=="function") return;
       console[m]=function(){ try{ var s=Array.prototype.map.call(arguments,cfmt).join(" ").slice(0,300);
+        try{
+          var NEEDLE="Couldn't find file '";
+          var at=s.indexOf(NEEDLE);
+          if(at>=0){
+            var rest=s.slice(at+NEEDLE.length);
+            var end=rest.indexOf("'");
+            var mp=end>0 ? rest.slice(0,end) : "";
+            if(mp && missingPaths.indexOf(mp)<0 && missingPaths.length<6) missingPaths.push(mp);
+          }
+        }catch(_e){}
         if(m==="error") addErr("console.error: "+s,""); else if(m==="warn") elog("console.warn: "+s,"console"); else if(VERBOSE) elog("console: "+s,"console"); }catch(_){}
         return o.apply(this,arguments); }; }); } catch(e){}
   setInterval(post, 1000); post();

@@ -53,3 +53,20 @@ assert.ok(!/addFile\("main\.py", bootstrap\.path/.test(src),
   "main.py must be the shim, not the raw bootstrap");
 
 console.log("renpy web shim ok - py syntax, fallback-only imports, bootstrap wrapped");
+
+// The touch-variant fallback is Ren'Py script, compiled by the engine at startup,
+// so a syntax error there is a boot failure. It must also hand back an IMAGE
+// object: im.py calls .load() on whatever the callback returns, so a path string
+// would swap one crash for another.
+const rpyMatch = src.match(/const WEB_COMPAT_RPY = `([\s\S]*?)`;/);
+assert.ok(rpyMatch, "WEB_COMPAT_RPY not found");
+const rpy = rpyMatch[1];
+const pyBody = rpy.split("\n").slice(2).map((l) => (l.startsWith("    ") ? l.slice(4) : l)).join("\n");
+execFileSync("python3", ["-c", "import ast,sys; ast.parse(sys.stdin.read())"], { input: pyBody });
+assert.match(rpy, /config\.missing_image_callback = _asp_missing_image/);
+assert.match(rpy, /renpy\.display\.im\.Image\(alt\)/, "must return an image, not a path");
+assert.match(rpy, /except TypeError/, "loadable's signature differs across versions");
+for (const v of ["phone", "tablet", "touch"]) assert.ok(rpy.includes(`"${v}"`), `${v} variant`);
+assert.match(src, /game\/_asp_web_compat\.rpy/, "must be packed into game/");
+
+console.log("renpy touch-variant fallback ok - rpy python parses, returns an Image");

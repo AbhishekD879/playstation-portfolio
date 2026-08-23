@@ -51,6 +51,9 @@ export type DiagSnap = {
   vkey?: string;
   /** Ren'Py's own log.txt / errors.txt, read out of the emscripten filesystem. */
   renpyLog?: string;
+  /** For each file Ren'Py couldn't find: whether it was in the manifest, on the
+   *  filesystem, had a placeholder, and what its directory actually holds. */
+  renpyMissing?: string;
   /** Earliest errors seen — a boot failure's cause is the first one, not the last. */
   firstErrors?: { msg: string; at?: string }[];
   /** Raw MV escape codes caught reaching drawText, which never expands them. */
@@ -130,6 +133,7 @@ export default function DiagOverlay(props: {
     if (d.pics) L.push("", "-- PICTURES (asked for vs what arrived) --", `  ${d.pics}`);
     if (d.vkey) L.push(`video alpha: ${d.vkey}`);
     if (d.renpyLog) L.push("", "-- REN'PY LOG (from the game's own filesystem) --", d.renpyLog);
+    if (d.renpyMissing) L.push("", "-- MISSING FILES (where each should have been) --", `  ${d.renpyMissing}`);
     if (d.esc) L.push("", "-- RAW ESCAPE CODES (drawn unexpanded) --", `  ${d.esc}`);
     if (d.conv) L.push("", "-- ESCAPE CONVERSION (in -> out) --", `  ${d.conv}`);
     const inp = inputs();

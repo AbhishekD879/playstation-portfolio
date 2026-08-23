@@ -142,6 +142,45 @@ execfile("_asp_bootstrap.py")
 const PLACEHOLDER_PNG_B64 =
   "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAAC0lEQVR4nGNgAAIAAAUAAXpeqz8AAAAASUVORK5CYII=";
 
+// Ren'Py adds a "phone" variant on touch devices and tries gui/phone/x.png
+// before gui/x.png. A game that declares phone variants without shipping the
+// images works on desktop and dies on a phone:
+//
+//   IOError: Couldn't find file 'gui/phone/overlay/gm.png'.
+//
+// ...while gui/overlay/gm.png loads perfectly a moment later. config
+// .missing_image_callback exists for exactly this: it is handed the filename and
+// returns an image to use instead, or None to re-raise. So drop the variant
+// segment and use the base asset, which is what the variant system means anyway.
+//
+// Shipped as a .rpy that Ren'Py compiles at startup, which is the normal way to
+// add code to a game without touching its own scripts.
+const WEB_COMPAT_RPY = `# Injected by AbhishekStation: browser/touch compatibility.
+init -1500 python hide:
+
+    def _asp_missing_image(name):
+        # Strip a device-variant directory and retry the base path.
+        variants = ("phone", "tablet", "touch", "small", "medium", "large")
+        parts = name.split("/")
+        for v in variants:
+            if v not in parts:
+                continue
+            alt = "/".join([p for p in parts if p != v])
+            if alt == name:
+                continue
+            try:
+                ok = renpy.loader.loadable(alt, directory="images")
+            except TypeError:
+                ok = renpy.loader.loadable(alt)   # older signature
+            except Exception:
+                ok = False
+            if ok:
+                return renpy.display.im.Image(alt)
+        return None
+
+    config.missing_image_callback = _asp_missing_image
+`;
+
 export interface ConvertIO {
   /** Every file in the install, with its uncompressed size. */
   list: () => Promise<{ path: string; size: number }[]>;
@@ -380,6 +419,16 @@ export async function convertRenpyDesktop(
     await addFile(f.path.startsWith(root) ? f.path.slice(root.length) : f.path, f.path, f.size);
   }
   trace("convert: engine tree packed", { files: engineTree.length + 1 });
+
+  // Touch-variant fallback, compiled by Ren'Py at startup.
+  {
+    const rpy = new TextEncoder().encode(WEB_COMPAT_RPY);
+    const e = new ZipPassThrough("game/_asp_web_compat.rpy");
+    zip.add(e);
+    e.push(rpy, true);
+    await drain();
+    trace("convert: touch-variant fallback added", { bytes: rpy.length });
+  }
 
   const remote: RemoteEntry[] = [];
   let done = 0, videoBytes = 0;
