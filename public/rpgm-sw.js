@@ -178,7 +178,7 @@ const NW_SHIM = `<script>(function(){
 // audio buffers, fonts and the effekseer wasm, which are the things that stall.
 // Bump whenever a shim changes — a log that cannot name its own version wastes
 // a capture, which is exactly what happened once.
-const SHIM_V = "23";
+const SHIM_V = "24";
 const DIAG_SHIM = `<script>(function(){
   var T0=Date.now(), seq=0, pending={}, recent=[], errors=[], counts={ok:0,fail:0}, activity=[], xfer=[];
   // MOVEMENT channel — map transfers (doors/stairs) + event triggers get their
@@ -417,7 +417,7 @@ const DIAG_SHIM = `<script>(function(){
    *  ships alongside, so the true values are unrecoverable and this is an
    *  approximation. Tell the two apart by how much of the frame is lit, and give
    *  the sparse one a fraction of the opacity. */
-  var VK_OVERLAY_ALPHA=0.25, VK_SPARSE_MAX=0.10;
+  var VK_OVERLAY_ALPHA=0.10, VK_SPARSE_MAX=0.10;
   function nonBlackFrac(v){
     try{
       var c=document.createElement("canvas"); c.width=48; c.height=34;
