@@ -178,7 +178,7 @@ const NW_SHIM = `<script>(function(){
 // audio buffers, fonts and the effekseer wasm, which are the things that stall.
 // Bump whenever a shim changes — a log that cannot name its own version wastes
 // a capture, which is exactly what happened once.
-const SHIM_V = "27";
+const SHIM_V = "28";
 const DIAG_SHIM = `<script>(function(){
   var T0=Date.now(), seq=0, pending={}, recent=[], errors=[], counts={ok:0,fail:0}, activity=[], xfer=[];
   // MOVEMENT channel — map transfers (doors/stairs) + event triggers get their
@@ -216,7 +216,7 @@ const DIAG_SHIM = `<script>(function(){
     return {source:"rpgm-diag", up:now-T0, scene:scene, spinner:spinner,
       booted:!!(canvas&&!spinner&&(scene?scene!=="Scene_Boot":true)), canvas:canvas,
       pending:pend.slice(0,12), recent:recent.slice(0,20), counts:counts, errors:errors.slice(0,10), activity:activity.slice(0,400), xfer:xfer.slice(0,60), manifest:manifest,
-      probe:(probe||(probed?"":"no VAnim global — defined inside a plugin closure")), codecs:codecs, shimV:"${SHIM_V}", vids:vidState(), frames:frames, gl:glCompare(), canv:canvasInfo(), glLoad:glLoad(), pixi:pixiInfo(), stage:stageDump(), pics:pictureDump(),
+      probe:(probe||(probed?"":"no VAnim global — defined inside a plugin closure")), codecs:codecs, shimV:"${SHIM_V}", vids:vidState(), frames:frames, gl:glCompare(), canv:canvasInfo(), glLoad:glLoad(), pixi:pixiInfo(), stage:stageDump(), pics:pictureDump(), renpyLog:renpyLogs(), firstErrors:firstErrs,
       esc:ecHits.length?ecHits.join(" ;; "):(ecHooked?"drawText hooked, no raw escape code seen":"drawText not hooked"),
       conv:(ecConvHooked?("fixed="+ecFixed+" codes["+(Object.keys(ecCodes).map(function(k){ return k+"x"+ecCodes[k]; }).join(",")||"NONE CALLED")+"] "
         +(ecConv.length?ecConv.join(" ;; "):"no backslash reached convertEscapeCharacters")):"convertEscapeCharacters not hooked"),
@@ -555,6 +555,25 @@ const DIAG_SHIM = `<script>(function(){
       };
     }catch(e){}
   }
+  /** Ren'Py's own logs from inside the emscripten filesystem. The engine writes
+   *  its traceback there before exiting, so this is the actual reason rather
+   *  than something reconstructed from interleaved stderr. */
+  function renpyLogs(){
+    try{
+      var FSx = window.FS || (window.Module && window.Module.FS);
+      if(!FSx || typeof FSx.readFile !== "function") return "no emscripten FS";
+      var out=[], NL=String.fromCharCode(10);
+      ["/log.txt","/errors.txt","/traceback.txt","/game/errors.txt","/game/log.txt"].forEach(function(f){
+        try{
+          var txt=FSx.readFile(f, {encoding:"utf8"});
+          if(txt && txt.length) out.push(f+" ("+txt.length+"B):"+NL+txt.slice(-2200));
+        }catch(e){ /* absent */ }
+      });
+      var listing="";
+      try{ listing=" · root["+FSx.readdir("/").filter(function(n){ return n!=="." && n!==".."; }).join(",").slice(0,300)+"]"; }catch(e){}
+      return (out.length ? out.join(NL+"---"+NL) : "no log.txt/errors.txt written") + listing;
+    }catch(e){ return "renpyLogs threw: "+(e&&e.message); }
+  }
   function stageDump(){
     try{
       var SM=window.SceneManager, root=SM && SM._scene;
@@ -807,7 +826,22 @@ const DIAG_SHIM = `<script>(function(){
       // No renderer running (or none wrapped yet) — grab now rather than never.
       setTimeout(function(){ if(wantFrame){ wantFrame=false; grabAll(); } }, 700); } }catch(e){}
   }, false);
-  function addErr(msg, at){ errors.unshift({msg:String(msg).slice(0,280), at:at||""}); if(errors.length>10) errors.pop(); post(); }
+  var PY_NOISE = ["# cleanup", "# clear", "# destroy", "# zap", "# restore", "# refcnt", "# releasing"];
+  function isPyNoise(m){
+    var t = m.indexOf("console.error: ") === 0 ? m.slice(15) : m;
+    if(t.indexOf("import ") === 0 && t.indexOf(" # ") > 0) return true;   // verbose import trace
+    for(var i=0;i<PY_NOISE.length;i++) if(t.indexOf(PY_NOISE[i]) === 0) return true;
+    return false;
+  }
+  var firstErrs = [];
+  function addErr(msg, at){
+    var m=String(msg).slice(0,280);
+    if(isPyNoise(m)) return;                                        // interpreter tracing, not a fault
+    if(firstErrs.length<8) firstErrs.push({msg:m, at:at||""});      // a boot failure's cause is the FIRST error
+    errors.unshift({msg:m, at:at||""});
+    if(errors.length>10) errors.pop();
+    post();
+  }
   window.addEventListener("unhandledrejection", function(ev){ var r=ev&&ev.reason; addErr("Unhandled: "+((r&&r.message)||r), ""); });
   // ONE capture-phase error listener catches BOTH script errors AND resource
   // (img/video/audio/script/link) load failures — the latter don't bubble, so
@@ -999,7 +1033,9 @@ const DIAG_SHIM = `<script>(function(){
     L.push("ua: "+navigator.userAgent);
     try{ if(window.$plugins) L.push("plugins: "+window.$plugins.map(function(p){return p.name+(p.status?"":"(OFF)");}).join(", ")); }catch(e){}
     try{ if(window.PluginManager&&PluginManager._commands) L.push("pluginCommands: "+Object.keys(PluginManager._commands).join(", ")); }catch(e){}
-    if(errors.length){ L.push(""); L.push("-- ERRORS --"); errors.forEach(function(x){ L.push("  ! "+x.msg+(x.at?" ("+x.at+")":"")); }); }
+    if(d.firstErrors && d.firstErrors.length){ L.push(""); L.push("-- FIRST ERRORS (the cause, oldest first) --");
+      d.firstErrors.forEach(function(x){ L.push("  ! "+x.msg+(x.at?" ("+x.at+")":"")); }); }
+    if(errors.length){ L.push(""); L.push("-- ERRORS (most recent) --"); errors.forEach(function(x){ L.push("  ! "+x.msg+(x.at?" ("+x.at+")":"")); }); }
     if(recent.length){ L.push(""); L.push("-- FAILED LOADS --"); recent.forEach(function(r){ L.push("  x "+r.path+" · "+r.status); }); }
     L.push(""); L.push("-- ACTIVITY (oldest first, "+activity.length+" entries) --");
     activity.slice().reverse().forEach(function(a){ L.push("  "+(a.ok?"+":"x")+" ["+Math.round(a.t)+"ms] "+a.path+(a.reason?" · "+a.reason:"")); });

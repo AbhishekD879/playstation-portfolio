@@ -49,6 +49,10 @@ export type DiagSnap = {
   /** Whether this browser honours the WebM alpha channel, and how many video
    *  sprites needed the black keyed back out. */
   vkey?: string;
+  /** Ren'Py's own log.txt / errors.txt, read out of the emscripten filesystem. */
+  renpyLog?: string;
+  /** Earliest errors seen — a boot failure's cause is the first one, not the last. */
+  firstErrors?: { msg: string; at?: string }[];
   /** Raw MV escape codes caught reaching drawText, which never expands them. */
   esc?: string;
   /** What convertEscapeCharacters was handed and what it returned — the only
@@ -125,6 +129,7 @@ export default function DiagOverlay(props: {
     if (d.stage) L.push("", "-- STAGE (what PIXI is actually drawing) --", `  ${d.stage}`);
     if (d.pics) L.push("", "-- PICTURES (asked for vs what arrived) --", `  ${d.pics}`);
     if (d.vkey) L.push(`video alpha: ${d.vkey}`);
+    if (d.renpyLog) L.push("", "-- REN'PY LOG (from the game's own filesystem) --", d.renpyLog);
     if (d.esc) L.push("", "-- RAW ESCAPE CODES (drawn unexpanded) --", `  ${d.esc}`);
     if (d.conv) L.push("", "-- ESCAPE CONVERSION (in -> out) --", `  ${d.conv}`);
     const inp = inputs();
