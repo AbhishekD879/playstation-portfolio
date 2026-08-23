@@ -8,7 +8,7 @@
     "build": "vite build",
     "preview": "vite preview",
     "prebuild": "node src/rpgmShim.test.mjs && node scripts/seo.mjs",
-    "test": "node src/rpgmShim.test.mjs && node src/rpgmShotStats.test.mjs && node src/rpgmDetect.test.mjs && node src/renpyPack.test.mjs && node src/renpyConvert.test.mjs && node src/importTrace.test.mjs"
+    "test": "node src/rpgmShim.test.mjs && node src/rpgmShotStats.test.mjs && node src/rpgmDetect.test.mjs && node src/rpaIndex.test.mjs && node src/renpyPack.test.mjs && node src/renpyConvert.test.mjs && node src/importTrace.test.mjs"
   },
   "dependencies": {
     "@dimforge/rapier3d-compat": "^0.19.3",

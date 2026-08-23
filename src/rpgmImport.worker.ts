@@ -115,6 +115,11 @@ const canTranscode = (name: string, ent: ZipEntry): boolean =>
 
 // media kept deflated couldn't serve Range requests from the pack — re-store
 const isMedia = (name: string) => /\.(webm|mp4|ogv|avi|ogg|mp3|m4a|wav)$/i.test(name);
+// A Ren'Py .rpa is a container read by byte offset: its index sits at the tail
+// and each asset is a range inside it. Kept deflated it can only be read by
+// inflating the whole archive — 823MB for one image — so it must be STORED for
+// the same reason media is, and the Ren'Py converter depends on it.
+const needsRandomAccess = (name: string) => isMedia(name) || /\.rpa$/i.test(name);
 
 // —— pack writer: a standard zip our own readers consume ——————————————————————
 const enc = new TextEncoder();
@@ -314,7 +319,7 @@ async function extractViaLibarchive(file: File, id: string, skipAudio: boolean, 
           try {
             if (compressImages && isImg(name) && u.length > 0 && u.length < 30 * 1048576) {
               const out = await maybeTranscodePng(u.slice()); pw.begin(name, 0, out.length, out.length); pw.chunk(out);
-            } else if (isMedia(name) || isImg(name) || u.length === 0) {
+            } else if (needsRandomAccess(name) || isImg(name) || u.length === 0) {
               pw.begin(name, 0, u.length, u.length); if (u.length) pw.chunk(u); // already-compressed → store as-is
             } else {
               const def = deflateSync(u, { level: 6 }); pw.begin(name, 8, def.length, u.length); pw.chunk(def); // re-deflate text/data to keep the pack small
@@ -418,7 +423,7 @@ self.onmessage = async (ev: MessageEvent<Job>) => {
     // fine: the failure is resumable (progress is NEVER discarded), the user
     // frees some space and continues.
     const rest = files.slice(startIndex);
-    const need = rest.reduce((s, f) => s + (packed ? (isMedia(f.name) && f.method !== 0 ? f.uncompSize : f.compSize) : f.uncompSize), 0);
+    const need = rest.reduce((s, f) => s + (packed ? (needsRandomAccess(f.name) && f.method !== 0 ? f.uncompSize : f.compSize) : f.uncompSize), 0);
     const est = await navigator.storage?.estimate?.().catch(() => null);
     if (est && est.quota != null && est.usage != null && need > (est.quota - est.usage)) {
       const mb = (n: number) => Math.ceil(n / 1048576);
@@ -459,8 +464,8 @@ self.onmessage = async (ev: MessageEvent<Job>) => {
             const out = await maybeTranscodePng(await inflateWhole(file, ent));
             if (pw) { pw.begin(ent.name, 0, out.length, out.length); pw.chunk(out); }
             else bytes += await writeWhole(gameDir!, ent.name, out);
-          } else if (pw && isMedia(ent.name) && ent.method !== 0) {
-            // re-store deflated media so Range requests work by offset math
+          } else if (pw && needsRandomAccess(ent.name) && ent.method !== 0) {
+            // re-store deflated media and .rpa archives so ranges work by offset math
             const mds = await entryDataStart(file, ent);
             pw.begin(ent.name, 0, ent.uncompSize, ent.uncompSize);
             const inf = new Inflate();

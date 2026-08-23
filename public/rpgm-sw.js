@@ -178,7 +178,7 @@ const NW_SHIM = `<script>(function(){
 // audio buffers, fonts and the effekseer wasm, which are the things that stall.
 // Bump whenever a shim changes — a log that cannot name its own version wastes
 // a capture, which is exactly what happened once.
-const SHIM_V = "25";
+const SHIM_V = "26";
 const DIAG_SHIM = `<script>(function(){
   var T0=Date.now(), seq=0, pending={}, recent=[], errors=[], counts={ok:0,fail:0}, activity=[], xfer=[];
   // MOVEMENT channel — map transfers (doors/stairs) + event triggers get their
@@ -1198,6 +1198,58 @@ async function walkDir(dir, prefix, out) {
 // DecompressionStream. The central directory is parsed once per game and kept
 // as an NFKC-lowercased name map (which also gives case-insensitive lookups
 // for free). Media entries were re-stored at import so Range works by offset.
+// Ren'Py archives: the converter writes .rpaindex mapping each asset inside a
+// .rpa to a byte range, so an archive-backed request is served straight out of
+// the archive with nothing extracted and nothing resident. Archives are STORED
+// in the pack (see needsRandomAccess in the import worker), so the range is
+// plain offset math from the entry's data start.
+const rpaCache = new Map(); // gameId -> Promise<{a:[], f:{}} | null>
+function rpaIndexFor(gameId) {
+  let p = rpaCache.get(gameId);
+  if (!p) {
+    p = (async () => {
+      try {
+        const f = await opfsFile(gameId, ".rpaindex");
+        return f ? JSON.parse(await f.text()) : null;
+      } catch { return null; }
+    })();
+    rpaCache.set(gameId, p);
+  }
+  return p;
+}
+/** Bytes for one asset held inside a .rpa, or null when it isn't there. */
+async function rpaBytes(gameId, path) {
+  const idx = await rpaIndexFor(gameId);
+  if (!idx || !idx.f) return null;
+  const rel = path.replace(/^game\//, "");
+  const hit = idx.f[rel];
+  if (!hit) return null;
+  const archive = "game/" + idx.a[hit[0]];
+
+  // resolve the archive itself: loose first, then the pack, same as any file
+  let src = null, base = 0;
+  const loose = await opfsFile(gameId, archive).catch(() => null);
+  if (loose) { src = loose; base = 0; }
+  else {
+    const pack = await packFor(gameId);
+    if (!pack) return null;
+    let root = "";
+    try { root = await gameRootPrefix(await gameDirOf(gameId), gameId); } catch { /* no dir */ }
+    const ent = pack.map.get((root + archive).normalize("NFKC").toLowerCase());
+    if (!ent) return null;
+    if (ent.method !== 0) return null;   // deflated: no random access, needs a re-import
+    src = pack.file;
+    base = await packDataStart(pack.file, ent);
+  }
+
+  const parts = [];
+  for (const seg of hit[1]) {
+    const [off, len, pfx] = seg;
+    if (pfx) parts.push(Uint8Array.from(atob(pfx), (c) => c.charCodeAt(0)));
+    parts.push(await src.slice(base + off, base + off + len).arrayBuffer());
+  }
+  return new Blob(parts);
+}
 const packCache = new Map(); // gameId -> Promise<{file, map} | null>
 function packFor(gameId) {
   let p = packCache.get(gameId);
@@ -1349,6 +1401,14 @@ self.addEventListener("fetch", (e) => {
         if (ent) { packEnt = ent; packFile = pack.file; }
       }
     }
+    // Ren'Py: the asset may live inside a .rpa the converter indexed.
+    if (!file && !packEnt && isRenpy) {
+      try {
+        const blob = await rpaBytes(gameId, path);
+        if (blob) return new Response(blob, { headers: { ...base, "Content-Length": String(blob.size) } });
+      } catch { /* fall through to 404 */ }
+    }
+
     if (!file && !packEnt) {
       // EasyRPG: fall back to the bundled RTP for assets the game itself omits.
       // LAZY: RTP files are only fetched when a game actually references one it

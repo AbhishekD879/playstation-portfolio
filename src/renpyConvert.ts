@@ -13,6 +13,7 @@
 // manifest needs, with no extra serving code.
 import { Zip, ZipPassThrough, unzipSync } from "fflate";
 import { trace } from "./importTrace";
+import { decodeRpaIndex, parseRpaHeader, type RpaEntry } from "./rpaIndex";
 import {
   budgetRefusal, buildRemoteManifest, findGameRoot, imageSize, parseRenpyVersion, placeFile,
   planSplit, webZipCandidates, type RemoteEntry,
@@ -118,11 +119,57 @@ export async function convertRenpyDesktop(
   const gameFiles = all.filter((f) => f.path.startsWith(gamePrefix) && !f.path.endsWith("/"));
   if (!gameFiles.length) throw new Error("The game/ folder is empty.");
 
+  // —— open the .rpa archives ————————————————————————————————————————————
+  // Left whole, an .rpa forces its entire contents to be resident. But it is
+  // just a container: a zlib-deflated pickled index at a known offset, and each
+  // asset a byte range inside. Read the index and every asset inside becomes
+  // individually fetchable, exactly like a loose file — which is what takes a
+  // 823MB archive off the memory budget entirely.
+  const archives: string[] = [];
+  const rpaFiles: Record<string, [number, [number, number, string | 0][]]> = {};
+  const rpaOwned = new Map<string, { ai: number; entry: RpaEntry }>();
+  for (const f of gameFiles) {
+    if (!/\.rpa$/i.test(f.path)) continue;
+    try {
+      const head = await io.readHead(f.path, 40);
+      const hdr = head ? parseRpaHeader(head) : null;
+      if (!hdr) { trace("rpa: unrecognised header", { file: f.path }); continue; }
+      const tail = await io.readSlice(f.path, hdr.indexOffset, f.size);
+      if (!tail) { trace("rpa: index unreadable", { file: f.path }); continue; }
+      // zlib-wrapped, so "deflate" rather than "deflate-raw"
+      const inflated = new Uint8Array(await new Response(
+        new Blob([tail as BlobPart]).stream().pipeThrough(new DecompressionStream("deflate")),
+      ).arrayBuffer());
+      const index = decodeRpaIndex(inflated, hdr.key);
+      const ai = archives.length;
+      archives.push(f.path.slice(root.length));
+      for (const [rel, entry] of index) {
+        rpaOwned.set(rel, { ai, entry });
+        rpaFiles[rel] = [ai, entry.segments.map((sg) => [sg.offset, sg.length,
+          sg.prefix?.length ? btoa(String.fromCharCode(...sg.prefix)) : 0])];
+      }
+      trace("rpa: index read", { file: f.path.slice(root.length), version: hdr.version, entries: index.size });
+    } catch (e) {
+      // A refusal here is safe: the archive simply stays whole and counts
+      // against the budget, which is the pre-existing behaviour.
+      trace("rpa: index FAILED", { file: f.path, error: e instanceof Error ? e.message : String(e) });
+    }
+  }
+
   // —— refuse the impossible before touching a single byte ————————————————
   // Everything game.zip carries is extracted into emscripten's in-memory
   // filesystem and never freed, so an oversized game does not import slowly, it
   // kills the tab. Decide from the listing, where it costs nothing to be wrong.
-  const rels = gameFiles.map((f) => ({ rel: f.path.slice(gamePrefix.length), size: f.size }));
+  // An archive whose index was read no longer costs anything: it is replaced in
+  // the plan by its contents, each of which can be fetched on demand.
+  const opened = new Set<string>();
+  for (const f of gameFiles) {
+    if (/\.rpa$/i.test(f.path) && archives.includes(f.path.slice(root.length))) opened.add(f.path);
+  }
+  const rels = gameFiles
+    .filter((f) => !opened.has(f.path))
+    .map((f) => ({ rel: f.path.slice(gamePrefix.length), size: f.size }));
+  for (const [rel, o] of rpaOwned) rels.push({ rel, size: o.entry.size });
   const plan = planSplit(rels);
   trace("convert: plan", { localFiles: plan.localFiles, localMB: Math.round(plan.localBytes / 1048576),
     remoteFiles: plan.remoteFiles, rpaMB: Math.round(plan.rpaBytes / 1048576),
@@ -169,6 +216,7 @@ export async function convertRenpyDesktop(
   let done = 0, videoBytes = 0;
 
   for (const f of gameFiles) {
+    if (opened.has(f.path)) continue;    // replaced by its contents below
     const rel = f.path.slice(gamePrefix.length);
     let place = placeFile(rel, f.size);
 
@@ -190,6 +238,45 @@ export async function convertRenpyDesktop(
     if ((++done & 31) === 0) say("packing game files", 22 + Math.round((done / gameFiles.length) * 60));
   }
 
+  // Archive contents: same rules, but the bytes are read through the archive.
+  for (const [rel, o] of rpaOwned) {
+    let place = placeFile(rel, o.entry.size);
+    if (place.where === "remote" && place.rtype === "image") {
+      const seg = o.entry.segments[0];
+      const pfx = seg?.prefix?.length ?? 0;
+      const head = seg
+        ? await io.readSlice(`${root}${archives[o.ai]}`, seg.offset, seg.offset + Math.min(seg.length, 65536))
+        : null;
+      let probe: Uint8Array | null = head;
+      if (head && seg?.prefix?.length) {
+        const joined = new Uint8Array(pfx + head.length);
+        joined.set(seg.prefix, 0);
+        joined.set(head, pfx);
+        probe = joined;
+      }
+      const dim = probe ? imageSize(probe) : null;
+      if (dim) remote.push({ rel, rtype: "image", size: o.entry.size, w: dim.w, h: dim.h });
+      else place = { where: "zip" };
+    } else if (place.where === "remote") {
+      remote.push({ rel, rtype: place.rtype, size: o.entry.size });
+      if (/\.(webm|mp4|ogv|mkv|avi|mov)$/i.test(rel)) videoBytes += o.entry.size;
+    }
+    if (place.where === "zip") {
+      // small or startup-critical: copy the bytes out of the archive into the zip
+      const entry = new ZipPassThrough(`game/${rel}`);
+      zip.add(entry);
+      const chunks: Uint8Array[] = [];
+      for (const sg of o.entry.segments) {
+        if (sg.prefix?.length) chunks.push(sg.prefix);
+        const part = await io.readSlice(`${root}${archives[o.ai]}`, sg.offset, sg.offset + sg.length);
+        if (part) chunks.push(part);
+      }
+      chunks.forEach((c, k) => entry.push(c, k === chunks.length - 1));
+      if (!chunks.length) entry.push(new Uint8Array(0), true);
+      await drain();
+    }
+  }
+
   const manifest = buildRemoteManifest(remote);
   if (manifest) {
     const bytes = new TextEncoder().encode(manifest);
@@ -199,6 +286,12 @@ export async function convertRenpyDesktop(
     await drain();
   }
 
+  if (archives.length) {
+    // The map the service worker resolves archive-backed requests through.
+    await io.write(".rpaindex", new TextEncoder().encode(JSON.stringify({ v: 1, a: archives, f: rpaFiles })));
+    trace("rpa: sidecar written", { archives: archives.length, files: Object.keys(rpaFiles).length });
+  }
+
   say("finishing game.zip", 92);
   zip.end();
   await drain();
@@ -206,8 +299,8 @@ export async function convertRenpyDesktop(
   trace("convert: game.zip written", { remoteEntries: remote.length });
 
   if (plan.rpaBytes > 0) {
-    notes.push(`${Math.round(plan.rpaBytes / 1048576)} MB of .rpa archives have to stay in memory — `
-      + "an .rpa is one blob and can't be fetched per file.");
+    notes.push(`${Math.round(plan.rpaBytes / 1048576)} MB of .rpa archives couldn't be opened and have to `
+      + "stay in memory. Unopened archives can't be fetched per file.");
   }
   if (videoBytes > 0) {
     notes.push(`${Math.round(videoBytes / 1048576)} MB of video is fetched on demand but not freed after playing.`);
