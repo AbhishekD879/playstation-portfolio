@@ -178,7 +178,7 @@ const NW_SHIM = `<script>(function(){
 // audio buffers, fonts and the effekseer wasm, which are the things that stall.
 // Bump whenever a shim changes — a log that cannot name its own version wastes
 // a capture, which is exactly what happened once.
-const SHIM_V = "17";
+const SHIM_V = "18";
 const DIAG_SHIM = `<script>(function(){
   var T0=Date.now(), seq=0, pending={}, recent=[], errors=[], counts={ok:0,fail:0}, activity=[], xfer=[];
   // MOVEMENT channel — map transfers (doors/stairs) + event triggers get their
@@ -216,7 +216,7 @@ const DIAG_SHIM = `<script>(function(){
     return {source:"rpgm-diag", up:now-T0, scene:scene, spinner:spinner,
       booted:!!(canvas&&!spinner&&(scene?scene!=="Scene_Boot":true)), canvas:canvas,
       pending:pend.slice(0,12), recent:recent.slice(0,20), counts:counts, errors:errors.slice(0,10), activity:activity.slice(0,400), xfer:xfer.slice(0,60), manifest:manifest,
-      probe:(probe||(probed?"":"no VAnim global — defined inside a plugin closure")), codecs:codecs, shimV:"${SHIM_V}", vids:vidState(), frames:frames, gl:glCompare(), canv:canvasInfo(), glLoad:glLoad(), pixi:pixiInfo(), stage:stageDump(),
+      probe:(probe||(probed?"":"no VAnim global — defined inside a plugin closure")), codecs:codecs, shimV:"${SHIM_V}", vids:vidState(), frames:frames, gl:glCompare(), canv:canvasInfo(), glLoad:glLoad(), pixi:pixiInfo(), stage:stageDump(), pics:pictureDump(),
       selftest:stOut ? stOut+(stRun?" · STILL RUNNING":" · complete") : ""}; }
   // One-shot source probe for globals whose art never loads. Captured lazily
   // because a plugin defining them may not have run at startup.
@@ -384,37 +384,78 @@ const DIAG_SHIM = `<script>(function(){
     try{
       var SM=window.SceneManager, root=SM && SM._scene;
       if(!root) return "SceneManager._scene absent";
-      var out=[], n=0, CAP=26;
+      // MV nests the picture container AFTER the tilemap and every character
+      // sprite, so a small cap truncates before the nodes that carry the big
+      // character art. Compact each node hard instead of stopping early.
+      var out=[], n=0, CAP=150;
       function px(v){ return (typeof v==="number") ? Math.round(v*100)/100 : "?"; }
       function walk(node, depth){
         if(!node || n>=CAP) return;
         n++;
         var t=node.texture, bt=t && t.baseTexture, src=bt && bt.source;
-        var tag=(node.constructor && node.constructor.name) || "?";
-        var bits=[new Array(depth+1).join("  ")+tag];
-        if(node.visible===false) bits.push("HIDDEN");
-        if(node.alpha!==undefined && node.alpha!==1) bits.push("alpha="+px(node.alpha));
-        if(node.worldAlpha!==undefined && node.worldAlpha!==1) bits.push("worldAlpha="+px(node.worldAlpha));
-        bits.push("@"+px(node.x)+","+px(node.y));
-        if(node.scale && (node.scale.x!==1 || node.scale.y!==1)) bits.push("scale="+px(node.scale.x)+"x"+px(node.scale.y));
-        if(node.width!==undefined) bits.push("size="+px(node.width)+"x"+px(node.height));
+        var b=[depth+":"+((node.constructor && node.constructor.name)||"?")];
+        if(node.visible===false) b.push("HIDE");
+        if(node.alpha!==undefined && node.alpha!==1) b.push("a="+px(node.alpha));
+        if(node.x||node.y) b.push("@"+px(node.x)+","+px(node.y));
+        if(node.width) b.push(px(node.width)+"x"+px(node.height));
+        if(node.scale && (node.scale.x!==1 || node.scale.y!==1)) b.push("sc"+px(node.scale.x)+"x"+px(node.scale.y));
         if(t){
-          bits.push("tex="+px(t.width)+"x"+px(t.height)+(t.valid===false?" INVALID":""));
-          if(t.frame) bits.push("frame="+px(t.frame.x)+","+px(t.frame.y)+" "+px(t.frame.width)+"x"+px(t.frame.height));
-          if(src && src.videoWidth!==undefined){
-            bits.push("VIDEO "+((src.currentSrc||src.src||"?").split("/").pop())
-              +" "+src.videoWidth+"x"+src.videoHeight+(src.paused?" PAUSED":" playing"));
-          } else if(src && src.width!==undefined) bits.push("srcsize="+src.width+"x"+src.height);
-          if(bt && bt.hasLoaded===false) bits.push("NOT-LOADED");
+          b.push("t"+px(t.width)+"x"+px(t.height));
+          if(t.valid===false) b.push("INVALID");
+          if(t.frame && (t.frame.x||t.frame.y)) b.push("f"+px(t.frame.x)+","+px(t.frame.y));
+          if(src && src.videoWidth!==undefined)
+            b.push("VIDEO:"+((src.currentSrc||src.src||"?").split("/").pop())+(src.paused?":PAUSED":":play"));
+          else if(src && src.width!==undefined) b.push("src"+src.width+"x"+src.height);
+          if(bt && bt.hasLoaded===false) b.push("UNLOADED");
         }
-        if(node._mask || node.mask) bits.push("MASKED");
-        out.push(bits.join(" "));
-        var kids=node.children||[];
-        for(var i=0;i<kids.length && n<CAP;i++) walk(kids[i], depth+1);
+        if(node._mask||node.mask) b.push("MASK");
+        out.push(b.join(" "));
+        var k=node.children||[];
+        for(var i=0;i<k.length && n<CAP;i++) walk(k[i], depth+1);
       }
       walk(root, 0);
-      return out.join(" | ")+(n>=CAP?" | …capped at "+CAP+" nodes":"");
+      return out.join(" | ")+(n>=CAP?" | …CAPPED at "+CAP:"");
     }catch(e){ return "stageDump threw: "+(e&&e.message); }
+  }
+  /** $gameScreen._pictures is the game's own record of every picture it has
+   *  shown — the authoritative answer to "where did it ask for this art, and
+   *  how big". Pair each entry with its Sprite_Picture's real bitmap so a
+   *  requested-vs-actual mismatch (wrong scale, zero opacity, 1x1 placeholder)
+   *  reads straight off the line. */
+  function pictureDump(){
+    try{
+      var G=window.$gameScreen;
+      if(!G) return "$gameScreen absent";
+      var pics=G._pictures||[], out=[];
+      var sprites={};
+      (function find(node){
+        if(!node) return;
+        if(node.constructor && node.constructor.name==="Sprite_Picture" && node._pictureId!==undefined)
+          sprites[node._pictureId]=node;
+        (node.children||[]).forEach(find);
+      })(window.SceneManager && SceneManager._scene);
+      for(var i=0;i<pics.length;i++){
+        var p=pics[i]; if(!p) continue;
+        var b=["#"+i+" "+(p._name||"(none)")];
+        b.push("@"+Math.round(p._x)+","+Math.round(p._y));
+        b.push("scale="+p._scaleX+"%x"+p._scaleY+"%");
+        b.push("opacity="+Math.round(p._opacity));
+        if(p._blendMode) b.push("blend="+p._blendMode);
+        if(p._origin) b.push("origin="+p._origin);
+        var sp=sprites[i];
+        if(!sp) b.push("NO SPRITE");
+        else {
+          var bm=sp.bitmap;
+          b.push("sprite@"+Math.round(sp.x)+","+Math.round(sp.y)
+            +" "+Math.round(sp.width)+"x"+Math.round(sp.height)
+            +(sp.visible===false?" HIDDEN":"")
+            +" bmp="+(bm?(bm.width+"x"+bm.height+(bm.isReady&&!bm.isReady()?" NOTREADY":"")):"NONE"));
+          if(bm && bm.width<=1) b.push("<< 1x1 PLACEHOLDER");
+        }
+        out.push(b.join(" "));
+      }
+      return out.length ? out.join(" | ") : "no pictures shown";
+    }catch(e){ return "pictureDump threw: "+(e&&e.message); }
   }
   var stRun=false, stOut="";
   function stLog(k,v){ stOut+=(stOut?" · ":"")+k+"["+v+"]"; }

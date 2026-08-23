@@ -43,6 +43,9 @@ export type DiagSnap = {
   selftest?: string;
   /** Every node on the live PIXI stage with its transform, alpha and texture. */
   stage?: string;
+  /** The game's own record of every picture it asked to show, paired with the
+   *  bitmap that actually arrived. */
+  pics?: string;
   /** direct video-to-texture upload vs the same frame via a 2D canvas — tests
    *  the proposed fix on the real device before it is written */
   gl?: string;
@@ -112,6 +115,7 @@ export default function DiagOverlay(props: {
     if (d.probe) L.push(`probe: ${d.probe}`);
     if (d.selftest) L.push("", "-- SELF-TEST (probe suite, no gameplay) --", `  ${d.selftest}`);
     if (d.stage) L.push("", "-- STAGE (what PIXI is actually drawing) --", `  ${d.stage}`);
+    if (d.pics) L.push("", "-- PICTURES (asked for vs what arrived) --", `  ${d.pics}`);
     const inp = inputs();
     if (inp.length) {
       L.push("", "-- INPUT (parent) --");
