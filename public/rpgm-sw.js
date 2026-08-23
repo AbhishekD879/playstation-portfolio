@@ -178,7 +178,7 @@ const NW_SHIM = `<script>(function(){
 // audio buffers, fonts and the effekseer wasm, which are the things that stall.
 // Bump whenever a shim changes — a log that cannot name its own version wastes
 // a capture, which is exactly what happened once.
-const SHIM_V = "14";
+const SHIM_V = "15";
 const DIAG_SHIM = `<script>(function(){
   var T0=Date.now(), seq=0, pending={}, recent=[], errors=[], counts={ok:0,fail:0}, activity=[], xfer=[];
   // MOVEMENT channel — map transfers (doors/stairs) + event triggers get their
@@ -288,7 +288,7 @@ const DIAG_SHIM = `<script>(function(){
   }
   // Wrap texImage2D on the live context: count uploads, total bytes, and record
   // any that raise a GL error — an out-of-memory upload fails silently otherwise.
-  var texN=0, texMB=0, texErr=[], texHooked=false, ctxLost=0, texKind={};
+  var texN=0, texMB=0, texErr=[], texHooked=false, ctxLost=0, texKind={}, vidUp={};
   function hookGL(){
     if(texHooked) return;
     try{
@@ -303,7 +303,10 @@ const DIAG_SHIM = `<script>(function(){
         try{ if(src&&src.videoWidth){ w=src.videoWidth; h=src.videoHeight; }
              else if(src&&src.width){ w=src.width|0; h=src.height|0; } }catch(e){}
         try{ var k=(src&&src.constructor&&src.constructor.name)||(src===null?"null":typeof src);
-             texKind[k]=(texKind[k]||0)+1; }catch(e){}
+             texKind[k]=(texKind[k]||0)+1;
+             if(src&&src.videoWidth!==undefined){
+               var nm=((src.currentSrc||src.src||"?").split("/").pop());
+               vidUp[nm]=(vidUp[nm]||0)+1; } }catch(e){}
         var r=ti.apply(this,a);
         try{
           texN++; if(w&&h) texMB+=(w*h*4)/1048576;
@@ -328,6 +331,17 @@ const DIAG_SHIM = `<script>(function(){
       +(texErr.length?" · ERRORS: "+texErr.join(" | "):" · no upload errors");
   }
   var vfix=0;
+  function refreshTexturesFor(v){
+    try{
+      var C=window.PIXI && PIXI.utils && PIXI.utils.BaseTextureCache;
+      if(!C) return 0;
+      var n=0;
+      for(var k in C){ var bt=C[k];
+        if(bt && bt.source===v && typeof bt.update==="function"){ bt.update(); n++; } }
+      if(n) vfix+=n;
+      return n;
+    }catch(e){ return 0; }
+  }
   function patchVideoTextures(){
     try{
       var P=window.PIXI;
@@ -399,7 +413,7 @@ const DIAG_SHIM = `<script>(function(){
   function vidState(){ try{
     return vids.filter(function(v){ return v.src||v.currentSrc; }).slice(0,8).map(function(v){
       var n=(v.currentSrc||v.src||"").split("/").pop();
-      return n+" "+(v.paused?"PAUSED":"playing")+" t="+(v.currentTime||0).toFixed(1)
+      return n+" "+(v.paused?"PAUSED":"playing")+" up="+(vidUp[n]||0)+" t="+(v.currentTime||0).toFixed(1)
         +" rs="+v.readyState+" "+(v.videoWidth||0)+"x"+(v.videoHeight||0)
         +(v.muted?" muted":"")+(v.error?" ERR"+v.error.code:"");
     }).join("  |  ");
@@ -467,6 +481,9 @@ const DIAG_SHIM = `<script>(function(){
         elog("video element created","engine video");
         try{ if(vids.length<12) vids.push(el); }catch(e3){}
         el.addEventListener("loadeddata",function(){ logAct(rel(el.currentSrc||el.src||"(video)"), true, "video ready"); },false);
+        el.addEventListener("pause",function(){
+          var n=0; (function push(){ refreshTexturesFor(el);
+            if(++n<4) requestAnimationFrame(push); })(); }, false);
         el.addEventListener("error",function(){ var e=el.error;
           logAct(rel(el.currentSrc||el.src||"(video)"), false, "video error"+(e?" code "+e.code:"")); },false);
       } }catch(e2){}
