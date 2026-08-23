@@ -178,7 +178,7 @@ const NW_SHIM = `<script>(function(){
 // audio buffers, fonts and the effekseer wasm, which are the things that stall.
 // Bump whenever a shim changes — a log that cannot name its own version wastes
 // a capture, which is exactly what happened once.
-const SHIM_V = "18";
+const SHIM_V = "19";
 const DIAG_SHIM = `<script>(function(){
   var T0=Date.now(), seq=0, pending={}, recent=[], errors=[], counts={ok:0,fail:0}, activity=[], xfer=[];
   // MOVEMENT channel — map transfers (doors/stairs) + event triggers get their
@@ -525,6 +525,39 @@ const DIAG_SHIM = `<script>(function(){
       }catch(e){ stLog("concurrentDecode","threw"); }
 
       try{ v.pause(); v.removeAttribute("src"); v.load(); }catch(e){}
+
+      // Is the free tier gated? The plugin's own source settles it — no more
+      // inferring a paywall from behaviour. The log already caught this plugin
+      // alerting "works only in PRO version", so find that string and read what
+      // the code does around it.
+      try{
+        var plugs=[], S2=window.__rpgmFS;
+        if(S2) S2.forEach(function(k){
+          if(k.indexOf("js/plugins/")===0 && k.slice(-3)===".js") plugs.push(k); });
+        stLog("plugins", plugs.length+" files");
+        var hits=[], looked=0;
+        for(var pi=0; pi<plugs.length && hits.length<3 && looked<60; pi++){
+          var txt="";
+          try{ var rr=await fetch(plugs[pi]); txt=await rr.text(); }catch(e){ continue; }
+          looked++;
+          var low=txt.toLowerCase();
+          var g=low.indexOf("pro version");
+          var isVid = low.indexOf("vanim")>=0 || low.indexOf("videoanim")>=0
+                   || low.indexOf("vplayer")>=0 || low.indexOf("createvideo")>=0;
+          if(g<0 && !isVid) continue;
+          var nm=plugs[pi].split("/").pop();
+          var bit=nm+" "+Math.round(txt.length/1024)+"kB";
+          if(g>=0){
+            var a=Math.max(0,g-220), snip=txt.slice(a, g+220);
+            bit+=" GATE{"+JSON.stringify(snip).slice(0,420)+"}";
+          } else bit+=" (video plugin, no PRO string)";
+          // does it hand back a 1x1 bitmap? that is what the stage showed
+          var one=low.indexOf("bitmap(1,1)"); if(one<0) one=low.indexOf("bitmap(1, 1)");
+          if(one>=0) bit+=" ONE_BY_ONE{"+JSON.stringify(txt.slice(Math.max(0,one-160), one+160)).slice(0,300)+"}";
+          hits.push(bit);
+        }
+        stLog("pluginSrc", hits.length?hits.join(" ;;; "):"scanned "+looked+", no video plugin matched");
+      }catch(e){ stLog("pluginSrc","threw "+(e&&e.message)); }
     }catch(e){ stLog("selftest","threw "+(e&&e.message)); }
     stRun=false; post();
   }
