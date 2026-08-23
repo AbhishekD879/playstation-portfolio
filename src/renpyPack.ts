@@ -47,8 +47,15 @@ const IMAGE_EXT = new Set(["png", "jpg", "jpeg", "webp", "gif", "bmp", "avif"]);
 const AUDIO_EXT = new Set(["ogg", "oga", "opus", "mp3", "wav", "m4a", "aac", "flac"]);
 const VIDEO_EXT = new Set(["webm", "mp4", "ogv", "mkv", "avi", "mov"]);
 
-/** Small files cost more as an HTTP round trip than as bytes in the zip. */
-export const INLINE_MAX = 48 * 1024;
+/** Inline only genuinely tiny files.
+ *
+ *  This was 48KB on the reasoning that a round trip costs more than the bytes —
+ *  which is true on the open web and false here. A "remote" file in this design
+ *  is a same-origin request answered by our own service worker straight from
+ *  OPFS: no network, no latency worth trading memory for. Inlining bought almost
+ *  nothing and cost 108MB of residency on a real game, so it is now reserved for
+ *  files small enough that zip overhead is comparable to the request itself. */
+export const INLINE_MAX = 4 * 1024;
 
 export type Placement =
   | { where: "zip" }
@@ -59,7 +66,7 @@ export type Placement =
 export function placeFile(rel: string, size: number): Placement {
   const ext = EXT(rel);
   if (LOCAL_EXT.has(ext)) return { where: "zip" };      // needed at startup
-  if (size <= INLINE_MAX) return { where: "zip" };      // a round trip costs more
+  if (size <= INLINE_MAX) return { where: "zip" };      // too small to be worth a request
   if (IMAGE_EXT.has(ext)) return { where: "remote", rtype: "image" };
   if (AUDIO_EXT.has(ext)) {
     // webloader unlinks voice right after playback but keeps music for looping,
@@ -156,6 +163,10 @@ export interface SplitPlan {
   rpaBytes: number;
   videoBytes: number;
   biggestLocal: { rel: string; size: number } | null;
+  /** Where the resident bytes actually go, biggest first — the thing that makes
+   *  an over-budget game reducible instead of merely refused. */
+  localByExt: { ext: string; mb: number }[];
+  localByDir: { dir: string; mb: number }[];
 }
 
 /** Budget for everything game.zip carries. The engine extracts it into
@@ -163,7 +174,13 @@ export interface SplitPlan {
  *  runtime ceiling, not a preference — and on a phone the tab is killed rather
  *  than told. Checked from the file LISTING, before a single byte is read, so an
  *  impossible game is refused with a message instead of crashing the import. */
-export const LOCAL_BUDGET = 96 * 1024 * 1024;
+export const LOCAL_BUDGET = 192 * 1024 * 1024;
+// Chosen, not measured, and worth saying so: the previous 96MB was a guess that
+// refused a real game by 12MB. Runtime cost is this figure plus roughly 15MB of
+// engine data plus decoded textures, against a mobile tab budget usually in the
+// 1-2GB range, so 192MB leaves real headroom while still refusing the
+// gigabyte-scale case that actually kills tabs. The composition below is
+// reported so a game that does fail can be diagnosed rather than re-guessed.
 
 /** What the split will look like, computed from sizes alone. Images are assumed
  *  remote here; a few may fall back to local when their header can't be parsed,
@@ -172,7 +189,10 @@ export const LOCAL_BUDGET = 96 * 1024 * 1024;
 export function planSplit(files: { rel: string; size: number }[]): SplitPlan {
   const plan: SplitPlan = {
     localBytes: 0, localFiles: 0, remoteFiles: 0, rpaBytes: 0, videoBytes: 0, biggestLocal: null,
+    localByExt: [], localByDir: [],
   };
+  const byExt = new Map<string, number>();
+  const byDir = new Map<string, number>();
   for (const f of files) {
     const p = placeFile(f.rel, f.size);
     if (p.where === "zip") {
@@ -180,11 +200,20 @@ export function planSplit(files: { rel: string; size: number }[]): SplitPlan {
       plan.localFiles++;
       if (/\.rpa$/i.test(f.rel)) plan.rpaBytes += f.size;
       if (!plan.biggestLocal || f.size > plan.biggestLocal.size) plan.biggestLocal = { rel: f.rel, size: f.size };
+      const ext = EXT(f.rel) || "(none)";
+      byExt.set(ext, (byExt.get(ext) ?? 0) + f.size);
+      const dir = f.rel.includes("/") ? f.rel.slice(0, f.rel.indexOf("/")) : "(root)";
+      byDir.set(dir, (byDir.get(dir) ?? 0) + f.size);
     } else {
       plan.remoteFiles++;
       if (/\.(webm|mp4|ogv|mkv|avi|mov)$/i.test(f.rel)) plan.videoBytes += f.size;
     }
   }
+  const top = (m: Map<string, number>) => [...m.entries()]
+    .sort((a, b) => b[1] - a[1]).slice(0, 6)
+    .map(([k, v]) => ({ k, mb: Math.round((v / 1048576) * 10) / 10 }));
+  plan.localByExt = top(byExt).map(({ k, mb }) => ({ ext: k, mb }));
+  plan.localByDir = top(byDir).map(({ k, mb }) => ({ dir: k, mb }));
   return plan;
 }
 
@@ -199,7 +228,10 @@ export function budgetRefusal(plan: SplitPlan): string | null {
       + `hold all of it in memory at once, and the browser would kill the tab. Total that must stay resident: ${mb(plan.localBytes)}, `
       + `and the safe limit is ${mb(LOCAL_BUDGET)}.`;
   }
+  const where = plan.localByDir.length
+    ? ` Most of it is in ${plan.localByDir.slice(0, 3).map((d) => `${d.dir}/ (${d.mb} MB)`).join(", ")}.`
+    : "";
   return `This build needs ${mb(plan.localBytes)} of scripts and data resident in memory `
-    + `(safe limit ${mb(LOCAL_BUDGET)}), which the browser won't survive. `
-    + (plan.biggestLocal ? `Largest single file: ${plan.biggestLocal.rel} at ${mb(plan.biggestLocal.size)}.` : "");
+    + `(safe limit ${mb(LOCAL_BUDGET)}), which the browser won't survive.${where}`
+    + (plan.biggestLocal ? ` Largest single file: ${plan.biggestLocal.rel} at ${mb(plan.biggestLocal.size)}.` : "");
 }

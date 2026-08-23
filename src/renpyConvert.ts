@@ -174,7 +174,9 @@ export async function convertRenpyDesktop(
   trace("convert: plan", { localFiles: plan.localFiles, localMB: Math.round(plan.localBytes / 1048576),
     remoteFiles: plan.remoteFiles, rpaMB: Math.round(plan.rpaBytes / 1048576),
     videoMB: Math.round(plan.videoBytes / 1048576),
-    biggest: plan.biggestLocal ? `${plan.biggestLocal.rel}:${Math.round(plan.biggestLocal.size / 1048576)}MB` : "none" });
+    biggest: plan.biggestLocal ? `${plan.biggestLocal.rel}:${Math.round(plan.biggestLocal.size / 1048576)}MB` : "none",
+    byExt: plan.localByExt.map((e) => `${e.ext}:${e.mb}`).join(" "),
+    byDir: plan.localByDir.map((d) => `${d.dir}:${d.mb}`).join(" ") });
   const refusal = budgetRefusal(plan);
   if (refusal) throw new Error(refusal);
 
@@ -301,6 +303,10 @@ export async function convertRenpyDesktop(
   if (plan.rpaBytes > 0) {
     notes.push(`${Math.round(plan.rpaBytes / 1048576)} MB of .rpa archives couldn't be opened and have to `
       + "stay in memory. Unopened archives can't be fetched per file.");
+  }
+  if (plan.localBytes > 128 * 1024 * 1024) {
+    notes.push(`${Math.round(plan.localBytes / 1048576)} MB of scripts and data stay in memory while playing `
+      + "— this is a heavy build and may be unstable on a phone.");
   }
   if (videoBytes > 0) {
     notes.push(`${Math.round(videoBytes / 1048576)} MB of video is fetched on demand but not freed after playing.`);

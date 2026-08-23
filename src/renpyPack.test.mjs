@@ -26,7 +26,11 @@ assert.deepEqual(placeFile("script.rpyc", big), { where: "zip" }, "scripts are n
 assert.deepEqual(placeFile("gui/font.ttf", big), { where: "zip" }, "fonts are needed to draw anything");
 assert.deepEqual(placeFile("archive.rpa", 900e6), { where: "zip" },
   "an .rpa is monolithic — it cannot be fetched per file");
-assert.deepEqual(placeFile("images/bg.png", 8), { where: "zip" }, "a round trip costs more than 8 bytes");
+assert.deepEqual(placeFile("images/bg.png", 8), { where: "zip" }, "too small to be worth a request");
+// remote here means our own service worker reading OPFS, so inlining buys almost
+// nothing — a 40KB image belongs on demand, not resident
+assert.deepEqual(placeFile("images/bg.png", 40 * 1024), { where: "remote", rtype: "image" },
+  "40KB must not be inlined: a remote read is same-origin, not a network trip");
 assert.deepEqual(placeFile("images/bg.png", big), { where: "remote", rtype: "image" });
 assert.deepEqual(placeFile("audio/theme.ogg", big), { where: "remote", rtype: "music" });
 // voice is unlinked right after playback, music is kept for looping — the
@@ -89,6 +93,9 @@ const modest = planSplit([
 ]);
 assert.equal(modest.localFiles, 1, "only the script is local");
 assert.equal(modest.localBytes, 8 * MB, "a remote image costs no resident memory");
+// composition is what makes an over-budget game reducible rather than just refused
+assert.deepEqual(modest.localByExt, [{ ext: "rpyc", mb: 8 }]);
+assert.deepEqual(modest.localByDir, [{ dir: "(root)", mb: 8 }]);
 assert.equal(modest.videoBytes, 300 * MB);
 assert.equal(budgetRefusal(modest), null, "8 MB resident is fine");
 
@@ -106,6 +113,15 @@ const bulky = planSplit(Array.from({ length: 400 }, (_, i) => ({ rel: `s${i}.rpy
 const bulkWhy = budgetRefusal(bulky);
 assert.ok(bulkWhy && !/\.rpa/.test(bulkWhy), "no archives, so do not blame archives");
 assert.match(bulkWhy, /Largest single file/);
+
+// the refusal must point at WHERE the weight is, so it can be acted on
+const tl = planSplit([
+  ...Array.from({ length: 200 }, (_, i) => ({ rel: `tl/Spanish/s${i}.rpyc`, size: 1 * MB })),
+  ...Array.from({ length: 60 }, (_, i) => ({ rel: `game/s${i}.rpyc`, size: 1 * MB })),
+]);
+assert.equal(tl.localByDir[0].dir, "tl", "the heaviest directory must come first");
+const tlWhy = budgetRefusal(tl);
+assert.match(tlWhy, /tl\/ \(200 MB\)/, "the refusal must name the directory to cut");
 
 // right at the edge: at the limit is allowed, one byte over is not
 assert.equal(budgetRefusal(planSplit([{ rel: "a.rpyc", size: LOCAL_BUDGET }])), null);
