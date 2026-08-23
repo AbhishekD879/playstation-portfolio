@@ -23,7 +23,7 @@ self.addEventListener("install", () => self.skipWaiting());
 self.addEventListener("activate", (e) => e.waitUntil(self.clients.claim()));
 // a re-import can change a game's root prefix / lite flag / pack — forget all
 self.addEventListener("message", (e) => {
-  if (e.data && e.data.type === "rpgm-root-bust") { rootCache.delete(e.data.id); liteCache.delete(e.data.id); packCache.delete(e.data.id); }
+  if (e.data && e.data.type === "rpgm-root-bust") { rootCache.delete(e.data.id); liteCache.delete(e.data.id); packCache.delete(e.data.id); rpaCache.delete(e.data.id); }
 });
 
 // —— MV/MZ save isolation shim (injected into that route's HTML only) ——
@@ -178,7 +178,7 @@ const NW_SHIM = `<script>(function(){
 // audio buffers, fonts and the effekseer wasm, which are the things that stall.
 // Bump whenever a shim changes — a log that cannot name its own version wastes
 // a capture, which is exactly what happened once.
-const SHIM_V = "26";
+const SHIM_V = "27";
 const DIAG_SHIM = `<script>(function(){
   var T0=Date.now(), seq=0, pending={}, recent=[], errors=[], counts={ok:0,fail:0}, activity=[], xfer=[];
   // MOVEMENT channel — map transfers (doors/stairs) + event triggers get their
@@ -1224,7 +1224,9 @@ async function rpaBytes(gameId, path) {
   const rel = path.replace(/^game\//, "");
   const hit = idx.f[rel];
   if (!hit) return null;
-  const archive = "game/" + idx.a[hit[0]];
+  // Already root-relative and already includes game/ — see archives.push in
+  // renpyConvert.ts. Prepending game/ here would look for game/game/x.rpa.
+  const archive = idx.a[hit[0]];
 
   // resolve the archive itself: loose first, then the pack, same as any file
   let src = null, base = 0;

@@ -3,9 +3,10 @@
 // in-memory FS for the whole session), and the manifest format is read by
 // renpy/loader.py, so a wrong separator silently drops every remote file.
 import assert from "node:assert/strict";
+globalThis.btoa ??= (b) => Buffer.from(b, "binary").toString("base64");
 import {
   parseRenpyVersion, webZipCandidates, placeFile, buildRemoteManifest, imageSize, INLINE_MAX,
-  planSplit, budgetRefusal, LOCAL_BUDGET,
+  planSplit, budgetRefusal, LOCAL_BUDGET, archiveKey, toBase64,
 } from "./renpyPack.ts";
 
 // —— version ——————————————————————————————————————————————————————————————
@@ -127,5 +128,27 @@ assert.match(tlWhy, /tl\/ \(200 MB\)/, "the refusal must name the directory to c
 assert.equal(budgetRefusal(planSplit([{ rel: "a.rpyc", size: LOCAL_BUDGET }])), null);
 assert.ok(budgetRefusal(planSplit([{ rel: "a.rpyc", size: LOCAL_BUDGET + 1 }])));
 assert.equal(budgetRefusal(planSplit([])), null, "an empty plan is not a refusal");
+
+// —— the path invariant ————————————————————————————————————————————————————
+// The service worker prepends .rpgmroot to EVERY lookup, so what .rpaindex
+// stores must satisfy root + key === the real path. Breaking this prepends game/
+// twice and 404s every asset in the game — it already did once.
+for (const [root, full] of [
+  ["LewdIsland-1.0-pc/", "LewdIsland-1.0-pc/game/sugar.rpa"],
+  ["", "game/sugar.rpa"],
+  ["a/b/", "a/b/game/x.rpa"],
+]) {
+  const key = archiveKey(root, full);
+  assert.equal(root + key, full, `root + archiveKey must rebuild the path (${full})`);
+  assert.ok(key.startsWith("game/"), "the stored key must still carry the game/ segment");
+}
+// a path outside the root is returned untouched rather than silently truncated
+assert.equal(archiveKey("x/", "other/game/a.rpa"), "other/game/a.rpa");
+
+// base64 must not spread a large buffer into a call (stack overflow reads as a
+// corrupt archive, which is the worst way to fail)
+const wide = new Uint8Array(200_000).fill(65);
+assert.equal(toBase64(wide).length, Math.ceil(wide.length / 3) * 4);
+assert.equal(toBase64(new Uint8Array([104, 105])), "aGk=");
 
 console.log("renpy pack ok · version, placement, manifest, 5 image formats, budget gate");

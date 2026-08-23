@@ -627,6 +627,9 @@ async function doImport(
   trace("saved game record", { engine: game.engine, root: game.root, entry: game.entry,
     files: game.fileCount, mb: Math.round(game.bytes / 1048576) });
   await putGame(game);
+  // Bust again now the files are final. The pre-import bust can be undone by
+  // anything the worker memoises while the import is still running.
+  bustSwRootCache(id);
   return game;
 }
 
@@ -648,6 +651,16 @@ function renpyIO(id: string): ConvertIO {
     readHead: async (path, n) => {
       const f = await readGameFile(id, path);
       return f ? new Uint8Array(await f.slice(0, n).arrayBuffer()) : null;
+    },
+    randomAccess: async (path) => {
+      try {
+        const { dir, name } = await ensurePath(await gameDir(id), path);
+        await (await dir.getFileHandle(name)).getFile();
+        return true;                                     // loose: slicing is cheap
+      } catch { /* packed */ }
+      const pack = await packOf(id);
+      const ent = pack?.map.get(path.normalize("NFKC").toLowerCase());
+      return ent ? ent.method === 0 : false;             // stored only
     },
     readSlice: async (path, start, end) => {
       const f = await readGameFile(id, path);

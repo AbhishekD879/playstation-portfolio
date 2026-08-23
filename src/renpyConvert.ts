@@ -17,8 +17,8 @@ import { Zip, ZipPassThrough, unzipSync } from "fflate";
 import { trace } from "./importTrace";
 import { decodeRpaIndex, parseRpaHeader, type RpaEntry } from "./rpaIndex";
 import {
-  budgetRefusal, buildRemoteManifest, findGameRoot, imageSize, parseRenpyVersion, placeFile,
-  planSplit, webZipCandidates, type RemoteEntry,
+  archiveKey, budgetRefusal, buildRemoteManifest, findGameRoot, imageSize, parseRenpyVersion,
+  placeFile, planSplit, toBase64, webZipCandidates, type RemoteEntry,
 } from "./renpyPack";
 
 const PROXY = "https://abhishekstation-mp.abhishekdiwate879.workers.dev/renpy-web";
@@ -49,6 +49,10 @@ export interface ConvertIO {
    *  20MB PNG to learn them is what made this run out of memory on a phone. */
   readHead: (path: string, n: number) => Promise<Uint8Array | null>;
   readSlice: (path: string, start: number, end: number) => Promise<Uint8Array | null>;
+  /** True when this file can be sliced cheaply. A deflated pack entry cannot:
+   *  reading any part of it inflates the whole thing, which for an 823MB archive
+   *  is precisely the out-of-memory this design exists to avoid. */
+  randomAccess: (path: string) => Promise<boolean>;
   write: (path: string, bytes: Uint8Array) => Promise<void>;
   /** Sequential sink, so game.zip is never held in memory in full. */
   openWrite: (path: string) => Promise<{ write: (c: Uint8Array) => Promise<void>; close: () => Promise<void> }>;
@@ -132,12 +136,23 @@ export async function convertRenpyDesktop(
   // asset a byte range inside. Read the index and every asset inside becomes
   // individually fetchable, exactly like a loose file — which is what takes a
   // 823MB archive off the memory budget entirely.
+  const looseRels = new Set(
+    gameFiles.filter((f) => !/\.rpa$/i.test(f.path)).map((f) => f.path.slice(gamePrefix.length)),
+  );
   const archives: string[] = [];
   const rpaFiles: Record<string, [number, [number, number, string | 0][]]> = {};
   const rpaOwned = new Map<string, { ai: number; entry: RpaEntry }>();
   for (const f of gameFiles) {
     if (!/\.rpa$/i.test(f.path)) continue;
     try {
+      if (!(await io.randomAccess(f.path))) {
+        // Stored at import (needsRandomAccess) — but an install made before that
+        // change is still deflated, and inflating it would blow up the tab.
+        trace("rpa: not randomly accessible, skipping", { file: f.path.slice(root.length) });
+        notes.push(`${f.path.split("/").pop()} was imported before archive support and can't be `
+          + "opened without re-importing this game.");
+        continue;
+      }
       const head = await io.readHead(f.path, 40);
       const hdr = head ? parseRpaHeader(head) : null;
       if (!hdr) { trace("rpa: unrecognised header", { file: f.path }); continue; }
@@ -149,11 +164,14 @@ export async function convertRenpyDesktop(
       ).arrayBuffer());
       const index = decodeRpaIndex(inflated, hdr.key);
       const ai = archives.length;
-      archives.push(f.path.slice(root.length));
+      archives.push(archiveKey(root, f.path));
       for (const [rel, entry] of index) {
+        // A loose file of the same name wins, as it does in Ren'Py itself, and
+        // emitting both would duplicate the manifest line.
+        if (looseRels.has(rel) || rpaOwned.has(rel)) continue;
         rpaOwned.set(rel, { ai, entry });
         rpaFiles[rel] = [ai, entry.segments.map((sg) => [sg.offset, sg.length,
-          sg.prefix?.length ? btoa(String.fromCharCode(...sg.prefix)) : 0])];
+          sg.prefix?.length ? toBase64(sg.prefix) : 0])];
       }
       trace("rpa: index read", { file: f.path.slice(root.length), version: hdr.version, entries: index.size });
     } catch (e) {
@@ -171,7 +189,7 @@ export async function convertRenpyDesktop(
   // the plan by its contents, each of which can be fetched on demand.
   const opened = new Set<string>();
   for (const f of gameFiles) {
-    if (/\.rpa$/i.test(f.path) && archives.includes(f.path.slice(root.length))) opened.add(f.path);
+    if (/\.rpa$/i.test(f.path) && archives.includes(archiveKey(root, f.path))) opened.add(f.path);
   }
   const rels = gameFiles
     .filter((f) => !opened.has(f.path))

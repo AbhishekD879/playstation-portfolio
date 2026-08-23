@@ -235,3 +235,22 @@ export function budgetRefusal(plan: SplitPlan): string | null {
     + `(safe limit ${mb(LOCAL_BUDGET)}), which the browser won't survive.${where}`
     + (plan.biggestLocal ? ` Largest single file: ${plan.biggestLocal.rel} at ${mb(plan.biggestLocal.size)}.` : "");
 }
+
+/** The archive path stored in .rpaindex, and the invariant the service worker
+ *  relies on: root + archiveKey(root, path) === path. The worker prepends
+ *  .rpgmroot to every lookup, so the stored form must be root-RELATIVE and must
+ *  already contain the game/ segment. Getting this wrong prepends game/ twice and
+ *  404s every asset in the game, so it lives in one place and is tested. */
+export function archiveKey(root: string, fullPath: string): string {
+  return fullPath.startsWith(root) ? fullPath.slice(root.length) : fullPath;
+}
+
+/** Base64 without spreading into apply() — a large prefix would overflow the
+ *  call stack, and the failure would look like a corrupt archive. */
+export function toBase64(bytes: Uint8Array): string {
+  let out = "";
+  for (let i = 0; i < bytes.length; i += 0x8000) {
+    out += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+  }
+  return btoa(out);
+}
