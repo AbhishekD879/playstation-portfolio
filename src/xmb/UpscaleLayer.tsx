@@ -5,9 +5,9 @@
 // completely unaware — no emulator had to be modified for this, which is the
 // only way one feature could cover eight of them.
 import { createEffect, on, onCleanup } from "solid-js";
-import { findCaptureSource } from "../capture";
+import { findCaptureSource, sourceViewportRect } from "../capture";
 import { startUpscale, upscaleSupported, type UpscaleHandle } from "../upscale";
-import { upscale } from "../theme";
+import { frameGen, upscale } from "../theme";
 
 /** Apps whose main view is a game/video screen worth upscaling. */
 const UPSCALE_APPS = new Set([
@@ -33,16 +33,17 @@ export default function UpscaleLayer(props: { app: string | null }) {
     if (hidden) { hidden.style.visibility = ""; hidden = null }
   };
 
-  createEffect(on(() => [props.app, upscale()] as const, ([app, mode]) => {
+  createEffect(on(() => [props.app, upscale(), frameGen()] as const, ([app, mode, fg]) => {
     teardown();
-    if (!app || !UPSCALE_APPS.has(app) || mode === "off" || !upscaleSupported()) return;
+    const smooth = fg === "smooth";
+    if (!app || !UPSCALE_APPS.has(app) || (mode === "off" && !smooth) || !upscaleSupported()) return;
 
     let dead = false, tries = 0;
     const arm = async () => {
       if (dead) return;
       const src = findCaptureSource();
       if (!src) { if (++tries < 40) setTimeout(arm, 500); return } // still booting
-      const h = await startUpscale(src, mode);
+      const h = await startUpscale(src, mode, { frameGen: smooth });
       if (dead || !h) { h?.stop(); return }
       handle = h;
 
@@ -64,7 +65,8 @@ export default function UpscaleLayer(props: { app: string | null }) {
         if (cs.transform !== "none" || cs.filter !== "none" || cs.perspective !== "none") { transformed = true; break }
         anc = anc.parentElement;
       }
-      if (transformed || !hidden.parentElement) {
+      const inFrame = hidden.ownerDocument !== document;
+      if (transformed || inFrame || !hidden.parentElement) {
         out.classList.add("upscale-out-detached");
         document.body.appendChild(out);
       } else {
@@ -73,7 +75,8 @@ export default function UpscaleLayer(props: { app: string | null }) {
       hidden.style.visibility = "hidden";
 
       const place = () => {
-        const r = (hidden as HTMLElement).getBoundingClientRect();
+        // composes through any same-origin iframe the source lives in
+        const r = sourceViewportRect(hidden as HTMLElement);
         out.style.left = `${r.left}px`;
         out.style.top = `${r.top}px`;
         out.style.width = `${r.width}px`;

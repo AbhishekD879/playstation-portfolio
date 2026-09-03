@@ -111,6 +111,20 @@ const [upscale, setUpSig] = createSignal<UpscaleMode>(
 export { upscale };
 export function setUpscale(m: UpscaleMode) { localStorage.setItem(UPSCALE_KEY, m); setUpSig(m); }
 
+// —— motion smoothing (frame interpolation) ————————————————————————————————
+// Generates an in-between frame from consecutive source frames using optical
+// flow, so a 30fps game presents at 60. This is what a TV's motion smoothing
+// does and what DLSS Frame Generation does with far better inputs — an emulator
+// has no motion vectors to give us, so this is image-based and honest about it:
+// one frame of added latency and artefacts on fast cuts. Off by default, and a
+// separate switch from upscaling because the two compose.
+export type FrameGenMode = "off" | "smooth";
+const FRAMEGEN_KEY = "asp.framegen";
+const storedFg = localStorage.getItem(FRAMEGEN_KEY);
+const [frameGen, setFgSig] = createSignal<FrameGenMode>(storedFg === "smooth" ? "smooth" : "off");
+export { frameGen };
+export function setFrameGen(m: FrameGenMode) { localStorage.setItem(FRAMEGEN_KEY, m); setFgSig(m); }
+
 /** Index into THEMES; THEMES.length means "custom colour". */
 export function currentThemeIndex(): number {
   const c = localStorage.getItem("asp.theme");

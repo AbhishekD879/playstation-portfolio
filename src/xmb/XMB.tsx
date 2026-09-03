@@ -4,7 +4,7 @@ import { For, Show, createEffect, createMemo, createSignal, onCleanup, onMount }
 import { CAREER, CATEGORIES, PROJECTS, TROPHIES, type XmbItem } from "../content";
 import { AVATARS, PLATINUM, award, resizePhoto, updateProfile, type Profile } from "../profiles";
 import { CORES, PS2_EXTS, PSP_ONLY_EXTS, PSX_ONLY_EXTS, addGame, listGames, addPhoto, listPhotos, fsAccessSupported, type GameRecord, type PhotoRecord } from "../gamesdb";
-import { BG_MODES, THEMES, applyCustomHsl, applyTheme, bgMode, currentThemeIndex, loadCustomHsl, setBgMode, setUpscale, upscale } from "../theme";
+import { BG_MODES, THEMES, applyCustomHsl, applyTheme, bgMode, currentThemeIndex, loadCustomHsl, setBgMode, setUpscale, upscale, frameGen, setFrameGen } from "../theme";
 import { UPSCALE_MODES, upscaleSupported } from "../upscale";
 import { LAB_FLAT, LAB_GROUPS, LAB_GUIDES, labEnabled, rateFeature, toggleLab } from "../labs";
 import { deviceSummary } from "../gpu";
@@ -2721,6 +2721,21 @@ export default function XMB(props: {
                     </button>
                   )}
                 </For>
+              </div>
+            </div>
+            <div class="bg-modes">
+              <span class="bg-modes-label">MOTION SMOOTHING</span>
+              <div class="bg-modes-row">
+                <button class="bg-mode" classList={{ active: frameGen() === "off" }}
+                  onClick={() => { setFrameGen("off"); sfx.tickH(); }}>
+                  <span class="bg-mode-name">Off</span>
+                  <span class="bg-mode-sub">Frames shown exactly as the game presents them</span>
+                </button>
+                <button class="bg-mode" classList={{ active: frameGen() === "smooth" }}
+                  onClick={() => { setFrameGen("smooth"); sfx.tickH(); }}>
+                  <span class="bg-mode-name">Smooth</span>
+                  <span class="bg-mode-sub">Synthesises the frame between two real ones, so a 30fps game moves at 60. Adds one frame of latency and can soften fast cuts — experimental</span>
+                </button>
               </div>
             </div>
           </Show>

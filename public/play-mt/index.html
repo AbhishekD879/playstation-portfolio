@@ -216,6 +216,29 @@
     }
   }
 
+  const Q = new URLSearchParams(location.search);
+  // ?keepbuf=1 — keep the WebGL drawing buffer readable after a frame is
+  // composited. A WebGL canvas without preserveDrawingBuffer reads back blank
+  // once the browser has presented it, so the parent's upscaler and motion
+  // smoothing would capture nothing. Emscripten creates the context through
+  // canvas.getContext, so it is intercepted here. Costs a per-frame copy, which
+  // is why the parent only asks for it when a picture setting is actually on.
+  if (Q.get("keepbuf") === "1") {
+    const og = HTMLCanvasElement.prototype.getContext;
+    HTMLCanvasElement.prototype.getContext = function (kind, attrs) {
+      if (/webgl/i.test(String(kind))) {
+        attrs = attrs || {};
+        if (attrs.preserveDrawingBuffer === undefined) attrs.preserveDrawingBuffer = true;
+        return og.call(this, kind, attrs);
+      }
+      return og.apply(this, arguments);
+    };
+  }
+  // ?res=N — internal render resolution (1..3). The fork's setResolutionFactor
+  // applies it live on the GS thread; stock has no such binding and ignores it.
+  const resFactor = (v) => { const n = Number(v); return n === 2 || n === 3 ? n : 1; };
+  const applyRes = (n) => { if (mod && typeof mod.setResolutionFactor === "function") mod.setResolutionFactor(resFactor(n)); };
+
   Play({
     canvas,
     locateFile: (f) => "/play-mt/" + f,
@@ -234,6 +257,8 @@
     // initVm creates the VM + WebGL context (#outputCanvas) + input + sound.
     // Without this ccall nothing boots — bootElf/bootDiscImage assume the VM exists.
     mod.ccall("initVm", "", [], []);
+    // the GS exists now, so the requested internal resolution can take effect
+    applyRes(Q.get("res"));
     tell("play-ready");
   }).catch((e) => tell("play-error", { message: String(e).slice(0, 200) }));
 
@@ -279,6 +304,9 @@
       } catch (err) {
         tell("play-error", { message: String(err).slice(0, 200) });
       }
+    }
+    if (e.data.type === "play-res" && mod) {
+      applyRes(e.data.factor);   // live change from the parent, no reboot
     }
     if (e.data.type === "play-save" && mod) {
       const count = await snapshot(e.data.saveKey);

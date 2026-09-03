@@ -69,3 +69,32 @@ export function readClock(search = location.search): Ps2Clock {
 export function writeClock(c: Ps2Clock): void {
   try { localStorage.setItem(CLOCK_KEY, c); } catch { /* nothing to do if storage is blocked */ }
 }
+
+// —— internal render resolution ————————————————————————————————————————————
+// The GS draws every framebuffer at N× the PS2's native size, so a 512×448 game
+// becomes a clean 1024×896 or 1536×1344 picture — the same lever PCSX2 exposes.
+// Advanced engine only: the binding lives in our fork (setResolutionFactor) and
+// the boot page guards the call, so on native this is silently 1×. Read once at
+// mount like the clock; the fork applies changes live, but re-reading here
+// would mean re-setting the iframe src, which restarts the game.
+
+export type Ps2Res = 1 | 2 | 3;
+
+const RES_KEY = "asp.ps2.res";
+
+export function readRes(search = location.search): Ps2Res {
+  const q = new URLSearchParams(search).get("res");
+  if (q === "2" || q === "3") return Number(q) as Ps2Res;
+  if (q === "1") return 1;
+  try {
+    const v = localStorage.getItem(RES_KEY);
+    if (v === "2" || v === "3") return Number(v) as Ps2Res;
+  } catch {
+    /* private mode — fall through to the default */
+  }
+  return 1;
+}
+
+export function writeRes(r: Ps2Res): void {
+  try { localStorage.setItem(RES_KEY, String(r)); } catch { /* nothing to do if storage is blocked */ }
+}

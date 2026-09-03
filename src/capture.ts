@@ -73,16 +73,54 @@ export function clipSupported() {
   return typeof VideoEncoder !== "undefined" && typeof VideoFrame !== "undefined";
 }
 
+/** Every canvas/video in the top document AND in same-origin iframes. The PS2
+ *  emulator runs in its own same-origin frame (so its input bridge and module
+ *  are reachable), and until this looked inside frames the upscaler never found
+ *  it — "ps2" sat in UPSCALE_APPS and silently did nothing. Cross-origin frames
+ *  throw on contentDocument and are skipped. */
+function captureCandidates(): Src[] {
+  const out: Src[] = [...document.querySelectorAll<Src>("canvas, video")];
+  for (const f of document.querySelectorAll("iframe")) {
+    try {
+      const doc = f.contentDocument;
+      if (doc) out.push(...doc.querySelectorAll<Src>("canvas, video"));
+    } catch { /* cross-origin: not ours to read */ }
+  }
+  return out;
+}
+
+/** Compose an element's rect through every same-origin frame up to the top
+ *  document. getBoundingClientRect() inside an iframe is relative to THAT
+ *  frame's viewport, so an overlay positioned in the top page must add each
+ *  frame element's own offset. */
+export function composeRect(inner: DOMRect, frames: DOMRect[]): { left: number; top: number; width: number; height: number } {
+  let left = inner.left, top = inner.top;
+  for (const f of frames) { left += f.left; top += f.top; }
+  return { left, top, width: inner.width, height: inner.height };
+}
+
+export function sourceViewportRect(el: Element): { left: number; top: number; width: number; height: number } {
+  const frames: DOMRect[] = [];
+  let win: Window | null = el.ownerDocument.defaultView;
+  while (win && win !== window) {
+    const fe = win.frameElement;
+    if (!fe) break;
+    frames.push(fe.getBoundingClientRect());
+    win = win.parent === win ? null : win.parent;
+  }
+  return composeRect(el.getBoundingClientRect(), frames);
+}
+
 /**
  * The biggest thing actually drawing pixels right now. Every capture surface we
  * have — EmulatorJS, Play!, Ruffle, xash3d, DOOM, the video player, and the
  * WebRTC <video> a spectator is watching — is a plain canvas or video in the top
- * document, so one query covers all of them and no app needs to register itself.
- * Cross-origin iframes are unreachable by design; nothing we ship uses one.
+ * document or a same-origin iframe, so one scan covers all of them and no app
+ * needs to register itself. Cross-origin iframes are unreachable by design.
  */
 export function findCaptureSource(): Src | null {
   let best: Src | null = null, bestArea = 0;
-  for (const el of document.querySelectorAll<Src>("canvas, video")) {
+  for (const el of captureCandidates()) {
     // Console chrome is not app content. The living background (.wave-bg /
     // .fluid-canvas) is a full-screen canvas, so on area alone it beats every
     // real app view — and worse, the upscaler would then HIDE the console's own
@@ -92,9 +130,9 @@ export function findCaptureSource(): Src | null {
     const { w, h } = srcSize(el);
     if (w < 64 || h < 64) continue;                     // sparklines, icons, thumbnails
     if (el instanceof HTMLVideoElement && el.readyState < 2) continue;
-    const r = el.getBoundingClientRect();
+    const r = sourceViewportRect(el);
     if (r.width < 120 || r.height < 90) continue;       // not the main view
-    if (getComputedStyle(el).visibility === "hidden") continue;
+    if ((el.ownerDocument.defaultView ?? window).getComputedStyle(el).visibility === "hidden") continue;
     const area = r.width * r.height;
     if (area > bestArea) { best = el; bestArea = area }
   }

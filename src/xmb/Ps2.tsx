@@ -17,7 +17,8 @@ import { Icon } from "./icons";
 import { makeRoomCode, startHost, startJoinerResilient, type HostHandle, type ResilientJoiner } from "../ps2mp/webrtc";
 import { captureLocalInput, makeInjector, type PadState } from "../ps2mp/input";
 import { bumpPlays, resolveGameFile, type GameRecord } from "../gamesdb";
-import { clockDen, engineUrl, readClock, readEngine } from "../ps2/engineChoice";
+import { clockDen, engineUrl, readClock, readEngine, readRes } from "../ps2/engineChoice";
+import { frameGen, upscale } from "../theme";
 import PartyPanel, { type MicState } from "./PartyPanel";
 import { buildRoster, cleanName, cleanText, confirmLine, lineId, pushLine, type ChatLine, type Member } from "../ps2mp/party";
 import { partyNameAsked } from "../ps2mp/partyName";
@@ -74,7 +75,17 @@ export default function Ps2(props: {
   // destroyed document — so the choice is made on PS2 home before a disc spins,
   // and by the time this component exists the answer is already settled.
   const engine = readEngine();
-  const engineSrc = engineUrl(engine);
+  // Internal resolution and the drawing-buffer flag travel in the frame URL and
+  // are read once with everything else. res= is honoured only by the fork
+  // (stock has no such binding and ignores it). keepbuf=1 asks the emulator page
+  // to keep its WebGL drawing buffer readable, which the upscaler and motion
+  // smoothing need to copy frames out of the frame — it costs a per-frame copy,
+  // so it is only requested when one of them is actually on.
+  const res = readRes();
+  const wantsFrames = upscale() !== "off" || frameGen() !== "off";
+  const engineSrc = engine === "advanced"
+    ? `${engineUrl(engine)}?res=${res}${wantsFrames ? "&keepbuf=1" : ""}`
+    : engineUrl(engine);
   // Same read-once rule as the engine: the clock is applied at boot, so it is
   // settled on PS2 home before this component exists.
   const eeClockDen = clockDen(readClock());

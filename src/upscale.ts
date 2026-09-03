@@ -14,11 +14,14 @@
 // The library is ~3.5 MB of inlined WGSL weights, so it is ALWAYS lazy-imported
 // — a visitor who never turns this on never downloads it.
 import { hasWebGPU } from "./gpu";
+import { createFsr, type UpscalePipeline } from "./fsr";
+import { createFrameGen, type FrameGen } from "./framegen";
 
-export type UpscaleMode = "off" | "fast" | "quality" | "restore";
+export type UpscaleMode = "off" | "fsr" | "fast" | "quality" | "restore";
 
 export const UPSCALE_MODES: { id: UpscaleMode; name: string; desc: string }[] = [
   { id: "off", name: "Off", desc: "Native output, nearest-neighbour as the browser scales it" },
+  { id: "fsr", name: "FSR", desc: "AMD FidelityFX Super Resolution 1 — 2× edge-aware upscale with no neural net. The light choice for a phone GPU" },
   { id: "fast", name: "Sharp", desc: "2× CNN upscale. Cheap enough for a laptop iGPU" },
   { id: "quality", name: "Sharp+", desc: "Heavier 2× CNN. Best on a discrete GPU" },
   { id: "restore", name: "Restore", desc: "Deblur and clean up first, then upscale. Best for blurry 3D-era games" },
@@ -60,8 +63,15 @@ export function upscaleSupported() {
  * the mode is off, or the source hasn't sized itself yet — every caller treats
  * null as "just show the original", so this can never break a game.
  */
-export async function startUpscale(src: Src, mode: UpscaleMode): Promise<UpscaleHandle | null> {
-  if (mode === "off" || !upscaleSupported()) return null;
+export interface UpscaleOpts {
+  /** Motion smoothing: synthesise the frame between consecutive source frames.
+   *  Composes with any mode, including "off" (smoothing at native size). */
+  frameGen?: boolean;
+}
+
+export async function startUpscale(src: Src, mode: UpscaleMode, opts: UpscaleOpts = {}): Promise<UpscaleHandle | null> {
+  const smooth = !!opts.frameGen;
+  if ((mode === "off" && !smooth) || !upscaleSupported()) return null;
   const first = srcSize(src);
   if (!first.w || !first.h) return null;
 
@@ -72,8 +82,10 @@ export async function startUpscale(src: Src, mode: UpscaleMode): Promise<Upscale
     device = await adapter.requestDevice();
   } catch { return null }
 
-  const a4k = await import("anime4k-webgpu").catch(() => null);
-  if (!a4k) { device.destroy(); return null }
+  // The CNN library is ~3.5MB of weights; only fetched when a CNN mode is chosen.
+  const needsCnn = mode === "fast" || mode === "quality" || mode === "restore";
+  const a4k = needsCnn ? await import("anime4k-webgpu").catch(() => null) : null;
+  if (needsCnn && !a4k) { device.destroy(); return null }
 
   const output = document.createElement("canvas");
   const ctx = output.getContext("webgpu");
@@ -85,7 +97,8 @@ export async function startUpscale(src: Src, mode: UpscaleMode): Promise<Upscale
   // when a game switches video mode, so everything below is rebuilt on change.
   let W = 0, H = 0;
   let inputTex: GPUTexture | null = null;
-  let chain: any[] = [];
+  let chain: { pass(enc: GPUCommandEncoder): void; getOutputTexture(): GPUTexture; destroy?(): void }[] = [];
+  let fg: FrameGen | null = null;
   let bind: GPUBindGroup | null = null;
   let stopped = false;
 
@@ -98,25 +111,37 @@ export async function startUpscale(src: Src, mode: UpscaleMode): Promise<Upscale
   const sampler = device.createSampler({ magFilter: "linear", minFilter: "linear" });
 
   function build(w: number, h: number) {
+    for (const p of chain) p.destroy?.();
+    fg?.destroy(); fg = null;
     inputTex?.destroy();
     W = w; H = h;
     inputTex = device.createTexture({
       size: [w, h], format: "rgba8unorm",
-      usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST | GPUTextureUsage.RENDER_ATTACHMENT,
+      // COPY_SRC: motion smoothing rotates this capture into its frame history
+      usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST | GPUTextureUsage.COPY_SRC | GPUTextureUsage.RENDER_ATTACHMENT,
     });
 
-    const d = { device, inputTexture: inputTex };
+    // Smoothing runs at SOURCE resolution, before any upscale: the flow search is
+    // 4× cheaper there and the upscaler then sharpens the synthesised frame like
+    // any other. Its output becomes the chain's input.
+    if (smooth) fg = createFrameGen(device, inputTex, w, h);
+    const chainInput = fg ? fg.output : inputTex;
+
+    const d = { device, inputTexture: chainInput };
     // Retro output is small, so a 2× CNN already lands at a sane size; the
     // preset modes (which deblur/denoise first) are what actually help the
     // blurry 3D-era stuff. Targets are capped so a 4K panel can't ask for a
     // 16× chain and hang the GPU.
-    const target = { targetDimensions: { width: Math.min(w * 2, 2160), height: Math.min(h * 2, 2160) } };
+    const tw = Math.min(w * 2, 2160), th = Math.min(h * 2, 2160);
+    const target = { targetDimensions: { width: tw, height: th } };
     chain =
-      mode === "fast" ? [new a4k!.CNNx2M(d)]
+      mode === "off" ? []                                   // smoothing only: present at native size
+      : mode === "fsr" ? [createFsr(device, chainInput, tw, th) as UpscalePipeline]
+      : mode === "fast" ? [new a4k!.CNNx2M(d)]
       : mode === "quality" ? [new a4k!.CNNx2VL(d)]
       : [new a4k!.ModeA({ ...d, nativeDimensions: { width: w, height: h }, ...target })];
 
-    const last = chain[chain.length - 1].getOutputTexture();
+    const last = chain.length ? chain[chain.length - 1].getOutputTexture() : chainInput;
     output.width = last.width; output.height = last.height;
     bind = device.createBindGroup({
       layout: blit.getBindGroupLayout(0),
@@ -140,6 +165,7 @@ export async function startUpscale(src: Src, mode: UpscaleMode): Promise<Upscale
       return; // source not paintable this frame (video between frames, tainted canvas)
     }
     const enc = device.createCommandEncoder();
+    fg?.pass(enc);
     for (const p of chain) p.pass(enc);
     const pass = enc.beginRenderPass({
       colorAttachments: [{
@@ -152,6 +178,7 @@ export async function startUpscale(src: Src, mode: UpscaleMode): Promise<Upscale
     pass.draw(3);
     pass.end();
     device.queue.submit([enc.finish()]);
+    fg?.afterSubmit();
   };
 
   try { build(first.w, first.h) } catch { device.destroy(); return null }
@@ -162,6 +189,8 @@ export async function startUpscale(src: Src, mode: UpscaleMode): Promise<Upscale
     stop: () => {
       stopped = true;
       cancelAnimationFrame(raf);
+      for (const p of chain) p.destroy?.();
+      fg?.destroy();
       inputTex?.destroy();
       try { device.destroy() } catch { /* already gone */ }
     },

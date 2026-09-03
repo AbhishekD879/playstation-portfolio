@@ -11,8 +11,8 @@
 import { For, createSignal } from "solid-js";
 import * as sfx from "../audio";
 import {
-  readClock, readEngine, writeClock, writeEngine,
-  type Ps2Clock, type Ps2Engine,
+  readClock, readEngine, readRes, writeClock, writeEngine, writeRes,
+  type Ps2Clock, type Ps2Engine, type Ps2Res,
 } from "../ps2/engineChoice";
 
 const ENGINES: { id: Ps2Engine; title: string; sub: string }[] = [
@@ -53,12 +53,24 @@ const CLOCKS: { id: Ps2Clock; title: string; sub: string }[] = [
   },
 ];
 
+// Internal render resolution. The GS draws at N× native, so 3D games get clean
+// edges instead of the PS2's 512×448 stair-steps. It is real geometry, not a
+// filter — the same lever PCSX2 exposes — and costs GPU fill in proportion, so
+// 1× stays the default and 3× is as high as a phone should go.
+const RESOLUTIONS: { id: Ps2Res; title: string; sub: string }[] = [
+  { id: 1, title: "Native", sub: "The PS2's own resolution. Exactly the picture the console drew." },
+  { id: 2, title: "2× internal", sub: "Renders every frame at twice the size. Clean edges on most games; modest GPU cost." },
+  { id: 3, title: "3× internal", sub: "Three times the native size. Sharpest picture; heavy on a phone, and some games need 1× to render correctly." },
+];
+
 const engineLabel = (e: Ps2Engine) => (e === "native" ? "Native" : "Advanced");
 const clockLabel = (c: Ps2Clock) => CLOCKS.find((r) => r.id === c)!.title;
 
 export default function Ps2EnginePick() {
   const [engine, setEngine] = createSignal<Ps2Engine>(readEngine());
   const [clock, setClock] = createSignal<Ps2Clock>(readClock());
+  const [res, setRes] = createSignal<Ps2Res>(readRes());
+  const pickRes = (r: Ps2Res) => { if (r !== res()) { writeRes(r); setRes(r); } };
   const [open, setOpen] = createSignal(false);
   const pickEngine = (e: Ps2Engine) => {
     if (e !== engine()) { writeEngine(e); setEngine(e); }
@@ -96,6 +108,16 @@ export default function Ps2EnginePick() {
             role="radio" aria-checked={clock() === r.id} onClick={() => pickClock(r.id)}>
             <span><span class="t">{r.title}</span><span class="s">{r.sub}</span></span>
             <span class="s">{clock() === r.id ? "ON" : ""}</span>
+          </button>
+        )}</For>
+
+        <h4 style="margin-top:clamp(14px,1.8cqw,26px)">Picture</h4>
+        <For each={RESOLUTIONS}>{(r) => (
+          <button class="hz-srow" classList={{ pri: res() === r.id }}
+            disabled={engine() === "native"}
+            role="radio" aria-checked={res() === r.id} onClick={() => pickRes(r.id)}>
+            <span><span class="t">{r.title}</span><span class="s">{r.sub}</span></span>
+            <span class="s">{res() === r.id ? "ON" : ""}</span>
           </button>
         )}</For>
 
