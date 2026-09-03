@@ -55,22 +55,31 @@ export default function UpscaleLayer(props: { app: string | null }) {
       const out = h.output;
       out.className = "upscale-out";
       hidden = src as unknown as HTMLElement;
+      // A source inside a same-origin iframe (the PS2 emulator) has no place in
+      // OUR tree, so the overlay is anchored beside the <iframe> element itself.
+      // Not appended to <body>: the player runs fullscreen, and a fullscreen
+      // subtree does not paint body-level siblings — the source went invisible
+      // and nothing took its place, which read as a black screen.
+      const frameEl = hidden.ownerDocument !== document
+        ? (hidden.ownerDocument.defaultView?.frameElement as HTMLElement | null)
+        : null;
+      const anchor: HTMLElement = frameEl ?? hidden;
       // `position: fixed` is only viewport-relative when no ancestor is
       // transformed; under a transform it resolves against that ancestor and
-      // our rect maths would be silently offset. Detect it and bail to body.
-      let anc: HTMLElement | null = hidden.parentElement;
+      // our rect maths would be silently offset. Detect it and bail to the
+      // fullscreen element (or body).
+      let anc: HTMLElement | null = anchor.parentElement;
       let transformed = false;
       while (anc && anc !== document.body) {
         const cs = getComputedStyle(anc);
         if (cs.transform !== "none" || cs.filter !== "none" || cs.perspective !== "none") { transformed = true; break }
         anc = anc.parentElement;
       }
-      const inFrame = hidden.ownerDocument !== document;
-      if (transformed || inFrame || !hidden.parentElement) {
+      if (transformed || !anchor.parentElement) {
         out.classList.add("upscale-out-detached");
-        document.body.appendChild(out);
+        ((document.fullscreenElement as HTMLElement | null) ?? document.body).appendChild(out);
       } else {
-        hidden.parentElement.insertBefore(out, hidden.nextSibling);
+        anchor.parentElement.insertBefore(out, anchor.nextSibling);
       }
       hidden.style.visibility = "hidden";
 

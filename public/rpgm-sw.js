@@ -178,7 +178,7 @@ const NW_SHIM = `<script>(function(){
 // audio buffers, fonts and the effekseer wasm, which are the things that stall.
 // Bump whenever a shim changes — a log that cannot name its own version wastes
 // a capture, which is exactly what happened once.
-const SHIM_V = "36";
+const SHIM_V = "37";
 const DIAG_SHIM = `<script>(function(){
   var T0=Date.now(), seq=0, pending={}, recent=[], errors=[], counts={ok:0,fail:0}, activity=[], xfer=[];
   // MOVEMENT channel — map transfers (doors/stairs) + event triggers get their
@@ -1335,8 +1335,10 @@ const RENPY_SHIM = `<script>(function(){
       var og = CE.prototype.getContext;
       CE.prototype.getContext = function(kind, attrs){
         if (/webgl/i.test(String(kind))) {
-          attrs = attrs || {};
-          if (attrs.preserveDrawingBuffer === undefined) attrs.preserveDrawingBuffer = true;
+          // Forced, not defaulted: emscripten/SDL pass the full attribute set
+          // with preserveDrawingBuffer explicitly false, so an "only if
+          // undefined" override never fires and captures stay blank.
+          attrs = Object.assign({}, attrs || {}, { preserveDrawingBuffer: true });
           return og.call(this, kind, attrs);
         }
         return og.apply(this, arguments);

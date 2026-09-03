@@ -75,8 +75,11 @@ console.log("fixStrayEscapes ok · 7 cases");
 // engine has stopped redrawing (idle at a menu, or an error screen) — which is
 // why every earlier screenshot read back fully transparent.
 assert.match(renpy, /preserveDrawingBuffer/, "Ren'Py needs a readable buffer at any time");
-assert.match(renpy, /attrs\.preserveDrawingBuffer === undefined/,
-  "must not override a value the engine asked for explicitly");
+// It must be FORCED: emscripten/SDL pass preserveDrawingBuffer explicitly as
+// false, so a "respect an explicit value" override never fires and every
+// capture reads back blank — which is exactly what happened.
+assert.match(renpy, /Object\.assign\(\{\}, attrs \|\| \{\}, \{ preserveDrawingBuffer: true \}\)/,
+  "preserveDrawingBuffer must be forced, not defaulted");
 // match the assignment, not the word — DIAG_SHIM's comments explain why it does
 // NOT force the flag, and a bare word match hits that explanation
 assert.ok(!/preserveDrawingBuffer\s*=/.test(diag),

@@ -227,8 +227,10 @@
     const og = HTMLCanvasElement.prototype.getContext;
     HTMLCanvasElement.prototype.getContext = function (kind, attrs) {
       if (/webgl/i.test(String(kind))) {
-        attrs = attrs || {};
-        if (attrs.preserveDrawingBuffer === undefined) attrs.preserveDrawingBuffer = true;
+        // FORCE it. Emscripten passes the full attribute set with
+        // preserveDrawingBuffer explicitly false, so "only if undefined" never
+        // fired and the parent kept reading a blank buffer.
+        attrs = Object.assign({}, attrs || {}, { preserveDrawingBuffer: true });
         return og.call(this, kind, attrs);
       }
       return og.apply(this, arguments);
