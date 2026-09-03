@@ -22,11 +22,19 @@ export interface UpscalePipeline {
 export const FSR_EASU_WGSL = /* wgsl */ `
 struct Con { c0: vec4f, c1: vec4f, c2: vec4f, c3: vec4f, outSize: vec2f, pad: vec2f };
 @group(0) @binding(0) var src: texture_2d<f32>;
-@group(0) @binding(1) var samp: sampler;
 @group(0) @binding(2) var dst: texture_storage_2d<rgba8unorm, write>;
 @group(0) @binding(3) var<uniform> con: Con;
 
-fn tapAt(p: vec2f) -> vec3f { return textureSampleLevel(src, samp, p, 0.0).rgb; }
+// Taps are read at texel centres by integer offset from f (textureLoad, edge
+// clamped) — exactly what the reference's textureGather returns. An earlier
+// port sampled *at* the gather corner positions con1..con3 encode, which put
+// every tap about 1.5 texels off the position the kernel weights assume; that
+// vertical misregistration showed as horizontal striations through anything
+// upscaled by a non-integer factor (every glyph of WWE's pause menu).
+fn tapAt(base: vec2i, off: vec2i) -> vec3f {
+  let sz = vec2i(textureDimensions(src));
+  return textureLoad(src, clamp(base + off, vec2i(0), sz - vec2i(1)), 0).rgb;
+}
 
 // Accumulate one tap's direction/length contribution (FsrEasuSetF).
 fn easuSet(dir: ptr<function, vec2f>, len: ptr<function, f32>, pp: vec2f,
@@ -84,22 +92,13 @@ fn main(@builtin(global_invocation_id) gid: vec3u) {
   //    e f g h
   //    i j k l
   //      n o
-  let p0 = fp * con.c1.xy + con.c1.zw;                 // centre of f
-  let p1 = p0 + con.c2.xy;
-  let p2 = p0 + con.c2.zw;
-  let p3 = p0 + con.c3.xy;
-  let bC = tapAt(p0 + vec2f(0.0, -1.0) * con.c1.xy);
-  let cC = tapAt(p0 + vec2f(1.0, -1.0) * con.c1.xy);
-  let eC = tapAt(p1 + vec2f(-1.0, 0.0) * con.c1.xy);
-  let fC = tapAt(p1);
-  let gC = tapAt(p1 + vec2f(1.0, 0.0) * con.c1.xy);
-  let hC = tapAt(p1 + vec2f(2.0, 0.0) * con.c1.xy);
-  let iC = tapAt(p2 + vec2f(-1.0, 0.0) * con.c1.xy);
-  let jC = tapAt(p2);
-  let kC = tapAt(p2 + vec2f(1.0, 0.0) * con.c1.xy);
-  let lC = tapAt(p2 + vec2f(2.0, 0.0) * con.c1.xy);
-  let nC = tapAt(p3);
-  let oC = tapAt(p3 + vec2f(1.0, 0.0) * con.c1.xy);
+  let base = vec2i(fp);
+  let bC = tapAt(base, vec2i(0, -1)); let cC = tapAt(base, vec2i(1, -1));
+  let eC = tapAt(base, vec2i(-1, 0)); let fC = tapAt(base, vec2i(0, 0));
+  let gC = tapAt(base, vec2i(1, 0));  let hC = tapAt(base, vec2i(2, 0));
+  let iC = tapAt(base, vec2i(-1, 1)); let jC = tapAt(base, vec2i(0, 1));
+  let kC = tapAt(base, vec2i(1, 1));  let lC = tapAt(base, vec2i(2, 1));
+  let nC = tapAt(base, vec2i(0, 2));  let oC = tapAt(base, vec2i(1, 2));
   let bL = luma(bC); let cL = luma(cC); let eL = luma(eC); let fL = luma(fC);
   let gL = luma(gC); let hL = luma(hC); let iL = luma(iC); let jL = luma(jC);
   let kL = luma(kC); let lL = luma(lC); let nL = luma(nC); let oL = luma(oC);
@@ -218,11 +217,10 @@ export function createFsr(device: GPUDevice, input: GPUTexture, outW: number, ou
   new Float32Array(pv, 0, 1)[0] = rcasSharp(sharpness);
   new Uint32Array(pv, 4, 2).set([outW, outH]);
   device.queue.writeBuffer(prm, 0, pv);
-  const sampler = device.createSampler({ magFilter: "linear", minFilter: "linear", addressModeU: "clamp-to-edge", addressModeV: "clamp-to-edge" });
   const easuBind = device.createBindGroup({
     layout: easu.getBindGroupLayout(0),
     entries: [
-      { binding: 0, resource: input.createView() }, { binding: 1, resource: sampler },
+      { binding: 0, resource: input.createView() },
       { binding: 2, resource: mid.createView() }, { binding: 3, resource: { buffer: conBuf } },
     ],
   });
