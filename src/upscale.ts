@@ -15,6 +15,7 @@
 // — a visitor who never turns this on never downloads it.
 import { hasWebGPU } from "./gpu";
 import { createFsr, type UpscalePipeline } from "./fsr";
+import { outputSize } from "./capture";
 import { createFrameGen, type FrameGen } from "./framegen";
 
 export type UpscaleMode = "off" | "fsr" | "fast" | "quality" | "restore";
@@ -96,6 +97,7 @@ export async function startUpscale(src: Src, mode: UpscaleMode, opts: UpscaleOpt
   // The source texture must match the source's CURRENT size; emulators resize
   // when a game switches video mode, so everything below is rebuilt on change.
   let W = 0, H = 0;
+  let TW = 0, TH = 0, settle = 0;
   let inputTex: GPUTexture | null = null;
   let chain: { pass(enc: GPUCommandEncoder): void; getOutputTexture(): GPUTexture; destroy?(): void }[] = [];
   let fg: FrameGen | null = null;
@@ -110,7 +112,7 @@ export async function startUpscale(src: Src, mode: UpscaleMode, opts: UpscaleOpt
   });
   const sampler = device.createSampler({ magFilter: "linear", minFilter: "linear" });
 
-  function build(w: number, h: number) {
+  function build(w: number, h: number, tw: number, th: number) {
     for (const p of chain) p.destroy?.();
     fg?.destroy(); fg = null;
     inputTex?.destroy();
@@ -132,7 +134,7 @@ export async function startUpscale(src: Src, mode: UpscaleMode, opts: UpscaleOpt
     // preset modes (which deblur/denoise first) are what actually help the
     // blurry 3D-era stuff. Targets are capped so a 4K panel can't ask for a
     // 16× chain and hang the GPU.
-    const tw = Math.min(w * 2, 2160), th = Math.min(h * 2, 2160);
+    TW = tw; TH = th; // sized by outputSize(): the overlay box in device pixels
     const target = { targetDimensions: { width: tw, height: th } };
     chain =
       mode === "off" ? []                                   // smoothing only: present at native size
@@ -155,8 +157,16 @@ export async function startUpscale(src: Src, mode: UpscaleMode, opts: UpscaleOpt
     raf = requestAnimationFrame(frame);
     const { w, h } = srcSize(src);
     if (!w || !h) return;
-    if (w !== W || h !== H) {
-      try { build(w, h) } catch { stopped = true; return } // an unbuildable chain = fall back to native
+    // Render at the device pixels the overlay occupies so the browser never
+    // resamples the sharpened result (see outputSize). A source size change
+    // rebuilds at once — the capture copy must match the input texture — while
+    // an output-only change waits for the box to hold still for a few frames.
+    const box = output.getBoundingClientRect();
+    const want = outputSize(w, h, box.width, box.height, devicePixelRatio);
+    const outDirty = want.w !== TW || want.h !== TH;
+    settle = outDirty ? settle + 1 : 0;
+    if (w !== W || h !== H || (outDirty && settle >= 8)) {
+      try { build(w, h, want.w, want.h) } catch { stopped = true; return } // an unbuildable chain = fall back to native
     }
     if (!inputTex || !bind) return;
     try {
@@ -181,7 +191,9 @@ export async function startUpscale(src: Src, mode: UpscaleMode, opts: UpscaleOpt
     fg?.afterSubmit();
   };
 
-  try { build(first.w, first.h) } catch { device.destroy(); return null }
+  // 2× until the overlay has been laid out; frame() re-sizes to device pixels
+  const start = outputSize(first.w, first.h, 0, 0, devicePixelRatio);
+  try { build(first.w, first.h, start.w, start.h) } catch { device.destroy(); return null }
   raf = requestAnimationFrame(frame);
 
   return {

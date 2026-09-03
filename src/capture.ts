@@ -113,6 +113,21 @@ export function fitRect(
   return { left: box.left + (box.width - width) / 2, top: box.top + (box.height - height) / 2, width, height };
 }
 
+/** Device-pixel size the upscaler renders at: the box it is shown in times the
+ *  DPR, so the browser never resamples the sharpened result — a non-integer
+ *  resample of RCAS output shows as moiré striations (seen through every glyph
+ *  of WWE's pause menu at DPR 2, where a 1280×960 output was stretched to
+ *  1902×1426). Uniform scale, never below the source (EASU does not
+ *  downscale), capped at 4× and a 2160 long edge so a 4K panel cannot ask for
+ *  a chain that hangs the GPU. 2× until the box has been laid out. */
+export function outputSize(srcW: number, srcH: number, cssW: number, cssH: number, dpr: number): { w: number; h: number } {
+  const cap = Math.min(4, 2160 / Math.max(srcW, srcH));
+  const fallback = Math.min(2, cap);
+  const raw = cssW > 0 && cssH > 0 ? Math.min((cssW * dpr) / srcW, (cssH * dpr) / srcH) : fallback;
+  const scale = Math.max(1, Math.min(raw, cap));
+  return { w: Math.round(srcW * scale), h: Math.round(srcH * scale) };
+}
+
 export function sourceViewportRect(el: Element): { left: number; top: number; width: number; height: number } {
   const frames: DOMRect[] = [];
   let win: Window | null = el.ownerDocument.defaultView;

@@ -25,3 +25,15 @@ assert.deepEqual(fitRect({ left: 0, top: 0, width: 640, height: 900 }, 640, 480,
 assert.deepEqual(fitRect(box, 640, 480, "fill"), box, "any other object-fit paints the whole box");
 assert.deepEqual(fitRect(box, 0, 0, "contain"), box, "unknown source size: fall back to the box");
 console.log("object-fit letterbox ok");
+
+// Output size: the overlay's box in device pixels — the whole point is that the
+// browser never resamples the sharpened picture again.
+const { outputSize } = await import("./capture.ts");
+assert.deepEqual(outputSize(640, 480, 951, 713, 2), { w: 1901, h: 1426 }, "DPR 2: device pixels of the letterboxed box, uniform scale");
+assert.deepEqual(outputSize(640, 480, 951, 713, 1), { w: 951, h: 713 }, "DPR 1: box as-is");
+assert.deepEqual(outputSize(640, 480, 0, 0, 2), { w: 1280, h: 960 }, "box not laid out yet: 2× fallback");
+assert.deepEqual(outputSize(640, 480, 320, 240, 1), { w: 640, h: 480 }, "never below the source (EASU does not downscale)");
+assert.deepEqual(outputSize(640, 480, 1000, 100, 1), { w: 640, h: 480 }, "a squashed box cannot skew the aspect");
+assert.deepEqual(outputSize(640, 480, 3840, 2880, 2), { w: 2160, h: 1620 }, "long edge capped at 2160");
+assert.deepEqual(outputSize(320, 240, 3840, 2880, 1), { w: 1280, h: 960 }, "and at 4× for small retro sources");
+console.log("output size ok");
