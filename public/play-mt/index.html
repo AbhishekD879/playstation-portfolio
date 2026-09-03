@@ -239,7 +239,19 @@
   // ?res=N — internal render resolution (1..3). The fork's setResolutionFactor
   // applies it live on the GS thread; stock has no such binding and ignores it.
   const resFactor = (v) => { const n = Number(v); return n === 2 || n === 3 ? n : 1; };
-  const applyRes = (n) => { if (mod && typeof mod.setResolutionFactor === "function") mod.setResolutionFactor(resFactor(n)); };
+  const applyRes = (n) => {
+    if (!mod || typeof mod.setResolutionFactor !== "function") return;
+    const f = resFactor(n);
+    mod.setResolutionFactor(f);
+    // Present at the render scale too. The GS presents into the canvas backing
+    // store at Main.cpp's hardcoded 640x480, so without this a 2x/3x frame is
+    // squeezed back to native before anyone sees it — supersampling, not detail.
+    // CSS owns the element's size and letterbox; only the backing store grows.
+    if (typeof mod.setPresentationSize === "function") {
+      canvas.width = 640 * f; canvas.height = 480 * f;
+      mod.setPresentationSize(canvas.width, canvas.height);
+    }
+  };
 
   Play({
     canvas,
