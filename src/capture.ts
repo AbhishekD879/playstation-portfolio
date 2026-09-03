@@ -99,6 +99,20 @@ export function composeRect(inner: DOMRect, frames: DOMRect[]): { left: number; 
   return { left, top, width: inner.width, height: inner.height };
 }
 
+/** The box a source actually PAINTS inside its element when CSS scales it with
+ *  object-fit: contain — the emulator's canvas fills its frame and letterboxes
+ *  the 4:3 picture inside, so covering the element rect stretched the upscaled
+ *  image to the frame's aspect. Pure, so the letterbox maths is testable. */
+export function fitRect(
+  box: { left: number; top: number; width: number; height: number },
+  srcW: number, srcH: number, objectFit: string,
+): { left: number; top: number; width: number; height: number } {
+  if (objectFit !== "contain" || !srcW || !srcH || !box.width || !box.height) return box;
+  const scale = Math.min(box.width / srcW, box.height / srcH);
+  const width = srcW * scale, height = srcH * scale;
+  return { left: box.left + (box.width - width) / 2, top: box.top + (box.height - height) / 2, width, height };
+}
+
 export function sourceViewportRect(el: Element): { left: number; top: number; width: number; height: number } {
   const frames: DOMRect[] = [];
   let win: Window | null = el.ownerDocument.defaultView;
@@ -108,7 +122,11 @@ export function sourceViewportRect(el: Element): { left: number; top: number; wi
     frames.push(fe.getBoundingClientRect());
     win = win.parent === win ? null : win.parent;
   }
-  return composeRect(el.getBoundingClientRect(), frames);
+  const box = composeRect(el.getBoundingClientRect(), frames);
+  // a canvas/video scaled with object-fit: contain paints smaller than its box
+  const { w, h } = srcSize(el as Src);
+  const fit = (el.ownerDocument.defaultView ?? window).getComputedStyle(el).objectFit;
+  return fitRect(box, w, h, fit);
 }
 
 /**
