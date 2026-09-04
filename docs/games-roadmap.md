@@ -174,3 +174,4 @@ Jazz Jackrabbit 1 & 2, OpenLara, Duke Nukem II, TIC-80, WASM-4, Scratch.
 - 2026-09-04 · Java ME on the Mobile shelf, as its own tab (CheerpJ cannot be framed under COEP).
 - 2026-09-04 · Your own PC disk images (Windows 9x / DOS) via v86 on the Computers shelf.
 - 2026-09-04 · Dreamcast via self-hosted flycast-wasm core; BIOS gate before boot for every firmware-required system.
+- 2026-09-04 · **Deployed to production** (main `ba030f4`). Regression pass on the preview: all 14 crossbar categories present and non-Games lists identical to the previous build; 31 app routes open with no runtime errors; NES, SNES, Mega Drive boot through the new shelves; GBA behaves as before (its core rejects a garbage ROM on both builds); PS2 engine binaries byte-identical.
