@@ -284,6 +284,14 @@ per-file cap (25 MiB). Now:
   title with a clear licence and a direct download was found (GitHub search
   across topics and releases; Aminet/CSDb have no CORS and mixed licences) —
   left empty rather than guessed.
+- **Verified on the preview:** Retaliate64 downloads through the relay and
+  boots in the C64 core; the core-switch row shows on arcade tiles; export →
+  clear → import restores the Continue row with its screenshot. **WebKit pass**
+  (Playwright WebKit 26, 390×844): home with all 14 categories, PC Games
+  folder with all ten items, Micropolis and Wolfenstein 3D run in-console;
+  `crossOriginIsolated` is false there (Safari has no COEP `credentialless`),
+  so the threaded PS2/PSP paths remain Chromium-only, as already noted. The
+  only console noise is Cloudflare's analytics beacon, not ours.
 - **OpenLara stays parked.** The author's site is down; the GitHub Pages copy
   is an old asm.js stub whose level files (`level/1/*.PHD`) 404 — the TR1
   demo data was only ever served from the dead host, and its redistribution
