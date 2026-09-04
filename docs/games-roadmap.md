@@ -229,7 +229,10 @@ DB — `src/saves.ts`, `gamesdb.ts`, `GameSession.tsx`, `GameShelf.tsx`):
   already had its own saving since the Play! work: the frame snapshots
   Play!'s data dir (memory cards `vfs/mc0`/`mc1` + states) into the `asp-ps2`
   DB per profile every 15 s and on the memory-card button, and restores it
-  before a disc boots — untouched here. Web games keep their own saves where
+  before a disc boots — untouched here, and re-verified with a real disc: a
+  file planted on `vfs/mc0` is in the profile's card record after "save card"
+  ("Memory card saved · 2 files") and comes back byte-for-byte after a page
+  reload and a fresh boot. Web games keep their own saves where
   the build mounts IDBFS (OpenTTD, DevilutionX, ECWolf, Qwasm); Jazz and
   Micropolis do not persist.
 - Verified locally with a blank NES ROM: manual save → 13.7 KB state + PNG;
