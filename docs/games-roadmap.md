@@ -156,6 +156,50 @@ Classic Mac (Infinite Mac iframe), OpenTTD + Micropolis, DevilutionX,
 shareware FPS shelf (Quake, Quake III + OpenArena, Wolf3D, RTCW demo),
 Jazz Jackrabbit 1 & 2, OpenLara, Duke Nukem II, TIC-80, WASM-4, Scratch.
 
+## Phase 4 — free to play (2026-09-04)
+
+Almost every shelf needs the visitor's own files, and portfolio visitors bring
+nothing. Two moves fix that without touching any engine:
+
+**Free games sheet** (`src/freegames.ts`, `src/xmb/FreeGamesSheet.tsx`,
+`functions/api/rom.ts`). A shelf whose systems have free titles shows a
+"Free games · N" pill; each row is homebrew or a game its rights-holder
+released, with author, licence and size, and "Download to shelf" fetches the
+file in the browser and stores it in the library (`origin: "download"`,
+`source` = upstream URL, so a second visit shows "On your shelf"). Hosts that
+send no CORS header go through `/api/rom`: https only, host allow-list with
+per-host path rules (mamedev.org `/roms/`, github.com release-download paths,
+GitHub's asset CDNs), redirects followed only onto the allow-list, 64 MB cap,
+per-IP rate limit on the existing GB KV. The console never hosts the ROMs.
+
+Catalog: the 18 mamedev.org free sets that MAME 2003-Plus knows (checked
+against the core's `driver.c`; `falcnwld`/`topgunnr` are on mamedev.org but
+not in this core, Poly-Play is not on mamedev.org); Nova the Squirrel (NES,
+GPL-3), µCity (GBC, GPL-3+), Bounstryk (2600, Apache-2, stored as `.a26`);
+six WASM-4 carts from the CC BY-NC-SA carts archive (raw.githubusercontent
+sends CORS, so direct). Verified on the preview: Gridlee and Robby Roto
+download through the relay, land on the Arcade shelf and boot in MAME; the
+rest of the MAME sets are swept below.
+
+**Web games under PC Games** (`src/webgames.ts`, `WebGameApp.tsx`): whole
+engine builds with free data, hosted under `public/` and opened full-screen
+in a same-origin frame with EJECT — no upload step at all.
+
+| Game | Build | Size | Data | Verified |
+|---|---|---|---|---|
+| Micropolis | SimHacker MicropolisCore web build, GPL-3 | 2.8 MB | GPL | renders in console (preview) |
+| Jazz Jackrabbit | OpenJazz Emscripten (openjazz.github.io), GPL-2 | 4.3 MB | Epic shareware episode | renders in console (preview) |
+| Wolfenstein 3D | ECWolf-JS 1.5pre default frontend, GPL-2 | 5.2 MB | shareware episode bundled in `ecwolf.data` by the project | boots, canvas painting, clean console (local) |
+| Quake | Qwasm (qwasm.m-h.org.uk build), GPL-2; `getgame.js` patched to fetch our copy of the unmodified `quake106.zip` | 26.7 MB (largest file 9.1 MB) | id shareware archive, unpacked client-side; LibreQuake also offered | boots to the game canvas after Start (local) |
+| OpenTTD | openttd-online 15.3 Emscripten build, GPL-2; language pre-loader IIFE removed; OpenGFX 7.1 written into `/baseset` before `main()`; the page must predefine `Module.arguments`/`postRun` (the build's pre.js pushes onto them) | 18.6 MB (wasm 10.8 MB) | OpenGFX GPL-2, saves in IDBFS | title screen with OpenGFX, clean console (local) |
+
+Parked: Jazz Jackrabbit 2 (`jazz2.data` 46.7 MB > the 25 MiB per-file cap →
+R2), OpenLara (official site unreachable), C64 / Amiga / Neo Geo Pocket /
+WonderSwan homebrew (no free titles with a direct, licence-clear download
+found — CSDb/Aminet/AtariAge have no CORS and mixed licences), Tobu Tobu Girl
+(no direct file). Next: DevilutionX (upstream has an Emscripten target;
+`spawn.mpq` is 25,448,219 bytes — under the cap by 0.7 MB).
+
 ## Known constraints (from research, Sep 2026)
 
 - iOS Safari: no COEP `credentialless` → no threads; open EmulatorJS issues
@@ -175,3 +219,4 @@ Jazz Jackrabbit 1 & 2, OpenLara, Duke Nukem II, TIC-80, WASM-4, Scratch.
 - 2026-09-04 · Your own PC disk images (Windows 9x / DOS) via v86 on the Computers shelf.
 - 2026-09-04 · Dreamcast via self-hosted flycast-wasm core; BIOS gate before boot for every firmware-required system.
 - 2026-09-04 · **Deployed to production** (main `ba030f4`). Regression pass on the preview: all 14 crossbar categories present and non-Games lists identical to the previous build; 31 app routes open with no runtime errors; NES, SNES, Mega Drive boot through the new shelves; GBA behaves as before (its core rejects a garbage ROM on both builds); PS2 engine binaries byte-identical.
+- 2026-09-04 · Phase 4 free-to-play: Free games sheet + allow-listed relay (mamedev + GitHub releases), 27-title catalog; Wolf3D, Quake, OpenTTD join Micropolis and Jazz under PC Games as full-screen web games.

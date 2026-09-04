@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Wolfenstein 3D — ECWolf</title>
+<style>
+  html, body { margin: 0; height: 100%; background: #000; overflow: hidden; }
+  #canvas { display: block; width: 100vw; height: 100vh; background: #000; }
+  #status { position: fixed; left: 0; right: 0; bottom: 8vh; text-align: center; color: #c8c8c8; font: 600 15px/1.4 system-ui, sans-serif; letter-spacing: .04em; pointer-events: none; text-shadow: 0 1px 2px #000; }
+  #status:empty { display: none; }
+</style>
+</head>
+<body>
+<canvas id="canvas" oncontextmenu="event.preventDefault()" tabindex="-1"></canvas>
+<div id="status">Loading…</div>
+<script>
+  // ECWolf default web frontend; the data file bundles the shareware episode.
+  const canvas = document.getElementById('canvas');
+  const status = document.getElementById('status');
+  var Module = {
+    canvas,
+    print: (...a) => console.log(...a),
+    printErr: (...a) => console.warn(...a),
+    setStatus(text) {
+      const m = text.match(/([^(]+)\((\d+(\.\d+)?)\/(\d+)\)/);
+      status.textContent = m ? `${m[1].trim()} ${Math.round((+m[2] / +m[4]) * 100)}%` : text;
+    },
+    totalDependencies: 0,
+    monitorRunDependencies(left) {
+      this.totalDependencies = Math.max(this.totalDependencies, left);
+      Module.setStatus(left ? `Preparing… (${this.totalDependencies - left}/${this.totalDependencies})` : '');
+    },
+    onExit() { status.textContent = 'Wolfenstein 3D closed — press EJECT.'; },
+  };
+  canvas.addEventListener('webglcontextlost', (e) => { e.preventDefault(); status.textContent = 'Graphics context lost — reload to play again.'; });
+  window.addEventListener('error', () => { status.textContent = 'Something went wrong — see the console.'; });
+  canvas.addEventListener('click', () => canvas.focus());
+</script>
+<script async src="ecwolf.js"></script>
+</body>
+</html>

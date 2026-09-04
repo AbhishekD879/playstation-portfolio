@@ -21,6 +21,18 @@ export const WEB_GAMES: Record<string, WebGame> = {
     id: "jazz", title: "Jazz Jackrabbit", sub: "Epic's 1994 run-and-gun — the shareware episode, playable now (OpenJazz)",
     url: "/jazz/index.html", icon: "star", licence: "OpenJazz GPL-2.0 · shareware episode under Epic's shareware licence", source: "https://github.com/AlisterT/openjazz",
   },
+  wolf: {
+    id: "wolf", title: "Wolfenstein 3D", sub: "id's 1992 shooter — shareware episode, playable now (ECWolf)",
+    url: "/wolf/index.html", icon: "skull", licence: "ECWolf GPL-2.0 · shareware episode under id Software's shareware terms", source: "https://github.com/54ac/ecwolf-js",
+  },
+  quake: {
+    id: "quake", title: "Quake", sub: "id's 1996 shooter in WebAssembly — shareware episode or LibreQuake, nothing to bring (Qwasm)",
+    url: "/quake/index.html", icon: "lightning", licence: "Qwasm GPL-2.0 · quake106.zip shareware under id's shareware terms · LibreQuake data", source: "https://github.com/GMH-Code/Qwasm",
+  },
+  openttd: {
+    id: "openttd", title: "OpenTTD", sub: "Transport Tycoon Deluxe, open-sourced — build a rail empire, saves stay in your browser",
+    url: "/openttd/index.html", icon: "globe", licence: "OpenTTD GPL-2.0 · OpenGFX GPL-2.0", source: "https://github.com/swords02/openttd-online",
+  },
 };
 
 export const WEB_GAME_IDS = Object.keys(WEB_GAMES);

@@ -19,4 +19,10 @@ for (const id of HIDDEN_GAME_ITEMS) assert.ok(!seen.has(id), `${id} is hidden an
 assert.equal(folderOf("doom")?.id, "pc");
 assert.equal(folderOf("nintendo"), undefined, "top-level items have no folder");
 assert.ok(placedGameItemIds().has("ps2") && placedGameItemIds().has("nintendo"));
+const { WEB_GAME_IDS } = await import("../webgames.ts");
+const { ROUTE_APPS } = await import("./routes.ts");
+for (const id of WEB_GAME_IDS) {
+  assert.equal(folderOf(id)?.id, "pc", `${id}: web games live under PC Games`);
+  assert.ok(ROUTE_APPS.has(id), `${id}: web game must be routable (#/app/${id})`);
+}
 console.log("game folders ok");

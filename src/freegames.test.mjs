@@ -16,5 +16,11 @@ for (const g of FREE_GAMES) {
 }
 assert.equal(downloadUrl(FREE_GAMES[0]), "/api/rom?url=" + encodeURIComponent(FREE_GAMES[0].url));
 assert.equal(fileNameOf({ url: "https://x/y/gridlee.zip?v=1" }), "gridlee.zip");
+assert.equal(fileNameOf({ url: "https://x/y/bounstryk.bin", file: "bounstryk.a26" }), "bounstryk.a26", "file override wins");
+assert.equal(new Set(RELAY_HOSTS).size, RELAY_HOSTS.length, "relay hosts unique");
+// the Pages Function keeps its own copy of the allow-list — every relay host must appear there
+const fn = (await import("node:fs")).readFileSync(new URL("../functions/api/rom.ts", import.meta.url), "utf8");
+for (const h of RELAY_HOSTS) assert.ok(fn.includes(`"${h}"`), `${h} missing from functions/api/rom.ts allow-list`);
+assert.ok(FREE_GAMES.length >= 25 && new Set(FREE_GAMES.map((g) => g.system)).size >= 5, "catalog covers several shelves");
 void SHARED_EXTS;
 console.log("free games ok");
