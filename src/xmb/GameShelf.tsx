@@ -5,6 +5,7 @@
 // files only — nothing is fetched from the internet.
 import { For, Show, createEffect, createSignal, onCleanup, onMount } from "solid-js";
 import SystemsSheet from "./SystemsSheet";
+import FreeGamesSheet from "./FreeGamesSheet";
 import { SYSTEMS } from "../systems";
 import { CORE_NAMES, coverCandidates, fsAccessSupported, isLinked, relinkGame, removeGame, saveCover, type GameRecord, type GameSystem } from "../gamesdb";
 import type { NavAction } from "../input";
@@ -162,6 +163,7 @@ export default function GameShelf(props: {
               <div class="hz-acts">
                 <button class="hz-btn pri" onClick={addGame}><span class="g">✕</span> Add a game</button>
                 {props.extra?.()}
+                <FreeGamesSheet systems={props.systems} profileId={props.profileId} owned={props.owned} onChanged={props.onChanged} />
                 <SystemsSheet systems={props.systems} />
               </div>
             </div>
@@ -179,6 +181,7 @@ export default function GameShelf(props: {
             <div class="hz-acts">
               <button class="hz-btn" onClick={addGame}><span class="g">△</span> Add a game</button>
               {props.extra?.()}
+              <FreeGamesSheet systems={props.systems} profileId={props.profileId} owned={props.owned} onChanged={props.onChanged} />
               <SystemsSheet systems={props.systems} />
             </div>
           </div>

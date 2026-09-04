@@ -20,6 +20,7 @@ export interface GameRecord {
   sys?: "ps2";                      // PlayStation 2 discs boot Play!, not EmulatorJS
   cover?: string;                   // cached box-art URL once one resolves
   origin?: "disk" | "download";     // link source: your drive vs downloaded to OPFS
+  source?: string;                  // "download" records: the URL it came from (so the free-games list knows you have it)
 }
 
 import { SYSTEMS } from "./systems";

@@ -23,6 +23,8 @@ import PalmSession from "../emulator/PalmSession";
 import FramePlayer from "../emulator/FramePlayer";
 import { bootJ2me } from "../j2me";
 import { biosState } from "../bios";
+import { WEB_GAMES, WEB_GAME_IDS } from "../webgames";
+import WebGameApp from "../emulator/WebGameApp";
 import { tr } from "../translate";
 import { startTabSync } from "../sync";
 import { fluidNavPulse } from "./FluidBg";
@@ -236,7 +238,7 @@ export default function XMB(props: {
   const [vListening, setVListening] = createSignal(false); // XMB voice command
   const [padTest, setPadTest] = createSignal(false);
   const [splatFile, setSplatFile] = createSignal<File | null>(null);
-  const [app, setAppRaw] = createSignal<null | "doom" | "doomrtx" | "worlddrive" | "chess" | "trivia" | "flash" | "cinema" | "podcasts" | "library" | "map" | "ai" | "webamp" | "youtube" | "timemachine" | "art" | "wiki" | "lichess" | "ps2" | "pc" | "guestbook" | "browser" | "visualizer" | "studio" | "code" | "manual" | "ps2home" | "ps1home" | "psphome" | "retrohome" | "nintendohome" | "segahome" | "arcadehome" | "consoleshome" | "computershome" | "mobilehome" | "palm" | "fantasyhome" | "frame" | "scummvm" | "karaoke" | "strudel" | "settingshub" | "videoplayer" | "reporewind" | "rpgmaker" | "renpy" | "godot" | "unity" | "html5" | "privacy" | "watch" | "syscity" | "cs" | "party" | "retrojoin" | "board" | "voiceavatar" | "consoletv" | "analytics">(null);
+  const [app, setAppRaw] = createSignal<null | "doom" | "doomrtx" | "worlddrive" | "chess" | "trivia" | "flash" | "cinema" | "podcasts" | "library" | "map" | "ai" | "webamp" | "youtube" | "timemachine" | "art" | "wiki" | "lichess" | "ps2" | "pc" | "guestbook" | "browser" | "visualizer" | "studio" | "code" | "manual" | "ps2home" | "ps1home" | "psphome" | "retrohome" | "nintendohome" | "segahome" | "arcadehome" | "consoleshome" | "computershome" | "mobilehome" | "palm" | "fantasyhome" | "frame" | "micropolis" | "jazz" | "scummvm" | "karaoke" | "strudel" | "settingshub" | "videoplayer" | "reporewind" | "rpgmaker" | "renpy" | "godot" | "unity" | "html5" | "privacy" | "watch" | "syscity" | "cs" | "party" | "retrojoin" | "board" | "voiceavatar" | "consoletv" | "analytics">(null);
 
   // Opening/closing an app goes through the native View Transitions API (now
   // Baseline for same-document), so the console cross-fades like real system
@@ -411,6 +413,8 @@ export default function XMB(props: {
     { id: "godot", title: "Godot", sub: `Drop a Godot Web export (.zip) — runs natively${godotCount() ? ` · ${godotCount()} in your library` : ""}`, icon: "gamepad", action: { type: "godot" as const } },
     { id: "unity", title: "Unity", sub: `Drop a Unity WebGL build (.zip) — runs natively${unityCount() ? ` · ${unityCount()} in your library` : ""}`, icon: "gamepad", action: { type: "unity" as const } },
     { id: "html5", title: "HTML5 / WebGL", sub: `Drop any web-exported game with an index.html${html5Count() ? ` · ${html5Count()} in your library` : ""}`, icon: "gamepad", action: { type: "html5" as const } },
+    // self-hosted web games with free data — play now, nothing to bring
+    ...WEB_GAME_IDS.map((id) => ({ id, title: WEB_GAMES[id].title, sub: WEB_GAMES[id].sub, icon: WEB_GAMES[id].icon, action: { type: "webgame" as const, id } })),
     { id: "lichesstv", title: "Lichess TV", sub: "Spectate · live grandmaster games", icon: "knight", action: { type: "lichess-tv" } },
   ]);
 
@@ -824,6 +828,10 @@ export default function XMB(props: {
         setApp("retrohome");
         break;
       case "shelf":
+        sfx.confirm();
+        setApp(a.id as AppId);
+        break;
+      case "webgame":
         sfx.confirm();
         setApp(a.id as AppId);
         break;
@@ -2557,6 +2565,7 @@ export default function XMB(props: {
           title="FANTASY CONSOLES — YOUR LIBRARY & DOWNLOADS" onPlay={playRecord} onInsert={() => { insertPrefer = FANTASY_SYSTEMS; fileInput.click(); }} onLink={() => onLink(FANTASY_SYSTEMS)}
           onChanged={refreshGames} onClose={() => setApp(null)} />
       </Show>
+      <Show when={WEB_GAMES[app() ?? ""]} keyed>{(wg) => <WebGameApp game={wg} onClose={() => setApp(null)} />}</Show>
       <Show when={app() === "frame" && frameBoot()}>
         <FramePlayer game={frameBoot()!} onClose={() => { const fam = SYSTEMS[frameBoot()!.core]?.family ?? "fantasy"; setFrameBoot(null); setApp(shelfOfFamily[fam] ?? null); }} />
       </Show>

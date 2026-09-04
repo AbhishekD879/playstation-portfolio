@@ -13,7 +13,7 @@
 export const ROUTE_APPS = new Set([
   "doom", "doomrtx", "worlddrive", "chess", "trivia", "flash", "cinema", "podcasts", "library", "map", "ai", "webamp",
   "youtube", "timemachine", "art", "wiki", "lichess", "ps2", "pc", "guestbook", "browser", "visualizer", "studio", "code",
-  "manual", "ps2home", "ps1home", "psphome", "retrohome", "nintendohome", "segahome", "arcadehome", "consoleshome", "computershome", "mobilehome", "palm", "fantasyhome", "frame", "scummvm", "karaoke", "strudel",
+  "manual", "ps2home", "ps1home", "psphome", "retrohome", "nintendohome", "segahome", "arcadehome", "consoleshome", "computershome", "mobilehome", "palm", "fantasyhome", "frame", "micropolis", "jazz", "scummvm", "karaoke", "strudel",
   "settingshub", "videoplayer", "reporewind", "rpgmaker", "renpy", "godot", "unity", "html5", "privacy", "watch", "syscity",
   "cs", "party", "board", "voiceavatar", "retrojoin", "consoletv", "analytics",
 ]);
