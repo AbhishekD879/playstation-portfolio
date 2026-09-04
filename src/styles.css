@@ -5134,15 +5134,44 @@ body.party-col .share-btn { right: calc(var(--pty-w) + clamp(12px, 2vw, 22px)); 
    used to be keyboard-only (DEL remove, R re-link) live here, so they exist
    for a controller and a thumb too. Never covers the Control Center. */
 .hz-sheet {
+  --hz-sheet-pad: clamp(20px, 2.6cqw, 40px);
+  --hz-sheet-ease: 0.32s cubic-bezier(0.22,1,0.36,1);
   position: absolute; top: 0; right: 0; bottom: var(--hz-cc-h); z-index: 7;
-  width: min(34cqw, 420px); min-width: 260px;
+  width: min(34cqw, 420px); min-width: 260px; box-sizing: border-box;
   background: rgba(8,13,22,0.82); backdrop-filter: blur(30px) saturate(1.35);
   border-left: 1px solid var(--glassline);
-  padding: clamp(20px, 2.6cqw, 40px);
+  padding: var(--hz-sheet-pad);
   display: flex; flex-direction: column; gap: 4px;
-  transform: translateX(0); transition: transform 0.32s cubic-bezier(0.22,1,0.36,1);
+  /* The sheet is a fixed-height panel, so anything taller than it has to scroll
+     INSIDE it. Without this the overflow spilled into the shelf's own (hidden)
+     scroll area, and the first focus shifted the whole screen up by ~180px with
+     no way to scroll it back — "I can't scroll the emulator settings". */
+  overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin;
+  transform: translateX(0);
+  transition: transform var(--hz-sheet-ease), visibility 0s;
 }
-.hz-sheet[hidden] { display: flex; transform: translateX(101%); }
+/* Slid away it is still display:flex so the slide can animate, but visibility
+   takes it out of the tab order and the accessibility tree — otherwise Tab
+   walked into an off-screen panel. The delay lets the slide finish first. */
+.hz-sheet[hidden] {
+  display: flex; visibility: hidden; transform: translateX(101%);
+  transition: transform var(--hz-sheet-ease), visibility 0s var(--hz-sheet-ease);
+}
+/* head / scrolling body / Close: the way out never has to be scrolled to */
+.hz-sheet-body {
+  flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin;
+  display: flex; flex-direction: column; gap: 4px;
+  margin: 0 calc(-1 * var(--hz-sheet-pad)); padding: 0 var(--hz-sheet-pad);
+}
+.hz-sheet-body > div[role="radiogroup"] { display: flex; flex-direction: column; gap: 4px; }
+.hz-sheet-body h4.gap { margin-top: clamp(14px, 1.8cqw, 26px); }
+.hz-sheet-note {
+  margin: -6px 0 8px; padding: 0 clamp(10px, 1.1cqw, 15px);
+  font-size: clamp(10px, 0.95cqw, 12.5px); line-height: 1.45; color: var(--faint2);
+}
+.hz-sheet-close { flex: none; margin-top: clamp(6px, 0.8cqw, 12px); }
+.hz-sheet-scrim { position: absolute; inset: 0; bottom: var(--hz-cc-h); z-index: 6; background: rgba(2,4,10,0.35); }
+@media (prefers-reduced-motion: reduce) { .hz-sheet, .hz-sheet[hidden] { transition: none; } }
 .hz-sheet h4 {
   font-size: clamp(9px, 1cqw, 13px); letter-spacing: 0.28em; text-transform: uppercase;
   color: var(--tint2); margin: 0 0 clamp(10px, 1.4cqw, 20px); font-weight: 400;
@@ -5161,8 +5190,11 @@ body.party-col .share-btn { right: calc(var(--pty-w) + clamp(12px, 2vw, 22px)); 
 .hz-srow.warn .t { color: #e88a82; }
 .hz-srow:disabled { opacity: 0.35; cursor: default; }
 @media (max-width: 640px) {
+  /* a bottom sheet: as tall as its content, never taller than the space above
+     the Control Center — the body scrolls for the rest */
   .hz-sheet { left: 0; width: auto; min-width: 0; top: auto; height: auto; border-left: 0;
-              border-top: 1px solid var(--glassline); }
+              max-height: calc(100% - var(--hz-cc-h) - clamp(32px, 6vh, 56px)); /* a strip stays free to tap out */
+              border-top: 1px solid var(--glassline); border-radius: 18px 18px 0 0; }
   .hz-sheet[hidden] { transform: translateY(101%); }
 }
 

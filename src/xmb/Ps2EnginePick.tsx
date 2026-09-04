@@ -8,7 +8,7 @@
 //
 // It lives on PS2 home because every launch passes through here and both
 // choices have to be settled before a disc spins — see engineChoice.ts.
-import { For, createSignal } from "solid-js";
+import { For, Show, createSignal, onCleanup, onMount } from "solid-js";
 import * as sfx from "../audio";
 import {
   readClock, readEngine, readRes, writeClock, writeEngine, writeRes,
@@ -85,43 +85,103 @@ export default function Ps2EnginePick() {
   const pillLabel = () =>
     `Emulator · ${engineLabel(engine())}${clock() === "full" ? "" : ` · ${clockLabel(clock())}`}`;
 
+  let pill!: HTMLButtonElement;
+  let sheet!: HTMLElement;
+  let body!: HTMLDivElement;
+  const close = () => { sfx.back(); setOpen(false); queueMicrotask(() => pill.focus({ preventScroll: true })); };
+  const show = () => {
+    sfx.tickH(); setOpen(true);
+    // start at the top and hand focus to the sheet, so a keyboard or a
+    // controller is inside it right away — the previous version left focus on
+    // the pill behind the panel
+    queueMicrotask(() => {
+      body.scrollTop = 0;
+      // preventScroll: the sheet is still sliding in, and a plain focus() would
+      // scroll the shelf's container to chase the row — that shift is what left
+      // the sheet's head above the screen
+      (sheet.querySelector<HTMLElement>('[aria-checked="true"]') ?? sheet.querySelector<HTMLElement>("button"))?.focus({ preventScroll: true });
+    });
+  };
+  // While the sheet is open it owns the keyboard: Escape closes it, ↑/↓ walk
+  // the rows, and nothing leaks to the shelf underneath (whose Backspace means
+  // "remove this game"). Capture phase so it runs before the shelf's listener.
+  onMount(() => {
+    const keys = (e: KeyboardEvent) => {
+      if (!open()) return;
+      if (e.key === "Escape") { e.preventDefault(); close(); }
+      else if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+        e.preventDefault();
+        const rows = [...sheet.querySelectorAll<HTMLButtonElement>("button:not(:disabled)")];
+        const i = rows.indexOf(document.activeElement as HTMLButtonElement);
+        rows[(i + (e.key === "ArrowDown" ? 1 : rows.length - 1)) % rows.length]?.focus({ preventScroll: true });
+      }
+      if (e.key !== "Tab") e.stopPropagation();
+    };
+    addEventListener("keydown", keys, true);
+    onCleanup(() => removeEventListener("keydown", keys, true));
+  });
+
+  const advancedOnly = () => engine() === "native";
+
   return (
     <>
-      <button class="hz-btn" onClick={() => { sfx.tickH(); setOpen(true); }}>
+      <button class="hz-btn" ref={pill} aria-haspopup="dialog" aria-expanded={open()} onClick={show}>
         {pillLabel()}
       </button>
 
-      <aside class="hz-sheet" hidden={!open()} aria-label="Emulator">
-        <h4>Emulator</h4>
-        <For each={ENGINES}>{(r) => (
-          <button class="hz-srow" classList={{ pri: engine() === r.id }}
-            role="radio" aria-checked={engine() === r.id} onClick={() => pickEngine(r.id)}>
-            <span><span class="t">{r.title}</span><span class="s">{r.sub}</span></span>
-            <span class="s">{engine() === r.id ? "ON" : ""}</span>
-          </button>
-        )}</For>
+      {/* tap outside closes, like any sheet; stops short of the Control Center */}
+      <Show when={open()}><div class="hz-sheet-scrim" onClick={close} /></Show>
 
-        <h4 style="margin-top:clamp(14px,1.8cqw,26px)">Performance</h4>
-        <For each={CLOCKS}>{(r) => (
-          <button class="hz-srow" classList={{ pri: clock() === r.id }}
-            disabled={engine() === "native"}
-            role="radio" aria-checked={clock() === r.id} onClick={() => pickClock(r.id)}>
-            <span><span class="t">{r.title}</span><span class="s">{r.sub}</span></span>
-            <span class="s">{clock() === r.id ? "ON" : ""}</span>
-          </button>
-        )}</For>
+      <aside class="hz-sheet" ref={sheet} hidden={!open()} role="dialog" aria-label="Emulator settings">
+        <div class="hz-sheet-head">
+          <div>
+            <div class="t">Emulator</div>
+            <div class="s">Applies to every PS2 disc you boot</div>
+          </div>
+        </div>
 
-        <h4 style="margin-top:clamp(14px,1.8cqw,26px)">Picture</h4>
-        <For each={RESOLUTIONS}>{(r) => (
-          <button class="hz-srow" classList={{ pri: res() === r.id }}
-            disabled={engine() === "native"}
-            role="radio" aria-checked={res() === r.id} onClick={() => pickRes(r.id)}>
-            <span><span class="t">{r.title}</span><span class="s">{r.sub}</span></span>
-            <span class="s">{res() === r.id ? "ON" : ""}</span>
-          </button>
-        )}</For>
+        {/* the settings scroll on their own; the title above and Close below
+            stay put, so the way out never has to be scrolled to */}
+        <div class="hz-sheet-body" ref={body}>
+          <h4 id="hz-eng">Engine</h4>
+          <div role="radiogroup" aria-labelledby="hz-eng">
+            <For each={ENGINES}>{(r) => (
+              <button class="hz-srow" classList={{ pri: engine() === r.id }}
+                role="radio" aria-checked={engine() === r.id} onClick={() => pickEngine(r.id)}>
+                <span><span class="t">{r.title}</span><span class="s">{r.sub}</span></span>
+                <span class="s">{engine() === r.id ? "ON" : ""}</span>
+              </button>
+            )}</For>
+          </div>
 
-        <button class="hz-srow" onClick={() => { sfx.back(); setOpen(false); }} style="margin-top:auto">
+          <h4 id="hz-perf" class="gap">Performance</h4>
+          <Show when={advancedOnly()}><p class="hz-sheet-note">Advanced engine only — the native build runs at the console's clock.</p></Show>
+          <div role="radiogroup" aria-labelledby="hz-perf">
+            <For each={CLOCKS}>{(r) => (
+              <button class="hz-srow" classList={{ pri: clock() === r.id }}
+                disabled={advancedOnly()}
+                role="radio" aria-checked={clock() === r.id} onClick={() => pickClock(r.id)}>
+                <span><span class="t">{r.title}</span><span class="s">{r.sub}</span></span>
+                <span class="s">{clock() === r.id ? "ON" : ""}</span>
+              </button>
+            )}</For>
+          </div>
+
+          <h4 id="hz-pic" class="gap">Picture</h4>
+          <Show when={advancedOnly()}><p class="hz-sheet-note">Advanced engine only — the native build draws at the PS2's own resolution.</p></Show>
+          <div role="radiogroup" aria-labelledby="hz-pic">
+            <For each={RESOLUTIONS}>{(r) => (
+              <button class="hz-srow" classList={{ pri: res() === r.id }}
+                disabled={advancedOnly()}
+                role="radio" aria-checked={res() === r.id} onClick={() => pickRes(r.id)}>
+                <span><span class="t">{r.title}</span><span class="s">{r.sub}</span></span>
+                <span class="s">{res() === r.id ? "ON" : ""}</span>
+              </button>
+            )}</For>
+          </div>
+        </div>
+
+        <button class="hz-srow hz-sheet-close" onClick={close}>
           <span><span class="t">Close</span></span><span class="s">○</span>
         </button>
       </aside>
