@@ -32,8 +32,9 @@ export interface SystemDef {
   id: string;
   name: string;
   family: Family;
-  engine: "ejs" | "play" | "cloudpilot" | "frame";
+  engine: "ejs" | "play" | "cloudpilot" | "frame" | "tab";
   frame?: string;          // engine "frame": the same-origin player page that takes the cart by postMessage
+  tab?: string;            // engine "tab": a player page opened top-level (it cannot live under our isolation headers)
   ejsCore?: string;        // when EJS_core differs from id (fuse, cap32)
   thumbs: string[];        // libretro-thumbnails repos, most specific first
   exts: string[];          // extensions that mean this system and nothing else
@@ -112,11 +113,13 @@ export const SYSTEMS: Record<string, SystemDef> = {
   palm: { id: "palm", name: "Palm OS", family: "mobile", engine: "cloudpilot", thumbs: [], exts: ["prc"],
     bios: { files: [], match: "rom", required: true, note: "Needs your Palm device's ROM file (.rom) — any m68k or OS5 device" },
     fit: { note: "Touch is the stylus — this one is at home on a phone" } },
+  j2me: { id: "j2me", name: "Java ME (J2ME)", family: "mobile", engine: "tab", tab: "/j2me/player.html", thumbs: [], exts: ["jar"],
+    fit: { note: "Nokia-era Java games with an on-screen keypad. Opens in its own tab — the Java runtime (CheerpJ, streamed from its CDN) can't run inside the console frame" } },
 
   // —— fantasy consoles ————————————————————————————————————————————————————
   // Real runtimes with open cart formats; nothing to own, thousands of free carts.
-  tic80: { id: "tic80", name: "TIC-80", family: "fantasy", engine: "frame", frame: "/tic80/player.html", thumbs: [], exts: ["tic"],
-    fit: { note: "Keyboard or pad; touch controls appear on phones" } },
+  // (TIC-80 is parked: its web build boots but a cart handed in at runtime never
+  // reaches its loader — see docs/games-roadmap.md.)
   wasm4: { id: "wasm4", name: "WASM-4", family: "fantasy", engine: "frame", frame: "/wasm4/player.html", thumbs: [], exts: [],
     fit: { note: "64 KB carts — runs on anything" } },
 

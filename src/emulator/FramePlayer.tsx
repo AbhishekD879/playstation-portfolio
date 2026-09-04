@@ -17,6 +17,7 @@ export default function FramePlayer(props: { game: GameRecord; onClose: () => vo
     setNavEnabled(false);
     const onMsg = async (e: MessageEvent) => {
       if (e.source !== frame.contentWindow || e.origin !== location.origin) return;
+      if (e.data?.type === "exit") { props.onClose(); return; }
       if (e.data?.type === "ready") {
         try {
           const bytes = await (await resolveGameFile(props.game)).arrayBuffer();

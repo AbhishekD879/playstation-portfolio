@@ -21,6 +21,7 @@ import { GAME_TOP, HIDDEN_GAME_ITEMS, folderOf, type GameFolder } from "./gameFo
 import { ALL_EXTS, SYSTEMS, classifyFile, systemsOf } from "../systems";
 import PalmSession from "../emulator/PalmSession";
 import FramePlayer from "../emulator/FramePlayer";
+import { bootJ2me } from "../j2me";
 import { tr } from "../translate";
 import { startTabSync } from "../sync";
 import { fluidNavPulse } from "./FluidBg";
@@ -289,6 +290,7 @@ export default function XMB(props: {
     if (g.sys === "ps2") { setPs2Boot(g); setPs2Join(false); setApp("ps2"); }
     else if (g.core === "palm") { setPalmBoot(g); setApp("palm"); }
     else if (SYSTEMS[g.core]?.engine === "frame") { setFrameBoot(g); setApp("frame"); }
+    else if (SYSTEMS[g.core]?.engine === "tab") { if (!bootJ2me(g, SYSTEMS[g.core].tab)) pushToast("Pop-up blocked", "Allow pop-ups for this site — Java ME games open in their own tab"); }
     else props.onPlay(g);
   }
   // DEV ONLY. Boots a disc straight into the PS2 app, bypassing the library so
@@ -368,7 +370,7 @@ export default function XMB(props: {
     { id: "worlddrive", title: "World Drive", sub: "Drive the real Earth — any street, any mountain pass, from open maps", icon: "globe", action: { type: "worlddrive" as const } },
     { id: "chess", title: "Chess vs Stockfish", sub: "Built-in game · the real engine, on this device", icon: "knight", action: { type: "chess" } },
     { id: "trivia", title: "Trivia Arcade", sub: "Built-in game · 10 questions, endless rounds", icon: "question", action: { type: "trivia" } },
-    { id: "fantasy", title: "Fantasy Consoles", sub: `TIC-80 and WASM-4 carts — tiny, open, thousands are free${shelfCount(FANTASY_SYSTEMS) ? ` · ${shelfCount(FANTASY_SYSTEMS)} in your shelf` : ""}`, icon: "cube", action: { type: "shelf", id: "fantasyhome" } },
+    { id: "fantasy", title: "Fantasy Consoles", sub: `WASM-4 carts — 64 KB games, open format, thousands are free${shelfCount(FANTASY_SYSTEMS) ? ` · ${shelfCount(FANTASY_SYSTEMS)} in your shelf` : ""}`, icon: "cube", action: { type: "shelf", id: "fantasyhome" } },
     { id: "flash", title: "Flash Arcade", sub: "Built-in arcade · classic Flash games, streamed", icon: "lightning", action: { type: "flash" } },
     { id: "ps2", title: "PlayStation 2", sub: `Library, downloads & 2-player online${ps2Count() ? ` · ${ps2Count()} in your shelf` : ""}`, icon: "disc", action: { type: "ps2-home" } },
     { id: "ps1", title: "PlayStation", sub: `The original — .chd/.pbp discs, no BIOS needed${psxCount() ? ` · ${psxCount()} in your shelf` : ""}`, icon: "disc", action: { type: "ps1-home" } },
@@ -380,7 +382,7 @@ export default function XMB(props: {
     { id: "sega", title: "Sega", sub: `Mega Drive · Master System · Game Gear · Sega CD · 32X · Saturn${shelfCount(SEGA_SYSTEMS) ? ` · ${shelfCount(SEGA_SYSTEMS)} in your shelf` : ""}`, icon: "gamepad", action: { type: "shelf", id: "segahome" } },
     { id: "arcade", title: "Arcade", sub: `Neo Geo · CPS1/CPS2 · classic MAME — bring your romsets, insert coin${shelfCount(ARCADE_SYSTEMS) ? ` · ${shelfCount(ARCADE_SYSTEMS)} in your shelf` : ""}`, icon: "gamepad", action: { type: "shelf", id: "arcadehome" } },
     { id: "consoles", title: "More Consoles", sub: `PC Engine · Neo Geo Pocket · WonderSwan · Atari · 3DO · ColecoVision & more${shelfCount(CONSOLE_SYSTEMS) ? ` · ${shelfCount(CONSOLE_SYSTEMS)} in your shelf` : ""}`, icon: "handheld", action: { type: "shelf", id: "consoleshome" } },
-    { id: "mobile", title: "Mobile", sub: `Palm OS — bring your device ROM and .prc programs; touch is the stylus${shelfCount(MOBILE_SYSTEMS) ? ` · ${shelfCount(MOBILE_SYSTEMS)} in your shelf` : ""}`, icon: "phone", action: { type: "shelf", id: "mobilehome" } },
+    { id: "mobile", title: "Mobile", sub: `Palm OS and Java ME — bring your Palm ROM and .prc programs, or Nokia-era .jar games${shelfCount(MOBILE_SYSTEMS) ? ` · ${shelfCount(MOBILE_SYSTEMS)} in your shelf` : ""}`, icon: "phone", action: { type: "shelf", id: "mobilehome" } },
     { id: "computers", title: "Computers", sub: `Amiga · Commodore 64 · ZX Spectrum · Amstrad CPC${shelfCount(COMPUTER_SYSTEMS) ? ` · ${shelfCount(COMPUTER_SYSTEMS)} in your shelf` : ""}`, icon: "monitor", action: { type: "shelf", id: "computershome" } },
     { id: "cs", title: "Counter-Strike 1.6", sub: "The classic FPS in your browser — bring your files · bots & online with friends", icon: "gamepad", action: { type: "cs" as const } },
     { id: "retrojoin", title: "Join a Retro Game", sub: "Player two for a friend's NES/SNES game — they stream it, you just play", icon: "gamepad", action: { type: "retrojoin" as const } },

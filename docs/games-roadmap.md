@@ -90,19 +90,42 @@ to the shelf). Verified without a device ROM: shelf, BIOS rule, no-ROM message,
 wasm loads from our origin, a fake ROM is rejected by Cloudpilot's own check.
 Needs a real m68k/OS5 ROM for a full boot.
 
-Done: **Fantasy Consoles** (2026-09-04) — TIC-80 (official web build, MIT,
-`public/tic80/`) and WASM-4 (slim runtime, ISC, `public/wasm4/`) as `frame`
-engines: each is a same-origin player page that announces "ready" and takes the
-cart by postMessage (TIC-80: file into Emscripten FS + argv; WASM-4: z85 cart
-JSON block, disk prefix per cart). One generic `FramePlayer` component; shelf
-lives inside Game Makers & Web. Verified: a hand-built TIC-80 cart and WASM-4's
-Watris boot and paint; eject returns to the shelf.
+Done: **Fantasy Consoles** (2026-09-04) — WASM-4 (slim runtime, ISC,
+`public/wasm4/`) as a `frame` engine: a same-origin player page that announces
+"ready" and takes the cart by postMessage, writing the same z85 cart JSON block
+its own bundler would plus a per-cart disk prefix for saves. One generic
+`FramePlayer` component (removing the iframe is the eject); shelf lives inside
+Game Makers & Web. Verified with WASM-4's Watris.
 
-Next in order: Java ME (CheerpJ CDN answers with CORS + CORP, so it loads under
-our isolation; vendor freej2me-web under the RPG Maker service-worker scope and
-serve the JAR from OPFS), Windows 9x on the existing v86 (attach a disk image as
-a File), Dreamcast (flycast-wasm as a self-hosted EmulatorJS core), then the
-shareware engines.
+**TIC-80 parked.** The official web build (MIT) boots and prints its banner,
+but a cart handed in at runtime never reaches the loader: tried MEMFS at `/`
+and `/tic80`, seeding its IDBFS (`/com.nesbox.tic/TIC-80`, store `FILE_DATA`,
+same record shape it writes) and passing the absolute path — every time
+"loading cart… the code is empty" (start.c reads argv with a plain `fs_read`).
+A real tic80.com cart fails the same way, so it is not the cart format. Next
+idea when revisited: build TIC-80 with a preload of the cart, or drive the
+console (`load <name>`) after boot via a custom `--cmd`-capable build. The
+player page is kept in the session scratchpad; assets were removed from
+`public/` so nothing dead ships.
+
+Done: **Java ME** (2026-09-04) — freej2me-web (zb3, GPL-3) vendored under
+`public/j2me/` (JAR runtime, libmidi/libmedia wasm, keypad UI; 8.4 MB). It runs
+as a **top-level tab**, not a frame: CheerpJ (streamed from its CDN under the
+Community licence) embeds a helper frame from that CDN, and a document under
+our COEP may only embed frames that are themselves isolated — Chrome blocks it
+(`ERR_BLOCKED_BY_RESPONSE`), same-origin or not. So `/j2me/*` is served with
+the isolation headers detached (`public/_headers` `!` rules; a Vite middleware
+mirrors it in dev), `bootJ2me()` opens the tab synchronously on the player's
+click and hands the JAR over through IndexedDB (`asp-j2me`), which the page
+polls for; `main.js` takes the JAR as an in-memory `/str/` file
+(`cheerpOSAddStringFile`) and a MIDlet's exit closes the tab. Verified with the
+bundled free Connect4 MIDlet from the shelf's Play: popup opens, game menu up
+in two seconds.
+
+Next in order: Windows 9x on the existing v86 (attach a disk image as a
+File), Dreamcast (flycast-wasm as a self-hosted EmulatorJS core), then the
+shareware engines (Quake, Wolf3D, DevilutionX, OpenTTD, Micropolis, Jazz,
+OpenLara).
 
 
 Palm OS (CloudpilotEmu embed), Java ME (j2me-player / CheerpJ CDN),
@@ -126,4 +149,5 @@ Jazz Jackrabbit 1 & 2, OpenLara, Duke Nukem II, TIC-80, WASM-4, Scratch.
 - 2026-09-04 · Phase 2: registry, BIOS pocket, Systems sheet, disc chooser, 20 new systems across four shelves; 14 cores smoke-booted.
 - 2026-09-04 · Arcade shelf (FBNeo + MAME 2003-Plus); Gridlee boots. Phase 2 complete — 22 new systems.
 - 2026-09-04 · Phase 3 begins: Palm OS via CloudpilotEmu (Mobile shelf).
-- 2026-09-04 · Fantasy Consoles shelf: TIC-80 + WASM-4 via a generic frame player.
+- 2026-09-04 · Fantasy Consoles shelf: WASM-4 via a generic frame player; TIC-80 parked (cart never reaches the loader).
+- 2026-09-04 · Java ME on the Mobile shelf, as its own tab (CheerpJ cannot be framed under COEP).

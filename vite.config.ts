@@ -15,7 +15,23 @@ const isolation = {
 };
 
 export default defineConfig({
-  plugins: [solid(), multiplayerSignaling()],
+  plugins: [
+    // /j2me/ is served without the isolation headers (see public/_headers): the
+    // Java ME player opens as its own tab because CheerpJ's helper frame cannot
+    // be embedded under COEP. Mirrors the production rule for local testing.
+    {
+      name: "j2me-no-isolation",
+      configureServer(server) {
+        server.middlewares.use((req, res, next) => {
+          if (req.url?.startsWith("/j2me/")) {
+            const set = res.setHeader.bind(res);
+            res.setHeader = (name: string, value: number | string | readonly string[]) =>
+              /^cross-origin-(embedder|opener)-policy$/i.test(name) ? res : set(name, value);
+          }
+          next();
+        });
+      },
+    },solid(), multiplayerSignaling()],
   assetsInclude: ["**/*.pk3"], // Xash3D/CS engine asset packs imported via ?url
   // Two HTML entries: the console (index.html) and the internal /admin review
   // tool (admin.html → served by Pages at /admin). Both boot the same main.tsx,

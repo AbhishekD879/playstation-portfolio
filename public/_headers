@@ -1,3 +1,10 @@
 /*
   Cross-Origin-Opener-Policy: same-origin
   Cross-Origin-Embedder-Policy: credentialless
+
+# Java ME runs in its own tab: CheerpJ embeds a frame from its CDN that cannot
+# satisfy cross-origin isolation, so these pages drop it (nothing here needs
+# SharedArrayBuffer).
+/j2me/*
+  ! Cross-Origin-Embedder-Policy
+  ! Cross-Origin-Opener-Policy
