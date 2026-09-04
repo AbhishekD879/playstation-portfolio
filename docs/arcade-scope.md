@@ -5,7 +5,7 @@ MAME via `mame2003_plus`. Chosen over Dreamcast after establishing Dreamcast is
 not buildable for the web (no flycast core in EmulatorJS's build set, none on
 libretro's emscripten buildbot, no emscripten target upstream in flycast itself).
 
-Status: **scoped, unbuilt.**
+Status: **built (2026-09-04, branch feat/games-shelves).** Arcade shelf with `arcade` (fbneo) and `mame` (mame2003_plus) as two systems from the registry; `.zip` is accepted only from that shelf and the console asks which core; `EJS_gameName` keeps the `.zip` so the romset name reaches the core; `EJS_controlScheme` set so Select is "insert coin". Verified: MAME's freely released Gridlee boots and paints. Note: the Dreamcast conclusion below is superseded — flycast-wasm (Aug 2026) exists; see docs/games-roadmap.md.
 
 ## Why arcade is the right addition
 

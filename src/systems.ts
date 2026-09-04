@@ -8,7 +8,7 @@
 // 4.2.3 has no alias), and it is what a library record stores in `core`. PS2 is
 // the exception — it boots Play!, not EmulatorJS — and keeps `sys: "ps2"`.
 
-export type Family = "sony" | "nintendo" | "sega" | "consoles" | "computers";
+export type Family = "sony" | "nintendo" | "sega" | "consoles" | "computers" | "arcade";
 
 /** Device fit, in the same vocabulary as labs.ts rateFeature(). */
 export interface SystemFit {
@@ -97,6 +97,15 @@ export const SYSTEMS: Record<string, SystemDef> = {
   coleco: { id: "coleco", name: "ColecoVision", family: "consoles", engine: "ejs", thumbs: ["Coleco_-_ColecoVision"], exts: ["col"],
     bios: { files: ["colecovision.rom"], required: true, note: "Needs the console's BIOS" } },
 
+  // —— arcade ——————————————————————————————————————————————————————————————
+  // Every arcade ROM is a .zip and which core runs it depends on the romset's
+  // version lineage, not its name — so the player picks the core when adding.
+  arcade: { id: "arcade", name: "Arcade · FinalBurn Neo", family: "arcade", engine: "ejs", thumbs: ["FBNeo_-_Arcade_Games"], exts: [],
+    bios: { files: ["neogeo.zip", "pgm.zip"], required: false, note: "Neo Geo games need neogeo.zip, PGM games pgm.zip; CPS1/CPS2 need nothing" },
+    fit: { cpuHeavy: true, note: "Romsets must match FBNeo's version — use full non-merged sets. Select inserts a coin." } },
+  mame: { id: "mame", name: "Arcade · MAME 2003-Plus", family: "arcade", engine: "ejs", thumbs: ["MAME"], exts: [],
+    fit: { note: "MAME 0.78-era romsets (full non-merged need no BIOS). Select inserts a coin." } },
+
   // —— computers ———————————————————————————————————————————————————————————
   amiga: { id: "amiga", name: "Amiga", family: "computers", engine: "ejs", thumbs: ["Commodore_-_Amiga"], exts: ["adf", "adz", "dms", "hdf", "hdz", "lha"],
     bios: { files: ["kick34005.A500", "kick40068.A1200"], required: false, note: "Boots on the free AROS ROM; commercial games want a Kickstart" },
@@ -124,8 +133,10 @@ export const SHARED_EXTS: Record<string, string[]> = {
   rom: ["jaguar", "coleco"],
   tap: ["zx", "c64"],
 };
-/** Formats that are only accepted when a shelf asks for them (legacy: .img was PS1-home only). */
-const CONTEXT_ONLY_EXTS: Record<string, string[]> = { img: ["psx"] };
+/** Formats that are only accepted when a shelf asks for them: .img was always
+ *  PS1-home only, and .zip is claimed by other apps (RPG Maker, Unity, HTML5) so
+ *  it is an arcade ROM only when added from the Arcade shelf. */
+const CONTEXT_ONLY_EXTS: Record<string, string[]> = { img: ["psx"], zip: ["arcade", "mame"] };
 
 export const ext = (name: string) => name.split(".").pop()?.toLowerCase() ?? "";
 
@@ -154,7 +165,10 @@ export function classifyFile(name: string, candidates?: readonly string[]): Clas
     return asClass(shared[0]);
   }
   const ctx = CONTEXT_ONLY_EXTS[e];
-  if (ctx) { const hits = ctx.filter((id) => candidates?.includes(id)); return hits.length ? asClass(hits[0]) : null; }
+  if (ctx) {
+    const hits = ctx.filter((id) => candidates?.includes(id));
+    return hits.length > 1 ? { choose: hits } : hits.length ? asClass(hits[0]) : null;
+  }
   return null;
 }
 

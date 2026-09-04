@@ -232,7 +232,7 @@ export default function XMB(props: {
   const [vListening, setVListening] = createSignal(false); // XMB voice command
   const [padTest, setPadTest] = createSignal(false);
   const [splatFile, setSplatFile] = createSignal<File | null>(null);
-  const [app, setAppRaw] = createSignal<null | "doom" | "doomrtx" | "worlddrive" | "chess" | "trivia" | "flash" | "cinema" | "podcasts" | "library" | "map" | "ai" | "webamp" | "youtube" | "timemachine" | "art" | "wiki" | "lichess" | "ps2" | "pc" | "guestbook" | "browser" | "visualizer" | "studio" | "code" | "manual" | "ps2home" | "ps1home" | "psphome" | "retrohome" | "nintendohome" | "segahome" | "consoleshome" | "computershome" | "scummvm" | "karaoke" | "strudel" | "settingshub" | "videoplayer" | "reporewind" | "rpgmaker" | "renpy" | "godot" | "unity" | "html5" | "privacy" | "watch" | "syscity" | "cs" | "party" | "retrojoin" | "board" | "voiceavatar" | "consoletv" | "analytics">(null);
+  const [app, setAppRaw] = createSignal<null | "doom" | "doomrtx" | "worlddrive" | "chess" | "trivia" | "flash" | "cinema" | "podcasts" | "library" | "map" | "ai" | "webamp" | "youtube" | "timemachine" | "art" | "wiki" | "lichess" | "ps2" | "pc" | "guestbook" | "browser" | "visualizer" | "studio" | "code" | "manual" | "ps2home" | "ps1home" | "psphome" | "retrohome" | "nintendohome" | "segahome" | "arcadehome" | "consoleshome" | "computershome" | "scummvm" | "karaoke" | "strudel" | "settingshub" | "videoplayer" | "reporewind" | "rpgmaker" | "renpy" | "godot" | "unity" | "html5" | "privacy" | "watch" | "syscity" | "cs" | "party" | "retrojoin" | "board" | "voiceavatar" | "consoletv" | "analytics">(null);
 
   // Opening/closing an app goes through the native View Transitions API (now
   // Baseline for same-document), so the console cross-fades like real system
@@ -346,6 +346,7 @@ export default function XMB(props: {
   // old all-in-one shelf) stays so #/app/retrohome keeps working.
   const NINTENDO_SYSTEMS = systemsOf("nintendo");
   const SEGA_SYSTEMS = systemsOf("sega");
+  const ARCADE_SYSTEMS = systemsOf("arcade");
   const CONSOLE_SYSTEMS = systemsOf("consoles");
   const COMPUTER_SYSTEMS = systemsOf("computers");
   const shelfCount = (systems: readonly string[]) => games().filter((g) => !g.sys && systems.includes(g.core)).length;
@@ -365,6 +366,7 @@ export default function XMB(props: {
     { id: "retro", title: "Retro Games", sub: `NES · SNES · GBA · N64 & more — library + downloads${retroCount() ? ` · ${retroCount()} in your shelf` : ""}`, icon: "gamepad", action: { type: "retro-home" } },
     { id: "nintendo", title: "Nintendo", sub: `NES · Super Nintendo · Nintendo 64 · Game Boy · GBA · DS · Virtual Boy${shelfCount(NINTENDO_SYSTEMS) ? ` · ${shelfCount(NINTENDO_SYSTEMS)} in your shelf` : ""}`, icon: "gamepad", action: { type: "shelf", id: "nintendohome" } },
     { id: "sega", title: "Sega", sub: `Mega Drive · Master System · Game Gear · Sega CD · 32X · Saturn${shelfCount(SEGA_SYSTEMS) ? ` · ${shelfCount(SEGA_SYSTEMS)} in your shelf` : ""}`, icon: "gamepad", action: { type: "shelf", id: "segahome" } },
+    { id: "arcade", title: "Arcade", sub: `Neo Geo · CPS1/CPS2 · classic MAME — bring your romsets, insert coin${shelfCount(ARCADE_SYSTEMS) ? ` · ${shelfCount(ARCADE_SYSTEMS)} in your shelf` : ""}`, icon: "gamepad", action: { type: "shelf", id: "arcadehome" } },
     { id: "consoles", title: "More Consoles", sub: `PC Engine · Neo Geo Pocket · WonderSwan · Atari · 3DO · ColecoVision & more${shelfCount(CONSOLE_SYSTEMS) ? ` · ${shelfCount(CONSOLE_SYSTEMS)} in your shelf` : ""}`, icon: "handheld", action: { type: "shelf", id: "consoleshome" } },
     { id: "computers", title: "Computers", sub: `Amiga · Commodore 64 · ZX Spectrum · Amstrad CPC${shelfCount(COMPUTER_SYSTEMS) ? ` · ${shelfCount(COMPUTER_SYSTEMS)} in your shelf` : ""}`, icon: "monitor", action: { type: "shelf", id: "computershome" } },
     { id: "cs", title: "Counter-Strike 1.6", sub: "The classic FPS in your browser — bring your files · bots & online with friends", icon: "gamepad", action: { type: "cs" as const } },
@@ -1645,7 +1647,7 @@ export default function XMB(props: {
     if (padTest()) { if (action === "back") setPadTest(false); return; }
     if (app()) {
       // bound apps route their own nav; the rest are keyboard-driven owner apps
-      if (["chess", "trivia", "flash", "cinema", "podcasts", "library", "youtube", "art", "wiki", "ps2home", "ps1home", "psphome", "retrohome", "nintendohome", "segahome", "consoleshome", "computershome", "karaoke", "settingshub", "videoplayer", "reporewind", "rpgmaker", "renpy", "godot", "unity", "html5", "syscity", "worlddrive"].includes(app()!)) appNav?.(action);
+      if (["chess", "trivia", "flash", "cinema", "podcasts", "library", "youtube", "art", "wiki", "ps2home", "ps1home", "psphome", "retrohome", "nintendohome", "segahome", "arcadehome", "consoleshome", "computershome", "karaoke", "settingshub", "videoplayer", "reporewind", "rpgmaker", "renpy", "godot", "unity", "html5", "syscity", "worlddrive"].includes(app()!)) appNav?.(action);
       else if (app() === "lichess" && action === "back") { sfx.back(); setApp(null); }
       else if (src === "pad" || src === "gesture") {
         // owner apps (map/globe, lichess…) listen to the KEYBOARD — turn pad
@@ -1981,7 +1983,7 @@ export default function XMB(props: {
   // Horizon shelves are entirely tappable — tiles, hero actions and the Control
   // Center are all real buttons — so a virtual d-pad adds nothing, and its face
   // buttons land squarely on top of the Control Center bar on a phone.
-  const TAP_NATIVE = new Set(["ps2home", "ps1home", "psphome", "retrohome", "nintendohome", "segahome", "consoleshome", "computershome"]);
+  const TAP_NATIVE = new Set(["ps2home", "ps1home", "psphome", "retrohome", "nintendohome", "segahome", "arcadehome", "consoleshome", "computershome"]);
   // show the on-screen controller once you're INSIDE something (an app/panel) —
   // that's where back/select/move-focus are needed; the bare crossbar is swipe+tap.
   const touchNavHidden = () =>
@@ -2505,6 +2507,11 @@ export default function XMB(props: {
       <Show when={app() === "segahome"}>
         <GameShelf bind={(f) => (appNav = f)} profileId={props.profile.id} systems={SEGA_SYSTEMS} owned={games()}
           title="SEGA — YOUR LIBRARY & DOWNLOADS" onPlay={playRecord} onInsert={() => { insertPrefer = SEGA_SYSTEMS; fileInput.click(); }} onLink={() => onLink(SEGA_SYSTEMS)}
+          onChanged={refreshGames} onClose={() => setApp(null)} />
+      </Show>
+      <Show when={app() === "arcadehome"}>
+        <GameShelf bind={(f) => (appNav = f)} profileId={props.profile.id} systems={ARCADE_SYSTEMS} owned={games()}
+          title="ARCADE — YOUR LIBRARY & DOWNLOADS" onPlay={playRecord} onInsert={() => { insertPrefer = ARCADE_SYSTEMS; fileInput.click(); }} onLink={() => onLink(ARCADE_SYSTEMS)}
           onChanged={refreshGames} onClose={() => setApp(null)} />
       </Show>
       <Show when={app() === "consoleshome"}>

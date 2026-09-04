@@ -26,6 +26,7 @@ export const GAME_TOP: GameTopEntry[] = [
   { kind: "folder", id: "playstation", title: "PlayStation", icon: "disc", blurb: "PlayStation · PlayStation 2 · PSP", items: ["ps2", "ps1", "psp"] },
   { kind: "item", id: "nintendo" },
   { kind: "item", id: "sega" },
+  { kind: "item", id: "arcade" },
   { kind: "item", id: "consoles" },
   { kind: "item", id: "computers" },
   { kind: "folder", id: "pc", title: "PC Games", icon: "monitor", blurb: "DOOM · DOOM RTX · Counter-Strike · point & click", items: ["doom", "doomrtx", "cs", "scummvm"] },

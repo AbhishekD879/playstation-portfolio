@@ -20,6 +20,7 @@ declare global {
     EJS_player?: string;
     EJS_core?: string;
     EJS_biosUrl?: string | File;
+    EJS_controlScheme?: string;
     EJS_gameUrl?: string;
     EJS_gameName?: string;
     EJS_pathtodata?: string;
@@ -203,7 +204,13 @@ export default function GameSession(props: { game: GameRecord; profileId: string
     // top document is cross-origin isolated. Harmless/unused for lighter cores.
     window.EJS_threads = props.game.core === "psp";
     window.EJS_gameUrl = blobUrl;
-    window.EJS_gameName = props.game.name.replace(/\.[^.]+$/, "");
+    // Arcade cores identify a romset by its file name, and EmulatorJS writes a
+    // blob-loaded ROM under EJS_gameName — so for them the name keeps its .zip.
+    // Everything else drops the extension, as before.
+    const arcade = props.game.core === "arcade" || props.game.core === "mame";
+    window.EJS_gameName = arcade ? props.game.name : props.game.name.replace(/\.[^.]+$/, "");
+    // coin-op button labels ("INSERT COIN" on Select) and layout
+    if (arcade) window.EJS_controlScheme = props.game.core;
     window.EJS_pathtodata = `https://cdn.emulatorjs.org/${EJS_VERSION}/data/`;
     window.EJS_language = "en-US";
     window.EJS_startOnLoaded = true;

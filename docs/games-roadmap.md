@@ -55,9 +55,12 @@ Game Gear, PC Engine, Neo Geo Pocket, WonderSwan, Virtual Boy, Atari 5200/7800,
 `segaMS-bios.zip`. Not verifiable without firmware or discs: Saturn, Sega CD,
 3DO, PC-FX, Lynx, ColecoVision boots (cores load; the sheet says what is missing).
 
-Still to do in this phase: Arcade (fbneo + mame2003_plus) per
-`docs/arcade-scope.md` — needs `EJS_dontExtractBIOS` for zipped BIOS and a
-per-game core choice.
+Arcade shelf (fbneo + mame2003_plus) also done: `.zip` only from the Arcade
+shelf, chooser picks the core per romset, `EJS_gameName` keeps `.zip`,
+`EJS_controlScheme` for coin/start labels, BIOS pocket takes `neogeo.zip` /
+`pgm.zip` (the outer zip is extracted, the inner archive stays whole, which is
+what FBNeo wants — no `EJS_dontExtractBIOS` needed). Verified with MAME's free
+Gridlee romset.
 
 ### Original plan
 
@@ -98,3 +101,4 @@ Jazz Jackrabbit 1 & 2, OpenLara, Duke Nukem II, TIC-80, WASM-4, Scratch.
 
 - 2026-09-04 · Phase 1 grouping implemented (folders, shelves, routes, tests).
 - 2026-09-04 · Phase 2: registry, BIOS pocket, Systems sheet, disc chooser, 20 new systems across four shelves; 14 cores smoke-booted.
+- 2026-09-04 · Arcade shelf (FBNeo + MAME 2003-Plus); Gridlee boots. Phase 2 complete — 22 new systems.

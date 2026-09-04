@@ -11,7 +11,7 @@ const REPOS = new Set(["Sony_-_PlayStation_2", "Sony_-_PlayStation", "Sony_-_Pla
   "Nintendo_-_Nintendo_DS", "Nintendo_-_Virtual_Boy", "Sega_-_Mega_Drive_-_Genesis", "Sega_-_Master_System_-_Mark_III", "Sega_-_Game_Gear", "Sega_-_32X",
   "Sega_-_Mega-CD_-_Sega_CD", "Sega_-_Saturn", "NEC_-_PC_Engine_-_TurboGrafx_16", "NEC_-_PC_Engine_CD_-_TurboGrafx-CD", "NEC_-_PC_Engine_SuperGrafx", "NEC_-_PC-FX",
   "SNK_-_Neo_Geo_Pocket_Color", "SNK_-_Neo_Geo_Pocket", "Bandai_-_WonderSwan_Color", "Bandai_-_WonderSwan", "Atari_-_Lynx", "Atari_-_2600", "Atari_-_5200", "Atari_-_7800",
-  "Atari_-_Jaguar", "The_3DO_Company_-_3DO", "Coleco_-_ColecoVision", "Commodore_-_Amiga", "Commodore_-_64", "Sinclair_-_ZX_Spectrum", "Amstrad_-_CPC"]);
+  "Atari_-_Jaguar", "The_3DO_Company_-_3DO", "Coleco_-_ColecoVision", "Commodore_-_Amiga", "Commodore_-_64", "Sinclair_-_ZX_Spectrum", "Amstrad_-_CPC", "FBNeo_-_Arcade_Games", "MAME"]);
 
 const owner = new Map();
 for (const [id, s] of Object.entries(SYSTEMS)) {
@@ -39,7 +39,10 @@ assert.deepEqual(classifyFile("game.pbp"), { core: "psp" });
 assert.deepEqual(classifyFile("game.bin"), { core: "segaMD" }, ".bin defaults to Mega Drive");
 assert.deepEqual(classifyFile("track.img"), null, ".img only from the PS1 home");
 assert.deepEqual(classifyFile("track.img", ["psx"]), { core: "psx" });
-assert.deepEqual(classifyFile("what.zip"), null, "zip is not a game yet (arcade comes later)");
+assert.deepEqual(classifyFile("what.zip"), null, "zip from the global picker is not a game — other apps own it");
+assert.deepEqual(classifyFile("mslug.zip", ["arcade", "mame"]), { choose: ["arcade", "mame"] }, "the Arcade shelf asks which core, because the romset lineage decides");
+assert.deepEqual(classifyFile("mslug.zip", ["arcade"]), { core: "arcade" });
+assert.deepEqual(classifyFile("mslug.zip", ["segaMD"]), null, "zip on a non-arcade shelf is still not a game");
 // the new shelves
 assert.deepEqual(classifyFile("sonic.sms"), { core: "segaMS" });
 assert.deepEqual(classifyFile("game.a26"), { core: "atari2600" });
