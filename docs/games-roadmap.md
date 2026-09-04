@@ -192,13 +192,14 @@ in a same-origin frame with EJECT — no upload step at all.
 | Wolfenstein 3D | ECWolf-JS 1.5pre default frontend, GPL-2 | 5.2 MB | shareware episode bundled in `ecwolf.data` by the project | boots, canvas painting, clean console (local) |
 | Quake | Qwasm (qwasm.m-h.org.uk build), GPL-2; `getgame.js` patched to fetch our copy of the unmodified `quake106.zip` | 26.7 MB (largest file 9.1 MB) | id shareware archive, unpacked client-side; LibreQuake also offered | boots to the game canvas after Start (local) |
 | OpenTTD | openttd-online 15.3 Emscripten build, GPL-2; language pre-loader IIFE removed; OpenGFX 7.1 written into `/baseset` before `main()`; the page must predefine `Module.arguments`/`postRun` (the build's pre.js pushes onto them) | 18.6 MB (wasm 10.8 MB) | OpenGFX GPL-2, saves in IDBFS | title screen with OpenGFX, clean console (local) |
+| Diablo | DevilutionX, built here from upstream master (2026-08-24) with emsdk 4.0.1 via `emcmake cmake` (Sustainable Use License 1.0, non-commercial); the build's own Emscripten shell + file manager, assets preloaded, saves in IDBFS; our CSS makes it full-screen | 45 MB (spawn.mpq 25,448,219 B, wasm 6.5 MB, data 12.7 MB) | `spawn.mpq` shareware data as distributed by the DevilutionX project; owners can add DIABDAT.MPQ through the file manager | boots to the title screen with spawn.mpq loaded, clean console (local) |
 
 Parked: Jazz Jackrabbit 2 (`jazz2.data` 46.7 MB > the 25 MiB per-file cap →
 R2), OpenLara (official site unreachable), C64 / Amiga / Neo Geo Pocket /
 WonderSwan homebrew (no free titles with a direct, licence-clear download
 found — CSDb/Aminet/AtariAge have no CORS and mixed licences), Tobu Tobu Girl
-(no direct file). Next: DevilutionX (upstream has an Emscripten target;
-`spawn.mpq` is 25,448,219 bytes — under the cap by 0.7 MB).
+(no direct file). DevilutionX is in (row above): upstream has an Emscripten
+target and `spawn.mpq` is 25,448,219 bytes — 0.7 MB under the cap, so no R2.
 
 ## Known constraints (from research, Sep 2026)
 
@@ -220,3 +221,4 @@ found — CSDb/Aminet/AtariAge have no CORS and mixed licences), Tobu Tobu Girl
 - 2026-09-04 · Dreamcast via self-hosted flycast-wasm core; BIOS gate before boot for every firmware-required system.
 - 2026-09-04 · **Deployed to production** (main `ba030f4`). Regression pass on the preview: all 14 crossbar categories present and non-Games lists identical to the previous build; 31 app routes open with no runtime errors; NES, SNES, Mega Drive boot through the new shelves; GBA behaves as before (its core rejects a garbage ROM on both builds); PS2 engine binaries byte-identical.
 - 2026-09-04 · Phase 4 free-to-play: Free games sheet + allow-listed relay (mamedev + GitHub releases), 27-title catalog; Wolf3D, Quake, OpenTTD join Micropolis and Jazz under PC Games as full-screen web games.
+- 2026-09-04 · Diablo (DevilutionX, own Emscripten build) joins PC Games — the last engine on the free-to-play list.

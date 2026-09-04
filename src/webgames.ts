@@ -33,6 +33,10 @@ export const WEB_GAMES: Record<string, WebGame> = {
     id: "openttd", title: "OpenTTD", sub: "Transport Tycoon Deluxe, open-sourced — build a rail empire, saves stay in your browser",
     url: "/openttd/index.html", icon: "globe", licence: "OpenTTD GPL-2.0 · OpenGFX GPL-2.0", source: "https://github.com/swords02/openttd-online",
   },
+  diablo: {
+    id: "diablo", title: "Diablo", sub: "The 1996 dungeon crawl — shareware Warrior, all sixteen levels of the Cathedral's demo (DevilutionX)",
+    url: "/diablo/index.html", icon: "skull", licence: "DevilutionX Sustainable Use License 1.0 (non-commercial) · spawn.mpq shareware data as distributed by the project", source: "https://github.com/diasurgical/devilutionX",
+  },
 };
 
 export const WEB_GAME_IDS = Object.keys(WEB_GAMES);
