@@ -38,8 +38,10 @@ const gh = (id: string, system: string, title: string, author: string, year: num
 
 export const FREE_GAMES: FreeGame[] = [
   // MAME's own site distributes these with the rights-holders' permission. Only
-  // sets that MAME 2003-Plus (our arcade core) knows are listed — falcnwld and
-  // topgunnr are on mamedev.org but not in this core.
+  // sets that boot in MAME 2003-Plus (our arcade core) are listed — falcnwld and
+  // topgunnr are not in this core, and looping's set on mamedev.org does not
+  // match what the core expects (it drops to the RetroArch menu). All 17
+  // below were swept on the preview (2026-09-04) and reach their attract screens.
   mame("gridlee", "Gridlee", "Videa", 1982, 25516, "Unreleased 1983 arcade shooter; Select inserts a coin"),
   mame("robby", "Robby Roto", "Bally/Midway (Dave Nutting Associates)", 1981, 27915, "Dig through rock, rescue the miners"),
   mame("alienar", "Alien Arena", "Duncan Brown", 1985, 17005, "Two-player arena shooter; Select inserts a coin"),
@@ -49,7 +51,6 @@ export const FREE_GAMES: FreeGame[] = [
   mame("fax", "FAX", "Exidy", 1983, 198449, "Trivia quiz cabinet — thousands of questions"),
   mame("fireone", "Fire One", "Exidy", 1979, 23227, "Two-player submarine duel"),
   mame("hardhat", "Hard Hat", "Exidy", 1982, 19938, "Construction-site maze chase"),
-  mame("looping", "Looping", "Video Games GmbH", 1982, 22684, "Loop-the-loop plane through the tunnels"),
   mame("ripcord", "Rip Cord", "Exidy", 1979, 5906, "Skydive onto the moving targets"),
   mame("robotbwl", "Robot Bowl", "Exidy", 1977, 5608, "Ten-pin bowling, 1977 style"),
   mame("sidetrac", "Side Trak", "Exidy", 1979, 5491, "Switch the tracks, keep the train alive"),

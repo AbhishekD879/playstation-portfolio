@@ -172,14 +172,18 @@ per-host path rules (mamedev.org `/roms/`, github.com release-download paths,
 GitHub's asset CDNs), redirects followed only onto the allow-list, 64 MB cap,
 per-IP rate limit on the existing GB KV. The console never hosts the ROMs.
 
-Catalog: the 18 mamedev.org free sets that MAME 2003-Plus knows (checked
-against the core's `driver.c`; `falcnwld`/`topgunnr` are on mamedev.org but
-not in this core, Poly-Play is not on mamedev.org); Nova the Squirrel (NES,
-GPL-3), µCity (GBC, GPL-3+), Bounstryk (2600, Apache-2, stored as `.a26`);
-six WASM-4 carts from the CC BY-NC-SA carts archive (raw.githubusercontent
-sends CORS, so direct). Verified on the preview: Gridlee and Robby Roto
-download through the relay, land on the Arcade shelf and boot in MAME; the
-rest of the MAME sets are swept below.
+Catalog: 17 mamedev.org free sets (mamedev.org lists 20; `falcnwld` and
+`topgunnr` are not in MAME 2003-Plus per the core's `driver.c`, and `looping`
+is in the driver list but mamedev's set does not start in this core — it
+drops to the RetroArch menu — so it is left out; Poly-Play is not on
+mamedev.org); Nova the Squirrel (NES, GPL-3), µCity (GBC, GPL-3+), Bounstryk
+(2600, Apache-2, stored as `.a26`); six WASM-4 carts from the CC BY-NC-SA
+carts archive (raw.githubusercontent sends CORS, so direct). Verified on the
+preview with a scripted sweep (download through the relay → tile → Play →
+canvas screenshot): all 17 MAME sets reach their attract screens (Alien
+Arena, Car Polo, FAX, Super Tank checked by eye; the rest by a lit, animating
+canvas). The relay follows GitHub's two-hop release redirects (Nova, µCity,
+Bounstryk return 200) and refuses off-path GitHub URLs (403).
 
 **Web games under PC Games** (`src/webgames.ts`, `WebGameApp.tsx`): whole
 engine builds with free data, hosted under `public/` and opened full-screen
@@ -222,3 +226,4 @@ target and `spawn.mpq` is 25,448,219 bytes — 0.7 MB under the cap, so no R2.
 - 2026-09-04 · **Deployed to production** (main `ba030f4`). Regression pass on the preview: all 14 crossbar categories present and non-Games lists identical to the previous build; 31 app routes open with no runtime errors; NES, SNES, Mega Drive boot through the new shelves; GBA behaves as before (its core rejects a garbage ROM on both builds); PS2 engine binaries byte-identical.
 - 2026-09-04 · Phase 4 free-to-play: Free games sheet + allow-listed relay (mamedev + GitHub releases), 27-title catalog; Wolf3D, Quake, OpenTTD join Micropolis and Jazz under PC Games as full-screen web games.
 - 2026-09-04 · Diablo (DevilutionX, own Emscripten build) joins PC Games — the last engine on the free-to-play list.
+- 2026-09-04 · Free-games sweep on the preview: 17/18 mamedev sets boot in MAME 2003-Plus; `looping` dropped. Phase 4 complete on the preview (`feat-games-shelves`); not yet in production.
