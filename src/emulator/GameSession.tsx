@@ -277,9 +277,10 @@ export default function GameSession(props: { game: GameRecord; profileId: string
 
   // —— progress: save states + in-game saves, kept in the console ——————————
   // EmulatorJS only *downloads* these and never persists SRAM, so the session
-  // answers its events itself (a handler cancels the download): the menu's
-  // Save/Load State use our "manual" slot, the periodic SRAM flush lands in
-  // "sram", and EJECT writes an "auto" state — so "Continue" always exists.
+  // answers its events itself (a handler cancels the download): "save
+  // progress" and the menu's Save/Load State use the "manual" slot; the
+  // periodic SRAM flush (and one on EJECT) lands in "sram". Nothing is
+  // snapshotted behind the player's back — saving is their call.
   const [progressNote, setProgressNote] = createSignal("");
   let progressPoll: ReturnType<typeof setInterval> | undefined;
   const ejs = () => window.EJS_emulator;
@@ -291,14 +292,14 @@ export default function GameSession(props: { game: GameRecord; profileId: string
     data: new Blob([data.slice()]), shot: shot ? new Blob([shot.slice()], { type: "image/png" }) : undefined,
   });
 
-  async function saveProgress(slot: "auto" | "manual"): Promise<boolean> {
+  async function saveProgress(): Promise<boolean> {
     const g = gm();
-    if (!g || !ejs()?.started) { if (slot === "manual") say("THE GAME IS STILL LOADING"); return false; }
+    if (!g || !ejs()?.started) { say("THE GAME IS STILL LOADING"); return false; }
     let state: Uint8Array;
-    try { state = g.getState(); } catch (e) { console.warn("save state", e); if (slot === "manual") say("THIS CORE CANNOT SAVE STATES"); return false; }
+    try { state = g.getState(); } catch (e) { console.warn("save state", e); say("THIS CORE CANNOT SAVE STATES"); return false; }
     const shot = await g.screenshot().catch((e) => { console.warn("screenshot", e); return undefined; });
-    await stamp(slot, state, shot);
-    if (slot === "manual") say("PROGRESS SAVED");
+    await stamp("manual", state, shot);
+    say("PROGRESS SAVED");
     return true;
   }
   async function saveSram(bytes?: Uint8Array | null) {
@@ -322,7 +323,7 @@ export default function GameSession(props: { game: GameRecord; profileId: string
     const g = gm();
     if (!g) return;
     g.loadState(new Uint8Array(await rec.data.arrayBuffer()));
-    say(rec.slot === "auto" ? "CONTINUING WHERE YOU LEFT OFF" : "CONTINUING FROM YOUR SAVE");
+    say("CONTINUING FROM YOUR SAVE");
   }
   function hookProgress() {
     progressPoll = setInterval(() => {
@@ -339,20 +340,18 @@ export default function GameSession(props: { game: GameRecord; profileId: string
         if (s?.state) void stamp("manual", s.state, s.screenshot).then(() => say("PROGRESS SAVED"));
       });
       e.on("loadState", () => {
-        void Promise.all([getSave(props.game.id, "manual"), getSave(props.game.id, "auto")]).then((recs) => {
-          const r = recs.filter((x): x is SaveRecord => !!x).sort((x, y) => y.at - x.at)[0];
-          if (r) void loadProgress(r); else say("NO SAVED PROGRESS YET");
-        });
+        void getSave(props.game.id, "manual").then((r) => { if (r) void loadProgress(r); else say("NO SAVED PROGRESS YET"); });
       });
       e.on("saveSaveFiles", (data) => { void saveSram(data as Uint8Array | null); });
     }, 100);
   }
 
   function eject() {
-    // save what we can (SRAM flush + an "auto" state), then restart the console —
-    // EmulatorJS can't re-init in-page. Capped so a wedged core can't trap the player.
-    const cap = new Promise<void>((r) => setTimeout(r, 2500));
-    void Promise.race([Promise.allSettled([saveSram(), saveProgress("auto")]), cap]).then(() => {
+    // flush the game's own save file (what the player saved in-game), then restart
+    // the console — EmulatorJS can't re-init in-page. No snapshot is taken here.
+    // Capped so a wedged core can't trap the player.
+    const cap = new Promise<void>((r) => setTimeout(r, 1500));
+    void Promise.race([saveSram(), cap]).then(() => {
       sessionStorage.setItem("asp.resume", props.profileId);
       location.reload();
     });
@@ -404,7 +403,7 @@ export default function GameSession(props: { game: GameRecord; profileId: string
           }>
             <button class="ps-act" onClick={hostTwoPlayer}>play online (up to {MAX_PLAYERS})</button>
             <button class="ps-act" onClick={hostBroadcast}>let people watch</button>
-            <button class="ps-act" onClick={() => void saveProgress("manual")} title="Keep a snapshot in the console — Continue from it next time">save progress</button>
+            <button class="ps-act" onClick={() => void saveProgress()} title="Keep a snapshot in the console — Continue from it next time">save progress</button>
             <Show when={progressNote()}><span class="session-mp-note">{progressNote()}</span></Show>
             <Show when={couch() === 0} fallback={
               <>

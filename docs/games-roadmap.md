@@ -209,27 +209,32 @@ target and `spawn.mpq` is 25,448,219 bytes — 0.7 MB under the cap, so no R2.
 
 EmulatorJS 4.2.3 only ever *downloads* a save state (its "Keep in Browser"
 mode is one unnamed slot) and never persists in-game saves (SRAM) at all; our
-EJECT reloads the page, so until now every session lost both. The session
-now keeps progress in the console (`saves` store in the `asp-games` DB, see
-`src/saves.ts`, `gamesdb.ts`, `GameSession.tsx`, `GameShelf.tsx`):
+EJECT reloads the page, so until now every EmulatorJS session lost both. The
+session now keeps progress in the console (`saves` store in the `asp-games`
+DB — `src/saves.ts`, `gamesdb.ts`, `GameSession.tsx`, `GameShelf.tsx`):
 
-- **auto** — written on EJECT (state + PNG the core rendered), capped at 2.5 s
-  so a wedged core cannot trap the player; **manual** — the "save progress"
-  button in the session bar, and EmulatorJS's own Save State menu button
-  (its `saveState` event is answered by us, which cancels the download);
-  **sram** — the periodic in-game save flush (`saveSaveFiles` event, default
-  every 5 min) plus a flush on EJECT, written back into the core's save path
-  on the next start before `loadSaveFiles()`.
-- Game options shows **Continue · where you left off / your save · N min
-  ago** with the thumbnail as the primary row when a snapshot exists; **Play
-  from start** ignores it. Load State in the EmulatorJS menu loads the
-  newest snapshot. Removing a game removes its saves.
-- Scope: every EmulatorJS shelf (retro, PS1, arcade, Dreamcast, PSP…). Web
-  games keep their own saves where the build mounts IDBFS (OpenTTD,
-  DevilutionX, ECWolf, Qwasm); Jazz and Micropolis do not persist. PS2
-  (Play!) memory cards are not persisted by that build — open item.
+- **manual** — the "save progress" button in the session bar, and
+  EmulatorJS's own Save State menu button (its `saveState` event is answered
+  by us, which cancels the download). Nothing is snapshotted behind the
+  player's back: saving is their call (an auto-snapshot on EJECT was built
+  and removed on request).
+- **sram** — the game's own save file: EmulatorJS's periodic flush
+  (`saveSaveFiles`, default every 5 min) plus a flush on EJECT, written back
+  into the core's save path before `loadSaveFiles()` on the next start.
+- Game options shows **Continue · your save · N min ago** with the thumbnail
+  as the primary row when a snapshot exists; **Play from start** ignores it.
+  Load State in the EmulatorJS menu loads that snapshot. Removing a game
+  removes its saves.
+- Scope: every EmulatorJS shelf (retro, PS1, arcade, Dreamcast, PSP…). PS2
+  already had its own saving since the Play! work: the frame snapshots
+  Play!'s data dir (memory cards `vfs/mc0`/`mc1` + states) into the `asp-ps2`
+  DB per profile every 15 s and on the memory-card button, and restores it
+  before a disc boots — untouched here. Web games keep their own saves where
+  the build mounts IDBFS (OpenTTD, DevilutionX, ECWolf, Qwasm); Jazz and
+  Micropolis do not persist.
 - Verified locally with a blank NES ROM: manual save → 13.7 KB state + PNG;
-  EJECT → auto slot; Continue row with thumbnail; resume boots and loads.
+  Continue row with thumbnail; resume boots, loads, says "CONTINUING FROM
+  YOUR SAVE".
 
 ## Known constraints (from research, Sep 2026)
 
@@ -254,4 +259,4 @@ now keeps progress in the console (`saves` store in the `asp-games` DB, see
 - 2026-09-04 · Diablo (DevilutionX, own Emscripten build) joins PC Games — the last engine on the free-to-play list.
 - 2026-09-04 · Free-games sweep on the preview: 17/18 mamedev sets boot in MAME 2003-Plus; `looping` dropped. Phase 4 complete on the preview (`feat-games-shelves`); not yet in production.
 - 2026-09-04 · **Phase 4 deployed to production** (main `16e13ef`). Regression pass, preview vs previous production: captured non-Games crossbar lists identical; 31 app routes open with zero runtime errors on both; the four shelf boots (NES, GBA, Mega Drive, SNES) behave identically; the six web games open in-console with zero runtime errors. Verified live: relay 200/403, Arcade "Free games · 17", PC Games folder lists all six web games, Wolfenstein 3D runs.
-- 2026-09-04 · Phase 5 saved progress: auto/manual/SRAM slots per game, Continue row in Game options, EmulatorJS Save/Load State routed to the console's storage.
+- 2026-09-04 · Phase 5 saved progress: manual snapshots + SRAM per game, Continue row in Game options, EmulatorJS Save/Load State routed to the console's storage. PS2 memory cards were already persisted (Play! frame).

@@ -238,7 +238,7 @@ export default function GameShelf(props: {
               <button class="hz-srow pri" onClick={() => { closeOpts(); props.onPlay(cur()!, r()); }}>
                 <span style="display:flex;align-items:center;gap:10px">
                   <Show when={shotUrl(r())}><img class="hz-shot" src={shotUrl(r())} alt="" /></Show>
-                  <span><span class="t">Continue</span><span class="s">{r().slot === "auto" ? "where you left off" : "your save"} · {ago(r().at)}</span></span>
+                  <span><span class="t">Continue</span><span class="s">your save · {ago(r().at)}</span></span>
                 </span>
               </button>
             )}</Show>

@@ -2,11 +2,12 @@
 // in-game saves (the cartridge's own SRAM), kept per game in the console's
 // IndexedDB. EmulatorJS 4.2.3 only ever *downloads* these — its "Keep in
 // Browser" mode is one unnamed slot and it never persists SRAM at all — so the
-// session hooks its events and stores the bytes here instead. Three slots per
-// game: "auto" (written on EJECT), "manual" (the player asked), "sram".
+// session hooks its events and stores the bytes here instead. Two slots per
+// game: "manual" (the player asked — nothing is snapshotted behind their back)
+// and "sram" (the game's own save file, so in-game saves survive EJECT).
 // Pure helpers here (node-tested); putSave/getSave/savesFor live in gamesdb.ts.
 
-export type SaveSlot = "auto" | "manual" | "sram";
+export type SaveSlot = "manual" | "sram";
 
 export interface SaveRecord {
   key: string;        // `${gameId}:${slot}`
@@ -20,9 +21,9 @@ export interface SaveRecord {
 
 export const saveKey = (gameId: string, slot: SaveSlot) => `${gameId}:${slot}`;
 
-/** The snapshot "Continue" should load: the newest state, whoever wrote it. */
+/** The snapshot "Continue" should load — only what the player saved on purpose. */
 export const pickResume = (saves: readonly SaveRecord[]): SaveRecord | undefined =>
-  saves.filter((s) => s.slot !== "sram").sort((a, b) => b.at - a.at)[0];
+  saves.filter((s) => s.slot === "manual").sort((a, b) => b.at - a.at)[0];
 
 /** "just now" · "4 min ago" · "3 h ago" · "yesterday" · "12 days ago" */
 export function ago(at: number, now = Date.now()): string {
