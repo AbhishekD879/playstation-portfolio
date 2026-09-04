@@ -4,6 +4,7 @@ import { For, Show, createEffect, createMemo, createSignal, onCleanup, onMount }
 import { CAREER, CATEGORIES, PROJECTS, TROPHIES, type XmbItem } from "../content";
 import { AVATARS, PLATINUM, award, resizePhoto, updateProfile, type Profile } from "../profiles";
 import { addGame, listGames, addPhoto, listPhotos, fsAccessSupported, type GameRecord, type PhotoRecord } from "../gamesdb";
+import type { SaveRecord } from "../saves";
 import { BG_MODES, THEMES, applyCustomHsl, applyTheme, bgMode, currentThemeIndex, loadCustomHsl, setBgMode, setUpscale, upscale, frameGen, setFrameGen } from "../theme";
 import { UPSCALE_MODES, upscaleSupported } from "../upscale";
 import { LAB_FLAT, LAB_GROUPS, LAB_GUIDES, labEnabled, rateFeature, toggleLab } from "../labs";
@@ -116,7 +117,7 @@ let toastSeq = 1;
 export default function XMB(props: {
   profile: Profile;
   onSwitchUser: () => void;
-  onPlay: (g: GameRecord) => void;
+  onPlay: (g: GameRecord, resume?: SaveRecord) => void;
 }) {
   const [cat, setCat] = createSignal(1); // land on Career
   const [sels, setSels] = createSignal<Record<string, number>>({});
@@ -288,28 +289,28 @@ export default function XMB(props: {
 
   // route a library record to the right engine: PS2 discs boot the Play! app
   // (auto-loading the disc), everything else goes to the EmulatorJS session
-  function playRecord(g: GameRecord) {
+  function playRecord(g: GameRecord, resume?: SaveRecord) {
     // a system that cannot boot without firmware says so here, in the console's
     // words, instead of letting the core crash on an empty BIOS folder
     const spec = SYSTEMS[g.core]?.bios;
     if (spec?.required) {
       void biosState(g.core).then((st) => {
-        if (st.ok) { launchRecord(g); return; }
+        if (st.ok) { launchRecord(g, resume); return; }
         sfx.deny();
         const need = spec.match ? `a .${spec.match} file` : spec.anyOf ? `one of ${st.missing.join(", ")}` : st.missing.join(", ");
         pushToast(`${SYSTEMS[g.core].name} needs its BIOS`, `Add ${need} under Systems on this shelf, then play again`);
       });
       return;
     }
-    launchRecord(g);
+    launchRecord(g, resume);
   }
-  function launchRecord(g: GameRecord) {
+  function launchRecord(g: GameRecord, resume?: SaveRecord) {
     awardT("disc");
     if (g.sys === "ps2") { setPs2Boot(g); setPs2Join(false); setApp("ps2"); }
     else if (g.core === "palm") { setPalmBoot(g); setApp("palm"); }
     else if (SYSTEMS[g.core]?.engine === "frame") { setFrameBoot(g); setApp("frame"); }
     else if (SYSTEMS[g.core]?.engine === "tab") { if (!bootJ2me(g, SYSTEMS[g.core].tab)) pushToast("Pop-up blocked", "Allow pop-ups for this site — Java ME games open in their own tab"); }
-    else props.onPlay(g);
+    else props.onPlay(g, resume);
   }
   // DEV ONLY. Boots a disc straight into the PS2 app, bypassing the library so
   // a 4GB ISO is never copied into IndexedDB. Exists because the two real entry

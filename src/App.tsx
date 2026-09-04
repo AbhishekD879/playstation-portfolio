@@ -8,6 +8,7 @@ import MobileNudge from "./xmb/MobileNudge";
 import PhonePad from "./xmb/PhonePad";
 import PartyController from "./xmb/PartyController";
 import GameSession from "./emulator/GameSession";
+import type { SaveRecord } from "./saves";
 import { createProfile, loadProfiles, updateProfile, type Profile } from "./profiles";
 import type { GameRecord } from "./gamesdb";
 
@@ -65,6 +66,7 @@ export default function App() {
   const [stage, setStage] = createSignal<Stage>(initialProfile ? "xmb" : "boot");
   const [profile, setProfile] = createSignal<Profile | null>(initialProfile);
   const [session, setSession] = createSignal<GameRecord | null>(null);
+  const [resume, setResume] = createSignal<SaveRecord | null>(null);
 
   return (
     <>
@@ -86,12 +88,12 @@ export default function App() {
           <XMB
             profile={profile()!}
             onSwitchUser={() => setStage("profiles")}
-            onPlay={(g) => setSession(g)}
+            onPlay={(g, resume) => { setResume(resume ?? null); setSession(g); }}
           />
         </Match>
       </Switch>
       <Show when={session()}>
-        <GameSession game={session()!} profileId={profile()!.id} />
+        <GameSession game={session()!} profileId={profile()!.id} resume={resume()} />
       </Show>
       {/* controller users get the PS on-screen keyboard on any text field */}
       <Osk />

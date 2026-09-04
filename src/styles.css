@@ -5328,3 +5328,6 @@ body.party-col .share-btn { right: calc(var(--pty-w) + clamp(12px, 2vw, 22px)); 
 .palm-msg span { display: block; margin-top: 12px; letter-spacing: 0.06em; opacity: 0.7; font-size: 12.5px; }
 .palm-eject { position: absolute; top: 16px; right: 16px; font: inherit; font-size: 12px; letter-spacing: 0.12em; padding: 10px 16px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.18); background: rgba(8,13,22,0.85); color: #fff; cursor: pointer; }
 .frame-session iframe { width: 100vw; height: min(100vh, 100dvh); border: 0; background: #000; }
+
+/* saved-progress thumbnail on the Continue row */
+.hz-srow .hz-shot { width: 56px; height: 42px; object-fit: cover; border-radius: 4px; flex: none; image-rendering: pixelated; background: #000; }

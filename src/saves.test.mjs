@@ -1,0 +1,19 @@
+// "Continue" must offer the newest snapshot and never an SRAM file; the label
+// must read like a console, not a timestamp.
+import assert from "node:assert/strict";
+const { pickResume, ago, saveKey } = await import("./saves.ts");
+
+const rec = (slot, at) => ({ key: saveKey("g1", slot), gameId: "g1", profileId: "p", slot, at, data: null });
+assert.equal(pickResume([]), undefined, "nothing saved → no Continue");
+assert.equal(pickResume([rec("sram", 50)]), undefined, "an in-game save alone is not a snapshot to resume");
+assert.equal(pickResume([rec("auto", 10), rec("manual", 20), rec("sram", 99)]).slot, "manual", "newest state wins");
+assert.equal(pickResume([rec("auto", 30), rec("manual", 20)]).slot, "auto", "EJECT's auto save can be the newest");
+assert.equal(saveKey("g1", "auto"), "g1:auto");
+
+const now = 1_000_000_000_000;
+assert.equal(ago(now - 5_000, now), "just now");
+assert.equal(ago(now - 4 * 60_000, now), "4 min ago");
+assert.equal(ago(now - 3 * 3_600_000, now), "3 h ago");
+assert.equal(ago(now - 26 * 3_600_000, now), "yesterday");
+assert.equal(ago(now - 12 * 86_400_000, now), "12 days ago");
+console.log("saves ok");

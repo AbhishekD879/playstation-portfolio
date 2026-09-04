@@ -7,10 +7,11 @@ import { For, Show, createEffect, createSignal, onCleanup, onMount } from "solid
 import SystemsSheet from "./SystemsSheet";
 import FreeGamesSheet from "./FreeGamesSheet";
 import { SYSTEMS } from "../systems";
-import { CORE_NAMES, coverCandidates, fsAccessSupported, isLinked, relinkGame, removeGame, saveCover, type GameRecord, type GameSystem } from "../gamesdb";
+import { CORE_NAMES, coverCandidates, fsAccessSupported, isLinked, relinkGame, removeGame, saveCover, savesFor, type GameRecord, type GameSystem } from "../gamesdb";
 import type { NavAction } from "../input";
 import { generateCover } from "../covers";
 import * as sfx from "../audio";
+import { ago, pickResume, type SaveRecord } from "../saves";
 
 const mb = (n?: number) => (!n ? "" : n >= 1073741824 ? `${(n / 1073741824).toFixed(1)} GB` : `${(n / 1048576).toFixed(1)} MB`);
 const sysLabel = (s: string) => (s === "ps2" ? "PlayStation 2" : CORE_NAMES[s] ?? s);
@@ -20,7 +21,7 @@ export default function GameShelf(props: {
   systems: GameSystem[];       // which systems this home shows
   owned: GameRecord[];         // full library (parent-owned, already loaded)
   title: string;
-  onPlay: (g: GameRecord) => void;
+  onPlay: (g: GameRecord, resume?: SaveRecord) => void;
   onInsert: () => void;        // bring your own — copy into the console
   onLink?: () => void;         // bring your own — link from disk (Chromium)
   onChanged: () => void;       // library mutated (remove / relink)
@@ -34,6 +35,18 @@ export default function GameShelf(props: {
   const [opts, setOpts] = createSignal(false);
   const [confirmRm, setConfirmRm] = createSignal(false);
   const closeOpts = () => { setOpts(false); setConfirmRm(false); };
+
+  // saved progress per game (newest state wins). Loaded once: EJECT reloads the
+  // page, so the shelf always comes back with fresh saves.
+  const [saves, setSaves] = createSignal<Record<string, SaveRecord[]>>({});
+  onMount(() => { void savesFor(props.profileId).then(setSaves).catch((e) => console.warn("saves", e)); });
+  const resumeOf = (g: GameRecord) => pickResume(saves()[g.id] ?? []);
+  const shotUrls = new WeakMap<Blob, string>();
+  const shotUrl = (r?: SaveRecord) => {
+    if (!r?.shot) return "";
+    if (!shotUrls.has(r.shot)) shotUrls.set(r.shot, URL.createObjectURL(r.shot));
+    return shotUrls.get(r.shot)!;
+  };
 
   const inSystems = (s: string) => props.systems.includes(s as GameSystem);
   const rows = () => props.owned.filter((g) => inSystems(g.sys ?? g.core));
@@ -221,8 +234,16 @@ export default function GameShelf(props: {
                 <div class="s">{sysLabel(cur()!.sys ?? cur()!.core)}{mb(cur()!.size) ? ` · ${mb(cur()!.size)}` : ""} · {badge(cur()!).toLowerCase()}</div>
               </div>
             </div>
-            <button class="hz-srow pri" onClick={() => { closeOpts(); props.onPlay(cur()!); }}>
-              <span><span class="t">Play</span><span class="s">start the game</span></span>
+            <Show when={resumeOf(cur()!)}>{(r) => (
+              <button class="hz-srow pri" onClick={() => { closeOpts(); props.onPlay(cur()!, r()); }}>
+                <span style="display:flex;align-items:center;gap:10px">
+                  <Show when={shotUrl(r())}><img class="hz-shot" src={shotUrl(r())} alt="" /></Show>
+                  <span><span class="t">Continue</span><span class="s">{r().slot === "auto" ? "where you left off" : "your save"} · {ago(r().at)}</span></span>
+                </span>
+              </button>
+            )}</Show>
+            <button class="hz-srow" classList={{ pri: !resumeOf(cur()!) }} onClick={() => { closeOpts(); props.onPlay(cur()!); }}>
+              <span><span class="t">{resumeOf(cur()!) ? "Play from start" : "Play"}</span><span class="s">{resumeOf(cur()!) ? "leave the saved progress alone" : "start the game"}</span></span>
             </button>
             <button
               class="hz-srow" disabled={!(isLinked(cur()!) && cur()!.origin !== "download" && fsAccessSupported())}

@@ -24,6 +24,7 @@ export interface GameRecord {
 }
 
 import { SYSTEMS } from "./systems";
+import { saveKey, type SaveRecord, type SaveSlot } from "./saves";
 
 /** A system id from the registry (systems.ts). Kept as a string alias so records
  *  written before a system existed still type-check; the registry is the truth. */
@@ -88,10 +89,11 @@ const DB = "asp-games";
 const STORE = "roms";
 const PHOTOS = "photos";
 const BIOS = "bios";   // firmware the player supplies — see bios.ts
+export const SAVES = "saves"; // save states + SRAM per game — see saves.ts
 
 function open(): Promise<IDBDatabase> {
   return new Promise((res, rej) => {
-    const req = indexedDB.open(DB, 3);
+    const req = indexedDB.open(DB, 4);
     req.onupgradeneeded = () => {
       const db = req.result;
       if (!db.objectStoreNames.contains(STORE)) {
@@ -102,6 +104,11 @@ function open(): Promise<IDBDatabase> {
       }
       if (!db.objectStoreNames.contains(BIOS)) {
         db.createObjectStore(BIOS, { keyPath: "key" }).createIndex("system", "system");
+      }
+      if (!db.objectStoreNames.contains(SAVES)) {
+        const saves = db.createObjectStore(SAVES, { keyPath: "key" });
+        saves.createIndex("gameId", "gameId");
+        saves.createIndex("profileId", "profileId");
       }
     };
     req.onsuccess = () => res(req.result);
@@ -198,8 +205,11 @@ export async function relinkGame(id: string, handle: FileSystemFileHandle, size:
 export async function removeGame(id: string): Promise<void> {
   const db = await open();
   return new Promise((res, rej) => {
-    const tx = db.transaction(STORE, "readwrite");
+    const tx = db.transaction([STORE, SAVES], "readwrite");
     tx.objectStore(STORE).delete(id);
+    // its progress goes with it — a save for a game you no longer own is noise
+    const cur = tx.objectStore(SAVES).index("gameId").openKeyCursor(IDBKeyRange.only(id));
+    cur.onsuccess = () => { const c = cur.result; if (c) { tx.objectStore(SAVES).delete(c.primaryKey); c.continue(); } };
     tx.oncomplete = () => res();
     tx.onerror = () => rej(tx.error);
   });
@@ -212,3 +222,37 @@ export const CORES: Record<string, string> = Object.fromEntries(
 
 /** system id → player-facing name (derived from the registry) */
 export const CORE_NAMES: Record<string, string> = Object.fromEntries(Object.values(SYSTEMS).map((s) => [s.id, s.name]));
+
+// —— saved progress (see saves.ts for the slots) ——
+export async function putSave(rec: Omit<SaveRecord, "key">): Promise<void> {
+  const db = await open();
+  return new Promise((res, rej) => {
+    const tx = db.transaction(SAVES, "readwrite");
+    tx.objectStore(SAVES).put({ ...rec, key: saveKey(rec.gameId, rec.slot) });
+    tx.oncomplete = () => res();
+    tx.onerror = () => rej(tx.error);
+  });
+}
+
+export async function getSave(gameId: string, slot: SaveSlot): Promise<SaveRecord | undefined> {
+  const db = await open();
+  return new Promise((res, rej) => {
+    const req = db.transaction(SAVES).objectStore(SAVES).get(saveKey(gameId, slot));
+    req.onsuccess = () => res(req.result as SaveRecord | undefined);
+    req.onerror = () => rej(req.error);
+  });
+}
+
+/** Every save of a profile, grouped by game — one query for a whole shelf. */
+export async function savesFor(profileId: string): Promise<Record<string, SaveRecord[]>> {
+  const db = await open();
+  return new Promise((res, rej) => {
+    const req = db.transaction(SAVES).objectStore(SAVES).index("profileId").getAll(profileId);
+    req.onsuccess = () => {
+      const out: Record<string, SaveRecord[]> = {};
+      for (const r of req.result as SaveRecord[]) (out[r.gameId] ??= []).push(r);
+      res(out);
+    };
+    req.onerror = () => rej(req.error);
+  });
+}

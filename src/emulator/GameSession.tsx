@@ -3,17 +3,43 @@
 // what a real console does anyway. ROMs are blob URLs; nothing is uploaded.
 import { Show, createSignal, onCleanup, onMount } from "solid-js";
 import gsap from "gsap";
-import { bumpPlays, isLinked, resolveGameFile, type GameRecord } from "../gamesdb";
+import { bumpPlays, getSave, isLinked, putSave, resolveGameFile, type GameRecord } from "../gamesdb";
 import { setNavEnabled } from "../input";
 import { holdWakeLock } from "../wakelock";
 import { EJS_CONFIG, PSP_CONFIG, setBridgePaused, setPrimaryIndex, startBridge, stopBridge } from "../gamepadBridge";
 import { biosZipFor } from "../bios";
+import type { SaveRecord } from "../saves";
 import { SYSTEMS } from "../systems";
 import { startHost, type HostHandle } from "../ps2mp/webrtc";
 import { newPartyCode } from "../party/net";
 import { ejsCanvas, ejsSimulateInput, makeRetroInjector, type RetroInjector } from "../retromp";
 import { claimGamepadPress, startLocalPad2 } from "../ps2mp/input";
 import { setShareLabel } from "../xmb/ShareBar";
+
+// The slice of EmulatorJS 4.2.3 the session touches for progress. Undocumented
+// internals, but the version is pinned (see EJS_VERSION) so they hold.
+interface EjsFS {
+  writeFile(path: string, data: Uint8Array): void;
+  mkdir(path: string): void;
+  analyzePath(path: string): { exists: boolean };
+  unlink(path: string): void;
+}
+interface EjsGameManager {
+  getState(): Uint8Array;
+  loadState(data: Uint8Array): void;
+  screenshot(): Promise<Uint8Array>;
+  getSaveFile(flushFirst?: boolean): Uint8Array | null;
+  getSaveFilePath(): string;
+  loadSaveFiles(): void;
+  FS: EjsFS;
+}
+interface EjsEmulator {
+  pauseMainLoop?: () => void;
+  started?: boolean;
+  gameManager?: EjsGameManager;
+  on(event: string, fn: (arg?: unknown) => void): void;
+  displayMessage(text: string, ms?: number): void;
+}
 
 declare global {
   interface Window {
@@ -28,7 +54,7 @@ declare global {
     EJS_threads?: boolean;
     EJS_startOnLoaded?: boolean;
     EJS_backgroundColor?: string;
-    EJS_emulator?: { pauseMainLoop?: () => void };
+    EJS_emulator?: EjsEmulator;
   }
 }
 
@@ -36,7 +62,7 @@ declare global {
 // auto-detected locales like en-GB have no CDN translation and crash the loader.
 const EJS_VERSION = "4.2.3";
 
-export default function GameSession(props: { game: GameRecord; profileId: string }) {
+export default function GameSession(props: { game: GameRecord; profileId: string; resume?: SaveRecord | null }) {
   const [reading, setReading] = createSignal(true);
   // "permission" → linked file needs a fresh grant; "missing" → file moved
   const [blocked, setBlocked] = createSignal<"permission" | "missing" | null>(null);
@@ -221,6 +247,7 @@ export default function GameSession(props: { game: GameRecord; profileId: string
     const s = document.createElement("script");
     s.src = `https://cdn.emulatorjs.org/${EJS_VERSION}/data/loader.js`;
     document.body.appendChild(s);
+    hookProgress();
     setReading(false);
   }
 
@@ -245,13 +272,90 @@ export default function GameSession(props: { game: GameRecord; profileId: string
       if (el) { clearInterval(findEjs); startBridge(el, () => {}, props.game.core === "psp" ? PSP_CONFIG : EJS_CONFIG); }
     }, 500);
 
-    onCleanup(() => { clearTimeout(timer); clearInterval(findEjs); stopBridge(); stopHosting(); endCouch(); });
+    onCleanup(() => { clearTimeout(timer); clearInterval(findEjs); clearInterval(progressPoll); stopBridge(); stopHosting(); endCouch(); });
   });
 
+  // —— progress: save states + in-game saves, kept in the console ——————————
+  // EmulatorJS only *downloads* these and never persists SRAM, so the session
+  // answers its events itself (a handler cancels the download): the menu's
+  // Save/Load State use our "manual" slot, the periodic SRAM flush lands in
+  // "sram", and EJECT writes an "auto" state — so "Continue" always exists.
+  const [progressNote, setProgressNote] = createSignal("");
+  let progressPoll: ReturnType<typeof setInterval> | undefined;
+  const ejs = () => window.EJS_emulator;
+  const gm = () => ejs()?.gameManager;
+  const say = (t: string) => { ejs()?.displayMessage(t, 2500); setProgressNote(t.toLowerCase()); setTimeout(() => setProgressNote(""), 3200); };
+  const stamp = (slot: SaveRecord["slot"], data: Uint8Array, shot?: Uint8Array) => putSave({
+    gameId: props.game.id, profileId: props.profileId, slot, at: Date.now(),
+    // .slice() copies onto a plain ArrayBuffer — the core's views may sit on a SharedArrayBuffer (threads), which Blob refuses
+    data: new Blob([data.slice()]), shot: shot ? new Blob([shot.slice()], { type: "image/png" }) : undefined,
+  });
+
+  async function saveProgress(slot: "auto" | "manual"): Promise<boolean> {
+    const g = gm();
+    if (!g || !ejs()?.started) { if (slot === "manual") say("THE GAME IS STILL LOADING"); return false; }
+    let state: Uint8Array;
+    try { state = g.getState(); } catch (e) { console.warn("save state", e); if (slot === "manual") say("THIS CORE CANNOT SAVE STATES"); return false; }
+    const shot = await g.screenshot().catch((e) => { console.warn("screenshot", e); return undefined; });
+    await stamp(slot, state, shot);
+    if (slot === "manual") say("PROGRESS SAVED");
+    return true;
+  }
+  async function saveSram(bytes?: Uint8Array | null) {
+    let data = bytes ?? null;
+    if (!data) { try { data = gm()?.getSaveFile(true) ?? null; } catch (e) { console.warn("sram", e); } }
+    if (!data?.length) return;
+    await stamp("sram", data);
+  }
+  async function restoreSram() {
+    const g = gm();
+    const rec = await getSave(props.game.id, "sram");
+    if (!g || !rec) return;
+    const path = g.getSaveFilePath();       // e.g. /home/web_user/retroarch/userdata/saves/<game>.srm
+    let dir = "";
+    for (const p of path.split("/").slice(1, -1)) { dir += `/${p}`; if (!g.FS.analyzePath(dir).exists) g.FS.mkdir(dir); }
+    if (g.FS.analyzePath(path).exists) g.FS.unlink(path);
+    g.FS.writeFile(path, new Uint8Array(await rec.data.arrayBuffer()));
+    g.loadSaveFiles();
+  }
+  async function loadProgress(rec: SaveRecord) {
+    const g = gm();
+    if (!g) return;
+    g.loadState(new Uint8Array(await rec.data.arrayBuffer()));
+    say(rec.slot === "auto" ? "CONTINUING WHERE YOU LEFT OFF" : "CONTINUING FROM YOUR SAVE");
+  }
+  function hookProgress() {
+    progressPoll = setInterval(() => {
+      const e = ejs();
+      if (!e?.on) return;
+      clearInterval(progressPoll);
+      e.on("start", () => {
+        void restoreSram().catch((err) => console.warn("restore save file", err));
+        const r = props.resume;
+        if (r) setTimeout(() => void loadProgress(r).catch((err) => console.warn("continue", err)), 800);
+      });
+      e.on("saveState", (a) => {
+        const s = a as { state?: Uint8Array; screenshot?: Uint8Array } | undefined;
+        if (s?.state) void stamp("manual", s.state, s.screenshot).then(() => say("PROGRESS SAVED"));
+      });
+      e.on("loadState", () => {
+        void Promise.all([getSave(props.game.id, "manual"), getSave(props.game.id, "auto")]).then((recs) => {
+          const r = recs.filter((x): x is SaveRecord => !!x).sort((x, y) => y.at - x.at)[0];
+          if (r) void loadProgress(r); else say("NO SAVED PROGRESS YET");
+        });
+      });
+      e.on("saveSaveFiles", (data) => { void saveSram(data as Uint8Array | null); });
+    }, 100);
+  }
+
   function eject() {
-    // EmulatorJS can't re-init in-page → restart the console straight to the XMB
-    sessionStorage.setItem("asp.resume", props.profileId);
-    location.reload();
+    // save what we can (SRAM flush + an "auto" state), then restart the console —
+    // EmulatorJS can't re-init in-page. Capped so a wedged core can't trap the player.
+    const cap = new Promise<void>((r) => setTimeout(r, 2500));
+    void Promise.race([Promise.allSettled([saveSram(), saveProgress("auto")]), cap]).then(() => {
+      sessionStorage.setItem("asp.resume", props.profileId);
+      location.reload();
+    });
   }
 
   return (
@@ -300,6 +404,8 @@ export default function GameSession(props: { game: GameRecord; profileId: string
           }>
             <button class="ps-act" onClick={hostTwoPlayer}>play online (up to {MAX_PLAYERS})</button>
             <button class="ps-act" onClick={hostBroadcast}>let people watch</button>
+            <button class="ps-act" onClick={() => void saveProgress("manual")} title="Keep a snapshot in the console — Continue from it next time">save progress</button>
+            <Show when={progressNote()}><span class="session-mp-note">{progressNote()}</span></Show>
             <Show when={couch() === 0} fallback={
               <>
                 <span class="session-mp-code">{couch() + 1} players on this screen</span>
