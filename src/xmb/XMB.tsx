@@ -22,6 +22,7 @@ import { ALL_EXTS, SYSTEMS, classifyFile, systemsOf } from "../systems";
 import PalmSession from "../emulator/PalmSession";
 import FramePlayer from "../emulator/FramePlayer";
 import { bootJ2me } from "../j2me";
+import { biosState } from "../bios";
 import { tr } from "../translate";
 import { startTabSync } from "../sync";
 import { fluidNavPulse } from "./FluidBg";
@@ -286,6 +287,21 @@ export default function XMB(props: {
   // route a library record to the right engine: PS2 discs boot the Play! app
   // (auto-loading the disc), everything else goes to the EmulatorJS session
   function playRecord(g: GameRecord) {
+    // a system that cannot boot without firmware says so here, in the console's
+    // words, instead of letting the core crash on an empty BIOS folder
+    const spec = SYSTEMS[g.core]?.bios;
+    if (spec?.required) {
+      void biosState(g.core).then((st) => {
+        if (st.ok) { launchRecord(g); return; }
+        sfx.deny();
+        const need = spec.match ? `a .${spec.match} file` : spec.anyOf ? `one of ${st.missing.join(", ")}` : st.missing.join(", ");
+        pushToast(`${SYSTEMS[g.core].name} needs its BIOS`, `Add ${need} under Systems on this shelf, then play again`);
+      });
+      return;
+    }
+    launchRecord(g);
+  }
+  function launchRecord(g: GameRecord) {
     awardT("disc");
     if (g.sys === "ps2") { setPs2Boot(g); setPs2Join(false); setApp("ps2"); }
     else if (g.core === "palm") { setPalmBoot(g); setApp("palm"); }
@@ -379,7 +395,7 @@ export default function XMB(props: {
     // but the column now shows the two platform shelves below instead.
     { id: "retro", title: "Retro Games", sub: `NES · SNES · GBA · N64 & more — library + downloads${retroCount() ? ` · ${retroCount()} in your shelf` : ""}`, icon: "gamepad", action: { type: "retro-home" } },
     { id: "nintendo", title: "Nintendo", sub: `NES · Super Nintendo · Nintendo 64 · Game Boy · GBA · DS · Virtual Boy${shelfCount(NINTENDO_SYSTEMS) ? ` · ${shelfCount(NINTENDO_SYSTEMS)} in your shelf` : ""}`, icon: "gamepad", action: { type: "shelf", id: "nintendohome" } },
-    { id: "sega", title: "Sega", sub: `Mega Drive · Master System · Game Gear · Sega CD · 32X · Saturn${shelfCount(SEGA_SYSTEMS) ? ` · ${shelfCount(SEGA_SYSTEMS)} in your shelf` : ""}`, icon: "gamepad", action: { type: "shelf", id: "segahome" } },
+    { id: "sega", title: "Sega", sub: `Mega Drive · Master System · Game Gear · Sega CD · 32X · Saturn · Dreamcast${shelfCount(SEGA_SYSTEMS) ? ` · ${shelfCount(SEGA_SYSTEMS)} in your shelf` : ""}`, icon: "gamepad", action: { type: "shelf", id: "segahome" } },
     { id: "arcade", title: "Arcade", sub: `Neo Geo · CPS1/CPS2 · classic MAME — bring your romsets, insert coin${shelfCount(ARCADE_SYSTEMS) ? ` · ${shelfCount(ARCADE_SYSTEMS)} in your shelf` : ""}`, icon: "gamepad", action: { type: "shelf", id: "arcadehome" } },
     { id: "consoles", title: "More Consoles", sub: `PC Engine · Neo Geo Pocket · WonderSwan · Atari · 3DO · ColecoVision & more${shelfCount(CONSOLE_SYSTEMS) ? ` · ${shelfCount(CONSOLE_SYSTEMS)} in your shelf` : ""}`, icon: "handheld", action: { type: "shelf", id: "consoleshome" } },
     { id: "mobile", title: "Mobile", sub: `Palm OS and Java ME — bring your Palm ROM and .prc programs, or Nokia-era .jar games${shelfCount(MOBILE_SYSTEMS) ? ` · ${shelfCount(MOBILE_SYSTEMS)} in your shelf` : ""}`, icon: "phone", action: { type: "shelf", id: "mobilehome" } },

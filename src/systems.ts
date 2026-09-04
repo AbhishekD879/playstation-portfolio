@@ -25,6 +25,7 @@ export interface BiosSpec {
   required: boolean;    // false = works without, better with
   anyOf?: boolean;      // true = one of the files is enough (3DO)
   match?: string;       // or: any file with this extension counts (Palm device ROMs have no fixed name)
+  dir?: string;         // sub-folder the core expects the files in (flycast: system/dc/)
   note: string;
 }
 
@@ -36,6 +37,7 @@ export interface SystemDef {
   frame?: string;          // engine "frame": the same-origin player page that takes the cart by postMessage
   tab?: string;            // engine "tab": a player page opened top-level (it cannot live under our isolation headers)
   ejsCore?: string;        // when EJS_core differs from id (fuse, cap32)
+  data?: string;           // EmulatorJS data path for this system when its core is not on the CDN (self-hosted, e.g. "/ejs/")
   thumbs: string[];        // libretro-thumbnails repos, most specific first
   exts: string[];          // extensions that mean this system and nothing else
   bios?: BiosSpec;
@@ -78,6 +80,11 @@ export const SYSTEMS: Record<string, SystemDef> = {
   segaSaturn: { id: "segaSaturn", name: "Saturn", family: "sega", engine: "ejs", thumbs: ["Sega_-_Saturn"], exts: ["mds"],
     bios: { files: ["saturn_bios.bin"], required: false, note: "Recommended; required for multi-disc games" },
     fit: { cpuHeavy: true, desktop: "recommended", minMemGB: 4, disc: true, note: "3D games may stutter — a laptop does best" } },
+  // flycast-wasm (Aug 2026): an SH4→WebAssembly JIT, packaged as an EmulatorJS core and
+  // served from our own data path because the CDN has no Dreamcast core.
+  dreamcast: { id: "dreamcast", name: "Dreamcast", family: "sega", engine: "ejs", ejsCore: "flycast", data: "/ejs/", thumbs: ["Sega_-_Dreamcast"], exts: ["gdi", "cdi"],
+    bios: { files: ["dc_boot.bin", "dc_flash.bin"], required: true, dir: "dc", note: "Needs the console's BIOS and flash dumps" },
+    fit: { cpuHeavy: true, desktop: "recommended", minMemGB: 4, disc: true, note: "New (Aug 2026) and desktop-first: needs WebGL2, generates code at runtime; 60 fps reported on a laptop, phones unknown" } },
 
   // —— more consoles ————————————————————————————————————————————————————————
   pce: { id: "pce", name: "PC Engine / TurboGrafx-16", family: "consoles", engine: "ejs", thumbs: ["NEC_-_PC_Engine_-_TurboGrafx_16", "NEC_-_PC_Engine_CD_-_TurboGrafx-CD", "NEC_-_PC_Engine_SuperGrafx"], exts: ["pce", "sgx"],
@@ -143,10 +150,10 @@ export const SYSTEMS: Record<string, SystemDef> = {
  *  depends on the shelf you add from; from the global picker the default wins. */
 export const SHARED_EXTS: Record<string, string[]> = {
   pbp: ["psp", "psx"],
-  iso: ["ps2", "psp", "segaSaturn", "segaCD", "3do", "x86"],
+  iso: ["ps2", "psp", "segaSaturn", "segaCD", "3do", "x86", "dreamcast"],
   cso: ["ps2", "psp"],
-  chd: ["ps2", "psx", "segaSaturn", "segaCD", "pce", "pcfx", "3do"],
-  cue: ["psx", "segaSaturn", "segaCD", "pce", "pcfx", "3do", "jaguar"],
+  chd: ["ps2", "psx", "segaSaturn", "segaCD", "pce", "pcfx", "3do", "dreamcast"],
+  cue: ["psx", "segaSaturn", "segaCD", "pce", "pcfx", "3do", "jaguar", "dreamcast"],
   ccd: ["psx", "segaSaturn", "pce", "pcfx"],
   toc: ["psx", "pcfx"],
   m3u: ["psx", "segaSaturn", "pce", "amiga"],

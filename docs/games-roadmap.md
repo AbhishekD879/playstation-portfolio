@@ -131,9 +131,22 @@ Windows 98; phones get an on-screen keyboard that sends typed text to the PC.
 The image stays the player's — nothing is hosted. Verified with the KolibriOS
 floppy: boots to the desktop from the shelf, eject returns.
 
-Next in order: Dreamcast (flycast-wasm as a self-hosted EmulatorJS core), then
-the shareware engines (Quake, Wolf3D, DevilutionX, OpenTTD, Micropolis, Jazz,
-OpenLara).
+Done: **Dreamcast** (2026-09-04) — flycast-wasm v1.0 (GPL-2) packaged as an
+EmulatorJS core archive (`public/ejs/cores/flycast-wasm.data`: the libretro
+js/wasm, `core.json` with the author's tuned options, `build.json`,
+licence) plus a core report, served from `public/ejs/` together with
+unmodified copies of the 4.2.3 runtime files the loader actually pulls
+(`README.txt` records source and licence). Only Dreamcast sessions use that
+data path (`SystemDef.data`); everything else stays on the CDN. BIOS goes in
+the pocket and is zipped under `dc/`, where flycast looks. Verified: from the
+Sega shelf a Dreamcast disc pulls runtime + core from our origin, unpacks,
+initialises with WebGL2 (`coreName: flycast`); without dumps flycast aborts, so
+the console now refuses to boot any BIOS-required system that has no firmware
+and says what to add instead. Real boot needs `dc_boot.bin`/`dc_flash.bin` and
+a disc (not available to me).
+
+Next in order: the shareware engines (Quake, Wolf3D, DevilutionX, OpenTTD,
+Micropolis, Jazz, OpenLara).
 
 
 Palm OS (CloudpilotEmu embed), Java ME (j2me-player / CheerpJ CDN),
@@ -160,3 +173,4 @@ Jazz Jackrabbit 1 & 2, OpenLara, Duke Nukem II, TIC-80, WASM-4, Scratch.
 - 2026-09-04 · Fantasy Consoles shelf: WASM-4 via a generic frame player; TIC-80 parked (cart never reaches the loader).
 - 2026-09-04 · Java ME on the Mobile shelf, as its own tab (CheerpJ cannot be framed under COEP).
 - 2026-09-04 · Your own PC disk images (Windows 9x / DOS) via v86 on the Computers shelf.
+- 2026-09-04 · Dreamcast via self-hosted flycast-wasm core; BIOS gate before boot for every firmware-required system.

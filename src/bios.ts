@@ -68,8 +68,10 @@ export async function biosState(system: string) {
 export async function biosZipFor(system: string): Promise<File | null> {
   const files = await listBios(system);
   if (!files.length) return null;
+  // some cores look for firmware in a sub-folder of the system directory (flycast: dc/)
+  const dir = SYSTEMS[system]?.bios?.dir;
   const entries: Record<string, [Uint8Array, { level: 0 }]> = {};
-  for (const f of files) entries[f.name] = [new Uint8Array(await f.blob.arrayBuffer()), { level: 0 }];
+  for (const f of files) entries[dir ? `${dir}/${f.name}` : f.name] = [new Uint8Array(await f.blob.arrayBuffer()), { level: 0 }];
   const zipped = zipSync(entries);
   return new File([zipped], `${system}-bios.zip`, { type: "application/zip" });
 }

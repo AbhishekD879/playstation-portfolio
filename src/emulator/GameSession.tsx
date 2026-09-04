@@ -211,7 +211,9 @@ export default function GameSession(props: { game: GameRecord; profileId: string
     window.EJS_gameName = arcade ? props.game.name : props.game.name.replace(/\.[^.]+$/, "");
     // coin-op button labels ("INSERT COIN" on Select) and layout
     if (arcade) window.EJS_controlScheme = props.game.core;
-    window.EJS_pathtodata = `https://cdn.emulatorjs.org/${EJS_VERSION}/data/`;
+    // a system whose core is not on the CDN (Dreamcast) loads the whole runtime
+    // from our own unmodified copy of the same version, plus its core
+    window.EJS_pathtodata = SYSTEMS[props.game.core]?.data ?? `https://cdn.emulatorjs.org/${EJS_VERSION}/data/`;
     window.EJS_language = "en-US";
     window.EJS_startOnLoaded = true;
     window.EJS_backgroundColor = "#000208";

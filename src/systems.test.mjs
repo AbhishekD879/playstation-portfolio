@@ -11,7 +11,7 @@ const REPOS = new Set(["Sony_-_PlayStation_2", "Sony_-_PlayStation", "Sony_-_Pla
   "Nintendo_-_Nintendo_DS", "Nintendo_-_Virtual_Boy", "Sega_-_Mega_Drive_-_Genesis", "Sega_-_Master_System_-_Mark_III", "Sega_-_Game_Gear", "Sega_-_32X",
   "Sega_-_Mega-CD_-_Sega_CD", "Sega_-_Saturn", "NEC_-_PC_Engine_-_TurboGrafx_16", "NEC_-_PC_Engine_CD_-_TurboGrafx-CD", "NEC_-_PC_Engine_SuperGrafx", "NEC_-_PC-FX",
   "SNK_-_Neo_Geo_Pocket_Color", "SNK_-_Neo_Geo_Pocket", "Bandai_-_WonderSwan_Color", "Bandai_-_WonderSwan", "Atari_-_Lynx", "Atari_-_2600", "Atari_-_5200", "Atari_-_7800",
-  "Atari_-_Jaguar", "The_3DO_Company_-_3DO", "Coleco_-_ColecoVision", "Commodore_-_Amiga", "Commodore_-_64", "Sinclair_-_ZX_Spectrum", "Amstrad_-_CPC", "FBNeo_-_Arcade_Games", "MAME"]);
+  "Atari_-_Jaguar", "The_3DO_Company_-_3DO", "Coleco_-_ColecoVision", "Commodore_-_Amiga", "Commodore_-_64", "Sinclair_-_ZX_Spectrum", "Amstrad_-_CPC", "FBNeo_-_Arcade_Games", "MAME", "Sega_-_Dreamcast"]);
 
 const owner = new Map();
 for (const [id, s] of Object.entries(SYSTEMS)) {
@@ -50,7 +50,10 @@ assert.deepEqual(classifyFile("mslug.zip", ["segaMD"]), null, "zip on a non-arca
 assert.deepEqual(classifyFile("sonic.sms"), { core: "segaMS" });
 assert.deepEqual(classifyFile("game.a26"), { core: "atari2600" });
 assert.deepEqual(classifyFile("game.tzx"), { core: "zx" });
-assert.deepEqual(classifyFile("game.cue", ["segaMD", "segaMS", "segaGG", "segaCD", "sega32x", "segaSaturn"]), { choose: ["segaSaturn", "segaCD"] }, "a Sega shelf must ask which disc system");
+assert.deepEqual(classifyFile("game.cue", ["segaMD", "segaMS", "segaGG", "segaCD", "sega32x", "segaSaturn", "dreamcast"]), { choose: ["segaSaturn", "segaCD", "dreamcast"] }, "a Sega shelf must ask which disc system");
+assert.deepEqual(classifyFile("game.gdi"), { core: "dreamcast" }, "a GDI is a Dreamcast disc");
+assert.equal(SYSTEMS.dreamcast.data, "/ejs/", "Dreamcast's core is self-hosted");
+assert.equal(biosStatus(SYSTEMS.dreamcast, ["dc_boot.bin"]).ok, false, "both Dreamcast dumps are required");
 assert.deepEqual(classifyFile("game.cue", ["pce", "ngp", "ws"]), { core: "pce" }, "one disc system on the shelf — no question");
 assert.deepEqual(classifyFile("game.bin", ["segaMD", "sega32x"]), { core: "segaMD" });
 assert.deepEqual(classifyFile("game.gba", ["segaMD"]), { core: "gba" }, "an unambiguous file is itself wherever you add it");
