@@ -19,6 +19,7 @@ import { iconOf } from "../prefs";
 import { ROUTE_APPS, appRouteHash, parseRouteHash } from "./routes";
 import { GAME_TOP, HIDDEN_GAME_ITEMS, folderOf, type GameFolder } from "./gameFolders";
 import { ALL_EXTS, SYSTEMS, classifyFile, systemsOf } from "../systems";
+import PalmSession from "../emulator/PalmSession";
 import { tr } from "../translate";
 import { startTabSync } from "../sync";
 import { fluidNavPulse } from "./FluidBg";
@@ -232,7 +233,7 @@ export default function XMB(props: {
   const [vListening, setVListening] = createSignal(false); // XMB voice command
   const [padTest, setPadTest] = createSignal(false);
   const [splatFile, setSplatFile] = createSignal<File | null>(null);
-  const [app, setAppRaw] = createSignal<null | "doom" | "doomrtx" | "worlddrive" | "chess" | "trivia" | "flash" | "cinema" | "podcasts" | "library" | "map" | "ai" | "webamp" | "youtube" | "timemachine" | "art" | "wiki" | "lichess" | "ps2" | "pc" | "guestbook" | "browser" | "visualizer" | "studio" | "code" | "manual" | "ps2home" | "ps1home" | "psphome" | "retrohome" | "nintendohome" | "segahome" | "arcadehome" | "consoleshome" | "computershome" | "scummvm" | "karaoke" | "strudel" | "settingshub" | "videoplayer" | "reporewind" | "rpgmaker" | "renpy" | "godot" | "unity" | "html5" | "privacy" | "watch" | "syscity" | "cs" | "party" | "retrojoin" | "board" | "voiceavatar" | "consoletv" | "analytics">(null);
+  const [app, setAppRaw] = createSignal<null | "doom" | "doomrtx" | "worlddrive" | "chess" | "trivia" | "flash" | "cinema" | "podcasts" | "library" | "map" | "ai" | "webamp" | "youtube" | "timemachine" | "art" | "wiki" | "lichess" | "ps2" | "pc" | "guestbook" | "browser" | "visualizer" | "studio" | "code" | "manual" | "ps2home" | "ps1home" | "psphome" | "retrohome" | "nintendohome" | "segahome" | "arcadehome" | "consoleshome" | "computershome" | "mobilehome" | "palm" | "scummvm" | "karaoke" | "strudel" | "settingshub" | "videoplayer" | "reporewind" | "rpgmaker" | "renpy" | "godot" | "unity" | "html5" | "privacy" | "watch" | "syscity" | "cs" | "party" | "retrojoin" | "board" | "voiceavatar" | "consoletv" | "analytics">(null);
 
   // Opening/closing an app goes through the native View Transitions API (now
   // Baseline for same-document), so the console cross-fades like real system
@@ -285,6 +286,7 @@ export default function XMB(props: {
   function playRecord(g: GameRecord) {
     awardT("disc");
     if (g.sys === "ps2") { setPs2Boot(g); setPs2Join(false); setApp("ps2"); }
+    else if (g.core === "palm") { setPalmBoot(g); setApp("palm"); }
     else props.onPlay(g);
   }
   // DEV ONLY. Boots a disc straight into the PS2 app, bypassing the library so
@@ -349,6 +351,9 @@ export default function XMB(props: {
   const ARCADE_SYSTEMS = systemsOf("arcade");
   const CONSOLE_SYSTEMS = systemsOf("consoles");
   const COMPUTER_SYSTEMS = systemsOf("computers");
+  const MOBILE_SYSTEMS = systemsOf("mobile");
+  // a Palm program boots its own player (CloudpilotEmu), like a PS2 disc boots Play!
+  const [palmBoot, setPalmBoot] = createSignal<GameRecord | null>(null);
   const shelfCount = (systems: readonly string[]) => games().filter((g) => !g.sys && systems.includes(g.core)).length;
 
   const gameItems = createMemo<XmbItem[]>(() => [
@@ -368,6 +373,7 @@ export default function XMB(props: {
     { id: "sega", title: "Sega", sub: `Mega Drive · Master System · Game Gear · Sega CD · 32X · Saturn${shelfCount(SEGA_SYSTEMS) ? ` · ${shelfCount(SEGA_SYSTEMS)} in your shelf` : ""}`, icon: "gamepad", action: { type: "shelf", id: "segahome" } },
     { id: "arcade", title: "Arcade", sub: `Neo Geo · CPS1/CPS2 · classic MAME — bring your romsets, insert coin${shelfCount(ARCADE_SYSTEMS) ? ` · ${shelfCount(ARCADE_SYSTEMS)} in your shelf` : ""}`, icon: "gamepad", action: { type: "shelf", id: "arcadehome" } },
     { id: "consoles", title: "More Consoles", sub: `PC Engine · Neo Geo Pocket · WonderSwan · Atari · 3DO · ColecoVision & more${shelfCount(CONSOLE_SYSTEMS) ? ` · ${shelfCount(CONSOLE_SYSTEMS)} in your shelf` : ""}`, icon: "handheld", action: { type: "shelf", id: "consoleshome" } },
+    { id: "mobile", title: "Mobile", sub: `Palm OS — bring your device ROM and .prc programs; touch is the stylus${shelfCount(MOBILE_SYSTEMS) ? ` · ${shelfCount(MOBILE_SYSTEMS)} in your shelf` : ""}`, icon: "phone", action: { type: "shelf", id: "mobilehome" } },
     { id: "computers", title: "Computers", sub: `Amiga · Commodore 64 · ZX Spectrum · Amstrad CPC${shelfCount(COMPUTER_SYSTEMS) ? ` · ${shelfCount(COMPUTER_SYSTEMS)} in your shelf` : ""}`, icon: "monitor", action: { type: "shelf", id: "computershome" } },
     { id: "cs", title: "Counter-Strike 1.6", sub: "The classic FPS in your browser — bring your files · bots & online with friends", icon: "gamepad", action: { type: "cs" as const } },
     { id: "retrojoin", title: "Join a Retro Game", sub: "Player two for a friend's NES/SNES game — they stream it, you just play", icon: "gamepad", action: { type: "retrojoin" as const } },
@@ -523,7 +529,9 @@ export default function XMB(props: {
     if ("app" in r && r.app) {
       // respect the Labs gate so a shared #/app/<hidden> link can't reveal an
       // opt-in easter egg (e.g. "privacy") on a console that hasn't enabled it
-      if (labEnabled(r.app) && app() !== r.app) setApp(r.app as AppId);
+      // a running Palm program is not an address — that link lands on the shelf
+      const target = r.app === "palm" ? "mobilehome" : r.app;
+      if (labEnabled(target) && app() !== target) setApp(target as AppId);
     } else if ("cat" in r) {
       if (app()) setApp(null);
       const ci = CATEGORIES.findIndex((c) => c.id === r.cat);
@@ -1647,7 +1655,7 @@ export default function XMB(props: {
     if (padTest()) { if (action === "back") setPadTest(false); return; }
     if (app()) {
       // bound apps route their own nav; the rest are keyboard-driven owner apps
-      if (["chess", "trivia", "flash", "cinema", "podcasts", "library", "youtube", "art", "wiki", "ps2home", "ps1home", "psphome", "retrohome", "nintendohome", "segahome", "arcadehome", "consoleshome", "computershome", "karaoke", "settingshub", "videoplayer", "reporewind", "rpgmaker", "renpy", "godot", "unity", "html5", "syscity", "worlddrive"].includes(app()!)) appNav?.(action);
+      if (["chess", "trivia", "flash", "cinema", "podcasts", "library", "youtube", "art", "wiki", "ps2home", "ps1home", "psphome", "retrohome", "nintendohome", "segahome", "arcadehome", "consoleshome", "computershome", "mobilehome", "karaoke", "settingshub", "videoplayer", "reporewind", "rpgmaker", "renpy", "godot", "unity", "html5", "syscity", "worlddrive"].includes(app()!)) appNav?.(action);
       else if (app() === "lichess" && action === "back") { sfx.back(); setApp(null); }
       else if (src === "pad" || src === "gesture") {
         // owner apps (map/globe, lichess…) listen to the KEYBOARD — turn pad
@@ -1983,7 +1991,7 @@ export default function XMB(props: {
   // Horizon shelves are entirely tappable — tiles, hero actions and the Control
   // Center are all real buttons — so a virtual d-pad adds nothing, and its face
   // buttons land squarely on top of the Control Center bar on a phone.
-  const TAP_NATIVE = new Set(["ps2home", "ps1home", "psphome", "retrohome", "nintendohome", "segahome", "arcadehome", "consoleshome", "computershome"]);
+  const TAP_NATIVE = new Set(["ps2home", "ps1home", "psphome", "retrohome", "nintendohome", "segahome", "arcadehome", "consoleshome", "computershome", "mobilehome"]);
   // show the on-screen controller once you're INSIDE something (an app/panel) —
   // that's where back/select/move-focus are needed; the bare crossbar is swipe+tap.
   const touchNavHidden = () =>
@@ -2513,6 +2521,14 @@ export default function XMB(props: {
         <GameShelf bind={(f) => (appNav = f)} profileId={props.profile.id} systems={ARCADE_SYSTEMS} owned={games()}
           title="ARCADE — YOUR LIBRARY & DOWNLOADS" onPlay={playRecord} onInsert={() => { insertPrefer = ARCADE_SYSTEMS; fileInput.click(); }} onLink={() => onLink(ARCADE_SYSTEMS)}
           onChanged={refreshGames} onClose={() => setApp(null)} />
+      </Show>
+      <Show when={app() === "mobilehome"}>
+        <GameShelf bind={(f) => (appNav = f)} profileId={props.profile.id} systems={MOBILE_SYSTEMS} owned={games()}
+          title="MOBILE — YOUR LIBRARY & DOWNLOADS" onPlay={playRecord} onInsert={() => { insertPrefer = MOBILE_SYSTEMS; fileInput.click(); }} onLink={() => onLink(MOBILE_SYSTEMS)}
+          onChanged={refreshGames} onClose={() => setApp(null)} />
+      </Show>
+      <Show when={app() === "palm" && palmBoot()}>
+        <PalmSession game={palmBoot()!} onClose={() => { setPalmBoot(null); setApp("mobilehome"); }} />
       </Show>
       <Show when={app() === "consoleshome"}>
         <GameShelf bind={(f) => (appNav = f)} profileId={props.profile.id} systems={CONSOLE_SYSTEMS} owned={games()}

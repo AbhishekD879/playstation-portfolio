@@ -25,6 +25,7 @@
     "anime4k-webgpu": "^1.0.0",
     "cesium": "^1.143.0",
     "chess.js": "^1.4.0",
+    "cloudpilot-emu-embedded": "^2.2.3",
     "cs16-client": "^0.1.2",
     "eslint-linter-browserify": "^10.7.0",
     "fflate": "^0.8.3",

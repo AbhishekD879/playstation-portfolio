@@ -8,7 +8,7 @@
 // 4.2.3 has no alias), and it is what a library record stores in `core`. PS2 is
 // the exception — it boots Play!, not EmulatorJS — and keeps `sys: "ps2"`.
 
-export type Family = "sony" | "nintendo" | "sega" | "consoles" | "computers" | "arcade";
+export type Family = "sony" | "nintendo" | "sega" | "consoles" | "computers" | "arcade" | "mobile";
 
 /** Device fit, in the same vocabulary as labs.ts rateFeature(). */
 export interface SystemFit {
@@ -24,6 +24,7 @@ export interface BiosSpec {
   files: string[];      // expected file names (case-insensitive match)
   required: boolean;    // false = works without, better with
   anyOf?: boolean;      // true = one of the files is enough (3DO)
+  match?: string;       // or: any file with this extension counts (Palm device ROMs have no fixed name)
   note: string;
 }
 
@@ -31,7 +32,7 @@ export interface SystemDef {
   id: string;
   name: string;
   family: Family;
-  engine: "ejs" | "play";
+  engine: "ejs" | "play" | "cloudpilot";
   ejsCore?: string;        // when EJS_core differs from id (fuse, cap32)
   thumbs: string[];        // libretro-thumbnails repos, most specific first
   exts: string[];          // extensions that mean this system and nothing else
@@ -106,6 +107,11 @@ export const SYSTEMS: Record<string, SystemDef> = {
   mame: { id: "mame", name: "Arcade · MAME 2003-Plus", family: "arcade", engine: "ejs", thumbs: ["MAME"], exts: [],
     fit: { note: "MAME 0.78-era romsets (full non-merged need no BIOS). Select inserts a coin." } },
 
+  // —— mobile ——————————————————————————————————————————————————————————————
+  palm: { id: "palm", name: "Palm OS", family: "mobile", engine: "cloudpilot", thumbs: [], exts: ["prc"],
+    bios: { files: [], match: "rom", required: true, note: "Needs your Palm device's ROM file (.rom) — any m68k or OS5 device" },
+    fit: { note: "Touch is the stylus — this one is at home on a phone" } },
+
   // —— computers ———————————————————————————————————————————————————————————
   amiga: { id: "amiga", name: "Amiga", family: "computers", engine: "ejs", thumbs: ["Commodore_-_Amiga"], exts: ["adf", "adz", "dms", "hdf", "hdz", "lha"],
     bios: { files: ["kick34005.A500", "kick40068.A1200"], required: false, note: "Boots on the free AROS ROM; commercial games want a Kickstart" },
@@ -176,6 +182,10 @@ export function classifyFile(name: string, candidates?: readonly string[]): Clas
 export function biosStatus(sys: SystemDef, present: readonly string[]): { have: string[]; missing: string[]; ok: boolean } {
   const spec = sys.bios;
   if (!spec) return { have: [], missing: [], ok: true };
+  if (spec.match) {
+    const have = present.filter((n) => n.toLowerCase().endsWith(`.${spec.match!.toLowerCase()}`));
+    return { have, missing: have.length ? [] : [`any .${spec.match}`], ok: !spec.required || have.length > 0 };
+  }
   const lower = new Set(present.map((n) => n.toLowerCase()));
   const have = spec.files.filter((f) => lower.has(f.toLowerCase()));
   const missing = spec.files.filter((f) => !lower.has(f.toLowerCase()));

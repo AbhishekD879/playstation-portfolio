@@ -16,14 +16,14 @@ const REPOS = new Set(["Sony_-_PlayStation_2", "Sony_-_PlayStation", "Sony_-_Pla
 const owner = new Map();
 for (const [id, s] of Object.entries(SYSTEMS)) {
   assert.equal(s.id, id, `${id}: key and id agree`);
-  assert.ok(s.name && s.family && s.engine && s.thumbs.length, `${id}: complete`);
+  assert.ok(s.name && s.family && s.engine && Array.isArray(s.thumbs), `${id}: complete`);
   for (const r of s.thumbs) assert.ok(REPOS.has(r), `${id}: unknown thumbnail repo ${r}`);
   for (const e of s.exts) {
     assert.ok(!owner.has(e), `.${e} claimed by both ${owner.get(e)} and ${id} — declare it in SHARED_EXTS instead`);
     assert.ok(!SHARED_EXTS[e], `.${e} is shared and cannot also be owned by ${id}`);
     owner.set(e, id);
   }
-  if (s.bios) assert.ok(s.bios.files.length && s.bios.note, `${id}: BIOS spec needs files and a note`);
+  if (s.bios) assert.ok((s.bios.files.length || s.bios.match) && s.bios.note, `${id}: BIOS spec needs files (or a match rule) and a note`);
 }
 for (const [e, ids] of Object.entries(SHARED_EXTS)) for (const id of ids) assert.ok(SYSTEMS[id], `.${e}: unknown system ${id}`);
 assert.ok(ALL_EXTS().includes("iso") && ALL_EXTS().includes("sms") && ALL_EXTS().includes("img"));
@@ -58,5 +58,8 @@ assert.deepEqual(biosStatus(SYSTEMS.segaCD, ["BIOS_CD_U.BIN"]), { have: ["bios_C
 assert.equal(biosStatus(SYSTEMS["3do"], ["goldstar.bin"]).ok, true, "any one 3DO BIOS is enough");
 assert.equal(biosStatus(SYSTEMS.segaSaturn, []).ok, true, "optional BIOS never blocks");
 assert.equal(biosStatus(SYSTEMS.nes, []).ok, true);
+assert.deepEqual(biosStatus(SYSTEMS.palm, []), { have: [], missing: ["any .rom"], ok: false }, "Palm needs some device ROM");
+assert.deepEqual(biosStatus(SYSTEMS.palm, ["Palm_m515.ROM"]), { have: ["Palm_m515.ROM"], missing: [], ok: true }, "any .rom will do");
+assert.deepEqual(classifyFile("game.prc", ["palm"]), { core: "palm" });
 assert.ok(systemsOf("sega").includes("segaSaturn") && !systemsOf("sega").includes("nes"));
 console.log("systems registry ok");

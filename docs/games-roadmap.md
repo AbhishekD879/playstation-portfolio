@@ -82,6 +82,20 @@ isolation, desktop, memory. New systems get specs there so the shelf can say
 
 ## Phase 3 — embeds (medium)
 
+Done: **Palm OS** (2026-09-04) — CloudpilotEmu embedded 2.2.3 (GPL-3), wasm +
+worker self-hosted under `public/palm/`, lazy-loaded UMD; `palm` system in the
+registry (engine `cloudpilot`, `.prc`), device ROM in the BIOS pocket with an
+"any .rom" rule, Mobile shelf, `PalmSession` player (touch = stylus, EJECT back
+to the shelf). Verified without a device ROM: shelf, BIOS rule, no-ROM message,
+wasm loads from our origin, a fake ROM is rejected by Cloudpilot's own check.
+Needs a real m68k/OS5 ROM for a full boot.
+
+Next in order: Java ME (spike CheerpJ under COEP first), fantasy consoles
+(TIC-80, WASM-4 players self-hosted), Windows 9x on the existing v86 (attach
+a disk image as a File), Dreamcast (flycast-wasm as a self-hosted EmulatorJS
+core), then the shareware engines.
+
+
 Palm OS (CloudpilotEmu embed), Java ME (j2me-player / CheerpJ CDN),
 Dreamcast (flycast-wasm, self-hosted core, `'wasm-unsafe-eval'`),
 Windows 95/98 on the existing v86 (disk-image attach + on-screen keyboard),
@@ -102,3 +116,4 @@ Jazz Jackrabbit 1 & 2, OpenLara, Duke Nukem II, TIC-80, WASM-4, Scratch.
 - 2026-09-04 · Phase 1 grouping implemented (folders, shelves, routes, tests).
 - 2026-09-04 · Phase 2: registry, BIOS pocket, Systems sheet, disc chooser, 20 new systems across four shelves; 14 cores smoke-booted.
 - 2026-09-04 · Arcade shelf (FBNeo + MAME 2003-Plus); Gridlee boots. Phase 2 complete — 22 new systems.
+- 2026-09-04 · Phase 3 begins: Palm OS via CloudpilotEmu (Mobile shelf).
