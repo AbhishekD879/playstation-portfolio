@@ -359,7 +359,7 @@ export default function XMB(props: {
   const FANTASY_SYSTEMS = systemsOf("fantasy");
   // engines that live in their own page (TIC-80, WASM-4) boot through one frame player
   const [frameBoot, setFrameBoot] = createSignal<GameRecord | null>(null);
-  const shelfOfFamily: Record<string, AppId> = { fantasy: "fantasyhome", mobile: "mobilehome" };
+  const shelfOfFamily: Record<string, AppId> = { fantasy: "fantasyhome", mobile: "mobilehome", computers: "computershome" };
   // a Palm program boots its own player (CloudpilotEmu), like a PS2 disc boots Play!
   const [palmBoot, setPalmBoot] = createSignal<GameRecord | null>(null);
   const shelfCount = (systems: readonly string[]) => games().filter((g) => !g.sys && systems.includes(g.core)).length;
@@ -383,7 +383,7 @@ export default function XMB(props: {
     { id: "arcade", title: "Arcade", sub: `Neo Geo · CPS1/CPS2 · classic MAME — bring your romsets, insert coin${shelfCount(ARCADE_SYSTEMS) ? ` · ${shelfCount(ARCADE_SYSTEMS)} in your shelf` : ""}`, icon: "gamepad", action: { type: "shelf", id: "arcadehome" } },
     { id: "consoles", title: "More Consoles", sub: `PC Engine · Neo Geo Pocket · WonderSwan · Atari · 3DO · ColecoVision & more${shelfCount(CONSOLE_SYSTEMS) ? ` · ${shelfCount(CONSOLE_SYSTEMS)} in your shelf` : ""}`, icon: "handheld", action: { type: "shelf", id: "consoleshome" } },
     { id: "mobile", title: "Mobile", sub: `Palm OS and Java ME — bring your Palm ROM and .prc programs, or Nokia-era .jar games${shelfCount(MOBILE_SYSTEMS) ? ` · ${shelfCount(MOBILE_SYSTEMS)} in your shelf` : ""}`, icon: "phone", action: { type: "shelf", id: "mobilehome" } },
-    { id: "computers", title: "Computers", sub: `Amiga · Commodore 64 · ZX Spectrum · Amstrad CPC${shelfCount(COMPUTER_SYSTEMS) ? ` · ${shelfCount(COMPUTER_SYSTEMS)} in your shelf` : ""}`, icon: "monitor", action: { type: "shelf", id: "computershome" } },
+    { id: "computers", title: "Computers", sub: `Amiga · Commodore 64 · ZX Spectrum · Amstrad CPC · your own PC disk image (Windows 95/98, DOS)${shelfCount(COMPUTER_SYSTEMS) ? ` · ${shelfCount(COMPUTER_SYSTEMS)} in your shelf` : ""}`, icon: "monitor", action: { type: "shelf", id: "computershome" } },
     { id: "cs", title: "Counter-Strike 1.6", sub: "The classic FPS in your browser — bring your files · bots & online with friends", icon: "gamepad", action: { type: "cs" as const } },
     { id: "retrojoin", title: "Join a Retro Game", sub: "Player two for a friend's NES/SNES game — they stream it, you just play", icon: "gamepad", action: { type: "retrojoin" as const } },
     { id: "consoletv", title: "Console TV", sub: "Watch whatever is being played on this console right now — no controller needed", icon: "broadcast", action: { type: "consoletv" as const } },

@@ -1,0 +1,64 @@
+<!doctype html>
+<!-- Your own PC — v86 (copy/v86, BSD-2) booting a disk image the player brings:
+     a floppy (.ima/.vfd/small .img), a hard disk (.img/.vhd/.raw) or a CD (.iso).
+     Windows 95/98/ME, DOS, old Linux… whatever the image holds. The console posts
+     the image's bytes; nothing is downloaded and nothing is hosted here except the
+     emulator and its BIOS. The KolibriOS "Other OS" page (index.html) is untouched. -->
+<html>
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<style>
+  html, body { margin: 0; height: 100%; background: #000; overflow: hidden; display: grid; place-items: center; }
+  #screen_container { position: relative; }
+  #screen_container > div { white-space: pre; font: 14px monospace; line-height: 14px; color: #ddd; }
+  canvas { display: block; max-width: 100vw; max-height: 100vh; height: 100vh; width: auto; image-rendering: pixelated; }
+  #boot { position: fixed; inset: 0; display: grid; place-items: center; color: #9fb8e0; font: 13px/1.6 monospace; letter-spacing: 0.3em; text-align: center; background: #000; }
+  #boot span { display: block; opacity: 0.55; letter-spacing: 0.12em; }
+  /* a keyboard for phones: the field is invisible; focusing it raises the soft keyboard and what you type is sent to the PC */
+  #kbd { position: fixed; left: 12px; bottom: 12px; z-index: 2; font: 12px/1 monospace; letter-spacing: 0.1em; padding: 9px 12px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.22); background: rgba(8,13,22,0.85); color: #fff; }
+  #kbd-in { position: fixed; left: -9999px; top: 0; opacity: 0; }
+  @media (hover: hover) and (pointer: fine) { #kbd { display: none; } }
+</style>
+</head>
+<body>
+<div id="boot">YOUR PC<span id="bootsub">waiting for the disk image…</span></div>
+<div id="screen_container"><div></div><canvas style="display: none"></canvas></div>
+<button id="kbd" type="button">⌨ keyboard</button>
+<input id="kbd-in" type="text" autocomplete="off" autocapitalize="off" spellcheck="false" />
+<script src="/pc/libv86.js"></script>
+<script>
+  const sub = (t) => (document.getElementById("bootsub").textContent = t);
+  const FLOPPY_MAX = 2.88 * 1024 * 1024 + 4096;
+  addEventListener("message", (e) => {
+    if (e.source !== parent || !e.data || e.data.type !== "cart") return;
+    const name = String(e.data.name || "disk.img");
+    const bytes = e.data.bytes;
+    const ext = name.split(".").pop().toLowerCase();
+    // which drive this image is: CDs by extension, floppies by extension or size, the rest is a hard disk
+    const drive = ext === "iso" ? "cdrom" : (ext === "ima" || ext === "vfd" || bytes.byteLength <= FLOPPY_MAX) ? "fda" : "hda";
+    sub(`booting ${name} as ${drive === "fda" ? "a floppy" : drive === "cdrom" ? "a CD" : "a hard disk"}…`);
+    const cfg = {
+      wasm_path: "/pc/v86.wasm",
+      bios: { url: "/pc/seabios.bin" },
+      vga_bios: { url: "/pc/vgabios.bin" },
+      memory_size: 128 * 1024 * 1024,     // Windows 98 is comfortable here; DOS ignores the extra
+      vga_memory_size: 16 * 1024 * 1024,
+      screen_container: document.getElementById("screen_container"),
+      boot_order: drive === "fda" ? 0x321 : drive === "cdrom" ? 0x132 : 0x123,
+      autostart: true,
+    };
+    cfg[drive] = { buffer: bytes };
+    const emulator = new V86(cfg);
+    emulator.add_listener("emulator-started", () => sub("starting…"));
+    emulator.add_listener("screen-set-size", () => { document.getElementById("boot").style.display = "none"; });
+    // phone keyboard: typed text goes to the PC as key presses
+    const kbdIn = document.getElementById("kbd-in");
+    document.getElementById("kbd").addEventListener("click", () => kbdIn.focus());
+    kbdIn.addEventListener("input", () => { if (kbdIn.value) { emulator.keyboard_send_text(kbdIn.value); kbdIn.value = ""; } });
+    kbdIn.addEventListener("keydown", (ev) => { if (ev.key === "Enter") emulator.keyboard_send_text("\n"); else if (ev.key === "Backspace") emulator.keyboard_send_scancodes([0x0E, 0x8E]); });
+  }, { once: true });
+  parent.postMessage({ type: "ready" }, location.origin);
+</script>
+</body>
+</html>

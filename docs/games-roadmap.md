@@ -122,9 +122,17 @@ polls for; `main.js` takes the JAR as an in-memory `/str/` file
 bundled free Connect4 MIDlet from the shelf's Play: popup opens, game menu up
 in two seconds.
 
-Next in order: Windows 9x on the existing v86 (attach a disk image as a
-File), Dreamcast (flycast-wasm as a self-hosted EmulatorJS core), then the
-shareware engines (Quake, Wolf3D, DevilutionX, OpenTTD, Micropolis, Jazz,
+Done: **Your own PC** (2026-09-04) — `x86` system on the Computers shelf, a
+`frame` engine on the v86 the site already ships (`public/pc/player.html`; the
+KolibriOS "Other OS" page is untouched). The player brings a floppy
+(.ima/.vfd/small .img), hard disk (.img/.vhd/.raw) or CD (.iso) image; the
+drive and boot order follow the extension and size; 128 MB RAM / 16 MB VGA for
+Windows 98; phones get an on-screen keyboard that sends typed text to the PC.
+The image stays the player's — nothing is hosted. Verified with the KolibriOS
+floppy: boots to the desktop from the shelf, eject returns.
+
+Next in order: Dreamcast (flycast-wasm as a self-hosted EmulatorJS core), then
+the shareware engines (Quake, Wolf3D, DevilutionX, OpenTTD, Micropolis, Jazz,
 OpenLara).
 
 
@@ -151,3 +159,4 @@ Jazz Jackrabbit 1 & 2, OpenLara, Duke Nukem II, TIC-80, WASM-4, Scratch.
 - 2026-09-04 · Phase 3 begins: Palm OS via CloudpilotEmu (Mobile shelf).
 - 2026-09-04 · Fantasy Consoles shelf: WASM-4 via a generic frame player; TIC-80 parked (cart never reaches the loader).
 - 2026-09-04 · Java ME on the Mobile shelf, as its own tab (CheerpJ cannot be framed under COEP).
+- 2026-09-04 · Your own PC disk images (Windows 9x / DOS) via v86 on the Computers shelf.

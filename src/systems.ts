@@ -133,13 +133,17 @@ export const SYSTEMS: Record<string, SystemDef> = {
     fit: { note: "Keyboard-first — the emulator menu has an on-screen keyboard" } },
   cpc: { id: "cpc", name: "Amstrad CPC", family: "computers", engine: "ejs", ejsCore: "cap32", thumbs: ["Amstrad_-_CPC"], exts: ["dsk", "cdt"],
     fit: { note: "Keyboard-first — the emulator menu has an on-screen keyboard" } },
+  // a whole x86 PC (v86) booting the player's own floppy, hard-disk or CD image —
+  // Windows 95/98, DOS, old Linux. The image is the player's; we host the emulator.
+  x86: { id: "x86", name: "PC (x86) — your own disk image", family: "computers", engine: "frame", frame: "/pc/player.html", thumbs: [], exts: ["ima", "vfd", "vhd", "raw"],
+    fit: { desktop: "recommended", minMemGB: 4, cpuHeavy: true, note: "Boots your own floppy, hard-disk (.img/.vhd) or CD (.iso) image — Windows 95/98, DOS. Keyboard and mouse: a laptop is the place; phones get an on-screen keyboard" } },
 };
 
 /** Extensions shared by several systems, legacy default first. Which one wins
  *  depends on the shelf you add from; from the global picker the default wins. */
 export const SHARED_EXTS: Record<string, string[]> = {
   pbp: ["psp", "psx"],
-  iso: ["ps2", "psp", "segaSaturn", "segaCD", "3do"],
+  iso: ["ps2", "psp", "segaSaturn", "segaCD", "3do", "x86"],
   cso: ["ps2", "psp"],
   chd: ["ps2", "psx", "segaSaturn", "segaCD", "pce", "pcfx", "3do"],
   cue: ["psx", "segaSaturn", "segaCD", "pce", "pcfx", "3do", "jaguar"],
@@ -153,7 +157,7 @@ export const SHARED_EXTS: Record<string, string[]> = {
 /** Formats that are only accepted when a shelf asks for them: .img was always
  *  PS1-home only, and .zip is claimed by other apps (RPG Maker, Unity, HTML5) so
  *  it is an arcade ROM only when added from the Arcade shelf. */
-const CONTEXT_ONLY_EXTS: Record<string, string[]> = { img: ["psx"], zip: ["arcade", "mame"], wasm: ["wasm4"] };
+const CONTEXT_ONLY_EXTS: Record<string, string[]> = { img: ["psx", "x86"], zip: ["arcade", "mame"], wasm: ["wasm4"] };
 
 export const ext = (name: string) => name.split(".").pop()?.toLowerCase() ?? "";
 
