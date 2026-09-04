@@ -299,6 +299,12 @@ per-file cap (25 MiB). Now:
 
 ## Known constraints (from research, Sep 2026)
 
+- Cosmetic: when the very first game lands on an empty shelf, the hero switches
+  from its empty to its populated state and the Free games sheet is remounted,
+  so it closes on its own and its "… is on your shelf" note is lost. The tile
+  is there; nothing else is affected. (Escape at that moment backs out of the
+  shelf, as it normally does — which is what tripped the automated check.)
+
 - iOS Safari: no COEP `credentialless` → no threads; open EmulatorJS issues
   report iOS killing any libretro core after 60–90 s. Tag, don't hide.
 - EmulatorJS is pinned to 4.2.3; 4.3.0-pre cores are not interchangeable.
@@ -325,3 +331,4 @@ per-file cap (25 MiB). Now:
 - 2026-09-04 · **Phases 5–6 deployed to production** (main `87a737f`): saved progress (manual + SRAM), R2-served binaries with same-origin Functions, Jazz Jackrabbit 2. Regression pass preview vs previous production: captured non-Games lists identical, 31 routes error-free on both, four shelf boots identical; on the preview all nine moved files came from R2 with matching sizes (quake106.zip hash equal to the local copy) and OpenTTD, Diablo, Quake (full start) and Jazz² ran in-console.
 - 2026-09-05 · Phase 7: arcade core switch, export/import of saved progress, SRAM restore proven on production with µCity, two C64 homebrews; OpenLara and Amiga/NGP/WS homebrew parked with reasons.
 - 2026-09-05 · **Phase 7 deployed to production** (main `3d060bd`). Regression pass preview vs previous production: captured non-Games lists identical, 31 routes error-free on both, four shelf boots identical.
+- 2026-09-05 · Production verified after the Phase 7 deploy: Retaliate64 downloads via the relay and boots in the C64 core on production; options rows (Play / Export / Import / Re-link, Run with… on arcade tiles) render; R2 assets and the relay answer as before.
