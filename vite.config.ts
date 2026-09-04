@@ -1,3 +1,5 @@
+import { createReadStream, existsSync, statSync } from "node:fs";
+import { resolve } from "node:path";
 import { defineConfig } from "vite";
 import solid from "vite-plugin-solid";
 import { multiplayerSignaling } from "./vite-plugin-mp";
@@ -19,6 +21,23 @@ export default defineConfig({
     // /j2me/ is served without the isolation headers (see public/_headers): the
     // Java ME player opens as its own tab because CheerpJ's helper frame cannot
     // be embedded under COEP. Mirrors the production rule for local testing.
+    {
+      // Big binaries (Quake, OpenTTD, Diablo, Jazz²) are not in public/ — they
+      // live in R2 and, for dev, in the gitignored r2/ mirror at the same paths.
+      name: "r2-mirror",
+      configureServer(server) {
+        server.middlewares.use((req, res, next) => {
+          const path = decodeURIComponent((req.url ?? "").split("?")[0]);
+          const file = resolve("r2", "." + path);
+          if (!/^\/(quake|openttd|diablo|jazz2)\//.test(path) || path.includes("..") || !existsSync(file) || !statSync(file).isFile()) return next();
+          const ext = path.split(".").pop() ?? "";
+          res.setHeader("content-type", ext === "wasm" ? "application/wasm" : ext === "js" ? "text/javascript" : "application/octet-stream");
+          res.setHeader("content-length", String(statSync(file).size));
+          res.setHeader("x-asset-source", "r2-mirror");
+          createReadStream(file).pipe(res);
+        });
+      },
+    },
     {
       name: "j2me-no-isolation",
       configureServer(server) {

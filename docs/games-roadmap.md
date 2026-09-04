@@ -198,8 +198,7 @@ in a same-origin frame with EJECT — no upload step at all.
 | OpenTTD | openttd-online 15.3 Emscripten build, GPL-2; language pre-loader IIFE removed; OpenGFX 7.1 written into `/baseset` before `main()`; the page must predefine `Module.arguments`/`postRun` (the build's pre.js pushes onto them) | 18.6 MB (wasm 10.8 MB) | OpenGFX GPL-2, saves in IDBFS | title screen with OpenGFX, clean console (local) |
 | Diablo | DevilutionX, built here from upstream master (2026-08-24) with emsdk 4.0.1 via `emcmake cmake` (Sustainable Use License 1.0, non-commercial); the build's own Emscripten shell + file manager, assets preloaded, saves in IDBFS; our CSS makes it full-screen | 45 MB (spawn.mpq 25,448,219 B, wasm 6.5 MB, data 12.7 MB) | `spawn.mpq` shareware data as distributed by the DevilutionX project; owners can add DIABDAT.MPQ through the file manager | boots to the title screen with spawn.mpq loaded, clean console (local) |
 
-Parked: Jazz Jackrabbit 2 (`jazz2.data` 46.7 MB > the 25 MiB per-file cap →
-R2), OpenLara (official site unreachable), C64 / Amiga / Neo Geo Pocket /
+Parked: OpenLara (official site unreachable), C64 / Amiga / Neo Geo Pocket /
 WonderSwan homebrew (no free titles with a direct, licence-clear download
 found — CSDb/Aminet/AtariAge have no CORS and mixed licences), Tobu Tobu Girl
 (no direct file). DevilutionX is in (row above): upstream has an Emscripten
@@ -239,6 +238,32 @@ DB — `src/saves.ts`, `gamesdb.ts`, `GameSession.tsx`, `GameShelf.tsx`):
   Continue row with thumbnail; resume boots, loads, says "CONTINUING FROM
   YOUR SAVE".
 
+## Phase 6 — big binaries on R2 (2026-09-04)
+
+The web games had pushed ~95 MB of binaries into the repo and every deploy,
+and Jazz² was parked because its data file (46.7 MB) is over the Pages
+per-file cap (25 MiB). Now:
+
+- Bucket `abhishekstation-assets` (binding `R2` in `wrangler.jsonc`). The
+  `.wasm/.data/.mpq/.zip/.bin/.tar` files of Quake, OpenTTD, Diablo and Jazz²
+  live there under their original paths (`quake/qwasm-gl.wasm`, …).
+- They are served **same-origin at the same URLs**: `functions/<dir>/[[file]].ts`
+  hands every request under those four directories to `functions/r2serve.ts`
+  — R2 hit → streamed with the isolation headers, an etag and a day of
+  edge cache (Cache API); miss → the static asset. No engine page changed,
+  no CORS, no cross-origin-isolation trouble for the Emscripten loaders.
+  Responses carry `x-asset-source: r2 | static` for checking.
+- Repo/deploy: the binaries are gone from `public/` (history still has them);
+  the gitignored `r2/` directory mirrors the bucket for `vite dev` (a plugin
+  serves `/quake|openttd|diablo|jazz2/*` from it) and `node scripts/r2-sync.mjs
+  [dir]` uploads it. Adding a game with big files = drop them in `r2/<dir>/`,
+  add a one-line route file, sync.
+- **Jazz Jackrabbit 2** joins PC Games: Jazz² Resurrection (jazz2-native,
+  GPL-3) web build from de4th.dev with the shareware demo data; the upstream
+  page's service-worker registration and manifest links are removed (it is
+  framed inside the console). 7.2 MB wasm + 46.7 MB data on R2, 0.9 MB
+  loader in the repo.
+
 ## Known constraints (from research, Sep 2026)
 
 - iOS Safari: no COEP `credentialless` → no threads; open EmulatorJS issues
@@ -263,3 +288,4 @@ DB — `src/saves.ts`, `gamesdb.ts`, `GameSession.tsx`, `GameShelf.tsx`):
 - 2026-09-04 · Free-games sweep on the preview: 17/18 mamedev sets boot in MAME 2003-Plus; `looping` dropped. Phase 4 complete on the preview (`feat-games-shelves`); not yet in production.
 - 2026-09-04 · **Phase 4 deployed to production** (main `16e13ef`). Regression pass, preview vs previous production: captured non-Games crossbar lists identical; 31 app routes open with zero runtime errors on both; the four shelf boots (NES, GBA, Mega Drive, SNES) behave identically; the six web games open in-console with zero runtime errors. Verified live: relay 200/403, Arcade "Free games · 17", PC Games folder lists all six web games, Wolfenstein 3D runs.
 - 2026-09-04 · Phase 5 saved progress: manual snapshots + SRAM per game, Continue row in Game options, EmulatorJS Save/Load State routed to the console's storage. PS2 memory cards were already persisted (Play! frame).
+- 2026-09-04 · Phase 6: Quake/OpenTTD/Diablo binaries moved to R2, served same-origin by Pages Functions; Jazz Jackrabbit 2 (Jazz² Resurrection) added.

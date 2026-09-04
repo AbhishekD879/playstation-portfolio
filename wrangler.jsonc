@@ -6,5 +6,10 @@
   "compatibility_date": "2026-07-01",
   "kv_namespaces": [
     { "binding": "GB", "id": "44c3b52f67cd4d398f0e1c7be98beaed" }
+  ],
+  // Big game binaries (Quake, OpenTTD, Diablo, Jazz²) live in R2 and are served
+  // same-origin by functions/<dir>/[[file]].ts — see functions/r2serve.ts.
+  "r2_buckets": [
+    { "binding": "R2", "bucket_name": "abhishekstation-assets" }
   ]
 }

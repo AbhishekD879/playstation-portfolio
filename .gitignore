@@ -20,3 +20,6 @@ public/ludo/*.hdr
 # CC0 photogrammetry chess set — see public/models/README.md
 public/models/chess/
 .chrome-profile/
+
+# local mirror of the R2 bucket (big game binaries) — upload with scripts/r2-sync.mjs, never commit
+/r2/
