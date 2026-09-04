@@ -16,6 +16,8 @@ import { hasWebGPU } from "../gpu";
 import { MODEL_BUDGET_MB, residentModels } from "../models";
 import { startPresence, visitorCount } from "../p2p";
 import { iconOf } from "../prefs";
+import { ROUTE_APPS, appRouteHash, parseRouteHash } from "./routes";
+import { GAME_TOP, HIDDEN_GAME_ITEMS, folderOf, type GameFolder } from "./gameFolders";
 import { tr } from "../translate";
 import { startTabSync } from "../sync";
 import { fluidNavPulse } from "./FluidBg";
@@ -99,24 +101,7 @@ function fmtPlaytime(sec: number): string {
   const h = Math.floor(sec / 3600), m = Math.round((sec % 3600) / 60);
   return h ? `${h}h ${m}m` : `${m}m`;
 }
-const ROUTE_APPS = new Set(["doom","doomrtx","worlddrive","chess","trivia","flash","cinema","podcasts","library","map","ai","webamp","youtube","timemachine","art","wiki","lichess","ps2","pc","guestbook","browser","visualizer","studio","code","manual","ps2home","ps1home","psphome","retrohome","scummvm","karaoke","strudel","settingshub","videoplayer","reporewind","rpgmaker","renpy","godot","unity","html5","privacy","watch","syscity","cs","party","board","voiceavatar","retrojoin","consoletv","analytics"]);
-// a live PS2 emulator/MP session can't be resumed cold → route it to its library home.
-const routeSlug = (a: string) => (a === "ps2" ? "ps2home" : a);
-export const appRouteHash = (a: string | null, catId: string) => (a ? `#/app/${routeSlug(a)}` : `#/${catId}`);
-/** Parse a location hash → what it addresses. null = not an app/category route (empty, or a #setup= link). */
-export function parseRouteHash(hash: string): { app?: string } | { cat: string } | { room: string } | null {
-  if (!hash || /^#setup=/.test(hash)) return null;
-  // ★ A room's own address. Codes are minted from an unambiguous alphabet, so
-  // anything else in those four characters is not a room and is ignored rather
-  // than opening an empty session.
-  const rm = hash.match(/^#\/room\/([A-Z0-9]{4})$/i);
-  if (rm) return { room: rm[1].toUpperCase() };
-  const am = hash.match(/^#\/app\/([a-z0-9-]+)/i);
-  if (am) { const id = routeSlug(am[1].toLowerCase()); return ROUTE_APPS.has(id) ? { app: id } : null; }
-  const cm = hash.match(/^#\/([a-z0-9-]+)$/i);
-  if (cm) return { cat: cm[1].toLowerCase() };
-  return null;
-}
+// URL routes live in routes.ts (pure, tested): #/app/<id>, #/<cat>, #/<cat>/<folder>, #/room/<CODE>
 
 interface Toast { id: number; title: string; sub: string; tier?: string; icon?: string }
 let toastSeq = 1;
@@ -246,7 +231,7 @@ export default function XMB(props: {
   const [vListening, setVListening] = createSignal(false); // XMB voice command
   const [padTest, setPadTest] = createSignal(false);
   const [splatFile, setSplatFile] = createSignal<File | null>(null);
-  const [app, setAppRaw] = createSignal<null | "doom" | "doomrtx" | "worlddrive" | "chess" | "trivia" | "flash" | "cinema" | "podcasts" | "library" | "map" | "ai" | "webamp" | "youtube" | "timemachine" | "art" | "wiki" | "lichess" | "ps2" | "pc" | "guestbook" | "browser" | "visualizer" | "studio" | "code" | "manual" | "ps2home" | "ps1home" | "psphome" | "retrohome" | "scummvm" | "karaoke" | "strudel" | "settingshub" | "videoplayer" | "reporewind" | "rpgmaker" | "renpy" | "godot" | "unity" | "html5" | "privacy" | "watch" | "syscity" | "cs" | "party" | "retrojoin" | "board" | "voiceavatar" | "consoletv" | "analytics">(null);
+  const [app, setAppRaw] = createSignal<null | "doom" | "doomrtx" | "worlddrive" | "chess" | "trivia" | "flash" | "cinema" | "podcasts" | "library" | "map" | "ai" | "webamp" | "youtube" | "timemachine" | "art" | "wiki" | "lichess" | "ps2" | "pc" | "guestbook" | "browser" | "visualizer" | "studio" | "code" | "manual" | "ps2home" | "ps1home" | "psphome" | "retrohome" | "nintendohome" | "segahome" | "scummvm" | "karaoke" | "strudel" | "settingshub" | "videoplayer" | "reporewind" | "rpgmaker" | "renpy" | "godot" | "unity" | "html5" | "privacy" | "watch" | "syscity" | "cs" | "party" | "retrojoin" | "board" | "voiceavatar" | "consoletv" | "analytics">(null);
 
   // Opening/closing an app goes through the native View Transitions API (now
   // Baseline for same-document), so the console cross-fades like real system
@@ -356,6 +341,12 @@ export default function XMB(props: {
   const [godotCount, setGodotCount] = createSignal(0);
   const [unityCount, setUnityCount] = createSignal(0);
   const [html5Count, setHtml5Count] = createSignal(0);
+  // Platform shelves: which library systems each home shows. RETRO_SYSTEMS (the
+  // old all-in-one shelf) stays so #/app/retrohome keeps working.
+  const NINTENDO_SYSTEMS = ["nes", "snes", "n64", "gb", "gba", "nds"] as const;
+  const SEGA_SYSTEMS = ["segaMD"] as const;
+  const shelfCount = (systems: readonly string[]) => games().filter((g) => !g.sys && systems.includes(g.core)).length;
+
   const gameItems = createMemo<XmbItem[]>(() => [
     { id: "doom", title: "DOOM", sub: "Built-in game · the 1993 shareware, playable now", icon: "skull", action: { type: "doom" } },
     ...(hasWebGPU() ? [{ id: "doomrtx", title: "DOOM RTX", sub: "E1M1 path-traced in real time — WebGPU ray tracing", icon: "lightning", action: { type: "doom-rtx" as const } }] : []),
@@ -366,7 +357,11 @@ export default function XMB(props: {
     { id: "ps2", title: "PlayStation 2", sub: `Library, downloads & 2-player online${ps2Count() ? ` · ${ps2Count()} in your shelf` : ""}`, icon: "disc", action: { type: "ps2-home" } },
     { id: "ps1", title: "PlayStation", sub: `The original — .chd/.pbp discs, no BIOS needed${psxCount() ? ` · ${psxCount()} in your shelf` : ""}`, icon: "disc", action: { type: "ps1-home" } },
     { id: "psp", title: "PlayStation Portable", sub: `PSP library & downloads — experimental (PPSSPP)${pspCount() ? ` · ${pspCount()} in your shelf` : ""}`, icon: "handheld", action: { type: "psp-home" } },
+    // "retro" is the old every-system shelf. It keeps its route (#/app/retrohome)
+    // but the column now shows the two platform shelves below instead.
     { id: "retro", title: "Retro Games", sub: `NES · SNES · GBA · N64 & more — library + downloads${retroCount() ? ` · ${retroCount()} in your shelf` : ""}`, icon: "gamepad", action: { type: "retro-home" } },
+    { id: "nintendo", title: "Nintendo", sub: `NES · Super Nintendo · Nintendo 64 · Game Boy · GBA · DS${shelfCount(NINTENDO_SYSTEMS) ? ` · ${shelfCount(NINTENDO_SYSTEMS)} in your shelf` : ""}`, icon: "gamepad", action: { type: "shelf", id: "nintendohome" } },
+    { id: "sega", title: "Sega", sub: `Mega Drive / Genesis${shelfCount(SEGA_SYSTEMS) ? ` · ${shelfCount(SEGA_SYSTEMS)} in your shelf` : ""}`, icon: "gamepad", action: { type: "shelf", id: "segahome" } },
     { id: "cs", title: "Counter-Strike 1.6", sub: "The classic FPS in your browser — bring your files · bots & online with friends", icon: "gamepad", action: { type: "cs" as const } },
     { id: "retrojoin", title: "Join a Retro Game", sub: "Player two for a friend's NES/SNES game — they stream it, you just play", icon: "gamepad", action: { type: "retrojoin" as const } },
     { id: "consoletv", title: "Console TV", sub: "Watch whatever is being played on this console right now — no controller needed", icon: "broadcast", action: { type: "consoletv" as const } },
@@ -450,16 +445,60 @@ export default function XMB(props: {
     { id: "apod", title: "Astronomy Photo of the Day", sub: "Live from NASA", icon: "star", action: { type: "apod" } },
   ]);
 
+  // —— Games is grouped like a PlayStation groups its games ————————————————
+  // The column shows folders and platform shelves (GAME_TOP); opening a folder
+  // lists its members in place. Which folder is open is part of the address
+  // (#/game/<folder>) and survives opening and closing an app inside it.
+  const [gameFolder, setGameFolderRaw] = createSignal<string | null>(null);
+  const setGameFolder = (id: string | null) => setGameFolderRaw(id && GAME_TOP.some((e) => e.kind === "folder" && e.id === id) ? id : null);
+  const gameLeaves = createMemo(() => gameItems().filter((i) => labEnabled(i.id) && !HIDDEN_GAME_ITEMS.has(i.id)));
+  const folderItem = (f: GameFolder, members: XmbItem[]): XmbItem => ({
+    id: `folder:${f.id}`, title: f.title, icon: f.icon,
+    sub: `${members.length} inside · ${f.blurb}`,
+    action: { type: "folder", id: f.id },
+  });
+  const gameColumn = createMemo<XmbItem[]>(() => {
+    const leaves = gameLeaves();
+    const byId = new Map(leaves.map((i) => [i.id, i] as const));
+    const open = gameFolder();
+    if (open) {
+      const f = GAME_TOP.find((e): e is GameFolder => e.kind === "folder" && e.id === open);
+      return f ? f.items.map((id) => byId.get(id)).filter((i): i is XmbItem => !!i) : [];
+    }
+    const placed = new Set<string>();
+    const top: XmbItem[] = [];
+    for (const e of GAME_TOP) {
+      if (e.kind === "item") { const it = byId.get(e.id); if (it) { top.push(it); placed.add(e.id); } continue; }
+      const members = e.items.map((id) => byId.get(id)).filter((i): i is XmbItem => !!i);
+      e.items.forEach((id) => placed.add(id));
+      if (members.length) top.push(folderItem(e, members)); // a folder with nothing enabled inside is not shown
+    }
+    // safety net: anything not filed stays visible, loose at the end
+    for (const it of leaves) if (!placed.has(it.id)) top.push(it);
+    return top;
+  });
+  const gameFolderTitle = () => GAME_TOP.find((e): e is GameFolder => e.kind === "folder" && e.id === gameFolder())?.title ?? "";
+
   // one gate for every category: Labs-disabled apps simply don't exist here
   const itemsOf = (ci: number): XmbItem[] =>
-    (CATEGORIES[ci].id === "game" ? gameItems()
-    : CATEGORIES[ci].id === "music" ? musicItems()
+    (CATEGORIES[ci].id === "game" ? gameColumn()
+    : (CATEGORIES[ci].id === "music" ? musicItems()
     : CATEGORIES[ci].id === "tv" ? tvItems()
     : CATEGORIES[ci].id === "news" ? newsItems()
     : CATEGORIES[ci].id === "photo" ? photoItems()
-    : CATEGORIES[ci].items).filter((i) => labEnabled(i.id));
+    : CATEGORIES[ci].items).filter((i) => labEnabled(i.id)));
 
-  const selOf = (ci: number) => Math.min(sels()[CATEGORIES[ci].id] ?? 0, Math.max(0, itemsOf(ci).length - 1));
+  // selection is remembered per column, and per folder inside Games
+  const selKey = (ci: number) => (CATEGORIES[ci].id === "game" && gameFolder() ? `game/${gameFolder()}` : CATEGORIES[ci].id);
+  const selOf = (ci: number) => Math.min(sels()[selKey(ci)] ?? 0, Math.max(0, itemsOf(ci).length - 1));
+  // put the cursor on an item wherever it is filed (search, deep links)
+  const revealGameItem = (id: string) => {
+    const gi = CATEGORIES.findIndex((c) => c.id === "game");
+    if (gi < 0) return;
+    setGameFolder(folderOf(id)?.id ?? null);
+    const ri = itemsOf(gi).findIndex((it) => it.id === id);
+    if (ri >= 0) setSels({ ...sels(), [selKey(gi)]: ri });
+  };
 
   // —— URL routing: restore-from-hash, then keep the hash in sync ————————————
   type AppId = Exclude<ReturnType<typeof app>, null>;
@@ -482,6 +521,7 @@ export default function XMB(props: {
       if (app()) setApp(null);
       const ci = CATEGORIES.findIndex((c) => c.id === r.cat);
       if (ci >= 0 && itemsOf(ci).length) setCat(ci);
+      if (r.cat === "game") setGameFolder(r.folder ?? null);
     }
   };
   // —— DualSense, per app ————————————————————————————————————————————————
@@ -504,7 +544,7 @@ export default function XMB(props: {
   createEffect(() => {
     const a = app(), catId = CATEGORIES[cat()]?.id ?? "";
     if (/^#setup=/.test(location.hash)) { prevAppOpen = !!a; return; } // don't clobber a pending share link
-    const target = appRouteHash(a, catId);
+    const target = appRouteHash(a, catId, catId === "game" ? gameFolder() : null);
     if (location.hash !== target) {
       // opening an app pushes a new entry (Back closes it); everything else replaces
       if (a && !prevAppOpen) history.pushState(null, "", target);
@@ -743,6 +783,17 @@ export default function XMB(props: {
         sfx.confirm();
         setApp("retrohome");
         break;
+      case "shelf":
+        sfx.confirm();
+        setApp(a.id as AppId);
+        break;
+      case "folder": {
+        sfx.confirm();
+        setGameFolder(a.id);
+        const gi = CATEGORIES.findIndex((c) => c.id === "game");
+        if (gi >= 0 && sels()[selKey(gi)] === undefined) setSels({ ...sels(), [selKey(gi)]: 0 });
+        break;
+      }
       case "insert-disc":
         sfx.confirm();
         fileInput.click();
@@ -1496,7 +1547,7 @@ export default function XMB(props: {
   // —— global search: find & launch any app or section on the console ——
   interface SearchHit { item: XmbItem; ci: number; ii: number; cat: string }
   const searchIndex = (): SearchHit[] =>
-    CATEGORIES.flatMap((c, ci) => itemsOf(ci).map((item, ii) => ({ item, ci, ii, cat: c.label })));
+    CATEGORIES.flatMap((c, ci) => (c.id === "game" ? gameLeaves() : itemsOf(ci)).map((item, ii) => ({ item, ci, ii, cat: c.label })));
   const searchResults = (): SearchHit[] => {
     const q = searchQuery().toLowerCase().trim();
     const all = searchIndex();
@@ -1516,8 +1567,11 @@ export default function XMB(props: {
   const launchSearch = (h: SearchHit) => {
     setSearchOpen(false);
     setCat(h.ci);
-    const ri = itemsOf(h.ci).findIndex((it) => it.id === h.item.id);
-    if (ri >= 0) setSels({ ...sels(), [CATEGORIES[h.ci].id]: ri });
+    if (CATEGORIES[h.ci].id === "game") revealGameItem(h.item.id);
+    else {
+      const ri = itemsOf(h.ci).findIndex((it) => it.id === h.item.id);
+      if (ri >= 0) setSels({ ...sels(), [selKey(h.ci)]: ri });
+    }
     act(h.item);
   };
 
@@ -1586,7 +1640,7 @@ export default function XMB(props: {
     if (padTest()) { if (action === "back") setPadTest(false); return; }
     if (app()) {
       // bound apps route their own nav; the rest are keyboard-driven owner apps
-      if (["chess", "trivia", "flash", "cinema", "podcasts", "library", "youtube", "art", "wiki", "ps2home", "ps1home", "psphome", "retrohome", "karaoke", "settingshub", "videoplayer", "reporewind", "rpgmaker", "renpy", "godot", "unity", "html5", "syscity", "worlddrive"].includes(app()!)) appNav?.(action);
+      if (["chess", "trivia", "flash", "cinema", "podcasts", "library", "youtube", "art", "wiki", "ps2home", "ps1home", "psphome", "retrohome", "nintendohome", "segahome", "karaoke", "settingshub", "videoplayer", "reporewind", "rpgmaker", "renpy", "godot", "unity", "html5", "syscity", "worlddrive"].includes(app()!)) appNav?.(action);
       else if (app() === "lichess" && action === "back") { sfx.back(); setApp(null); }
       else if (src === "pad" || src === "gesture") {
         // owner apps (map/globe, lichess…) listen to the KEYBOARD — turn pad
@@ -1777,12 +1831,12 @@ export default function XMB(props: {
       }
       case "up": {
         const s = selOf(cat());
-        if (s > 0) { setSels({ ...sels(), [CATEGORIES[cat()].id]: s - 1 }); sfx.tickV(); }
+        if (s > 0) { setSels({ ...sels(), [selKey(cat())]: s - 1 }); sfx.tickV(); }
         break;
       }
       case "down": {
         const s = selOf(cat());
-        if (s < items.length - 1) { setSels({ ...sels(), [CATEGORIES[cat()].id]: s + 1 }); sfx.tickV(); }
+        if (s < items.length - 1) { setSels({ ...sels(), [selKey(cat())]: s + 1 }); sfx.tickV(); }
         break;
       }
       case "confirm": {
@@ -1793,8 +1847,18 @@ export default function XMB(props: {
       case "options":
         setTrophiesOpen(true);
         break;
-      case "back":
+      case "back": {
+        // inside a Games folder, ○ steps out to the folder list with the cursor
+        // back on the folder you came from — the PlayStation way
+        const open = gameFolder();
+        if (CATEGORIES[cat()].id === "game" && open) {
+          sfx.back();
+          setGameFolder(null);
+          const ri = itemsOf(cat()).findIndex((it) => it.id === `folder:${open}`);
+          if (ri >= 0) setSels({ ...sels(), [selKey(cat())]: ri });
+        }
         break;
+      }
     }
   };
   onNav(handleNav);
@@ -1904,7 +1968,7 @@ export default function XMB(props: {
   // Horizon shelves are entirely tappable — tiles, hero actions and the Control
   // Center are all real buttons — so a virtual d-pad adds nothing, and its face
   // buttons land squarely on top of the Control Center bar on a phone.
-  const TAP_NATIVE = new Set(["ps2home", "ps1home", "psphome", "retrohome"]);
+  const TAP_NATIVE = new Set(["ps2home", "ps1home", "psphome", "retrohome", "nintendohome", "segahome"]);
   // show the on-screen controller once you're INSIDE something (an app/panel) —
   // that's where back/select/move-focus are needed; the bare crossbar is swipe+tap.
   const touchNavHidden = () =>
@@ -2033,11 +2097,17 @@ export default function XMB(props: {
 
       {/* item column for the active category */}
       <div class="item-col">
+        <Show when={CATEGORIES[cat()].id === "game" && gameFolder()}>
+          <div class="folder-crumb" onClick={() => handleNav("back")}>
+            <span class="crumb-root">{tr("Games")}</span><span class="crumb-sep">›</span><b>{tr(gameFolderTitle())}</b>
+            <span class="crumb-hint"><span class="btn-o" /> {tr("back")}</span>
+          </div>
+        </Show>
         <For each={itemsOf(cat())}>
           {(item, i) => {
             const d = () => i() - selOf(cat());
             const onClick = () => {
-              setSels({ ...sels(), [CATEGORIES[cat()].id]: i() });
+              setSels({ ...sels(), [selKey(cat())]: i() });
               sfx.confirm();
               act(item);
             };
@@ -2393,6 +2463,18 @@ export default function XMB(props: {
           onChanged={refreshGames}
           onClose={() => setApp(null)}
         />
+      </Show>
+      {/* platform shelves — one GameShelf per family, same behaviour as the old
+          all-in-one retro shelf, just filtered to that family's systems */}
+      <Show when={app() === "nintendohome"}>
+        <GameShelf bind={(f) => (appNav = f)} profileId={props.profile.id} systems={[...NINTENDO_SYSTEMS]} owned={games()}
+          title="NINTENDO — YOUR LIBRARY & DOWNLOADS" onPlay={playRecord} onInsert={() => fileInput.click()} onLink={onLink}
+          onChanged={refreshGames} onClose={() => setApp(null)} />
+      </Show>
+      <Show when={app() === "segahome"}>
+        <GameShelf bind={(f) => (appNav = f)} profileId={props.profile.id} systems={[...SEGA_SYSTEMS]} owned={games()}
+          title="SEGA — YOUR LIBRARY & DOWNLOADS" onPlay={playRecord} onInsert={() => fileInput.click()} onLink={onLink}
+          onChanged={refreshGames} onClose={() => setApp(null)} />
       </Show>
       <Show when={app() === "karaoke"}>
         <Karaoke bind={(f) => (appNav = f)} onClose={() => setApp(null)} />

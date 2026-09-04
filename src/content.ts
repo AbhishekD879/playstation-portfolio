@@ -20,6 +20,8 @@ export interface XmbItem {
     | { type: "ps2-home" }
     | { type: "psp-home" }
     | { type: "retro-home" }
+    | { type: "shelf"; id: string }        // a platform shelf (GameShelf) by app id
+    | { type: "folder"; id: string }       // open a Games folder in place (gameFolders.ts)
     | { type: "play-game"; gameId: string }
     | { type: "music-toggle" }
     | { type: "radio-guide" }
