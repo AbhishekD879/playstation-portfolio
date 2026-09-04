@@ -22,7 +22,11 @@ export interface GameRecord {
   origin?: "disk" | "download";     // link source: your drive vs downloaded to OPFS
 }
 
-export type GameSystem = "ps2" | "psp" | "psx" | "gba" | "gb" | "nes" | "snes" | "segaMD" | "n64" | "nds";
+import { SYSTEMS } from "./systems";
+
+/** A system id from the registry (systems.ts). Kept as a string alias so records
+ *  written before a system existed still type-check; the registry is the truth. */
+export type GameSystem = string;
 
 export const isLinked = (g: GameRecord) => g.kind === "link";
 
@@ -64,38 +68,29 @@ export async function resolveGameFile(g: GameRecord, opts?: { request?: boolean 
 }
 
 // —— box art: libretro-thumbnails (keyless, CORS *) ——————————————————————
-const THUMB_REPO: Record<string, string> = {
-  ps2: "Sony_-_PlayStation_2",
-  psp: "Sony_-_PlayStation_Portable",
-  psx: "Sony_-_PlayStation",
-  gba: "Nintendo_-_Game_Boy_Advance",
-  gb: "Nintendo_-_Game_Boy",
-  nes: "Nintendo_-_Nintendo_Entertainment_System",
-  snes: "Nintendo_-_Super_Nintendo_Entertainment_System",
-  segaMD: "Sega_-_Mega_Drive_-_Genesis",
-  n64: "Nintendo_-_Nintendo_64",
-  nds: "Nintendo_-_Nintendo_DS",
-};
-
-/** Best-effort box-art URLs, most-specific first. Try each until one loads. */
+/** Best-effort box-art URLs, most-specific first. Try each until one loads.
+ *  A system may have several repos (WonderSwan Color then WonderSwan). */
 export function coverCandidates(g: GameRecord): string[] {
-  const repo = THUMB_REPO[g.sys ?? g.core];
-  if (!repo) return [];
-  const base = `https://raw.githubusercontent.com/libretro-thumbnails/${repo}/master/Named_Boxarts/`;
+  const repos = SYSTEMS[g.sys ?? g.core]?.thumbs ?? [];
+  if (!repos.length) return [];
   const stem = g.name.replace(/\.[^.]+$/, "").trim();
   const clean = stem.replace(/\s*[([].*$/, "").trim(); // drop "(USA) (Rev 1)…" tails
   const names = [...new Set([stem, `${clean} (USA)`, `${clean} (Europe)`, `${clean} (Japan)`, clean])];
   // thumbnails replace &*/:`<>?\|" with _
-  return names.map((n) => base + encodeURIComponent(n.replace(/[&*/:`<>?\\|"]/g, "_")) + ".png");
+  return repos.flatMap((repo) => {
+    const base = `https://raw.githubusercontent.com/libretro-thumbnails/${repo}/master/Named_Boxarts/`;
+    return names.map((n) => base + encodeURIComponent(n.replace(/[&*/:`<>?\\|"]/g, "_")) + ".png");
+  });
 }
 
 const DB = "asp-games";
 const STORE = "roms";
 const PHOTOS = "photos";
+const BIOS = "bios";   // firmware the player supplies — see bios.ts
 
 function open(): Promise<IDBDatabase> {
   return new Promise((res, rej) => {
-    const req = indexedDB.open(DB, 2);
+    const req = indexedDB.open(DB, 3);
     req.onupgradeneeded = () => {
       const db = req.result;
       if (!db.objectStoreNames.contains(STORE)) {
@@ -103,6 +98,9 @@ function open(): Promise<IDBDatabase> {
       }
       if (!db.objectStoreNames.contains(PHOTOS)) {
         db.createObjectStore(PHOTOS, { keyPath: "id" }).createIndex("profileId", "profileId");
+      }
+      if (!db.objectStoreNames.contains(BIOS)) {
+        db.createObjectStore(BIOS, { keyPath: "key" }).createIndex("system", "system");
       }
     };
     req.onsuccess = () => res(req.result);
@@ -118,6 +116,9 @@ export interface PhotoRecord {
   addedAt: number;
   blob: Blob;
 }
+
+/** The library database, for sibling stores (bios.ts). */
+export const openDb = open;
 
 export async function addPhoto(rec: PhotoRecord): Promise<void> {
   const db = await open();
@@ -203,17 +204,10 @@ export async function removeGame(id: string): Promise<void> {
   });
 }
 
-export const CORES: Record<string, string> = {
-  gba: "gba", gb: "gb", gbc: "gb",
-  nes: "nes", fds: "nes",
-  sfc: "snes", smc: "snes",
-  md: "segaMD", gen: "segaMD", bin: "segaMD",
-  n64: "n64", z64: "n64", v64: "n64",
-  nds: "nds",
-};
+/** extension → system for every unambiguous cartridge/disk format (derived from the registry) */
+export const CORES: Record<string, string> = Object.fromEntries(
+  Object.values(SYSTEMS).flatMap((s) => s.exts.map((e) => [e, s.id] as const)),
+);
 
-export const CORE_NAMES: Record<string, string> = {
-  gba: "Game Boy Advance", gb: "Game Boy / Color", nes: "NES",
-  snes: "Super Nintendo", segaMD: "Mega Drive", n64: "Nintendo 64", nds: "Nintendo DS",
-  psp: "PlayStation Portable", psx: "PlayStation",
-};
+/** system id → player-facing name (derived from the registry) */
+export const CORE_NAMES: Record<string, string> = Object.fromEntries(Object.values(SYSTEMS).map((s) => [s.id, s.name]));

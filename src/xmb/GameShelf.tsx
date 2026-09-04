@@ -4,6 +4,8 @@
 // link-from-disk are the action buttons up top. Games come from your own local
 // files only — nothing is fetched from the internet.
 import { For, Show, createEffect, createSignal, onCleanup, onMount } from "solid-js";
+import SystemsSheet from "./SystemsSheet";
+import { SYSTEMS } from "../systems";
 import { CORE_NAMES, coverCandidates, fsAccessSupported, isLinked, relinkGame, removeGame, saveCover, type GameRecord, type GameSystem } from "../gamesdb";
 import type { NavAction } from "../input";
 import { generateCover } from "../covers";
@@ -160,6 +162,7 @@ export default function GameShelf(props: {
               <div class="hz-acts">
                 <button class="hz-btn pri" onClick={addGame}><span class="g">✕</span> Add a game</button>
                 {props.extra?.()}
+                <SystemsSheet systems={props.systems} />
               </div>
             </div>
           }
@@ -171,10 +174,12 @@ export default function GameShelf(props: {
               <span>{sysLabel(cur()!.sys ?? cur()!.core)}</span>
               <Show when={mb(cur()!.size)}><span class="d" /><span>{mb(cur()!.size)}</span></Show>
               <span class="d" /><span>{badge(cur()!).toLowerCase()}</span>
+              <Show when={SYSTEMS[cur()!.sys ?? cur()!.core]?.fit?.note}><span class="d" /><span class="hz-fitnote">{SYSTEMS[cur()!.sys ?? cur()!.core]!.fit!.note}</span></Show>
             </div>
             <div class="hz-acts">
               <button class="hz-btn" onClick={addGame}><span class="g">△</span> Add a game</button>
               {props.extra?.()}
+              <SystemsSheet systems={props.systems} />
             </div>
           </div>
         </Show>

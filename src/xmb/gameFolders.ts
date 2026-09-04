@@ -26,6 +26,8 @@ export const GAME_TOP: GameTopEntry[] = [
   { kind: "folder", id: "playstation", title: "PlayStation", icon: "disc", blurb: "PlayStation · PlayStation 2 · PSP", items: ["ps2", "ps1", "psp"] },
   { kind: "item", id: "nintendo" },
   { kind: "item", id: "sega" },
+  { kind: "item", id: "consoles" },
+  { kind: "item", id: "computers" },
   { kind: "folder", id: "pc", title: "PC Games", icon: "monitor", blurb: "DOOM · DOOM RTX · Counter-Strike · point & click", items: ["doom", "doomrtx", "cs", "scummvm"] },
   { kind: "folder", id: "makers", title: "Game Makers & Web", icon: "cube", blurb: "RPG Maker · Ren'Py · Godot · Unity · HTML5 · Flash", items: ["rpgmaker", "renpy", "godot", "unity", "html5", "flash"] },
   { kind: "folder", id: "together", title: "Play Together", icon: "users", blurb: "Party · board games · netplay · Console TV · Lichess TV", items: ["party", "board", "retrojoin", "consoletv", "lichesstv"] },

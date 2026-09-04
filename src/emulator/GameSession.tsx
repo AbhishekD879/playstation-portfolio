@@ -7,6 +7,8 @@ import { bumpPlays, isLinked, resolveGameFile, type GameRecord } from "../gamesd
 import { setNavEnabled } from "../input";
 import { holdWakeLock } from "../wakelock";
 import { EJS_CONFIG, PSP_CONFIG, setBridgePaused, setPrimaryIndex, startBridge, stopBridge } from "../gamepadBridge";
+import { biosZipFor } from "../bios";
+import { SYSTEMS } from "../systems";
 import { startHost, type HostHandle } from "../ps2mp/webrtc";
 import { newPartyCode } from "../party/net";
 import { ejsCanvas, ejsSimulateInput, makeRetroInjector, type RetroInjector } from "../retromp";
@@ -17,6 +19,7 @@ declare global {
   interface Window {
     EJS_player?: string;
     EJS_core?: string;
+    EJS_biosUrl?: string | File;
     EJS_gameUrl?: string;
     EJS_gameName?: string;
     EJS_pathtodata?: string;
@@ -189,8 +192,13 @@ export default function GameSession(props: { game: GameRecord; profileId: string
     bumpPlays(props.game.id);
 
     const blobUrl = URL.createObjectURL(file);
+    // firmware the player supplied for this system, as one zip (see bios.ts);
+    // EmulatorJS unpacks it beside the ROM with each file's real name
+    const bios = await biosZipFor(props.game.core).catch(() => null);
     window.EJS_player = "#ejs-mount";
-    window.EJS_core = props.game.core;
+    // the registry knows when the CDN alias differs from our id (ZX Spectrum → fuse)
+    window.EJS_core = SYSTEMS[props.game.core]?.ejsCore ?? props.game.core;
+    if (bios) window.EJS_biosUrl = bios;
     // PSP (PPSSPP) needs SharedArrayBuffer threads — we ship COOP/COEP so the
     // top document is cross-origin isolated. Harmless/unused for lighter cores.
     window.EJS_threads = props.game.core === "psp";

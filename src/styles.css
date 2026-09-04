@@ -5185,6 +5185,29 @@ body.party-col .share-btn { right: calc(var(--pty-w) + clamp(12px, 2vw, 22px)); 
 .hz-sheet-close { flex: none; margin-top: clamp(6px, 0.8cqw, 12px); }
 .hz-sheet-scrim { position: absolute; inset: 0; bottom: var(--hz-cc-h); z-index: 6; background: rgba(2,4,10,0.35); }
 @media (prefers-reduced-motion: reduce) { .hz-sheet, .hz-sheet[hidden] { transition: none; } }
+/* Systems & BIOS sheet — one block per system: name, fit, firmware pocket */
+.hz-sys { padding: clamp(10px, 1.15cqw, 16px) clamp(10px, 1.1cqw, 15px); border-radius: 10px; display: grid; gap: 6px; }
+.hz-sys + .hz-sys { border-top: 1px solid rgba(255,255,255,0.06); }
+.hz-sys-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.hz-sys .t { font-size: clamp(13px, 1.3cqw, 17px); line-height: 1.35; }
+.hz-sys .s { font-size: clamp(10px, 0.95cqw, 12.5px); color: var(--faint2); line-height: 1.45; }
+.hz-fit { flex: none; font-size: clamp(9px, 0.85cqw, 11px); letter-spacing: 0.08em; text-transform: uppercase; padding: 3px 8px; border-radius: 4px; }
+.hz-fit.ready { color: #7fd8a5; background: rgba(127,216,165,0.12); }
+.hz-fit.caution { color: #e2b95e; background: rgba(226,185,94,0.12); }
+.hz-fit.no { color: #e88a82; background: rgba(232,138,130,0.14); }
+.hz-fit.none { color: var(--faint2); background: rgba(255,255,255,0.06); }
+.hz-bios { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px; margin-top: 2px; }
+.hz-bios > .s { flex: 1 1 100%; }
+.hz-mini { font: inherit; font-size: clamp(10px, 0.95cqw, 12.5px); padding: 5px 10px; border-radius: 999px; cursor: pointer; border: 0; color: var(--text); background: var(--glass); box-shadow: inset 0 0 0 1px var(--glassline); }
+.hz-mini:hover, .hz-mini:focus-visible { background: rgba(158,190,235,0.18); outline: none; }
+.hz-mini.warn { color: #e88a82; }
+.hz-bios-file { display: inline-flex; align-items: center; gap: 8px; font-size: 12px; }
+.hz-bios-file code { font-family: ui-monospace, Menlo, monospace; font-size: 11.5px; }
+.hz-fitnote { color: #e2b95e; }
+/* "which system is this disc for?" — asked only when a shelf has more than one answer */
+.choose-sys { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+.choose-sys button { font: inherit; font-size: 14px; padding: 9px 16px; border-radius: 999px; cursor: pointer; border: 1px solid rgba(255,255,255,0.22); color: #fff; background: rgba(255,255,255,0.08); }
+.choose-sys button.on, .choose-sys button:hover, .choose-sys button:focus-visible { background: rgba(255,255,255,0.22); outline: none; }
 .hz-sheet h4 {
   font-size: clamp(9px, 1cqw, 13px); letter-spacing: 0.28em; text-transform: uppercase;
   color: var(--tint2); margin: 0 0 clamp(10px, 1.4cqw, 20px); font-weight: 400;

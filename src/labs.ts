@@ -348,7 +348,7 @@ export const LAB_GUIDES: Record<string, LabGuide> = { ...APP_GUIDES, ...FEATURE_
 // Light features carry no entry and never warn. Anything listed here gets a
 // ✓/⚠/✕ fitness badge in Labs, a spec readout on its guide card, and — for
 // ⚠/✕ — a "press again to enable anyway" guard. Nothing is ever locked.
-interface SpecReq {
+export interface SpecReq {
   webgpu?: "required" | "boost"; // hard need vs "CPU fallback will be slow"
   isolation?: boolean;           // needs crossOriginIsolated (SharedArrayBuffer)
   desktop?: "required" | "recommended";
@@ -387,6 +387,12 @@ export interface Suitability { level: FitLevel; notes: string[]; rec: string }
 export function rateFeature(id: string): Suitability | null {
   const s = FEATURE_SPECS[id];
   if (!s) return null;
+  return rateSpec(s);
+}
+
+/** Rate any requirement set against this device — apps and emulated systems
+ *  (systems.ts) share one vocabulary and therefore one set of honest notes. */
+export function rateSpec(s: SpecReq): Suitability {
   const notes: string[] = [];
   let level: FitLevel = "ready";
   const caution = (t: string) => { notes.push(t); if (level !== "no") level = "caution"; };

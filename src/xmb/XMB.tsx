@@ -3,7 +3,7 @@
 import { For, Show, createEffect, createMemo, createSignal, onCleanup, onMount } from "solid-js";
 import { CAREER, CATEGORIES, PROJECTS, TROPHIES, type XmbItem } from "../content";
 import { AVATARS, PLATINUM, award, resizePhoto, updateProfile, type Profile } from "../profiles";
-import { CORES, PS2_EXTS, PSP_ONLY_EXTS, PSX_ONLY_EXTS, addGame, listGames, addPhoto, listPhotos, fsAccessSupported, type GameRecord, type PhotoRecord } from "../gamesdb";
+import { addGame, listGames, addPhoto, listPhotos, fsAccessSupported, type GameRecord, type PhotoRecord } from "../gamesdb";
 import { BG_MODES, THEMES, applyCustomHsl, applyTheme, bgMode, currentThemeIndex, loadCustomHsl, setBgMode, setUpscale, upscale, frameGen, setFrameGen } from "../theme";
 import { UPSCALE_MODES, upscaleSupported } from "../upscale";
 import { LAB_FLAT, LAB_GROUPS, LAB_GUIDES, labEnabled, rateFeature, toggleLab } from "../labs";
@@ -18,6 +18,7 @@ import { startPresence, visitorCount } from "../p2p";
 import { iconOf } from "../prefs";
 import { ROUTE_APPS, appRouteHash, parseRouteHash } from "./routes";
 import { GAME_TOP, HIDDEN_GAME_ITEMS, folderOf, type GameFolder } from "./gameFolders";
+import { ALL_EXTS, SYSTEMS, classifyFile, systemsOf } from "../systems";
 import { tr } from "../translate";
 import { startTabSync } from "../sync";
 import { fluidNavPulse } from "./FluidBg";
@@ -231,7 +232,7 @@ export default function XMB(props: {
   const [vListening, setVListening] = createSignal(false); // XMB voice command
   const [padTest, setPadTest] = createSignal(false);
   const [splatFile, setSplatFile] = createSignal<File | null>(null);
-  const [app, setAppRaw] = createSignal<null | "doom" | "doomrtx" | "worlddrive" | "chess" | "trivia" | "flash" | "cinema" | "podcasts" | "library" | "map" | "ai" | "webamp" | "youtube" | "timemachine" | "art" | "wiki" | "lichess" | "ps2" | "pc" | "guestbook" | "browser" | "visualizer" | "studio" | "code" | "manual" | "ps2home" | "ps1home" | "psphome" | "retrohome" | "nintendohome" | "segahome" | "scummvm" | "karaoke" | "strudel" | "settingshub" | "videoplayer" | "reporewind" | "rpgmaker" | "renpy" | "godot" | "unity" | "html5" | "privacy" | "watch" | "syscity" | "cs" | "party" | "retrojoin" | "board" | "voiceavatar" | "consoletv" | "analytics">(null);
+  const [app, setAppRaw] = createSignal<null | "doom" | "doomrtx" | "worlddrive" | "chess" | "trivia" | "flash" | "cinema" | "podcasts" | "library" | "map" | "ai" | "webamp" | "youtube" | "timemachine" | "art" | "wiki" | "lichess" | "ps2" | "pc" | "guestbook" | "browser" | "visualizer" | "studio" | "code" | "manual" | "ps2home" | "ps1home" | "psphome" | "retrohome" | "nintendohome" | "segahome" | "consoleshome" | "computershome" | "scummvm" | "karaoke" | "strudel" | "settingshub" | "videoplayer" | "reporewind" | "rpgmaker" | "renpy" | "godot" | "unity" | "html5" | "privacy" | "watch" | "syscity" | "cs" | "party" | "retrojoin" | "board" | "voiceavatar" | "consoletv" | "analytics">(null);
 
   // Opening/closing an app goes through the native View Transitions API (now
   // Baseline for same-document), so the console cross-fades like real system
@@ -343,8 +344,10 @@ export default function XMB(props: {
   const [html5Count, setHtml5Count] = createSignal(0);
   // Platform shelves: which library systems each home shows. RETRO_SYSTEMS (the
   // old all-in-one shelf) stays so #/app/retrohome keeps working.
-  const NINTENDO_SYSTEMS = ["nes", "snes", "n64", "gb", "gba", "nds"] as const;
-  const SEGA_SYSTEMS = ["segaMD"] as const;
+  const NINTENDO_SYSTEMS = systemsOf("nintendo");
+  const SEGA_SYSTEMS = systemsOf("sega");
+  const CONSOLE_SYSTEMS = systemsOf("consoles");
+  const COMPUTER_SYSTEMS = systemsOf("computers");
   const shelfCount = (systems: readonly string[]) => games().filter((g) => !g.sys && systems.includes(g.core)).length;
 
   const gameItems = createMemo<XmbItem[]>(() => [
@@ -360,8 +363,10 @@ export default function XMB(props: {
     // "retro" is the old every-system shelf. It keeps its route (#/app/retrohome)
     // but the column now shows the two platform shelves below instead.
     { id: "retro", title: "Retro Games", sub: `NES · SNES · GBA · N64 & more — library + downloads${retroCount() ? ` · ${retroCount()} in your shelf` : ""}`, icon: "gamepad", action: { type: "retro-home" } },
-    { id: "nintendo", title: "Nintendo", sub: `NES · Super Nintendo · Nintendo 64 · Game Boy · GBA · DS${shelfCount(NINTENDO_SYSTEMS) ? ` · ${shelfCount(NINTENDO_SYSTEMS)} in your shelf` : ""}`, icon: "gamepad", action: { type: "shelf", id: "nintendohome" } },
-    { id: "sega", title: "Sega", sub: `Mega Drive / Genesis${shelfCount(SEGA_SYSTEMS) ? ` · ${shelfCount(SEGA_SYSTEMS)} in your shelf` : ""}`, icon: "gamepad", action: { type: "shelf", id: "segahome" } },
+    { id: "nintendo", title: "Nintendo", sub: `NES · Super Nintendo · Nintendo 64 · Game Boy · GBA · DS · Virtual Boy${shelfCount(NINTENDO_SYSTEMS) ? ` · ${shelfCount(NINTENDO_SYSTEMS)} in your shelf` : ""}`, icon: "gamepad", action: { type: "shelf", id: "nintendohome" } },
+    { id: "sega", title: "Sega", sub: `Mega Drive · Master System · Game Gear · Sega CD · 32X · Saturn${shelfCount(SEGA_SYSTEMS) ? ` · ${shelfCount(SEGA_SYSTEMS)} in your shelf` : ""}`, icon: "gamepad", action: { type: "shelf", id: "segahome" } },
+    { id: "consoles", title: "More Consoles", sub: `PC Engine · Neo Geo Pocket · WonderSwan · Atari · 3DO · ColecoVision & more${shelfCount(CONSOLE_SYSTEMS) ? ` · ${shelfCount(CONSOLE_SYSTEMS)} in your shelf` : ""}`, icon: "handheld", action: { type: "shelf", id: "consoleshome" } },
+    { id: "computers", title: "Computers", sub: `Amiga · Commodore 64 · ZX Spectrum · Amstrad CPC${shelfCount(COMPUTER_SYSTEMS) ? ` · ${shelfCount(COMPUTER_SYSTEMS)} in your shelf` : ""}`, icon: "monitor", action: { type: "shelf", id: "computershome" } },
     { id: "cs", title: "Counter-Strike 1.6", sub: "The classic FPS in your browser — bring your files · bots & online with friends", icon: "gamepad", action: { type: "cs" as const } },
     { id: "retrojoin", title: "Join a Retro Game", sub: "Player two for a friend's NES/SNES game — they stream it, you just play", icon: "gamepad", action: { type: "retrojoin" as const } },
     { id: "consoletv", title: "Console TV", sub: "Watch whatever is being played on this console right now — no controller needed", icon: "broadcast", action: { type: "consoletv" as const } },
@@ -1232,40 +1237,39 @@ export default function XMB(props: {
     }
   }
 
-  // classify any ROM/disc by extension → {sys:"ps2"} / PSP / a retro core.
-  // .iso/.cso are shared by PS2 and PSP, so the home you're adding from decides
-  // (prefer): PS2 home → ps2, PSP home → psp.
-  function classify(name: string, prefer?: "ps2" | "psp" | "psx"): { sys?: "ps2"; core: string } | null {
-    const ext = name.split(".").pop()?.toLowerCase() ?? "";
-    if (ext === "pbp") return prefer === "psx" ? { core: "psx" } : { core: "psp" }; // PBP: PSP eboot or PS1 disc
-    if (PSP_ONLY_EXTS.includes(ext)) return { core: "psp" };
-    if (PSX_ONLY_EXTS.includes(ext)) return { core: "psx" };
-    if (["iso", "cso"].includes(ext)) return prefer === "psp" ? { core: "psp" } : { sys: "ps2", core: "ps2" };
-    if (ext === "chd") return prefer === "psx" ? { core: "psx" } : { sys: "ps2", core: "ps2" }; // CHD: PS2 or PS1
-    if (PS2_EXTS.includes(ext)) return { sys: "ps2", core: "ps2" }; // isz — PS2 only
-    if (ext === "img") return prefer === "psx" ? { core: "psx" } : null; // raw track, PS1-home only
-    const core = CORES[ext];
-    return core ? { core } : null;
+  // Which system a file is for comes from the registry (systems.ts). A shelf
+  // passes the systems it shows; when more than one of them takes the format
+  // (.cue on the Sega shelf: Saturn or Sega CD) the console asks instead of
+  // guessing — that is the one thing a file name cannot tell us.
+  const [chooser, setChooser] = createSignal<{ name: string; choices: string[]; idx: number; resolve: (id: string | null) => void } | null>(null);
+  const askSystem = (name: string, choices: string[]) =>
+    new Promise<string | null>((resolve) => { sfx.tickH(); setChooser({ name, choices, idx: 0, resolve }); });
+  const answerChooser = (id: string | null) => { const c = chooser(); if (!c) return; setChooser(null); c.resolve(id); };
+  async function classify(name: string, candidates?: readonly string[]): Promise<{ sys?: "ps2"; core: string } | null> {
+    const c = classifyFile(name, candidates);
+    if (!c) return null;
+    if ("choose" in c) { const id = await askSystem(name, c.choose); return id ? (id === "ps2" ? { sys: "ps2", core: "ps2" } : { core: id }) : null; }
+    return c;
   }
 
   // which system a "bring your own" file should be tagged as, set by the home
   // that opened the picker (consumed by onDisc, which the file input calls)
-  let insertPrefer: "ps2" | "psp" | "psx" | undefined;
+  let insertPrefer: readonly string[] | undefined;
 
   // "Link Games from Disk…" — Chromium File System Access. Stores only handles;
   // the games stream from the user's own drive, PS2/PSP ISOs included (zero-copy).
-  async function onLink(prefer?: "ps2" | "psp" | "psx") {
+  async function onLink(prefer?: readonly string[]) {
     if (!fsAccessSupported()) { sfx.deny(); pushToast("Not supported", "Linking needs Chrome or Edge — use Insert Cartridge to copy instead"); return; }
     let handles: FileSystemFileHandle[];
     try {
       handles = await (window as any).showOpenFilePicker({
         multiple: true,
-        types: [{ description: "Game discs & ROMs", accept: { "application/octet-stream": [".iso", ".cso", ".chd", ".isz", ".pbp", ".img", ".cue", ".ccd", ".m3u", ".gba", ".gb", ".gbc", ".nes", ".fds", ".sfc", ".smc", ".md", ".gen", ".n64", ".z64", ".v64", ".nds"] } }],
+        types: [{ description: "Game discs & ROMs", accept: { "application/octet-stream": ALL_EXTS().map((e) => `.${e}`) } }],
       });
     } catch { return; } // picker dismissed
     let added = 0, skipped = 0;
     for (const h of handles) {
-      const cls = classify(h.name, prefer);
+      const cls = await classify(h.name, prefer);
       if (!cls) { skipped++; continue; }
       const f = await h.getFile();
       await addGame({
@@ -1283,8 +1287,9 @@ export default function XMB(props: {
   }
 
   async function onDisc(file: File) {
-    const cls = classify(file.name, insertPrefer);
+    const prefer = insertPrefer;
     insertPrefer = undefined; // consume the one-shot home context
+    const cls = await classify(file.name, prefer);
     if (!cls) {
       sfx.deny();
       pushToast("Unreadable disc", `.${file.name.split(".").pop()} isn't a supported format`);
@@ -1640,7 +1645,7 @@ export default function XMB(props: {
     if (padTest()) { if (action === "back") setPadTest(false); return; }
     if (app()) {
       // bound apps route their own nav; the rest are keyboard-driven owner apps
-      if (["chess", "trivia", "flash", "cinema", "podcasts", "library", "youtube", "art", "wiki", "ps2home", "ps1home", "psphome", "retrohome", "nintendohome", "segahome", "karaoke", "settingshub", "videoplayer", "reporewind", "rpgmaker", "renpy", "godot", "unity", "html5", "syscity", "worlddrive"].includes(app()!)) appNav?.(action);
+      if (["chess", "trivia", "flash", "cinema", "podcasts", "library", "youtube", "art", "wiki", "ps2home", "ps1home", "psphome", "retrohome", "nintendohome", "segahome", "consoleshome", "computershome", "karaoke", "settingshub", "videoplayer", "reporewind", "rpgmaker", "renpy", "godot", "unity", "html5", "syscity", "worlddrive"].includes(app()!)) appNav?.(action);
       else if (app() === "lichess" && action === "back") { sfx.back(); setApp(null); }
       else if (src === "pad" || src === "gesture") {
         // owner apps (map/globe, lichess…) listen to the KEYBOARD — turn pad
@@ -1817,6 +1822,14 @@ export default function XMB(props: {
       if (action === "back" || action === "confirm") { sfx.back(); setPanel(null); }
       return;
     }
+    if (chooser()) {
+      const c = chooser()!;
+      if (action === "back") { sfx.back(); answerChooser(null); }
+      else if (action === "confirm") { sfx.confirm(); answerChooser(c.choices[c.idx]); }
+      else if (action === "left" || action === "up") { setChooser({ ...c, idx: (c.idx + c.choices.length - 1) % c.choices.length }); sfx.tickH(); }
+      else if (action === "right" || action === "down") { setChooser({ ...c, idx: (c.idx + 1) % c.choices.length }); sfx.tickH(); }
+      return;
+    }
     const items = itemsOf(cat());
     switch (action) {
       case "left": {
@@ -1968,7 +1981,7 @@ export default function XMB(props: {
   // Horizon shelves are entirely tappable — tiles, hero actions and the Control
   // Center are all real buttons — so a virtual d-pad adds nothing, and its face
   // buttons land squarely on top of the Control Center bar on a phone.
-  const TAP_NATIVE = new Set(["ps2home", "ps1home", "psphome", "retrohome", "nintendohome", "segahome"]);
+  const TAP_NATIVE = new Set(["ps2home", "ps1home", "psphome", "retrohome", "nintendohome", "segahome", "consoleshome", "computershome"]);
   // show the on-screen controller once you're INSIDE something (an app/panel) —
   // that's where back/select/move-focus are needed; the bare crossbar is swipe+tap.
   const touchNavHidden = () =>
@@ -2139,6 +2152,24 @@ export default function XMB(props: {
             <For each={panel()!.body}>{(b) => <p>{b}</p>}</For>
           </div>
           <div class="panel-hint"><span class="btn-o" /> Back</div>
+        </div>
+      </Show>
+
+      {/* which system is this disc for? — only when the shelf has more than one answer */}
+      <Show when={chooser()}>
+        <div class="panel-backdrop" onClick={() => answerChooser(null)} />
+        <div class="panel" role="dialog" aria-label="Which system is this for?">
+          <div class="panel-tag">Which system is this for?</div>
+          <div class="panel-heading">{chooser()!.name}</div>
+          <div class="panel-body">
+            <p>Several systems on this shelf use this disc format. Pick the one the game was made for.</p>
+            <div class="choose-sys">
+              <For each={chooser()!.choices}>{(id, i) => (
+                <button classList={{ on: chooser()!.idx === i() }} onClick={() => { sfx.confirm(); answerChooser(id); }}>{SYSTEMS[id]?.name ?? id}</button>
+              )}</For>
+            </div>
+          </div>
+          <div class="panel-hint"><span class="btn-x" /> choose · <span class="btn-o" /> cancel</div>
         </div>
       </Show>
 
@@ -2378,8 +2409,8 @@ export default function XMB(props: {
           owned={games()}
           title="PLAYSTATION 2 — YOUR LIBRARY & DOWNLOADS"
           onPlay={playRecord}
-          onInsert={() => { insertPrefer = "ps2"; fileInput.click(); }}
-          onLink={() => onLink("ps2")}
+          onInsert={() => { insertPrefer = ["ps2"]; fileInput.click(); }}
+          onLink={() => onLink(["ps2"])}
           onChanged={refreshGames}
           onClose={() => setApp(null)}
           extra={() => (
@@ -2418,7 +2449,7 @@ export default function XMB(props: {
             if (!g) return;
             sfx.confirm(); setPs2Lobby(false); setPs2AutoHost(true); playRecord(g);
           }}
-          onInsert={() => { sfx.confirm(); setPs2Lobby(false); setPs2AutoHost(true); insertPrefer = "ps2"; fileInput.click(); }}
+          onInsert={() => { sfx.confirm(); setPs2Lobby(false); setPs2AutoHost(true); insertPrefer = ["ps2"]; fileInput.click(); }}
           onJoin={(code, title) => { sfx.confirm(); setPs2Lobby(false); setPs2AutoHost(false); setPs2Boot(null); setPs2JoinTitle(title); setPs2Join(code); setApp("ps2"); }}
         />
       </Show>
@@ -2430,8 +2461,8 @@ export default function XMB(props: {
           owned={games()}
           title="PLAYSTATION — YOUR PS1 LIBRARY"
           onPlay={playRecord}
-          onInsert={() => { insertPrefer = "psx"; fileInput.click(); }}
-          onLink={() => onLink("psx")}
+          onInsert={() => { insertPrefer = ["psx"]; fileInput.click(); }}
+          onLink={() => onLink(["psx"])}
           onChanged={refreshGames}
           onClose={() => setApp(null)}
         />
@@ -2444,8 +2475,8 @@ export default function XMB(props: {
           owned={games()}
           title="PLAYSTATION PORTABLE — YOUR LIBRARY & DOWNLOADS"
           onPlay={playRecord}
-          onInsert={() => { insertPrefer = "psp"; fileInput.click(); }}
-          onLink={() => onLink("psp")}
+          onInsert={() => { insertPrefer = ["psp"]; fileInput.click(); }}
+          onLink={() => onLink(["psp"])}
           onChanged={refreshGames}
           onClose={() => setApp(null)}
         />
@@ -2458,8 +2489,8 @@ export default function XMB(props: {
           owned={games()}
           title="RETRO GAMES — YOUR LIBRARY & DOWNLOADS"
           onPlay={playRecord}
-          onInsert={() => fileInput.click()}
-          onLink={onLink}
+          onInsert={() => { insertPrefer = RETRO_SYSTEMS; fileInput.click(); }}
+          onLink={() => onLink(RETRO_SYSTEMS)}
           onChanged={refreshGames}
           onClose={() => setApp(null)}
         />
@@ -2467,13 +2498,23 @@ export default function XMB(props: {
       {/* platform shelves — one GameShelf per family, same behaviour as the old
           all-in-one retro shelf, just filtered to that family's systems */}
       <Show when={app() === "nintendohome"}>
-        <GameShelf bind={(f) => (appNav = f)} profileId={props.profile.id} systems={[...NINTENDO_SYSTEMS]} owned={games()}
-          title="NINTENDO — YOUR LIBRARY & DOWNLOADS" onPlay={playRecord} onInsert={() => fileInput.click()} onLink={onLink}
+        <GameShelf bind={(f) => (appNav = f)} profileId={props.profile.id} systems={NINTENDO_SYSTEMS} owned={games()}
+          title="NINTENDO — YOUR LIBRARY & DOWNLOADS" onPlay={playRecord} onInsert={() => { insertPrefer = NINTENDO_SYSTEMS; fileInput.click(); }} onLink={() => onLink(NINTENDO_SYSTEMS)}
           onChanged={refreshGames} onClose={() => setApp(null)} />
       </Show>
       <Show when={app() === "segahome"}>
-        <GameShelf bind={(f) => (appNav = f)} profileId={props.profile.id} systems={[...SEGA_SYSTEMS]} owned={games()}
-          title="SEGA — YOUR LIBRARY & DOWNLOADS" onPlay={playRecord} onInsert={() => fileInput.click()} onLink={onLink}
+        <GameShelf bind={(f) => (appNav = f)} profileId={props.profile.id} systems={SEGA_SYSTEMS} owned={games()}
+          title="SEGA — YOUR LIBRARY & DOWNLOADS" onPlay={playRecord} onInsert={() => { insertPrefer = SEGA_SYSTEMS; fileInput.click(); }} onLink={() => onLink(SEGA_SYSTEMS)}
+          onChanged={refreshGames} onClose={() => setApp(null)} />
+      </Show>
+      <Show when={app() === "consoleshome"}>
+        <GameShelf bind={(f) => (appNav = f)} profileId={props.profile.id} systems={CONSOLE_SYSTEMS} owned={games()}
+          title="MORE CONSOLES — YOUR LIBRARY & DOWNLOADS" onPlay={playRecord} onInsert={() => { insertPrefer = CONSOLE_SYSTEMS; fileInput.click(); }} onLink={() => onLink(CONSOLE_SYSTEMS)}
+          onChanged={refreshGames} onClose={() => setApp(null)} />
+      </Show>
+      <Show when={app() === "computershome"}>
+        <GameShelf bind={(f) => (appNav = f)} profileId={props.profile.id} systems={COMPUTER_SYSTEMS} owned={games()}
+          title="COMPUTERS — YOUR LIBRARY & DOWNLOADS" onPlay={playRecord} onInsert={() => { insertPrefer = COMPUTER_SYSTEMS; fileInput.click(); }} onLink={() => onLink(COMPUTER_SYSTEMS)}
           onChanged={refreshGames} onClose={() => setApp(null)} />
       </Show>
       <Show when={app() === "karaoke"}>
@@ -3082,7 +3123,7 @@ export default function XMB(props: {
         type="file"
         ref={fileInput}
         hidden
-        accept=".iso,.cso,.chd,.isz,.pbp,.gba,.gb,.gbc,.nes,.fds,.sfc,.smc,.md,.gen,.bin,.n64,.z64,.v64,.nds"
+        accept={ALL_EXTS().map((e) => `.${e}`).join(",")}
         onChange={(e) => {
           const f = e.currentTarget.files?.[0];
           e.currentTarget.value = "";

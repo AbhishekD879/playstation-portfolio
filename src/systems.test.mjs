@@ -1,0 +1,59 @@
+// The registry is the one place a system is described. These checks keep it
+// honest: no extension claimed by two systems unless it is declared shared, every
+// cover repo is a real libretro-thumbnails repo, and the classifier keeps the
+// behaviour the file picker has always had while learning to ask when it must.
+import assert from "node:assert/strict";
+const { SYSTEMS, SHARED_EXTS, ALL_EXTS, classifyFile, biosStatus, systemsOf } = await import("./systems.ts");
+
+// verified against api.github.com/orgs/libretro-thumbnails/repos on 2026-09-04
+const REPOS = new Set(["Sony_-_PlayStation_2", "Sony_-_PlayStation", "Sony_-_PlayStation_Portable", "Nintendo_-_Nintendo_Entertainment_System",
+  "Nintendo_-_Super_Nintendo_Entertainment_System", "Nintendo_-_Nintendo_64", "Nintendo_-_Game_Boy", "Nintendo_-_Game_Boy_Color", "Nintendo_-_Game_Boy_Advance",
+  "Nintendo_-_Nintendo_DS", "Nintendo_-_Virtual_Boy", "Sega_-_Mega_Drive_-_Genesis", "Sega_-_Master_System_-_Mark_III", "Sega_-_Game_Gear", "Sega_-_32X",
+  "Sega_-_Mega-CD_-_Sega_CD", "Sega_-_Saturn", "NEC_-_PC_Engine_-_TurboGrafx_16", "NEC_-_PC_Engine_CD_-_TurboGrafx-CD", "NEC_-_PC_Engine_SuperGrafx", "NEC_-_PC-FX",
+  "SNK_-_Neo_Geo_Pocket_Color", "SNK_-_Neo_Geo_Pocket", "Bandai_-_WonderSwan_Color", "Bandai_-_WonderSwan", "Atari_-_Lynx", "Atari_-_2600", "Atari_-_5200", "Atari_-_7800",
+  "Atari_-_Jaguar", "The_3DO_Company_-_3DO", "Coleco_-_ColecoVision", "Commodore_-_Amiga", "Commodore_-_64", "Sinclair_-_ZX_Spectrum", "Amstrad_-_CPC"]);
+
+const owner = new Map();
+for (const [id, s] of Object.entries(SYSTEMS)) {
+  assert.equal(s.id, id, `${id}: key and id agree`);
+  assert.ok(s.name && s.family && s.engine && s.thumbs.length, `${id}: complete`);
+  for (const r of s.thumbs) assert.ok(REPOS.has(r), `${id}: unknown thumbnail repo ${r}`);
+  for (const e of s.exts) {
+    assert.ok(!owner.has(e), `.${e} claimed by both ${owner.get(e)} and ${id} — declare it in SHARED_EXTS instead`);
+    assert.ok(!SHARED_EXTS[e], `.${e} is shared and cannot also be owned by ${id}`);
+    owner.set(e, id);
+  }
+  if (s.bios) assert.ok(s.bios.files.length && s.bios.note, `${id}: BIOS spec needs files and a note`);
+}
+for (const [e, ids] of Object.entries(SHARED_EXTS)) for (const id of ids) assert.ok(SYSTEMS[id], `.${e}: unknown system ${id}`);
+assert.ok(ALL_EXTS().includes("iso") && ALL_EXTS().includes("sms") && ALL_EXTS().includes("img"));
+
+// the picker has always behaved like this — keep it so
+assert.deepEqual(classifyFile("game.gba"), { core: "gba" });
+assert.deepEqual(classifyFile("Game.ISO"), { sys: "ps2", core: "ps2" }, ".iso with no context is PS2");
+assert.deepEqual(classifyFile("game.iso", ["psp"]), { core: "psp" }, "from the PSP home .iso is PSP");
+assert.deepEqual(classifyFile("game.chd", ["psx"]), { core: "psx" }, "from the PS1 home .chd is PS1");
+assert.deepEqual(classifyFile("game.chd"), { sys: "ps2", core: "ps2" });
+assert.deepEqual(classifyFile("game.pbp", ["psx"]), { core: "psx" });
+assert.deepEqual(classifyFile("game.pbp"), { core: "psp" });
+assert.deepEqual(classifyFile("game.bin"), { core: "segaMD" }, ".bin defaults to Mega Drive");
+assert.deepEqual(classifyFile("track.img"), null, ".img only from the PS1 home");
+assert.deepEqual(classifyFile("track.img", ["psx"]), { core: "psx" });
+assert.deepEqual(classifyFile("what.zip"), null, "zip is not a game yet (arcade comes later)");
+// the new shelves
+assert.deepEqual(classifyFile("sonic.sms"), { core: "segaMS" });
+assert.deepEqual(classifyFile("game.a26"), { core: "atari2600" });
+assert.deepEqual(classifyFile("game.tzx"), { core: "zx" });
+assert.deepEqual(classifyFile("game.cue", ["segaMD", "segaMS", "segaGG", "segaCD", "sega32x", "segaSaturn"]), { choose: ["segaSaturn", "segaCD"] }, "a Sega shelf must ask which disc system");
+assert.deepEqual(classifyFile("game.cue", ["pce", "ngp", "ws"]), { core: "pce" }, "one disc system on the shelf — no question");
+assert.deepEqual(classifyFile("game.bin", ["segaMD", "sega32x"]), { core: "segaMD" });
+assert.deepEqual(classifyFile("game.gba", ["segaMD"]), { core: "gba" }, "an unambiguous file is itself wherever you add it");
+assert.deepEqual(classifyFile("game.tap", ["zx", "c64", "amiga", "cpc"]), { choose: ["zx", "c64"] });
+
+// BIOS bookkeeping
+assert.deepEqual(biosStatus(SYSTEMS.segaCD, ["BIOS_CD_U.BIN"]), { have: ["bios_CD_U.bin"], missing: ["bios_CD_E.bin", "bios_CD_J.bin"], ok: false }, "case-insensitive, all required");
+assert.equal(biosStatus(SYSTEMS["3do"], ["goldstar.bin"]).ok, true, "any one 3DO BIOS is enough");
+assert.equal(biosStatus(SYSTEMS.segaSaturn, []).ok, true, "optional BIOS never blocks");
+assert.equal(biosStatus(SYSTEMS.nes, []).ok, true);
+assert.ok(systemsOf("sega").includes("segaSaturn") && !systemsOf("sega").includes("nes"));
+console.log("systems registry ok");
