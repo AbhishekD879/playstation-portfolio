@@ -8,7 +8,7 @@
 // 4.2.3 has no alias), and it is what a library record stores in `core`. PS2 is
 // the exception — it boots Play!, not EmulatorJS — and keeps `sys: "ps2"`.
 
-export type Family = "sony" | "nintendo" | "sega" | "consoles" | "computers" | "arcade" | "mobile";
+export type Family = "sony" | "nintendo" | "sega" | "consoles" | "computers" | "arcade" | "mobile" | "fantasy";
 
 /** Device fit, in the same vocabulary as labs.ts rateFeature(). */
 export interface SystemFit {
@@ -32,7 +32,8 @@ export interface SystemDef {
   id: string;
   name: string;
   family: Family;
-  engine: "ejs" | "play" | "cloudpilot";
+  engine: "ejs" | "play" | "cloudpilot" | "frame";
+  frame?: string;          // engine "frame": the same-origin player page that takes the cart by postMessage
   ejsCore?: string;        // when EJS_core differs from id (fuse, cap32)
   thumbs: string[];        // libretro-thumbnails repos, most specific first
   exts: string[];          // extensions that mean this system and nothing else
@@ -112,6 +113,13 @@ export const SYSTEMS: Record<string, SystemDef> = {
     bios: { files: [], match: "rom", required: true, note: "Needs your Palm device's ROM file (.rom) — any m68k or OS5 device" },
     fit: { note: "Touch is the stylus — this one is at home on a phone" } },
 
+  // —— fantasy consoles ————————————————————————————————————————————————————
+  // Real runtimes with open cart formats; nothing to own, thousands of free carts.
+  tic80: { id: "tic80", name: "TIC-80", family: "fantasy", engine: "frame", frame: "/tic80/player.html", thumbs: [], exts: ["tic"],
+    fit: { note: "Keyboard or pad; touch controls appear on phones" } },
+  wasm4: { id: "wasm4", name: "WASM-4", family: "fantasy", engine: "frame", frame: "/wasm4/player.html", thumbs: [], exts: [],
+    fit: { note: "64 KB carts — runs on anything" } },
+
   // —— computers ———————————————————————————————————————————————————————————
   amiga: { id: "amiga", name: "Amiga", family: "computers", engine: "ejs", thumbs: ["Commodore_-_Amiga"], exts: ["adf", "adz", "dms", "hdf", "hdz", "lha"],
     bios: { files: ["kick34005.A500", "kick40068.A1200"], required: false, note: "Boots on the free AROS ROM; commercial games want a Kickstart" },
@@ -142,7 +150,7 @@ export const SHARED_EXTS: Record<string, string[]> = {
 /** Formats that are only accepted when a shelf asks for them: .img was always
  *  PS1-home only, and .zip is claimed by other apps (RPG Maker, Unity, HTML5) so
  *  it is an arcade ROM only when added from the Arcade shelf. */
-const CONTEXT_ONLY_EXTS: Record<string, string[]> = { img: ["psx"], zip: ["arcade", "mame"] };
+const CONTEXT_ONLY_EXTS: Record<string, string[]> = { img: ["psx"], zip: ["arcade", "mame"], wasm: ["wasm4"] };
 
 export const ext = (name: string) => name.split(".").pop()?.toLowerCase() ?? "";
 

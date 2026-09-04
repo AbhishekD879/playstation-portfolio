@@ -90,10 +90,19 @@ to the shelf). Verified without a device ROM: shelf, BIOS rule, no-ROM message,
 wasm loads from our origin, a fake ROM is rejected by Cloudpilot's own check.
 Needs a real m68k/OS5 ROM for a full boot.
 
-Next in order: Java ME (spike CheerpJ under COEP first), fantasy consoles
-(TIC-80, WASM-4 players self-hosted), Windows 9x on the existing v86 (attach
-a disk image as a File), Dreamcast (flycast-wasm as a self-hosted EmulatorJS
-core), then the shareware engines.
+Done: **Fantasy Consoles** (2026-09-04) — TIC-80 (official web build, MIT,
+`public/tic80/`) and WASM-4 (slim runtime, ISC, `public/wasm4/`) as `frame`
+engines: each is a same-origin player page that announces "ready" and takes the
+cart by postMessage (TIC-80: file into Emscripten FS + argv; WASM-4: z85 cart
+JSON block, disk prefix per cart). One generic `FramePlayer` component; shelf
+lives inside Game Makers & Web. Verified: a hand-built TIC-80 cart and WASM-4's
+Watris boot and paint; eject returns to the shelf.
+
+Next in order: Java ME (CheerpJ CDN answers with CORS + CORP, so it loads under
+our isolation; vendor freej2me-web under the RPG Maker service-worker scope and
+serve the JAR from OPFS), Windows 9x on the existing v86 (attach a disk image as
+a File), Dreamcast (flycast-wasm as a self-hosted EmulatorJS core), then the
+shareware engines.
 
 
 Palm OS (CloudpilotEmu embed), Java ME (j2me-player / CheerpJ CDN),
@@ -117,3 +126,4 @@ Jazz Jackrabbit 1 & 2, OpenLara, Duke Nukem II, TIC-80, WASM-4, Scratch.
 - 2026-09-04 · Phase 2: registry, BIOS pocket, Systems sheet, disc chooser, 20 new systems across four shelves; 14 cores smoke-booted.
 - 2026-09-04 · Arcade shelf (FBNeo + MAME 2003-Plus); Gridlee boots. Phase 2 complete — 22 new systems.
 - 2026-09-04 · Phase 3 begins: Palm OS via CloudpilotEmu (Mobile shelf).
+- 2026-09-04 · Fantasy Consoles shelf: TIC-80 + WASM-4 via a generic frame player.

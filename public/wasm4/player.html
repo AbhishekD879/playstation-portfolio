@@ -1,0 +1,52 @@
+<!doctype html>
+<!-- WASM-4 (aduros/wasm4, ISC) — the slim web runtime, self-hosted. The runtime
+     reads its cart from a JSON script block (the same shape `w4 bundle` writes:
+     z85-encoded bytes plus the size), so the parent posts the cart and we write
+     that block before loading the runtime. Same-origin iframe host. -->
+<html>
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=1, maximum-scale=1, user-scalable=no" />
+<link rel="stylesheet" href="/wasm4/wasm4.css" />
+<style>
+  html, body { margin: 0; height: 100%; background: #000; }
+  #boot { position: fixed; inset: 0; display: grid; place-items: center; color: #9fb8e0; font: 13px/1.6 monospace; letter-spacing: 0.3em; text-align: center; z-index: 1; }
+  #boot span { display: block; opacity: 0.55; letter-spacing: 0.12em; }
+</style>
+</head>
+<body>
+<div id="boot">WASM-4<span id="bootsub">waiting for the cart…</span></div>
+<script>
+  // z85, as in wasm4's own bundler (lib/utils/z85.js)
+  function z85(src) {
+    const E = "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ.-:+=^!/*?&<>()[]{}@%$#";
+    const size = src.length, extra = size % 4, padded = extra ? size + 4 - extra : size;
+    let out = "", n = 0, value = 0;
+    while (n < padded) {
+      value = value * 256 + (n < size ? src[n] : 0); n++;
+      if (n % 4 === 0) { let d = 85 * 85 * 85 * 85; while (d >= 1) { out += E[Math.floor(value / d) % 85]; d /= 85; } value = 0; }
+    }
+    return out;
+  }
+  const sub = (t) => (document.getElementById("bootsub").textContent = t);
+  addEventListener("message", (e) => {
+    if (e.source !== parent || !e.data || e.data.type !== "cart") return;
+    const bytes = new Uint8Array(e.data.bytes);
+    sub("loading " + (e.data.name || "cart"));
+    const json = document.createElement("script");
+    json.id = "wasm4-cart-json"; json.type = "application/json";
+    json.textContent = JSON.stringify({ WASM4_CART: z85(bytes), WASM4_CART_SIZE: bytes.length });
+    document.body.appendChild(json);
+    // saves ("disk") are keyed by this prefix — one namespace per cart name
+    const disk = document.createElement("script");
+    disk.id = "wasm4-disk-prefix"; disk.type = "text/plain"; disk.textContent = (e.data.name || "cart").replace(/\.[^.]+$/, "");
+    document.head.appendChild(disk);
+    const s = document.createElement("script");
+    s.src = "/wasm4/wasm4.js";
+    s.onload = () => { document.body.appendChild(document.createElement("wasm4-app")); document.getElementById("boot").style.display = "none"; };
+    document.body.appendChild(s);
+  }, { once: true });
+  parent.postMessage({ type: "ready" }, location.origin);
+</script>
+</body>
+</html>
