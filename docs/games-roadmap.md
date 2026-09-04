@@ -34,7 +34,32 @@ keeps working but is not listed.
 Planned entries: Arcade (shelf), More Consoles (shelf), Computers (folder:
 shelf + x86 PC), Mobile (folder), fantasy consoles under Game Makers & Web.
 
-## Phase 2 — BIOS slot + EmulatorJS quick wins
+## Phase 2 — BIOS slot + EmulatorJS quick wins — done in this branch (arcade pending)
+
+Shipped: `src/systems.ts` registry (single source for names, formats, BIOS,
+device fit, cover repos; tested), `src/bios.ts` BIOS pocket (IndexedDB, one zip
+per system handed to EmulatorJS as `EJS_biosUrl`), the "Systems" sheet on every
+shelf (fit verdict per system in Labs' words, BIOS status, add/remove), the
+"which system is this disc for?" chooser for shared formats, and four shelves:
+Nintendo (+Virtual Boy), Sega (Mega Drive, Master System, Game Gear, Sega CD,
+32X, Saturn), More Consoles (PC Engine, PC-FX, Neo Geo Pocket, WonderSwan, Lynx,
+Atari 2600/5200/7800, Jaguar, 3DO, ColecoVision), Computers (Amiga, C64, ZX
+Spectrum, Amstrad CPC).
+
+Verified in headless Chrome through the console's own picker (2026-09-04):
+C64 runs a BASIC program; Atari 2600 paints a hand-assembled frame; Amiga boots
+AROS on a blank disk; ZX Spectrum boots from a .z80 snapshot; Master System,
+Game Gear, PC Engine, Neo Geo Pocket, WonderSwan, Virtual Boy, Atari 5200/7800,
+32X and Jaguar select their cores and run. BIOS round-trip: Sega CD flips to
+"BIOS ready" on the third file; a Master System boot received
+`segaMS-bios.zip`. Not verifiable without firmware or discs: Saturn, Sega CD,
+3DO, PC-FX, Lynx, ColecoVision boots (cores load; the sheet says what is missing).
+
+Still to do in this phase: Arcade (fbneo + mame2003_plus) per
+`docs/arcade-scope.md` — needs `EJS_dontExtractBIOS` for zipped BIOS and a
+per-game core choice.
+
+### Original plan
 
 The gate for nine systems. One OPFS-backed BIOS pocket per system on the
 shelf, passed to EmulatorJS as `EJS_biosUrl` (as a `File`, plus
@@ -72,3 +97,4 @@ Jazz Jackrabbit 1 & 2, OpenLara, Duke Nukem II, TIC-80, WASM-4, Scratch.
 ## Status log
 
 - 2026-09-04 · Phase 1 grouping implemented (folders, shelves, routes, tests).
+- 2026-09-04 · Phase 2: registry, BIOS pocket, Systems sheet, disc chooser, 20 new systems across four shelves; 14 cores smoke-booted.

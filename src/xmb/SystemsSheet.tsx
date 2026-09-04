@@ -10,9 +10,9 @@ import { addBios, listBios, removeBios, type BiosRecord } from "../bios";
 import { rateSpec, type Suitability } from "../labs";
 import { SYSTEMS, biosStatus, type SystemDef } from "../systems";
 
-const fitOf = (d: SystemDef): Suitability | null => {
-  const f = d.fit;
-  if (!f) return null;
+// every system gets a verdict — a light 8-bit core simply rates "runs here"
+const fitOf = (d: SystemDef): Suitability => {
+  const f = d.fit ?? {};
   return rateSpec({ cpuHeavy: f.cpuHeavy, desktop: f.desktop, isolation: f.threads, minMemGB: f.minMemGB });
 };
 const mb = (n: number) => (n >= 1048576 ? `${(n / 1048576).toFixed(1)} MB` : `${Math.max(1, Math.round(n / 1024))} KB`);
