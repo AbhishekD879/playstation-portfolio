@@ -7,11 +7,11 @@ import { For, Show, createEffect, createSignal, onCleanup, onMount } from "solid
 import SystemsSheet from "./SystemsSheet";
 import FreeGamesSheet from "./FreeGamesSheet";
 import { SYSTEMS } from "../systems";
-import { CORE_NAMES, coverCandidates, fsAccessSupported, isLinked, relinkGame, removeGame, saveCover, savesFor, type GameRecord, type GameSystem } from "../gamesdb";
+import { CORE_NAMES, coverCandidates, fsAccessSupported, isLinked, putSave, relinkGame, removeGame, saveCover, savesFor, savesOf, setGameCore, type GameRecord, type GameSystem } from "../gamesdb";
 import type { NavAction } from "../input";
 import { generateCover } from "../covers";
 import * as sfx from "../audio";
-import { ago, pickResume, type SaveRecord } from "../saves";
+import { ago, isSaveFile, packSaves, pickResume, unpackSaves, type SaveRecord } from "../saves";
 
 const mb = (n?: number) => (!n ? "" : n >= 1073741824 ? `${(n / 1073741824).toFixed(1)} GB` : `${(n / 1048576).toFixed(1)} MB`);
 const sysLabel = (s: string) => (s === "ps2" ? "PlayStation 2" : CORE_NAMES[s] ?? s);
@@ -41,6 +41,50 @@ export default function GameShelf(props: {
   const [saves, setSaves] = createSignal<Record<string, SaveRecord[]>>({});
   onMount(() => { void savesFor(props.profileId).then(setSaves).catch((e) => console.warn("saves", e)); });
   const resumeOf = (g: GameRecord) => pickResume(saves()[g.id] ?? []);
+  const reloadSaves = () => savesFor(props.profileId).then(setSaves).catch((e) => console.warn("saves", e));
+
+  // arcade romsets differ per core: the same zip may only start in one of them
+  const otherArcadeCore = (g: GameRecord) => (g.core === "arcade" ? "mame" : g.core === "mame" ? "arcade" : null);
+  async function switchCore() {
+    const g = cur()!; const to = otherArcadeCore(g);
+    if (!to) return;
+    await setGameCore(g.id, to);
+    sfx.confirm(); setNote(`${clean(g.name)} now runs with ${sysLabel(to)}`); closeOpts(); props.onChanged();
+  }
+
+  // saves travel as one small zip — export here, import on the other device
+  async function exportSaves() {
+    const g = cur()!;
+    const recs = await savesOf(g.id);
+    if (!recs.length) { sfx.deny(); setNote("Nothing saved for this game yet"); return; }
+    const packed = packSaves(g.name, await Promise.all(recs.map(async (r) => ({
+      slot: r.slot, at: r.at, data: new Uint8Array(await r.data.arrayBuffer()), shot: r.shot ? new Uint8Array(await r.shot.arrayBuffer()) : undefined,
+    }))));
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(new Blob([packed.bytes.slice()], { type: "application/zip" })); a.download = packed.name; a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 10_000);
+    sfx.confirm(); setNote(`Saved progress exported — ${packed.name}`); closeOpts();
+  }
+  function importSaves() {
+    const g = cur()!;
+    const input = document.createElement("input");
+    input.type = "file"; input.accept = ".aspsave,application/zip";
+    input.onchange = async () => {
+      const f = input.files?.[0];
+      if (!f) return;
+      if (!isSaveFile(f.name)) { sfx.deny(); setNote("That is not a saved-progress file (.aspsave)"); return; }
+      try {
+        const slots = unpackSaves(new Uint8Array(await f.arrayBuffer()));
+        if (!slots.length) throw new Error("no slots inside");
+        for (const s of slots) await putSave({ gameId: g.id, profileId: props.profileId, slot: s.slot, at: s.at, data: new Blob([s.data.slice()]), shot: s.shot ? new Blob([s.shot.slice()], { type: "image/png" }) : undefined });
+        await reloadSaves();
+        sfx.confirm(); setNote(`Imported ${slots.length} save${slots.length === 1 ? "" : "s"} for ${clean(g.name)}`); closeOpts();
+      } catch (e) {
+        sfx.deny(); setNote(`Couldn't import: ${String((e as Error)?.message ?? e).slice(0, 60)}`);
+      }
+    };
+    input.click();
+  }
   const shotUrls = new WeakMap<Blob, string>();
   const shotUrl = (r?: SaveRecord) => {
     if (!r?.shot) return "";
@@ -245,6 +289,19 @@ export default function GameShelf(props: {
             <button class="hz-srow" classList={{ pri: !resumeOf(cur()!) }} onClick={() => { closeOpts(); props.onPlay(cur()!); }}>
               <span><span class="t">{resumeOf(cur()!) ? "Play from start" : "Play"}</span><span class="s">{resumeOf(cur()!) ? "leave the saved progress alone" : "start the game"}</span></span>
             </button>
+            <Show when={otherArcadeCore(cur()!)}>{(to) => (
+              <button class="hz-srow" onClick={() => void switchCore()}>
+                <span><span class="t">Run with {sysLabel(to())}</span><span class="s">romsets differ per core — try the other one if this one will not start</span></span>
+              </button>
+            )}</Show>
+            <Show when={cur()!.sys !== "ps2"}>
+              <button class="hz-srow" onClick={() => void exportSaves()} disabled={!(saves()[cur()!.id]?.length)}>
+                <span><span class="t">Export saved progress…</span><span class="s">{saves()[cur()!.id]?.length ? "one small file you can take to another device" : "nothing saved for this game yet"}</span></span>
+              </button>
+              <button class="hz-srow" onClick={importSaves}>
+                <span><span class="t">Import saved progress…</span><span class="s">an .aspsave file exported from another device</span></span>
+              </button>
+            </Show>
             <button
               class="hz-srow" disabled={!(isLinked(cur()!) && cur()!.origin !== "download" && fsAccessSupported())}
               onClick={relink}

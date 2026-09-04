@@ -63,6 +63,9 @@ export const FREE_GAMES: FreeGame[] = [
   gh("nes-nova", "nes", "Nova the Squirrel", "NovaSquirrel", 2018, "GPL-3.0 — https://github.com/NovaSquirrel/NovaTheSquirrel", "https://github.com/NovaSquirrel/NovaTheSquirrel/releases/download/v1.0.6a/nova.nes", 262160, "Open-source NES platformer with block-moving puzzles"),
   gh("gb-ucity", "gb", "µCity", "AntonioND", 2018, "GPL-3.0+ — https://github.com/AntonioND/ucity", "https://github.com/AntonioND/ucity/releases/download/v1.3/ucity.gbc", 131072, "SimCity-style city builder for Game Boy Color"),
   gh("a26-bounstryk", "atari2600", "Bounstryk", "Egar Garcia", 2021, "Apache-2.0 — https://github.com/egar-garcia/bounstryk", "https://github.com/egar-garcia/bounstryk/releases/latest/download/bounstryk.bin", 8192, "Homebrew 2600 arcade action — 8 KB of it", "bounstryk.a26"),
+  // Commodore 64 homebrew (MIT) — GitHub release builds, relayed
+  gh("c64-retaliate", "c64", "Retaliate64", "Marcelo Lv Cabral", 2021, "MIT — https://github.com/lvcabral/retaliate64", "https://github.com/lvcabral/retaliate64/releases/download/v1.0.0/retaliatece.d64", 174848, "Space shooter remake — Community Edition disk"),
+  gh("c64-wildboa", "c64", "Wild Boa Snake", "Tomasz Stamborski", 2021, "MIT — https://github.com/tstamborski/Wild-Boa-Snake", "https://github.com/tstamborski/Wild-Boa-Snake/releases/download/1.0/Wild.Snake.Boa.d64", 174848, "Snake, C64 style", "wild-boa-snake.d64"),
   // WASM-4 carts archive (CC BY-NC-SA 4.0, authors credited) — served by GitHub with CORS
   w4("watris", "Watris", "Bruno Garcia", 2628, "Falling blocks on the WASM-4 fantasy console"),
   w4("2048", "2048", "Peter Hellberg", 12469, "Slide the tiles to 2048"),

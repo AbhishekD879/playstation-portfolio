@@ -196,6 +196,12 @@ export async function saveCover(id: string, url: string): Promise<void> {
   if (g && g.cover !== url) { g.cover = url; await addGame(g); }
 }
 
+/** Run an arcade romset with the other core (FBNeo ↔ MAME 2003-Plus) — sets differ per core. */
+export async function setGameCore(id: string, core: string): Promise<void> {
+  const g = await getGame(id);
+  if (g && g.core !== core) { g.core = core; await addGame(g); }
+}
+
 /** Swap a linked record's handle (re-link after the file moved). */
 export async function relinkGame(id: string, handle: FileSystemFileHandle, size: number): Promise<void> {
   const g = await getGame(id);
@@ -253,6 +259,15 @@ export async function savesFor(profileId: string): Promise<Record<string, SaveRe
       for (const r of req.result as SaveRecord[]) (out[r.gameId] ??= []).push(r);
       res(out);
     };
+    req.onerror = () => rej(req.error);
+  });
+}
+
+export async function savesOf(gameId: string): Promise<SaveRecord[]> {
+  const db = await open();
+  return new Promise((res, rej) => {
+    const req = db.transaction(SAVES).objectStore(SAVES).index("gameId").getAll(gameId);
+    req.onsuccess = () => res(req.result as SaveRecord[]);
     req.onerror = () => rej(req.error);
   });
 }

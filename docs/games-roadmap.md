@@ -264,6 +264,31 @@ per-file cap (25 MiB). Now:
   framed inside the console). 7.2 MB wasm + 46.7 MB data on R2, 0.9 MB
   loader in the repo.
 
+## Phase 7 — the rest of the list (2026-09-05)
+
+- **Arcade core switch.** Romsets differ between FinalBurn Neo and MAME
+  2003-Plus, so an arcade tile's options now carry "Run with <the other
+  core>": one tap flips the record's core (`setGameCore`) and the shelf
+  relabels it. No more guessing at import time only.
+- **Saves travel.** "Export saved progress…" packs a game's slots (manual
+  state + PNG, SRAM) into one `.aspsave` zip with a manifest; "Import saved
+  progress…" on another device unpacks it into the same slots. Manual, like a
+  memory card — no account, no server. Pure pack/unpack in `saves.ts` with a
+  node round-trip test; PS2 keeps its own memory-card path.
+- **SRAM restore proven with a real cartridge.** On production, a
+  pseudo-random 128 KB SRAM image written into µCity's `sram` slot came back
+  byte-for-byte (131072/131072) from Gambatte's own flush after a fresh boot
+  — the core loaded what the console restored.
+- **Homebrew sources.** C64: Retaliate64 and Wild Boa Snake (both MIT, GitHub
+  release `.d64`, via the relay). Amiga / Neo Geo Pocket / WonderSwan: no
+  title with a clear licence and a direct download was found (GitHub search
+  across topics and releases; Aminet/CSDb have no CORS and mixed licences) —
+  left empty rather than guessed.
+- **OpenLara stays parked.** The author's site is down; the GitHub Pages copy
+  is an old asm.js stub whose level files (`level/1/*.PHD`) 404 — the TR1
+  demo data was only ever served from the dead host, and its redistribution
+  terms are not as explicit as id's or Epic's shareware licences.
+
 ## Known constraints (from research, Sep 2026)
 
 - iOS Safari: no COEP `credentialless` → no threads; open EmulatorJS issues
@@ -290,3 +315,4 @@ per-file cap (25 MiB). Now:
 - 2026-09-04 · Phase 5 saved progress: manual snapshots + SRAM per game, Continue row in Game options, EmulatorJS Save/Load State routed to the console's storage. PS2 memory cards were already persisted (Play! frame).
 - 2026-09-04 · Phase 6: Quake/OpenTTD/Diablo binaries moved to R2, served same-origin by Pages Functions; Jazz Jackrabbit 2 (Jazz² Resurrection) added.
 - 2026-09-04 · **Phases 5–6 deployed to production** (main `87a737f`): saved progress (manual + SRAM), R2-served binaries with same-origin Functions, Jazz Jackrabbit 2. Regression pass preview vs previous production: captured non-Games lists identical, 31 routes error-free on both, four shelf boots identical; on the preview all nine moved files came from R2 with matching sizes (quake106.zip hash equal to the local copy) and OpenTTD, Diablo, Quake (full start) and Jazz² ran in-console.
+- 2026-09-05 · Phase 7: arcade core switch, export/import of saved progress, SRAM restore proven on production with µCity, two C64 homebrews; OpenLara and Amiga/NGP/WS homebrew parked with reasons.
