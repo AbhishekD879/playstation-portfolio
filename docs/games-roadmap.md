@@ -410,17 +410,21 @@ and a README recording source and licence. three.js 0.183.0 is vendored for
 Descent so nothing loads from a CDN. `r2serve.ts` now sends real content types
 for images, audio, JSON and CSS.
 
-**Two that are mirrored but NOT shipped**, both failing for real reasons:
-- **SuperTux** (official GPL web build, 335 MB): my mirror is byte-identical
-  to `play.supertux.org/play/` and still aborts with
-  `missing function: IMG_Load_IO`. Upstream had not finished its 327 MB
-  download inside the test window, so it very likely aborts there too — the
-  master nightly looks broken. Worth retrying with `releases/0.7.0`.
-- **OpenHV** (OpenRA engine, 100% free CC assets, 144 MB): all 253 files
-  mirrored from the live request list, but a JSON fetch resolves to the SPA
-  fallback, so a path the game asks for at runtime is missing from the
-  capture. The licence story is the best of any candidate, so this is worth
-  finishing.
+**Chased down afterwards:**
+- **OpenHV shipped.** The stall was `asset-bundles.json`, which the loader
+  fetches next to `index.html` before the bundle. It was missing from the
+  mirror because it is requested too early to appear in the captured request
+  list, and a missing file resolves to the SPA fallback (HTML, status 200)
+  rather than a 404 — hence "Unexpected token '<'". Detection trick worth
+  keeping: log every response whose content type is HTML but whose URL is not
+  a page. With that one file in place the menu renders over a live map.
+- **SuperTux dropped: the official web build is broken upstream, not our
+  mirror.** `releases/0.7.0` dies in the browser with
+  `[FATAL] src/supertux/main.cpp:833 Unexpected exception`, and the master
+  nightly aborts on `missing function: IMG_Load_IO`. Both were reproduced
+  against play.supertux.org itself. Shipping it would need compiling SuperTux
+  from source, and its 327 MB asset pack makes it a poor fit anyway. The
+  mirror and its R2 objects were deleted.
 
 **Rejected**: Quake III / OpenArena (no working free-data browser build;
 quakejs.com returns 526), Morrowind / Jedi Knight / wipEout / RollerCoaster
@@ -483,3 +487,4 @@ redistribution grant; only their shareware episodes are.
 - 2026-09-05 · Phase 10: device audit rig + responsive/tap-target pass over the non-game apps; Winamp fixed; Trivia and Art error states.
 - 2026-09-05 · **Phase 10 deployed to production** (main `ae18a1e`). Regression pass preview vs previous production: non-Games category lists identical, 31 routes error-free on both, four shelf boots identical. Also fixed the Code Playground sample (globalReturn), phone crossbar width and HzScreen search inputs.
 - 2026-09-05 · **Phase 11 deployed to production** (main `5e89f1f`): Descent, Duke Nukem 3D, Gorescript and HexGL under PC Games, all verified booting from our own origin on prod. Regression pass clean (category lists identical, 31 routes error-free).
+- 2026-09-05 · OpenHV added under PC Games (free-asset RTS on the OpenRA engine); SuperTux abandoned — its official web build crashes upstream in both the 0.7.0 release and the master nightly.
