@@ -1,0 +1,14 @@
+{
+  "documentTitle": "OpenHV - Browser",
+  "loadingTitle": "Loading OpenHV...",
+  "modId": "hv",
+  "content": null,
+  "requiredPaths": [
+    "/openra/VERSION",
+    "/openra/glsl/combined.vert",
+    "/openra/mods/hv/mod.yaml",
+    "/openra/mods/common.oramod",
+    "/openra-support/settings.yaml"
+  ],
+  "defaultSkirmishTitle": null
+}

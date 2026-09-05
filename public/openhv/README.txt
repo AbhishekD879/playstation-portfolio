@@ -1,0 +1,4 @@
+OpenHV — https://github.com/OpenHV/OpenHV, a sci-fi real-time strategy game on the OpenRA engine. Web build (.NET WebAssembly) mirrored from https://hakyong-tae.github.io/openhv-web/ (2026-09-05), unmodified.
+Engine and mod code are GPL-3.0; the art and audio are original Hard Vacuum assets under Creative Commons. Unlike OpenRA's Command & Conquer mods, OpenHV needs NO proprietary game data — that is why it is here.
+_framework/ (the .NET assemblies) and assets/mods-bundle.bin.part00-02 (117 MB) are served from R2 by functions/openhv/[[file]].ts. Local dev uses the gitignored r2/openhv/ mirror; upload with `node scripts/r2-sync.mjs openhv`.
+Note: asset-bundles.json must be present next to index.html — the loader fetches it before the bundle, and a missing copy silently resolves to the SPA fallback.

@@ -29,7 +29,7 @@ export default defineConfig({
         server.middlewares.use((req, res, next) => {
           const path = decodeURIComponent((req.url ?? "").split("?")[0]);
           const file = resolve("r2", "." + path);
-          if (!/^\/(quake|openttd|diablo|jazz2|descent|duke|gorescript|hexgl)\//.test(path) || path.includes("..") || !existsSync(file) || !statSync(file).isFile()) return next();
+          if (!/^\/(quake|openttd|diablo|jazz2|descent|duke|gorescript|hexgl|openhv)\//.test(path) || path.includes("..") || !existsSync(file) || !statSync(file).isFile()) return next();
           const ext = path.split(".").pop() ?? "";
           res.setHeader("content-type", ext === "wasm" ? "application/wasm" : ext === "js" ? "text/javascript" : "application/octet-stream");
           res.setHeader("content-length", String(statSync(file).size));

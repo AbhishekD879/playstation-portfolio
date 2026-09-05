@@ -30,7 +30,7 @@ export const GAME_TOP: GameTopEntry[] = [
   { kind: "item", id: "consoles" },
   { kind: "item", id: "computers" },
   { kind: "item", id: "mobile" },
-  { kind: "folder", id: "pc", title: "PC Games", icon: "monitor", blurb: "DOOM · Counter-Strike · point & click · Wolf3D · Quake · Duke 3D · Descent · Diablo · OpenTTD · HexGL", items: ["doom", "doomrtx", "cs", "scummvm", "micropolis", "jazz", "wolf", "quake", "openttd", "diablo", "jazz2", "descent", "duke", "gorescript", "hexgl"] },
+  { kind: "folder", id: "pc", title: "PC Games", icon: "monitor", blurb: "DOOM · Counter-Strike · point & click · Wolf3D · Quake · Duke 3D · Descent · Diablo · OpenHV · HexGL", items: ["doom", "doomrtx", "cs", "scummvm", "micropolis", "jazz", "wolf", "quake", "openttd", "diablo", "jazz2", "descent", "duke", "gorescript", "hexgl", "openhv"] },
   { kind: "folder", id: "makers", title: "Game Makers & Web", icon: "cube", blurb: "WASM-4 · RPG Maker · Ren'Py · Godot · Unity · HTML5 · Flash", items: ["fantasy", "rpgmaker", "renpy", "godot", "unity", "html5", "flash"] },
   { kind: "folder", id: "together", title: "Play Together", icon: "users", blurb: "Party · board games · netplay · Console TV · Lichess TV", items: ["party", "board", "retrojoin", "consoletv", "lichesstv"] },
   { kind: "folder", id: "originals", title: "Console Originals", icon: "star", blurb: "Chess vs Stockfish · Trivia Arcade · World Drive", items: ["chess", "trivia", "worlddrive"] },

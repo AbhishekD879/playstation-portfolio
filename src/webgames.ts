@@ -57,6 +57,10 @@ export const WEB_GAMES: Record<string, WebGame> = {
     id: "hexgl", title: "HexGL", sub: "Futuristic anti-gravity racing — the three.js showpiece, at full speed",
     url: "/hexgl/index.html", icon: "spark", licence: "MIT — engine, textures, geometry and audio", source: "https://github.com/BKcore/HexGL",
   },
+  openhv: {
+    id: "openhv", title: "OpenHV", sub: "A sci-fi real-time strategy game on the OpenRA engine — every asset original and freely licensed",
+    url: "/openhv/index.html", icon: "chip", licence: "OpenRA engine and OpenHV mod GPL-3.0 · Hard Vacuum art and audio under Creative Commons", source: "https://github.com/OpenHV/OpenHV",
+  },
 };
 
 export const WEB_GAME_IDS = Object.keys(WEB_GAMES);

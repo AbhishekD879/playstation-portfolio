@@ -1,0 +1,99 @@
+{
+  "version": 1,
+  "profile": "hv",
+  "bundles": [
+    {
+      "name": "mods",
+      "data": "assets/mods-bundle.bin",
+      "entries": [
+        {
+          "path": "hv/CREDITS",
+          "offset": 0,
+          "length": 1628
+        },
+        {
+          "path": "hv/chrome.yaml",
+          "offset": 1628,
+          "length": 14859
+        },
+        {
+          "path": "hv/cursor.yaml",
+          "offset": 16487,
+          "length": 3002
+        },
+        {
+          "path": "hv/icon-2x.png",
+          "offset": 19489,
+          "length": 1004
+        },
+        {
+          "path": "hv/icon-3x.png",
+          "offset": 20493,
+          "length": 1259
+        },
+        {
+          "path": "hv/icon.png",
+          "offset": 21752,
+          "length": 456
+        },
+        {
+          "path": "hv/metrics.yaml",
+          "offset": 22208,
+          "length": 465
+        },
+        {
+          "path": "hv/missions.yaml",
+          "offset": 22673,
+          "length": 198
+        },
+        {
+          "path": "hv/mod.yaml",
+          "offset": 22871,
+          "length": 7366
+        },
+        {
+          "path": "hv/tileset.yaml",
+          "offset": 30237,
+          "length": 402509
+        },
+        {
+          "path": "hv/translations.yaml",
+          "offset": 432746,
+          "length": 288
+        },
+        {
+          "path": "common/fluent/fr/chrome.ftl",
+          "offset": 433034,
+          "length": 23443
+        },
+        {
+          "path": "common/fluent/fr/common.ftl",
+          "offset": 456477,
+          "length": 28091
+        },
+        {
+          "path": "common/fluent/fr/rules.ftl",
+          "offset": 484568,
+          "length": 1786
+        },
+        {
+          "path": "common.oramod",
+          "offset": 486354,
+          "length": 1217231
+        },
+        {
+          "path": "hv.oramod",
+          "offset": 1703585,
+          "length": 115427682
+        }
+      ],
+      "count": 16,
+      "bytes": 117131267,
+      "dataParts": [
+        "assets/mods-bundle.bin.part00",
+        "assets/mods-bundle.bin.part01",
+        "assets/mods-bundle.bin.part02"
+      ]
+    }
+  ]
+}

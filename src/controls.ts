@@ -204,6 +204,14 @@ export const SCHEMES: Record<string, ControlScheme> = {
     orientation: "landscape",
     tip: "The air brakes are the whole game: hold A or D through a corner instead of only steering.",
   },
+  openhv: {
+    keys: [["Arrow keys / screen edge", "move the camera"], ["Ctrl + 1-9", "assign a control group"], ["1 – 9", "select a control group"], ["Enter", "chat"], ["Esc", "cancel / menu"]],
+    mouse: "Left click selects, left-drag boxes a group, right click orders a move or attack, the wheel zooms.",
+    pad: "Not used — this is a mouse-and-keyboard strategy game.",
+    touch: "Playable but cramped: it really wants a mouse.",
+    orientation: "landscape",
+    tip: "Start with Singleplayer, then Skirmish. The first load pulls a large asset bundle, so give it a minute.",
+  },
 };
 
 // family fallbacks for systems added later without a card of their own

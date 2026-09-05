@@ -1,0 +1,580 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>OpenRA - Browser</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { background: #000; overflow: hidden; display: flex; justify-content: center; align-items: center; height: 100vh; }
+        #openra-canvas { display: block; background: #111; }
+        #loading {
+            position: absolute;
+            inset: 0;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            gap: 8px;
+            background: rgba(0, 0, 0, 0.78);
+            color: #fff;
+            font-family: monospace;
+            font-size: 16px;
+            text-align: center;
+            z-index: 10;
+            cursor: progress;
+        }
+        #loading.hidden { display: none; }
+        /* Compositor-driven spinner — keeps animating even while the single WASM
+           thread is blocked during load, so the screen never looks fully frozen. */
+        #loading .spinner {
+            width: 36px; height: 36px; margin-bottom: 12px;
+            border: 3px solid rgba(255,255,255,.18);
+            border-top-color: #8cf; border-radius: 50%;
+            animation: openhv-spin 0.9s linear infinite;
+        }
+        @keyframes openhv-spin { to { transform: rotate(360deg); } }
+        #loading .hint {
+            font-size: 13px; opacity: .7; margin-top: 14px;
+            max-width: 440px; line-height: 1.6;
+        }
+    </style>
+</head>
+<body>
+    <div id="loading">
+        <div class="spinner"></div>
+        <p id="loading-title">Loading OpenRA...</p>
+        <p id="loading-status"></p>
+        <p class="hint">
+            First load pulls ~112&nbsp;MB of game data and can take a minute or two.
+            Loading a match may briefly pause the tab — this is normal for the
+            WebAssembly engine. Gameplay runs smoothly once it starts.
+        </p>
+        <p style="font-size:12px;opacity:.6;margin-top:16px;max-width:420px;line-height:1.5;">
+            <a href="https://github.com/OpenHV/OpenHV" style="color:#8cf;">OpenHV</a>
+            on the <a href="https://github.com/OpenRA/OpenRA" style="color:#8cf;">OpenRA</a>
+            engine — free software (GPLv3).
+            <a href="https://github.com/hakyong-tae/openhv-web" style="color:#8cf;">Source</a>.
+        </p>
+    </div>
+    <canvas id="openra-canvas" width="1280" height="720"></canvas>
+
+    <script>
+        // Background-tab throttling bypass: the mono runtime yields via setTimeout(0),
+        // which Chrome clamps to 1s+ in hidden tabs, stalling boot. Route zero-delay
+        // timers through MessageChannel (unthrottled) while the tab is hidden.
+        (function() {
+            const nativeSetTimeout = window.setTimeout.bind(window);
+            const nativeClearTimeout = window.clearTimeout.bind(window);
+            let nextFakeId = -1;
+            const cancelled = new Set();
+            window.setTimeout = function(fn, delay, ...args) {
+                if ((delay || 0) <= 4 && typeof fn === 'function' && document.visibilityState === 'hidden') {
+                    const id = nextFakeId--;
+                    const channel = new MessageChannel();
+                    channel.port1.onmessage = () => { if (!cancelled.delete(id)) fn(...args); };
+                    channel.port2.postMessage(null);
+                    return id;
+                }
+                return nativeSetTimeout(fn, delay, ...args);
+            };
+            window.clearTimeout = function(id) {
+                if (typeof id === 'number' && id < 0) { cancelled.add(id); return; }
+                return nativeClearTimeout(id);
+            };
+        })();
+    </script>
+    <script src="js/webgl-interop.js"></script>
+    <script src="js/input-interop.js"></script>
+    <script src="js/font-interop.js"></script>
+    <script src="js/audio-interop.js"></script>
+    <script src="js/game-loop.js"></script>
+    <script src="js/persistent-fs.js"></script>
+    <script src="_framework/blazor.webassembly.js" autostart="false"></script>
+    <script>
+        const S = document.getElementById('loading-status');
+        const loadingTitle = document.getElementById('loading-title');
+        const loading = document.getElementById('loading');
+        const textEncoder = new TextEncoder();
+        const params = new URLSearchParams(window.location.search);
+        const smokeMode = params.get('smoke') === '1';
+        const disableAssetCache = params.get('nocache') === '1';
+        const initTimeoutMs = Number.parseInt(params.get('timeoutMs') || (smokeMode ? '45000' : '300000'), 10);
+
+        const bootState = window.OpenRABootState = {
+            smokeMode: smokeMode,
+            phase: 'booting',
+            status: '',
+            progress: [],
+            startedAt: Date.now()
+        };
+
+        function log(message) { console.log(message); }
+        function setPhase(phase) {
+            bootState.phase = phase;
+            document.body.dataset.bootState = phase;
+        }
+        function status(message) {
+            bootState.status = message;
+            S.textContent = message;
+            log('[Status] ' + message);
+        }
+        function fail(result) {
+            throw new Error(typeof result === 'string' ? result : String(result));
+        }
+        function withTimeout(promise, timeoutMs, label) {
+            return new Promise(function(resolve, reject) {
+                const timer = setTimeout(function() {
+                    reject(new Error(label + ' after ' + timeoutMs + 'ms'));
+                }, timeoutMs);
+
+                promise.then(function(result) {
+                    clearTimeout(timer);
+                    resolve(result);
+                }, function(error) {
+                    clearTimeout(timer);
+                    reject(error);
+                });
+            });
+        }
+        function recordProgress(message) {
+            bootState.progress.push({ message: message, at: Date.now() });
+            status(message);
+        }
+        function showLoading(message) {
+            if (message)
+                recordProgress(message);
+            loading.classList.remove('hidden');
+        }
+
+        async function dotnetStep(label, method) {
+            status(label);
+            log('[Step] ' + label + ' -> ' + method);
+            const result = DotNet.invokeMethod('OpenRA.Web', method);
+            log('[Step] ' + method + ' = ' + result);
+            if (typeof result === 'string' && result.startsWith('error:'))
+                fail(result);
+            return result;
+        }
+
+        async function dotnetStepAsync(label, method) {
+            const args = Array.prototype.slice.call(arguments, 2);
+            status(label);
+            log('[Step] ' + label + ' -> ' + method);
+            const result = await DotNet.invokeMethodAsync('OpenRA.Web', method, ...args);
+            log('[Step] ' + method + ' = ' + result);
+            if (typeof result === 'string' && result.startsWith('error:'))
+                fail(result);
+            return result;
+        }
+
+        async function runShellmapStartup(timeoutMs) {
+            const deadline = Date.now() + timeoutMs;
+            const begin = await dotnetStepAsync('Preparing shellmap startup...', 'Step_BeginShellmapStart');
+            log('[Shellmap] begin = ' + begin);
+            let step = 0;
+
+            while (Date.now() < deadline) {
+                step++;
+                status('Running shellmap step ' + step + '...');
+                log('[Shellmap] invoking step ' + step);
+                const result = await DotNet.invokeMethodAsync('OpenRA.Web', 'Step_ContinueShellmapStart');
+                log('[Shellmap] step = ' + result);
+
+                if (typeof result === 'string' && result.startsWith('error:'))
+                    fail(result);
+
+                if (result === 'done')
+                    return;
+
+                // MessageChannel yield: unlike setTimeout(0), not throttled in background tabs
+                await new Promise(resolve => {
+                    const channel = new MessageChannel();
+                    channel.port1.onmessage = () => resolve();
+                    channel.port2.postMessage(null);
+                });
+            }
+
+            throw new Error('Shellmap startup timed out after ' + timeoutMs + 'ms');
+        }
+
+        const OpenRABoot = {
+            assetBundles: undefined,
+            config: null,
+            defaultConfig: {
+                documentTitle: 'OpenRA - Browser',
+                loadingTitle: 'Loading OpenRA...',
+                modId: 'ra',
+                requiredPaths: [
+                    '/openra/VERSION',
+                    '/openra/glsl/combined.vert',
+                    '/openra/mods/ra/mod.yaml',
+                    '/openra/mods/common.oramod',
+                    '/openra-support/settings.yaml',
+                    '/openra-support/Content/ra/v2/local.mix'
+                ],
+                supportDirectories: [
+                    '/openra-support/Content/ra/v2/expand',
+                    '/openra-support/Content/ra/v2/cnc'
+                ],
+                content: {
+                    bundleName: 'content',
+                    mountPath: '/openra-support/Content/ra/v2',
+                    urlPrefix: 'content/ra/v2/',
+                    files: null
+                },
+                defaultSkirmishTitle: 'Desert Rats'
+            },
+            contentFiles: [
+                'allies.mix', 'conquer.mix', 'hires.mix', 'interior.mix', 'local.mix',
+                'lores.mix', 'russian.mix', 'snow.mix', 'sounds.mix', 'speech.mix', 'temperat.mix',
+                'expand/expand2.mix', 'expand/hires1.mix', 'expand/lores1.mix', 'cnc/desert.mix',
+                'expand/chrotnk1.aud', 'expand/fixit1.aud', 'expand/jburn1.aud',
+                'expand/jchrge1.aud', 'expand/jcrisp1.aud', 'expand/jdance1.aud',
+                'expand/jjuice1.aud', 'expand/jjump1.aud', 'expand/jlight1.aud',
+                'expand/jpower1.aud', 'expand/jshock1.aud', 'expand/jyes1.aud',
+                'expand/madchrg2.aud', 'expand/madexplo.aud', 'expand/mboss1.aud',
+                'expand/mhear1.aud', 'expand/mhotdig1.aud', 'expand/mhowdy1.aud',
+                'expand/mhuh1.aud', 'expand/mlaff1.aud', 'expand/mrise1.aud',
+                'expand/mwrench1.aud', 'expand/myeehaw1.aud', 'expand/myes1.aud'
+            ],
+            shaderFiles: [
+                'combined.vert', 'combined.frag', 'model.vert', 'model.frag',
+                'postprocess.vert', 'postprocess_flash.frag', 'postprocess_tint.frag',
+                'postprocess_chronoshift.frag', 'postprocess_menufade.frag',
+                'postprocess_textured.vert', 'postprocess_textured_sonic.frag',
+                'postprocess_textured_vortex.frag'
+            ],
+            settingsYaml: [
+                'Player:',
+                '\tName: WebPlayer',
+                '\tColor: 0000FF',
+                'Graphics:',
+                '\tMode: Windowed',
+                '\tVideoDisplay: 0',
+                '\tWindowedSize: 1280,720',
+                '\tCapFramerateToGameFps: True',
+                'Game:',
+                '\tPlatform: Web',
+                '\tIntroductionPromptVersion: 2',
+                'Debug:',
+                '\tSystemInformationVersionPrompt: 6',
+                '\tSendSystemInformation: False',
+                'Sound:',
+                '\tDevice:',
+                '\tCashTicks: False',
+                ''
+            ].join('\n'),
+
+            getConfig() {
+                return this.config || this.defaultConfig;
+            },
+
+            async loadBootConfig() {
+                const loaded = await this.fetchOptionalJson('boot-config.json');
+                const content = loaded && Object.prototype.hasOwnProperty.call(loaded, 'content')
+                    ? loaded.content
+                    : this.defaultConfig.content;
+
+                this.config = {
+                    ...this.defaultConfig,
+                    ...(loaded || {}),
+                    content: content
+                };
+
+                return this.config;
+            },
+
+            ensureFs() {
+                if (typeof Module === 'undefined' || !Module.FS)
+                    throw new Error('Module.FS is not ready');
+                return Module.FS;
+            },
+
+            ensureDir(path) {
+                const fs = this.ensureFs();
+                const parts = path.split('/').filter(Boolean);
+                let current = '';
+                for (const part of parts) {
+                    current += '/' + part;
+                    try {
+                        fs.mkdir(current);
+                    } catch (error) {
+                        if (!fs.analyzePath(current).exists)
+                            throw error;
+                    }
+                }
+            },
+
+            dirname(path) {
+                const index = path.lastIndexOf('/');
+                return index > 0 ? path.slice(0, index) : '/';
+            },
+
+            writeText(path, text) {
+                const fs = this.ensureFs();
+                this.ensureDir(this.dirname(path));
+                fs.writeFile(path, textEncoder.encode(text));
+            },
+
+            writeBytes(path, bytes) {
+                const fs = this.ensureFs();
+                this.ensureDir(this.dirname(path));
+                fs.writeFile(path, bytes);
+            },
+
+            fileExists(path) {
+                return this.ensureFs().analyzePath(path).exists;
+            },
+
+            async fetchText(url) {
+                const response = await fetch(url, { cache: disableAssetCache ? 'no-cache' : 'default' });
+                if (!response.ok)
+                    throw new Error('Failed to fetch ' + url + ' (' + response.status + ')');
+                return await response.text();
+            },
+
+            async fetchBytes(url) {
+                const response = await fetch(url, { cache: disableAssetCache ? 'no-cache' : 'default' });
+                if (!response.ok)
+                    throw new Error('Failed to fetch ' + url + ' (' + response.status + ')');
+                return new Uint8Array(await response.arrayBuffer());
+            },
+
+            // Fetch a bundle's raw bytes. If it was split into dataParts (to stay under
+            // host per-file size limits, e.g. GitHub's 100MB), fetch each part and
+            // concatenate them back into the original contiguous byte layout the
+            // offset table in asset-bundles.json expects.
+            async fetchBundleBytes(bundle) {
+                if (!Array.isArray(bundle.dataParts) || bundle.dataParts.length === 0)
+                    return await this.fetchBytes(bundle.data);
+
+                const parts = [];
+                let total = 0;
+                for (let i = 0; i < bundle.dataParts.length; i++) {
+                    status('Loading bundle part ' + (i + 1) + '/' + bundle.dataParts.length + '...');
+                    const part = await this.fetchBytes(bundle.dataParts[i]);
+                    parts.push(part);
+                    total += part.length;
+                }
+
+                if (typeof bundle.bytes === 'number' && total !== bundle.bytes)
+                    throw new Error('Bundle size mismatch: got ' + total + ', expected ' + bundle.bytes);
+
+                const merged = new Uint8Array(total);
+                let offset = 0;
+                for (const part of parts) {
+                    merged.set(part, offset);
+                    offset += part.length;
+                }
+                return merged;
+            },
+
+            async fetchOptionalJson(url) {
+                const response = await fetch(url, { cache: disableAssetCache ? 'no-cache' : 'default' });
+                if (response.status === 404)
+                    return null;
+
+                if (!response.ok)
+                    throw new Error('Failed to fetch ' + url + ' (' + response.status + ')');
+
+                return await response.json();
+            },
+
+            async getAssetBundles() {
+                if (this.assetBundles !== undefined)
+                    return this.assetBundles;
+
+                this.assetBundles = await this.fetchOptionalJson('asset-bundles.json');
+                return this.assetBundles;
+            },
+
+            async runPool(items, limit, worker) {
+                const queue = items.slice();
+                const workers = [];
+                for (let i = 0; i < Math.min(limit, queue.length); i++) {
+                    workers.push((async () => {
+                        while (queue.length > 0) {
+                            const item = queue.shift();
+                            await worker(item);
+                        }
+                    })());
+                }
+                await Promise.all(workers);
+            },
+
+            async stageEngineFiles() {
+                const config = this.getConfig();
+                status('Preparing engine files...');
+                this.ensureDir('/openra/glsl');
+                this.ensureDir('/openra/mods');
+                for (const dir of config.supportDirectories || [])
+                    this.ensureDir(dir);
+
+                if (window.PersistentFS?.supportsPersistence()) {
+                    status('Restoring browser storage...');
+                    await window.PersistentFS.init();
+                }
+
+                this.writeText('/openra/VERSION', await this.fetchText('VERSION'));
+                this.writeText('/openra-support/settings.yaml', this.settingsYaml);
+
+                for (const shader of this.shaderFiles)
+                    this.writeText('/openra/glsl/' + shader, await this.fetchText('glsl/' + shader));
+            },
+
+            async stageContentFiles() {
+                const config = this.getConfig();
+                if (!config.content)
+                    return;
+
+                const bundleIndex = await this.getAssetBundles();
+                const contentBundle = bundleIndex && bundleIndex.bundles
+                    ? bundleIndex.bundles.find(bundle => bundle.name === config.content.bundleName)
+                    : null;
+
+                if (contentBundle) {
+                    status('Loading content bundle...');
+                    const bytes = await this.fetchBundleBytes(contentBundle);
+                    let completed = 0;
+                    const total = contentBundle.entries.length;
+                    for (const entry of contentBundle.entries) {
+                        this.writeBytes(config.content.mountPath + '/' + entry.path, bytes.subarray(entry.offset, entry.offset + entry.length));
+                        completed++;
+                        if (completed % 5 === 0 || completed === total)
+                            status('Staging bundled content (' + completed + '/' + total + ')...');
+                    }
+
+                    return;
+                }
+
+                let completed = 0;
+                const files = config.content.files || this.contentFiles;
+                const total = files.length;
+                await this.runPool(files, 6, async (file) => {
+                    const bytes = await this.fetchBytes(config.content.urlPrefix + file);
+                    this.writeBytes(config.content.mountPath + '/' + file, bytes);
+                    completed++;
+                    status('Staging content (' + completed + '/' + total + ')...');
+                });
+            },
+
+            async stageModFiles() {
+                const bundleIndex = await this.getAssetBundles();
+                const modBundle = bundleIndex && bundleIndex.bundles
+                    ? bundleIndex.bundles.find(bundle => bundle.name === 'mods')
+                    : null;
+
+                if (modBundle) {
+                    status('Loading mod bundle...');
+                    const bytes = await this.fetchBundleBytes(modBundle);
+                    let completed = 0;
+                    const total = modBundle.entries.length;
+                    for (const entry of modBundle.entries) {
+                        this.writeBytes('/openra/mods/' + entry.path, bytes.subarray(entry.offset, entry.offset + entry.length));
+                        completed++;
+                        if (completed % 25 === 0 || completed === total)
+                            status('Staging bundled mod files (' + completed + '/' + total + ')...');
+                    }
+
+                    return;
+                }
+
+                status('Loading mod manifest...');
+                const manifest = JSON.parse(await this.fetchText('mod-manifest.json'));
+                const entries = [];
+                for (const modName of Object.keys(manifest)) {
+                    for (const file of manifest[modName]) {
+                        entries.push({
+                            url: 'mods/' + modName + '/' + file.path,
+                            vfsPath: '/openra/mods/' + modName + '/' + file.path
+                        });
+                    }
+                }
+
+                let completed = 0;
+                const total = entries.length;
+                await this.runPool(entries, 8, async (entry) => {
+                    const bytes = await this.fetchBytes(entry.url);
+                    this.writeBytes(entry.vfsPath, bytes);
+                    completed++;
+                    if (completed % 10 === 0 || completed === total)
+                        status('Staging mod files (' + completed + '/' + total + ')...');
+                });
+            },
+
+            verify() {
+                const required = this.getConfig().requiredPaths;
+
+                for (const path of required) {
+                    if (!this.fileExists(path))
+                        throw new Error('Missing staged file: ' + path);
+                }
+            },
+
+            async stageAll() {
+                this.ensureFs();
+                await this.stageEngineFiles();
+                await this.stageContentFiles();
+                await this.stageModFiles();
+                this.verify();
+                log('[Boot] VFS staging complete');
+            }
+        };
+
+        window.jsLog = function(message) { log(message); };
+        window.setLoadingStatus = function(message) { status(message); };
+        window.showLoading = function(message) { showLoading(message); };
+        window.hideLoading = function() { loading.classList.add('hidden'); };
+        window.reportInitProgress = function(message) { showLoading(message); };
+
+        (async function() {
+            log('[Boot] Starting...');
+            setPhase('starting-runtime');
+            const bootConfig = await OpenRABoot.loadBootConfig();
+            document.title = bootConfig.documentTitle || document.title;
+            loadingTitle.textContent = bootConfig.loadingTitle || loadingTitle.textContent;
+
+            status('Starting .NET runtime...');
+            log('[Boot] Starting Blazor...');
+            await Blazor.start();
+            log('[Boot] Blazor started, DotNet=' + (typeof DotNet !== 'undefined') + ' FS=' + (typeof Module !== 'undefined' && !!Module.FS));
+
+            setPhase('staging-assets');
+            await OpenRABoot.stageAll();
+
+            setPhase(smokeMode ? 'smoke-initializing-engine' : 'initializing-engine');
+            await withTimeout(
+                dotnetStepAsync('Initializing OpenRA engine...', 'Step_InitEngineAsync', bootConfig.modId, smokeMode, bootConfig.requiredPaths),
+                initTimeoutMs,
+                'Engine initialization timed out'
+            );
+
+            if (smokeMode) {
+                setPhase('smoke-passed');
+                status('Smoke test passed.');
+                return;
+            }
+
+            setPhase('starting-shellmap');
+            await withTimeout(
+                runShellmapStartup(initTimeoutMs),
+                initTimeoutMs,
+                'Shellmap startup timed out'
+            );
+
+            setPhase('starting-loop');
+            await dotnetStep('Starting game loop...', 'Step_StartLoop');
+
+            setPhase('running');
+            loading.classList.add('hidden');
+            log('[Boot] DONE!');
+        })().catch(function(error) {
+            setPhase('failed');
+            bootState.error = error && error.message ? error.message : String(error);
+            log('[Boot] FATAL: ' + error);
+            S.textContent = 'Error: ' + bootState.error;
+        });
+    </script>
+</body>
+</html>
