@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Descent</title>
+<style>
+  html, body { margin: 0; height: 100%; background: #000; overflow: hidden; color: #0f0; font-family: ui-monospace, Menlo, monospace; }
+  canvas { display: block; }
+  #status { position: fixed; left: 0; right: 0; top: 16px; text-align: center; font-size: 12px; letter-spacing: .08em; z-index: 50; pointer-events: none; text-shadow: 0 1px 2px #000; }
+  #status:empty { display: none; }
+</style>
+<!-- three.js is vendored (0.183.0, MIT) so the game runs from our own origin with no CDN -->
+<script type="importmap">
+  { "imports": { "three": "./vendor/three.module.js", "three/addons/": "./vendor/addons/" } }
+</script>
+</head>
+<body>
+<div id="status"></div>
+<script type="module" src="src/main.js"></script>
+</body>
+</html>

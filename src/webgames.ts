@@ -41,6 +41,22 @@ export const WEB_GAMES: Record<string, WebGame> = {
     id: "jazz2", title: "Jazz Jackrabbit 2", sub: "The 1998 sequel, rebuilt in C++ — shareware demo episode, playable now (Jazz² Resurrection)",
     url: "/jazz2/index.html", icon: "star", licence: "Jazz² Resurrection GPL-3.0 · shareware demo data under Epic's shareware terms", source: "https://github.com/deathkiller/jazz2-native",
   },
+  descent: {
+    id: "descent", title: "Descent", sub: "Parallax's 1995 six-degrees-of-freedom mine crawler — shareware episode, rebuilt in three.js",
+    url: "/descent/index.html", icon: "cube", licence: "three-descent MIT (OPL3 synth LGPL-2.1+) · Episode 1 shareware data as distributed by the project", source: "https://github.com/mrdoob/three-descent",
+  },
+  duke: {
+    id: "duke", title: "Duke Nukem 3D", sub: "1996's Build-engine icon — the shareware episode, all eleven levels (EDuke32)",
+    url: "/duke/index.html", icon: "skull", licence: "EDuke32 GPL-2.0 · shareware DUKE.GRP 1.3D under 3D Realms' shareware terms", source: "https://github.com/DigitalCyberSoft/eduke32-wasm",
+  },
+  gorescript: {
+    id: "gorescript", title: "Gorescript", sub: "A retro first-person shooter with an eighteen-level campaign, built on three.js",
+    url: "/gorescript/index.html", icon: "triangle", licence: "MIT — engine and assets", source: "https://github.com/gorescript/gorescript",
+  },
+  hexgl: {
+    id: "hexgl", title: "HexGL", sub: "Futuristic anti-gravity racing — the three.js showpiece, at full speed",
+    url: "/hexgl/index.html", icon: "spark", licence: "MIT — engine, textures, geometry and audio", source: "https://github.com/BKcore/HexGL",
+  },
 };
 
 export const WEB_GAME_IDS = Object.keys(WEB_GAMES);

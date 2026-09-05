@@ -173,6 +173,37 @@ export const SCHEMES: Record<string, ControlScheme> = {
     touch: "Keyboard and mouse only — play on a computer.",
     orientation: "landscape",
   },
+  descent: {
+    keys: [["W A S D", "move"], ["Q · E", "roll"], ["Tab", "map"], ["1 – 9", "weapons"], ["Esc", "menu"]],
+    mouse: "Mouselook to aim. Left click fires, right click launches a missile.",
+    pad: "Not used in this build.",
+    touch: "Keyboard only — pair a keyboard or play on a computer.",
+    orientation: "landscape",
+    tip: "It is a six-degrees-of-freedom game: you can roll and fly straight up. Getting lost is part of it — Tab opens the map.",
+  },
+  duke: {
+    keys: [["W A S D / ← ↑ → ↓", "move"], ["Ctrl", "fire"], ["Space", "open / use"], ["Shift", "run"], ["1 – 0", "weapons"], ["Z", "crouch"], ["Esc", "menu"]],
+    mouse: "Click the picture to capture the mouse: look and fire.",
+    pad: "Not used in this build.",
+    touch: "On-screen buttons are drawn by the game; the toolbar has fullscreen and sound.",
+    orientation: "landscape",
+    rebind: "In-game menu → Options → Keyboard Setup.",
+  },
+  gorescript: {
+    keys: [["W A S D", "move"], ["Mouse", "aim"], ["Left click", "fire"], ["1 – 7", "weapons"], ["Space", "jump"], ["Esc", "menu"]],
+    mouse: "Click the picture to capture the mouse: look and fire.",
+    pad: "Not used.",
+    touch: "Keyboard and mouse only — play on a computer.",
+    orientation: "landscape",
+    tip: "Eighteen hand-built levels — pick any of them from Level Select on the title screen.",
+  },
+  hexgl: {
+    keys: [["← →", "steer"], ["↑", "accelerate"], ["A · D", "air brakes (lean into the corner)"], ["Esc", "menu"]],
+    pad: "A controller works — the game ships its own gamepad support.",
+    touch: "Tilt the device to steer, with on-screen accelerate and brake buttons.",
+    orientation: "landscape",
+    tip: "The air brakes are the whole game: hold A or D through a corner instead of only steering.",
+  },
 };
 
 // family fallbacks for systems added later without a card of their own
