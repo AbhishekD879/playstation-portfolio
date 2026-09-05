@@ -377,3 +377,4 @@ per-file cap (25 MiB). Now:
 - 2026-09-05 · **Phase 7 deployed to production** (main `3d060bd`). Regression pass preview vs previous production: captured non-Games lists identical, 31 routes error-free on both, four shelf boots identical.
 - 2026-09-05 · Production verified after the Phase 7 deploy: Retaliate64 downloads via the relay and boots in the C64 core on production; options rows (Play / Export / Import / Re-link, Run with… on arcade tiles) render; R2 assets and the relay answer as before.
 - 2026-09-05 · Phase 8: BIOS how-to links in the Systems sheet; free catalog grows to 190 (WASM-4 archive + GitHub homebrew sweep, 23/26 verified booting on the preview) with a filter box.
+- 2026-09-05 · **Phase 8 deployed to production** (main `acbcc6e`). Regression pass preview vs previous production: captured non-Games lists identical, 31 routes error-free on both, four shelf boots identical.
