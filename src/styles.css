@@ -5391,7 +5391,7 @@ body.party-col .share-btn { right: calc(var(--pty-w) + clamp(12px, 2vw, 22px)); 
 @media (pointer: coarse) {
   .fullapp input:not([type=checkbox]):not([type=radio]):not([type=range]):not([type=file]),
   .panel input:not([type=checkbox]):not([type=radio]):not([type=range]):not([type=file]),
-  .browser-bar input, .set-search-input, .art-search input, .cin-search input, .lib-search input, .pod-search input, .wd-search input,
+  .browser-bar input, .set-search-input, .hz-search input, .studio-search input, .studio input[type=text],
   .gbook input, .gbook textarea, .wiki input, .tm input, .online-input, .bg-codein, .hz-filter {
     font-size: 16px; min-height: 40px; padding-top: 8px; padding-bottom: 8px;
   }
@@ -5407,9 +5407,11 @@ body.party-col .share-btn { right: calc(var(--pty-w) + clamp(12px, 2vw, 22px)); 
 @media (max-width: 480px) {
   .status { top: 10px; right: 10px; left: 10px; gap: 10px; font-size: 12.5px; justify-content: flex-end; overflow: hidden; white-space: nowrap; }
   .status-troph, .status-pad, .status-online, .status-batt .batt-pct { display: none; }
-  .item { width: calc(100vw - 32px); gap: 12px; }
-  .item-title { font-size: 15px; }
-  .item-sub { font-size: 11.5px; }
+  .item-col { left: 20px; }
+  .item { left: 0; width: calc(100vw - 40px); gap: 12px; }
+  .item-title { font-size: 15px; max-width: calc(100vw - 108px); }
+  .item.selected .item-title { font-size: 18px; }
+  .item-sub { font-size: 11.5px; max-width: calc(100vw - 108px); }
   .panel { width: 100vw; padding: calc(40px + env(safe-area-inset-top, 0px)) 18px calc(16px + env(safe-area-inset-bottom, 0px)); border-left: 0; }
   .panel-heading { font-size: 22px; margin-bottom: 16px; }
   .panel-body p { padding-left: 12px; font-size: 14.5px; }
