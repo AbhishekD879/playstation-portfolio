@@ -16,6 +16,9 @@ const TYPES: Record<string, string> = {
   wasm: "application/wasm", js: "text/javascript; charset=utf-8", html: "text/html; charset=utf-8",
   data: "application/octet-stream", mpq: "application/octet-stream", zip: "application/zip",
   bin: "application/octet-stream", tar: "application/x-tar", txt: "text/plain; charset=utf-8",
+  png: "image/png", jpg: "image/jpeg", jpeg: "image/jpeg", gif: "image/gif", webp: "image/webp", svg: "image/svg+xml",
+  ogg: "audio/ogg", mp3: "audio/mpeg", wav: "audio/wav", json: "application/json", css: "text/css; charset=utf-8",
+  hog: "application/octet-stream", pig: "application/octet-stream", pk3: "application/zip",
 };
 const typeOf = (key: string) => TYPES[key.split(".").pop()?.toLowerCase() ?? ""] ?? "application/octet-stream";
 
