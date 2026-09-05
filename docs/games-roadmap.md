@@ -390,6 +390,46 @@ second, so this can be rerun:
   Labs toggle is on (by design); Map/Chess canvases and Manual render fine —
   the rig's first selectors were wrong, not the apps.
 
+## Phase 11 — four more free games under PC Games (2026-09-05)
+
+Research pass over browser-playable games with freely redistributable data
+(two agents plus my own boot tests in a real browser — a repo claiming a web
+target means nothing until a canvas actually paints). Shipped:
+
+| Game | Engine / port | Size | Data licence |
+|---|---|---|---|
+| Descent | three-descent (mrdoob), a native three.js re-implementation, MIT | 5 MB | Episode 1 shareware `.hog`/`.pig`, distributed by the project |
+| Duke Nukem 3D | EDuke32 → WASM (DigitalCyberSoft), GPL-2.0 | 15 MB | Shareware `DUKE.GRP` 1.3D, Episode 1 |
+| Gorescript Classic | three.js, MIT | 10 MB | MIT, eighteen-level campaign |
+| HexGL | three.js, MIT | 16 MB | MIT, all textures/geometry/audio |
+
+Same pattern as the earlier web games: published build mirrored unmodified,
+big files in R2 behind `functions/<dir>/[[file]].ts`, loaders and code in the
+repo, a Controls card with the keys taken from each game's own menu, a route,
+and a README recording source and licence. three.js 0.183.0 is vendored for
+Descent so nothing loads from a CDN. `r2serve.ts` now sends real content types
+for images, audio, JSON and CSS.
+
+**Two that are mirrored but NOT shipped**, both failing for real reasons:
+- **SuperTux** (official GPL web build, 335 MB): my mirror is byte-identical
+  to `play.supertux.org/play/` and still aborts with
+  `missing function: IMG_Load_IO`. Upstream had not finished its 327 MB
+  download inside the test window, so it very likely aborts there too — the
+  master nightly looks broken. Worth retrying with `releases/0.7.0`.
+- **OpenHV** (OpenRA engine, 100% free CC assets, 144 MB): all 253 files
+  mirrored from the live request list, but a JSON fetch resolves to the SPA
+  fallback, so a path the game asks for at runtime is missing from the
+  capture. The licence story is the best of any candidate, so this is worth
+  finishing.
+
+**Rejected**: Quake III / OpenArena (no working free-data browser build;
+quakejs.com returns 526), Morrowind / Jedi Knight / wipEout / RollerCoaster
+Tycoon (engine runs, data is retail), archive.org embeds (fair use, not a
+licence, and not self-hostable), BananaBread (2013 asm.js, only the low
+quality tier still exists), Babylon.js Space Pirates (no licence declared).
+Note that "free on Steam" (Shadow Warrior, Rise of the Triad) is not a
+redistribution grant; only their shareware episodes are.
+
 ## Known constraints (from research, Sep 2026)
 
 - BIOS downloads (asked 2026-09-05): not possible for the systems that need
@@ -442,3 +482,4 @@ second, so this can be rerun:
 - 2026-09-05 · **Phase 9 deployed to production** (main `8a7e82d`). Regression pass preview vs previous production: captured non-Games lists identical, 31 routes error-free on both; the four shelf boots read dimmer on the preview only because the new Controls card covers a first boot — after "Got it" the NES canvas measures the same 0.817 as production.
 - 2026-09-05 · Phase 10: device audit rig + responsive/tap-target pass over the non-game apps; Winamp fixed; Trivia and Art error states.
 - 2026-09-05 · **Phase 10 deployed to production** (main `ae18a1e`). Regression pass preview vs previous production: non-Games category lists identical, 31 routes error-free on both, four shelf boots identical. Also fixed the Code Playground sample (globalReturn), phone crossbar width and HzScreen search inputs.
+- 2026-09-05 · **Phase 11 deployed to production** (main `5e89f1f`): Descent, Duke Nukem 3D, Gorescript and HexGL under PC Games, all verified booting from our own origin on prod. Regression pass clean (category lists identical, 31 routes error-free).
