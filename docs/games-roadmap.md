@@ -311,9 +311,14 @@ per-file cap (25 MiB). Now:
   latest release → ROM-extension assets → OSI licence only) that yielded 21
   more games across NES, Game Boy, GBA, N64, DS, PS1, Mega Drive, 2600 and
   C64 — Blind Jump, Witch n' Wiz, Rhythm Land, the N64brew 2024 jam, Traffic
-  Escape DS, Tetrade… Skipped on purpose: tools and interpreters, fan games
-  built on someone else's IP, and ports whose data is not free. Long lists
-  get a filter box in the Free games sheet.
+  Escape DS, KleleAtoms… Skipped on purpose: tools and interpreters, fan
+  games built on someone else's IP, and ports whose data is not free. Long
+  lists get a filter box in the Free games sheet. Boot sweep on the preview
+  (download → tile → Play → canvas screenshot, judged from a contact sheet):
+  23 of 26 relayed homebrews reach their title screens; dropped the two
+  libdragon N64 jam ROMs (the core dies with "table index is out of bounds")
+  and the PS1 homebrew disc (black on the HLE BIOS). The WASM-4 archive was
+  spot-checked (2048, Antcopter) — same loader as the six already verified.
 - **What "lots more games" would take next.** The richest legal catalog left
   is ScummVM's freeware set (Beneath a Steel Sky, Flight of the Amazon Queen,
   Lure of the Temptress, Drascula, Dreamweb, Soltys, Sfinx, Nippon Safes,
@@ -371,4 +376,4 @@ per-file cap (25 MiB). Now:
 - 2026-09-05 · Phase 7: arcade core switch, export/import of saved progress, SRAM restore proven on production with µCity, two C64 homebrews; OpenLara and Amiga/NGP/WS homebrew parked with reasons.
 - 2026-09-05 · **Phase 7 deployed to production** (main `3d060bd`). Regression pass preview vs previous production: captured non-Games lists identical, 31 routes error-free on both, four shelf boots identical.
 - 2026-09-05 · Production verified after the Phase 7 deploy: Retaliate64 downloads via the relay and boots in the C64 core on production; options rows (Play / Export / Import / Re-link, Run with… on arcade tiles) render; R2 assets and the relay answer as before.
-- 2026-09-05 · Phase 8: BIOS how-to links in the Systems sheet; free catalog grows to ~190 (WASM-4 archive + GitHub homebrew sweep) with a filter box.
+- 2026-09-05 · Phase 8: BIOS how-to links in the Systems sheet; free catalog grows to 190 (WASM-4 archive + GitHub homebrew sweep, 23/26 verified booting on the preview) with a filter box.
