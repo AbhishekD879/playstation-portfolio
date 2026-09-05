@@ -37,7 +37,9 @@ export async function lintJs(code: string): Promise<Diag[]> {
   if (!Linter) Linter = (await import("eslint-linter-browserify")).Linter;
   const linter = new Linter();
   const messages = linter.verify(code, {
-    languageOptions: { ecmaVersion: "latest", sourceType: "script", globals: GLOBALS as any },
+    // the sandbox runs the snippet as a function body, so a top-level `return`
+    // is legal there — tell the parser the same (the default sample ends with one)
+    languageOptions: { ecmaVersion: "latest", sourceType: "script", globals: GLOBALS as any, parserOptions: { ecmaFeatures: { globalReturn: true } } },
     rules: RULES as any,
   });
   return messages.map((m: any) => ({
