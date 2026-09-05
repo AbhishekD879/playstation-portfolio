@@ -9,6 +9,8 @@ import { holdWakeLock } from "../wakelock";
 import { EJS_CONFIG, PSP_CONFIG, setBridgePaused, setPrimaryIndex, startBridge, stopBridge } from "../gamepadBridge";
 import { biosZipFor } from "../bios";
 import type { SaveRecord } from "../saves";
+import ControlsCard from "./ControlsCard";
+import { hasSeenControls } from "../controls";
 import { SYSTEMS } from "../systems";
 import { startHost, type HostHandle } from "../ps2mp/webrtc";
 import { newPartyCode } from "../party/net";
@@ -64,6 +66,8 @@ const EJS_VERSION = "4.2.3";
 
 export default function GameSession(props: { game: GameRecord; profileId: string; resume?: SaveRecord | null }) {
   const [reading, setReading] = createSignal(true);
+  // "how do I play this?" — open by itself the first time this system boots
+  const [help, setHelp] = createSignal(!hasSeenControls(props.game.core));
   // "permission" → linked file needs a fresh grant; "missing" → file moved
   const [blocked, setBlocked] = createSignal<"permission" | "missing" | null>(null);
   let disc!: HTMLDivElement;
@@ -404,6 +408,7 @@ export default function GameSession(props: { game: GameRecord; profileId: string
             <button class="ps-act" onClick={hostTwoPlayer}>play online (up to {MAX_PLAYERS})</button>
             <button class="ps-act" onClick={hostBroadcast}>let people watch</button>
             <button class="ps-act" onClick={() => void saveProgress()} title="Keep a snapshot in the console — Continue from it next time">save progress</button>
+            <button class="ps-act" onClick={() => setHelp(true)} title="Keys, mouse, controller, touch (?)">controls</button>
             <Show when={progressNote()}><span class="session-mp-note">{progressNote()}</span></Show>
             <Show when={couch() === 0} fallback={
               <>
@@ -422,6 +427,7 @@ export default function GameSession(props: { game: GameRecord; profileId: string
         </div>
       </Show>
       <button class="session-eject" onClick={eject} title="Eject disc & restart console">⏏ EJECT</button>
+      <ControlsCard id={props.game.core} title={SYSTEMS[props.game.core]?.name ?? props.game.core} family={SYSTEMS[props.game.core]?.family} open={help()} onClose={() => setHelp(false)} onToggle={() => setHelp(!help())} />
     </div>
   );
 }

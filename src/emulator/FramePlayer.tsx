@@ -6,12 +6,15 @@ import { Show, createSignal, onCleanup, onMount } from "solid-js";
 import { bumpPlays, resolveGameFile, type GameRecord } from "../gamesdb";
 import { setNavEnabled } from "../input";
 import { SYSTEMS } from "../systems";
+import ControlsCard from "./ControlsCard";
+import { hasSeenControls } from "../controls";
 
 export default function FramePlayer(props: { game: GameRecord; onClose: () => void }) {
   const [state, setState] = createSignal<"loading" | "running" | "error">("loading");
   const [detail, setDetail] = createSignal("");
   let frame!: HTMLIFrameElement;
   const src = () => SYSTEMS[props.game.core]?.frame ?? "";
+  const [help, setHelp] = createSignal(!hasSeenControls(props.game.core));
 
   onMount(() => {
     setNavEnabled(false);
@@ -44,7 +47,9 @@ export default function FramePlayer(props: { game: GameRecord; onClose: () => vo
           <Show when={state() === "error"}><div class="palm-msg">COULDN'T START<span>{detail()}</span></div></Show>
         </div>
       </Show>
+      <button class="palm-help" onClick={() => setHelp(true)} title="How to play (?)">? controls</button>
       <button class="palm-eject" onClick={props.onClose}>⏏ EJECT</button>
+      <ControlsCard id={props.game.core} title={SYSTEMS[props.game.core]?.name ?? props.game.core} family={SYSTEMS[props.game.core]?.family} open={help()} onClose={() => { setHelp(false); frame.focus(); }} onToggle={() => setHelp(!help())} />
     </div>
   );
 }

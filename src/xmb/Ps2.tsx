@@ -2,6 +2,8 @@
 // our own PlayStation-style UI: disc-insert screen, spinning-disc load, full-
 // bleed canvas, Xbox-pad → PS2 mapping via the gamepad bridge (same-origin
 // iframe, so synthesized keys reach the emulator). ISOs are read locally.
+import ControlsCard from "../emulator/ControlsCard";
+import { hasSeenControls } from "../controls";
 import { For, Show, createEffect, createSignal, onCleanup, onMount } from "solid-js";
 import InputProbe from "./InputProbe";
 import PadLadder from "./PadLadder";
@@ -107,6 +109,7 @@ export default function Ps2(props: {
   let releaseLock: (() => void) | null = null;
   const requestSave = () => frame?.contentWindow?.postMessage({ type: "play-save", saveKey }, location.origin);
   const [saveNote, setSaveNote] = createSignal("");
+  const [help, setHelp] = createSignal(false); // "how to play": opens once after the first boot, then from the bar
   const [showDiag, setShowDiag] = createSignal(false); // diagnostics/share-log panel
 
   // —— speed readout ————————————————————————————————————————————————————
@@ -607,6 +610,7 @@ export default function Ps2(props: {
         frame.contentWindow?.focus();
         // auto-save the memory card every 15s so progress survives a reload
         saveTimer = setInterval(requestSave, 15_000);
+        if (!hasSeenControls("ps2")) setHelp(true);
         // Came here from "host this" on the Online screen. Hosting needs a
         // running emulator (it captures the canvas), so it can only happen
         // here — never in the boot gesture itself.
@@ -822,6 +826,8 @@ export default function Ps2(props: {
               <button class="ghost-btn" classList={{ on: showPerf() }} aria-pressed={showPerf()}
                 onClick={togglePerf}>▤ fps</button>
               <button class="ghost-btn" onClick={() => requestSave()}>▪ save card</button>
+              <button class="ghost-btn" onClick={() => setHelp(true)} title="How to play (?)">? controls</button>
+              <ControlsCard id="ps2" title="PlayStation 2" open={help()} onClose={() => setHelp(false)} onToggle={() => setHelp(!help())} />
               <button class="ghost-btn" classList={{ on: showDiag() }} onClick={() => setShowDiag((v) => !v)}>🩺 diagnostics</button>
               <button class="ghost-btn" onClick={goFullscreen}>⛶ full screen</button>
               <button class="ghost-btn" onClick={eject}>⏏ eject</button>

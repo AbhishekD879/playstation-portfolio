@@ -8,6 +8,8 @@ import { Show, createSignal, onCleanup, onMount } from "solid-js";
 import type * as Cloudpilot from "cloudpilot-emu-embedded";
 import { listBios } from "../bios";
 import { bumpPlays, resolveGameFile, type GameRecord } from "../gamesdb";
+import ControlsCard from "./ControlsCard";
+import { hasSeenControls } from "../controls";
 import { setNavEnabled } from "../input";
 
 type Emu = Cloudpilot.Emulator;
@@ -69,6 +71,7 @@ export default function PalmSession(props: { game: GameRecord; onClose: () => vo
   });
 
   const close = () => props.onClose();
+  const [help, setHelp] = createSignal(!hasSeenControls("palm"));
 
   return (
     <div class="palm-session">
@@ -84,7 +87,9 @@ export default function PalmSession(props: { game: GameRecord; onClose: () => vo
           <Show when={state() === "error"}><div class="palm-msg">COULDN'T START<span>{detail()}</span></div></Show>
         </div>
       </Show>
+      <button class="palm-help" onClick={() => setHelp(true)} title="How to play (?)">? controls</button>
       <button class="palm-eject" onClick={close}>⏏ EJECT</button>
+      <ControlsCard id="palm" title="Palm OS" open={help()} onClose={() => setHelp(false)} onToggle={() => setHelp(!help())} />
     </div>
   );
 }

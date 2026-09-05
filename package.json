@@ -8,7 +8,7 @@
     "build": "vite build",
     "preview": "vite preview",
     "prebuild": "node src/rpgmShim.test.mjs && node scripts/seo.mjs",
-    "test": "node src/rpgmShim.test.mjs && node src/rpgmShotStats.test.mjs && node src/rpgmDetect.test.mjs && node src/rpaIndex.test.mjs && node src/renpyPack.test.mjs && node src/renpyConvert.test.mjs && node src/renpyShim.test.mjs && node src/importTrace.test.mjs && node src/ps2/engineChoice.test.mjs && node src/capture.test.mjs && node src/fsr.test.mjs && node src/xmb/routes.test.mjs && node src/xmb/gameFolders.test.mjs && node src/systems.test.mjs && node src/freegames.test.mjs && node src/saves.test.mjs"
+    "test": "node src/rpgmShim.test.mjs && node src/rpgmShotStats.test.mjs && node src/rpgmDetect.test.mjs && node src/rpaIndex.test.mjs && node src/renpyPack.test.mjs && node src/renpyConvert.test.mjs && node src/renpyShim.test.mjs && node src/importTrace.test.mjs && node src/ps2/engineChoice.test.mjs && node src/capture.test.mjs && node src/fsr.test.mjs && node src/xmb/routes.test.mjs && node src/xmb/gameFolders.test.mjs && node src/systems.test.mjs && node src/freegames.test.mjs && node src/saves.test.mjs && node src/controls.test.mjs"
   },
   "dependencies": {
     "@dimforge/rapier3d-compat": "^0.19.3",

@@ -5339,3 +5339,30 @@ body.party-col .share-btn { right: calc(var(--pty-w) + clamp(12px, 2vw, 22px)); 
 /* free games: filter box on long lists */
 .hz-sheet-body .hz-filter { width: 100%; box-sizing: border-box; margin: 0 0 8px; padding: 8px 10px; font: inherit; color: inherit; background: rgba(255,255,255,.06); border: 1px solid rgba(255,255,255,.14); border-radius: 6px; outline: none; }
 .hz-sheet-body .hz-filter:focus { border-color: rgba(255,255,255,.4); }
+
+/* —— "How to play" card ———————————————————————————————————————————— */
+.ctl-card { position: fixed; inset: 0; z-index: 90; display: flex; align-items: center; justify-content: center; padding: 16px; background: rgba(2,4,10,0.58); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); }
+.ctl-panel { width: min(600px, 100%); max-height: min(88vh, 100%); overflow-y: auto; overscroll-behavior: contain; box-sizing: border-box; padding: clamp(18px, 3vw, 30px); border-radius: 14px; background: rgba(8,13,22,0.92); border: 1px solid var(--glassline, rgba(255,255,255,0.14)); box-shadow: 0 30px 80px rgba(0,0,0,0.6); color: #eef2ff; font-size: 14.5px; line-height: 1.5; }
+.ctl-eyebrow { display: block; font-size: 11px; letter-spacing: 0.32em; color: var(--dim, rgba(255,255,255,0.55)); }
+.ctl-head h3 { margin: 4px 0 14px; font-size: 22px; font-weight: 700; letter-spacing: 0.02em; }
+.ctl-sec { margin: 0 0 14px; }
+.ctl-sec h4 { margin: 0 0 6px; font-size: 11.5px; letter-spacing: 0.22em; text-transform: uppercase; color: var(--dim, rgba(255,255,255,0.6)); }
+.ctl-sec p { margin: 0 0 4px; }
+.ctl-orient { color: color-mix(in oklab, var(--xmb-tint, #7cc4ff) 70%, #fff); }
+.ctl-keys { display: grid; grid-template-columns: max-content 1fr; column-gap: 14px; row-gap: 6px; margin: 0; align-items: center; }
+.ctl-keys dt, .ctl-keys dd { margin: 0; }
+.ctl-keys kbd, .ctl-hint kbd { display: inline-block; padding: 2px 8px; border-radius: 6px; font: 600 12.5px ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing: 0.04em; color: #fff; background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.22); box-shadow: inset 0 -2px 0 rgba(0,0,0,0.4); white-space: nowrap; }
+.ctl-tip { margin: 8px 0 0; padding: 8px 10px; border-left: 2px solid color-mix(in oklab, var(--xmb-tint, #7cc4ff) 70%, #fff); background: rgba(255,255,255,0.05); }
+.ctl-rebind { margin: 10px 0 0; font-size: 13px; color: var(--dim, rgba(255,255,255,0.6)); }
+.ctl-foot { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-top: 16px; }
+.ctl-remember { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--dim, rgba(255,255,255,0.7)); }
+.ctl-ok { padding: 10px 22px; border-radius: 999px; border: 1px solid rgba(255,255,255,0.3); background: #fff; color: #0b1020; font: inherit; font-weight: 700; letter-spacing: 0.06em; cursor: pointer; }
+.ctl-ok:focus-visible { outline: 2px solid color-mix(in oklab, var(--xmb-tint, #7cc4ff) 70%, #fff); outline-offset: 2px; }
+.ctl-hint { margin-top: 12px; font-size: 12px; color: var(--dim, rgba(255,255,255,0.5)); text-align: right; }
+/* the "? controls" button on frame/palm/web-game sessions sits opposite EJECT */
+.palm-help { position: absolute; top: 14px; left: 14px; z-index: 12; padding: 8px 12px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.22); background: rgba(10,14,26,0.65); color: #fff; font: 600 12px/1 inherit; letter-spacing: 0.08em; cursor: pointer; }
+.palm-help:hover { background: rgba(255,255,255,0.14); }
+/* touch: the session bar leaves the bottom to the on-screen pad */
+@media (pointer: coarse) {
+  .session-mp { top: 14px; bottom: auto; left: 14px; right: 120px; flex-wrap: wrap; row-gap: 6px; }
+}

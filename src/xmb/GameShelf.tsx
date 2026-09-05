@@ -12,6 +12,7 @@ import type { NavAction } from "../input";
 import { generateCover } from "../covers";
 import * as sfx from "../audio";
 import { ago, isSaveFile, packSaves, pickResume, unpackSaves, type SaveRecord } from "../saves";
+import ControlsCard from "../emulator/ControlsCard";
 
 const mb = (n?: number) => (!n ? "" : n >= 1073741824 ? `${(n / 1073741824).toFixed(1)} GB` : `${(n / 1048576).toFixed(1)} MB`);
 const sysLabel = (s: string) => (s === "ps2" ? "PlayStation 2" : CORE_NAMES[s] ?? s);
@@ -35,6 +36,7 @@ export default function GameShelf(props: {
   const [opts, setOpts] = createSignal(false);
   const [confirmRm, setConfirmRm] = createSignal(false);
   const closeOpts = () => { setOpts(false); setConfirmRm(false); };
+  const [helpFor, setHelpFor] = createSignal<GameRecord | null>(null); // "How to play" from the options sheet
 
   // saved progress per game (newest state wins). Loaded once: EJECT reloads the
   // page, so the shelf always comes back with fresh saves.
@@ -289,6 +291,9 @@ export default function GameShelf(props: {
             <button class="hz-srow" classList={{ pri: !resumeOf(cur()!) }} onClick={() => { closeOpts(); props.onPlay(cur()!); }}>
               <span><span class="t">{resumeOf(cur()!) ? "Play from start" : "Play"}</span><span class="s">{resumeOf(cur()!) ? "leave the saved progress alone" : "start the game"}</span></span>
             </button>
+            <button class="hz-srow" onClick={() => setHelpFor(cur()!)}>
+              <span><span class="t">How to play</span><span class="s">keys, mouse, controller, touch — before you press Play</span></span>
+            </button>
             <Show when={otherArcadeCore(cur()!)}>{(to) => (
               <button class="hz-srow" onClick={() => void switchCore()}>
                 <span><span class="t">Run with {sysLabel(to())}</span><span class="s">romsets differ per core — try the other one if this one will not start</span></span>
@@ -331,6 +336,9 @@ export default function GameShelf(props: {
           </aside>
         </Show>
 
+        <Show when={helpFor()}>{(g) => (
+          <ControlsCard id={g().sys ?? g().core} title={sysLabel(g().sys ?? g().core)} family={SYSTEMS[g().sys ?? g().core]?.family} open={true} onClose={() => setHelpFor(null)} onToggle={() => setHelpFor(null)} />
+        )}</Show>
         <div class="hz-cc">
           <button class="hz-cc-i on" title="Home" onClick={() => { sfx.back(); props.onClose(); }}>
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M4 10.5 12 4l8 6.5V20H4z" /></svg>

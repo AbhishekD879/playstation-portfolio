@@ -330,6 +330,34 @@ per-file cap (25 MiB). Now:
   DOS shareware (Keen, Duke, Jill…) has no engine here — the PC shelf runs
   v86 disk images, not js-dos.
 
+## Phase 9 — "how do I play this?" (2026-09-05)
+
+Nobody could tell which keys a core listens to, what the mouse does, whether a
+phone shows a pad, or which way to hold it — so people mashed keys. Now every
+system, app and web game has a **Controls card** (`src/controls.ts` data,
+`src/emulator/ControlsCard.tsx`):
+
+- What it says: on a phone/tablet — what appears and how to hold the device
+  (landscape for consoles and arcade; upright is fine for handhelds); the
+  keyboard map in the console's own button names (EmulatorJS 4.2.3 defaults:
+  B=X, A=Z, Y=S, X=A, L/R=Q/E, L2/R2=Tab/R, Select=V, Start=Enter, sticks on
+  F/H/T/G and J/L/I/K — translated per system: PS1 ✕○□△, Mega Drive A/B/C,
+  N64 C-buttons, arcade "V inserts a coin"…); the mouse where it matters
+  (DS stylus, PC games, Micropolis/OpenTTD); the controller story; where to
+  rebind; one tip that saves a session ("nothing happens until you insert a
+  coin"). The device you are on is listed first.
+- When it shows: by itself the first time a system boots (remembered per
+  system in localStorage, "don't show again" on by default); from the
+  **controls** button in the EmulatorJS session bar, the **? controls** button
+  on web games / WASM-4 / PC / Palm, **? controls** in the PS2 bar; the
+  **?** or **F1** key anywhere in a session; and **How to play** in Game
+  options, before pressing Play.
+- Overlap: on touch devices the EmulatorJS session bar moves to the top so it
+  no longer sits on the virtual gamepad at the bottom.
+- Completeness is enforced: `controls.test.mjs` fails if any registry system
+  or web game lacks a card with keys-or-mouse, a controller line, a touch
+  line and an orientation.
+
 ## Known constraints (from research, Sep 2026)
 
 - BIOS downloads (asked 2026-09-05): not possible for the systems that need
@@ -378,3 +406,4 @@ per-file cap (25 MiB). Now:
 - 2026-09-05 · Production verified after the Phase 7 deploy: Retaliate64 downloads via the relay and boots in the C64 core on production; options rows (Play / Export / Import / Re-link, Run with… on arcade tiles) render; R2 assets and the relay answer as before.
 - 2026-09-05 · Phase 8: BIOS how-to links in the Systems sheet; free catalog grows to 190 (WASM-4 archive + GitHub homebrew sweep, 23/26 verified booting on the preview) with a filter box.
 - 2026-09-05 · **Phase 8 deployed to production** (main `acbcc6e`). Regression pass preview vs previous production: captured non-Games lists identical, 31 routes error-free on both, four shelf boots identical.
+- 2026-09-05 · Phase 9: Controls card for every system and web game (auto on first boot, controls button, ? key, How to play in Game options); session bar moves off the touch pad.
