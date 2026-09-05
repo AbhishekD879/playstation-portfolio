@@ -299,6 +299,17 @@ per-file cap (25 MiB). Now:
 
 ## Known constraints (from research, Sep 2026)
 
+- BIOS downloads (asked 2026-09-05): not possible for the systems that need
+  one. Sega CD, Dreamcast, PC-FX, Lynx, 3DO, ColecoVision and Palm firmware
+  is the console makers' copyright — never hosted or relayed. Free
+  replacements are already used where they exist (Amiga boots on AROS, the
+  5200 core has a built-in replacement, GBA / DS / PS1 / PSP / PS2 run on
+  HLE without a file). Checked and rejected: OpenBIOS for PS1 (MIT, and
+  PCSX ReARMed is on its compatibility list) has no public binary — no
+  GitHub releases on pcsx-redux or nugget, the author's static server only
+  carries a 10 KB build from 2019, and building needs Docker; flycast's
+  `reicast_hle_bios` option still aborts at start without dumps in our
+  build. Revisit only if OpenBIOS publishes releases.
 - Cosmetic: when the very first game lands on an empty shelf, the hero switches
   from its empty to its populated state and the Free games sheet is remounted,
   so it closes on its own and its "… is on your shelf" note is lost. The tile
