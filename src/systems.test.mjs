@@ -74,3 +74,7 @@ assert.ok(SYSTEMS.wasm4.engine === "frame" && SYSTEMS.wasm4.frame?.startsWith("/
 assert.ok(SYSTEMS.j2me.engine === "tab" && SYSTEMS.j2me.tab?.startsWith("/"), "j2me: tab engine needs a player page");
 assert.ok(systemsOf("sega").includes("segaSaturn") && !systemsOf("sega").includes("nes"));
 console.log("systems registry ok");
+
+// every firmware slot points the player at a legal how-to, never at a download
+for (const d of Object.values(SYSTEMS)) if (d.bios) assert.match(d.bios.howTo ?? "", /^https:\/\//, `${d.id}: BIOS slot needs a howTo link`);
+console.log("bios how-to ok");

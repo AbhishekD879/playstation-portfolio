@@ -5331,3 +5331,11 @@ body.party-col .share-btn { right: calc(var(--pty-w) + clamp(12px, 2vw, 22px)); 
 
 /* saved-progress thumbnail on the Continue row */
 .hz-srow .hz-shot { width: 56px; height: 42px; object-fit: cover; border-radius: 4px; flex: none; image-rendering: pixelated; background: #000; }
+
+/* BIOS pocket: the legal way to get firmware */
+.hz-bios .hz-howto { display: block; width: 100%; opacity: .8; }
+.hz-bios .hz-howto a { color: inherit; text-decoration: underline; text-underline-offset: 2px; }
+
+/* free games: filter box on long lists */
+.hz-sheet-body .hz-filter { width: 100%; box-sizing: border-box; margin: 0 0 8px; padding: 8px 10px; font: inherit; color: inherit; background: rgba(255,255,255,.06); border: 1px solid rgba(255,255,255,.14); border-radius: 6px; outline: none; }
+.hz-sheet-body .hz-filter:focus { border-color: rgba(255,255,255,.4); }

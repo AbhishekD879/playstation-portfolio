@@ -11,7 +11,13 @@ import { SYSTEMS } from "../systems";
 const kb = (n?: number) => (n ? (n >= 1048576 ? `${(n / 1048576).toFixed(1)} MB` : `${Math.max(1, Math.round(n / 1024))} KB`) : "");
 
 export default function FreeGamesSheet(props: { systems: readonly string[]; profileId: string; owned: GameRecord[]; onChanged: () => void }) {
-  const games = () => freeGamesFor(props.systems);
+  const all = () => freeGamesFor(props.systems);
+  // a big shelf (the WASM-4 archive is 150 carts) gets a filter box; a short list stays a list
+  const [q, setQ] = createSignal("");
+  const games = () => {
+    const needle = q().trim().toLowerCase();
+    return needle ? all().filter((g) => `${g.title} ${g.author} ${g.note}`.toLowerCase().includes(needle)) : all();
+  };
   const [open, setOpen] = createSignal(false);
   const [busy, setBusy] = createSignal<string | null>(null);
   const [note, setNote] = createSignal("");
@@ -60,8 +66,8 @@ export default function FreeGamesSheet(props: { systems: readonly string[]; prof
   });
 
   return (
-    <Show when={games().length}>
-      <button class="hz-btn" ref={pill} aria-haspopup="dialog" aria-expanded={open()} onClick={show}>Free games · {games().length}</button>
+    <Show when={all().length}>
+      <button class="hz-btn" ref={pill} aria-haspopup="dialog" aria-expanded={open()} onClick={show}>Free games · {all().length}</button>
       <Show when={open()}><div class="hz-sheet-scrim" onClick={close} /></Show>
       <aside class="hz-sheet" ref={sheet} hidden={!open()} role="dialog" aria-label="Free games for this shelf">
         <div class="hz-sheet-head">
@@ -71,6 +77,10 @@ export default function FreeGamesSheet(props: { systems: readonly string[]; prof
           </div>
         </div>
         <div class="hz-sheet-body" ref={body}>
+          <Show when={all().length > 12}>
+            <input class="hz-filter" type="search" placeholder={`Filter ${all().length} games…`} value={q()} onInput={(e) => setQ(e.currentTarget.value)} aria-label="Filter free games" />
+            <Show when={q() && !games().length}><div class="hz-sheet-note">Nothing matches "{q()}"</div></Show>
+          </Show>
           <For each={games()}>{(g) => (
             <div class="hz-sys">
               <div class="hz-sys-head">

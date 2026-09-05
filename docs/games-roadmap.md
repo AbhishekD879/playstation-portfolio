@@ -297,6 +297,34 @@ per-file cap (25 MiB). Now:
   demo data was only ever served from the dead host, and its redistribution
   terms are not as explicit as id's or Epic's shareware licences.
 
+## Phase 8 — firmware hints and a much bigger free catalog (2026-09-05)
+
+- **BIOS how-to.** Every firmware slot in the Systems sheet now carries, when
+  the files are missing, "Own the console? Dump its firmware yourself" with a
+  link to the core's documentation (libretro docs list the exact file names
+  and checksums; CloudpilotEmu's docs for Palm). Nothing downloads firmware:
+  it is the maker's copyright. `bios.howTo` is required by the registry test.
+- **Free catalog: 26 → ~190 titles.** The whole WASM-4 carts archive (150
+  carts, CC BY-NC-SA, authors credited; generated into
+  `src/data/wasm4carts.ts` from the archive's `.md` files) instead of six;
+  and an open-source homebrew sweep of GitHub (repos by topic and keyword →
+  latest release → ROM-extension assets → OSI licence only) that yielded 21
+  more games across NES, Game Boy, GBA, N64, DS, PS1, Mega Drive, 2600 and
+  C64 — Blind Jump, Witch n' Wiz, Rhythm Land, the N64brew 2024 jam, Traffic
+  Escape DS, Tetrade… Skipped on purpose: tools and interpreters, fan games
+  built on someone else's IP, and ports whose data is not free. Long lists
+  get a filter box in the Free games sheet.
+- **What "lots more games" would take next.** The richest legal catalog left
+  is ScummVM's freeware set (Beneath a Steel Sky, Flight of the Amazon Queen,
+  Lure of the Temptress, Drascula, Dreamweb, Soltys, Sfinx, Nippon Safes,
+  Mystery House, The Griffon Legend… ~20 titles, 0.1–35 MB each, official
+  downloads at downloads.scummvm.org). Our Point & Click app is a third-party
+  hosted iframe (scummvm.kuendig.io), so those files cannot be handed to it;
+  offering them means self-hosting the ScummVM wasm build (32.5 MB wasm → R2)
+  and writing the games into its IDBFS before launch. A phase of its own.
+  DOS shareware (Keen, Duke, Jill…) has no engine here — the PC shelf runs
+  v86 disk images, not js-dos.
+
 ## Known constraints (from research, Sep 2026)
 
 - BIOS downloads (asked 2026-09-05): not possible for the systems that need
@@ -343,3 +371,4 @@ per-file cap (25 MiB). Now:
 - 2026-09-05 · Phase 7: arcade core switch, export/import of saved progress, SRAM restore proven on production with µCity, two C64 homebrews; OpenLara and Amiga/NGP/WS homebrew parked with reasons.
 - 2026-09-05 · **Phase 7 deployed to production** (main `3d060bd`). Regression pass preview vs previous production: captured non-Games lists identical, 31 routes error-free on both, four shelf boots identical.
 - 2026-09-05 · Production verified after the Phase 7 deploy: Retaliate64 downloads via the relay and boots in the C64 core on production; options rows (Play / Export / Import / Re-link, Run with… on arcade tiles) render; R2 assets and the relay answer as before.
+- 2026-09-05 · Phase 8: BIOS how-to links in the Systems sheet; free catalog grows to ~190 (WASM-4 archive + GitHub homebrew sweep) with a filter box.

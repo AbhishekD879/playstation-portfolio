@@ -27,6 +27,8 @@ export interface BiosSpec {
   match?: string;       // or: any file with this extension counts (Palm device ROMs have no fixed name)
   dir?: string;         // sub-folder the core expects the files in (flycast: system/dc/)
   note: string;
+  /** where a player learns to dump this firmware from a console they own — a link to docs, never a download */
+  howTo?: string;
 }
 
 export interface SystemDef {
@@ -49,7 +51,7 @@ export const SYSTEMS: Record<string, SystemDef> = {
   ps2: { id: "ps2", name: "PlayStation 2", family: "sony", engine: "play", thumbs: ["Sony_-_PlayStation_2"], exts: ["isz"],
     fit: { cpuHeavy: true, desktop: "required", threads: true, minMemGB: 8, disc: true } },
   psx: { id: "psx", name: "PlayStation", family: "sony", engine: "ejs", thumbs: ["Sony_-_PlayStation"], exts: ["cbn", "mdf"],
-    bios: { files: ["scph5501.bin", "scph5500.bin", "scph5502.bin", "scph1001.bin"], required: false, note: "Works without one; a real BIOS fixes a few games" },
+    bios: { files: ["scph5501.bin", "scph5500.bin", "scph5502.bin", "scph1001.bin"], required: false, note: "Works without one; a real BIOS fixes a few games", howTo: "https://docs.libretro.com/library/pcsx_rearmed/" },
     fit: { cpuHeavy: true, minMemGB: 4, disc: true } },
   psp: { id: "psp", name: "PlayStation Portable", family: "sony", engine: "ejs", thumbs: ["Sony_-_PlayStation_Portable"], exts: ["prx"],
     fit: { cpuHeavy: true, threads: true, desktop: "recommended", minMemGB: 4, disc: true, note: "Needs threads — not on iPhone" } },
@@ -61,64 +63,64 @@ export const SYSTEMS: Record<string, SystemDef> = {
     fit: { cpuHeavy: true, minMemGB: 4 } },
   gb: { id: "gb", name: "Game Boy / Color", family: "nintendo", engine: "ejs", thumbs: ["Nintendo_-_Game_Boy_Color", "Nintendo_-_Game_Boy"], exts: ["gb", "gbc"] },
   gba: { id: "gba", name: "Game Boy Advance", family: "nintendo", engine: "ejs", thumbs: ["Nintendo_-_Game_Boy_Advance"], exts: ["gba"],
-    bios: { files: ["gba_bios.bin"], required: false, note: "Optional — only the boot logo needs it" } },
+    bios: { files: ["gba_bios.bin"], required: false, note: "Optional — only the boot logo needs it", howTo: "https://docs.libretro.com/library/mgba/" } },
   nds: { id: "nds", name: "Nintendo DS", family: "nintendo", engine: "ejs", thumbs: ["Nintendo_-_Nintendo_DS"], exts: ["nds"],
-    bios: { files: ["bios7.bin", "bios9.bin", "firmware.bin"], required: false, note: "Optional — the built-in firmware covers most games" },
+    bios: { files: ["bios7.bin", "bios9.bin", "firmware.bin"], required: false, note: "Optional — the built-in firmware covers most games", howTo: "https://docs.libretro.com/library/melonds/" },
     fit: { cpuHeavy: true, minMemGB: 4 } },
   vb: { id: "vb", name: "Virtual Boy", family: "nintendo", engine: "ejs", thumbs: ["Nintendo_-_Virtual_Boy"], exts: ["vb", "vboy"] },
 
   // —— Sega ————————————————————————————————————————————————————————————————
   segaMD: { id: "segaMD", name: "Mega Drive / Genesis", family: "sega", engine: "ejs", thumbs: ["Sega_-_Mega_Drive_-_Genesis"], exts: ["md", "gen", "smd"] },
   segaMS: { id: "segaMS", name: "Master System", family: "sega", engine: "ejs", thumbs: ["Sega_-_Master_System_-_Mark_III"], exts: ["sms"],
-    bios: { files: ["bios.sms"], required: false, note: "Optional" } },
+    bios: { files: ["bios.sms"], required: false, note: "Optional", howTo: "https://docs.libretro.com/library/genesis_plus_gx/" } },
   segaGG: { id: "segaGG", name: "Game Gear", family: "sega", engine: "ejs", thumbs: ["Sega_-_Game_Gear"], exts: ["gg"] },
   sega32x: { id: "sega32x", name: "32X", family: "sega", engine: "ejs", thumbs: ["Sega_-_32X"], exts: ["32x"],
     fit: { note: "A few titles glitch in this core" } },
   segaCD: { id: "segaCD", name: "Sega CD / Mega-CD", family: "sega", engine: "ejs", thumbs: ["Sega_-_Mega-CD_-_Sega_CD"], exts: [],
-    bios: { files: ["bios_CD_U.bin", "bios_CD_E.bin", "bios_CD_J.bin"], required: true, note: "Needs the console's BIOS for your game's region" },
+    bios: { files: ["bios_CD_U.bin", "bios_CD_E.bin", "bios_CD_J.bin"], required: true, note: "Needs the console's BIOS for your game's region", howTo: "https://docs.libretro.com/library/genesis_plus_gx/" },
     fit: { disc: true } },
   segaSaturn: { id: "segaSaturn", name: "Saturn", family: "sega", engine: "ejs", thumbs: ["Sega_-_Saturn"], exts: ["mds"],
-    bios: { files: ["saturn_bios.bin"], required: false, note: "Recommended; required for multi-disc games" },
+    bios: { files: ["saturn_bios.bin"], required: false, note: "Recommended; required for multi-disc games", howTo: "https://docs.libretro.com/library/beetle_saturn/" },
     fit: { cpuHeavy: true, desktop: "recommended", minMemGB: 4, disc: true, note: "3D games may stutter — a laptop does best" } },
   // flycast-wasm (Aug 2026): an SH4→WebAssembly JIT, packaged as an EmulatorJS core and
   // served from our own data path because the CDN has no Dreamcast core.
   dreamcast: { id: "dreamcast", name: "Dreamcast", family: "sega", engine: "ejs", ejsCore: "flycast", data: "/ejs/", thumbs: ["Sega_-_Dreamcast"], exts: ["gdi", "cdi"],
-    bios: { files: ["dc_boot.bin", "dc_flash.bin"], required: true, dir: "dc", note: "Needs the console's BIOS and flash dumps" },
+    bios: { files: ["dc_boot.bin", "dc_flash.bin"], required: true, dir: "dc", note: "Needs the console's BIOS and flash dumps", howTo: "https://docs.libretro.com/library/flycast/" },
     fit: { cpuHeavy: true, desktop: "recommended", minMemGB: 4, disc: true, note: "New (Aug 2026) and desktop-first: needs WebGL2, generates code at runtime; 60 fps reported on a laptop, phones unknown" } },
 
   // —— more consoles ————————————————————————————————————————————————————————
   pce: { id: "pce", name: "PC Engine / TurboGrafx-16", family: "consoles", engine: "ejs", thumbs: ["NEC_-_PC_Engine_-_TurboGrafx_16", "NEC_-_PC_Engine_CD_-_TurboGrafx-CD", "NEC_-_PC_Engine_SuperGrafx"], exts: ["pce", "sgx"],
-    bios: { files: ["syscard3.pce"], required: false, note: "CD games need the System Card; HuCards don't" } },
+    bios: { files: ["syscard3.pce"], required: false, note: "CD games need the System Card; HuCards don't", howTo: "https://docs.libretro.com/library/beetle_pce_fast/" } },
   pcfx: { id: "pcfx", name: "PC-FX", family: "consoles", engine: "ejs", thumbs: ["NEC_-_PC-FX"], exts: [],
-    bios: { files: ["pcfx.rom"], required: true, note: "Needs the console's BIOS" }, fit: { cpuHeavy: true, disc: true } },
+    bios: { files: ["pcfx.rom"], required: true, note: "Needs the console's BIOS", howTo: "https://docs.libretro.com/library/beetle_pc_fx/" }, fit: { cpuHeavy: true, disc: true } },
   ngp: { id: "ngp", name: "Neo Geo Pocket", family: "consoles", engine: "ejs", thumbs: ["SNK_-_Neo_Geo_Pocket_Color", "SNK_-_Neo_Geo_Pocket"], exts: ["ngp", "ngc"] },
   ws: { id: "ws", name: "WonderSwan", family: "consoles", engine: "ejs", thumbs: ["Bandai_-_WonderSwan_Color", "Bandai_-_WonderSwan"], exts: ["ws", "wsc", "pc2"] },
   lynx: { id: "lynx", name: "Atari Lynx", family: "consoles", engine: "ejs", thumbs: ["Atari_-_Lynx"], exts: ["lnx"],
-    bios: { files: ["lynxboot.img"], required: true, note: "Needs the Lynx boot ROM" } },
+    bios: { files: ["lynxboot.img"], required: true, note: "Needs the Lynx boot ROM", howTo: "https://docs.libretro.com/library/handy/" } },
   atari2600: { id: "atari2600", name: "Atari 2600", family: "consoles", engine: "ejs", thumbs: ["Atari_-_2600"], exts: ["a26"] },
   atari5200: { id: "atari5200", name: "Atari 5200", family: "consoles", engine: "ejs", thumbs: ["Atari_-_5200"], exts: ["a52"],
-    bios: { files: ["5200.rom"], required: false, note: "Optional — a free replacement is built in" } },
+    bios: { files: ["5200.rom"], required: false, note: "Optional — a free replacement is built in", howTo: "https://docs.libretro.com/library/atari800/" } },
   atari7800: { id: "atari7800", name: "Atari 7800", family: "consoles", engine: "ejs", thumbs: ["Atari_-_7800"], exts: ["a78"],
-    bios: { files: ["7800 BIOS (U).rom"], required: false, note: "Optional" } },
+    bios: { files: ["7800 BIOS (U).rom"], required: false, note: "Optional", howTo: "https://docs.libretro.com/library/prosystem/" } },
   jaguar: { id: "jaguar", name: "Atari Jaguar", family: "consoles", engine: "ejs", thumbs: ["Atari_-_Jaguar"], exts: ["j64", "jag", "abs", "cof"],
     fit: { cpuHeavy: true, desktop: "recommended", note: "3D titles want a laptop" } },
   "3do": { id: "3do", name: "3DO", family: "consoles", engine: "ejs", thumbs: ["The_3DO_Company_-_3DO"], exts: [],
-    bios: { files: ["panafz10.bin", "panafz1.bin", "goldstar.bin", "sanyotry.bin"], required: true, anyOf: true, note: "Needs one 3DO BIOS — any model" }, fit: { disc: true } },
+    bios: { files: ["panafz10.bin", "panafz1.bin", "goldstar.bin", "sanyotry.bin"], required: true, anyOf: true, note: "Needs one 3DO BIOS — any model", howTo: "https://docs.libretro.com/library/opera/" }, fit: { disc: true } },
   coleco: { id: "coleco", name: "ColecoVision", family: "consoles", engine: "ejs", thumbs: ["Coleco_-_ColecoVision"], exts: ["col"],
-    bios: { files: ["colecovision.rom"], required: true, note: "Needs the console's BIOS" } },
+    bios: { files: ["colecovision.rom"], required: true, note: "Needs the console's BIOS", howTo: "https://docs.libretro.com/library/gearcoleco/" } },
 
   // —— arcade ——————————————————————————————————————————————————————————————
   // Every arcade ROM is a .zip and which core runs it depends on the romset's
   // version lineage, not its name — so the player picks the core when adding.
   arcade: { id: "arcade", name: "Arcade · FinalBurn Neo", family: "arcade", engine: "ejs", thumbs: ["FBNeo_-_Arcade_Games"], exts: [],
-    bios: { files: ["neogeo.zip", "pgm.zip"], required: false, note: "Neo Geo games need neogeo.zip, PGM games pgm.zip; CPS1/CPS2 need nothing" },
+    bios: { files: ["neogeo.zip", "pgm.zip"], required: false, note: "Neo Geo games need neogeo.zip, PGM games pgm.zip; CPS1/CPS2 need nothing", howTo: "https://docs.libretro.com/library/fbneo/" },
     fit: { cpuHeavy: true, note: "Romsets must match FBNeo's version — use full non-merged sets. Select inserts a coin." } },
   mame: { id: "mame", name: "Arcade · MAME 2003-Plus", family: "arcade", engine: "ejs", thumbs: ["MAME"], exts: [],
     fit: { note: "MAME 0.78-era romsets (full non-merged need no BIOS). Select inserts a coin." } },
 
   // —— mobile ——————————————————————————————————————————————————————————————
   palm: { id: "palm", name: "Palm OS", family: "mobile", engine: "cloudpilot", thumbs: [], exts: ["prc"],
-    bios: { files: [], match: "rom", required: true, note: "Needs your Palm device's ROM file (.rom) — any m68k or OS5 device" },
+    bios: { files: [], match: "rom", required: true, note: "Needs your Palm device's ROM file (.rom) — any m68k or OS5 device", howTo: "https://cloudpilot-emu.github.io/" },
     fit: { note: "Touch is the stylus — this one is at home on a phone" } },
   j2me: { id: "j2me", name: "Java ME (J2ME)", family: "mobile", engine: "tab", tab: "/j2me/player.html", thumbs: [], exts: ["jar"],
     fit: { note: "Nokia-era Java games with an on-screen keypad. Opens in its own tab — the Java runtime (CheerpJ, streamed from its CDN) can't run inside the console frame" } },
@@ -132,7 +134,7 @@ export const SYSTEMS: Record<string, SystemDef> = {
 
   // —— computers ———————————————————————————————————————————————————————————
   amiga: { id: "amiga", name: "Amiga", family: "computers", engine: "ejs", thumbs: ["Commodore_-_Amiga"], exts: ["adf", "adz", "dms", "hdf", "hdz", "lha"],
-    bios: { files: ["kick34005.A500", "kick40068.A1200"], required: false, note: "Boots on the free AROS ROM; commercial games want a Kickstart" },
+    bios: { files: ["kick34005.A500", "kick40068.A1200"], required: false, note: "Boots on the free AROS ROM; commercial games want a Kickstart", howTo: "https://docs.libretro.com/library/puae/" },
     fit: { note: "Mouse and keyboard game — the emulator menu has an on-screen keyboard" } },
   c64: { id: "c64", name: "Commodore 64", family: "computers", engine: "ejs", thumbs: ["Commodore_-_64"], exts: ["d64", "t64", "prg", "crt", "g64"],
     fit: { note: "Keyboard-first — the emulator menu has an on-screen keyboard" } },

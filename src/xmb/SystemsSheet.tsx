@@ -114,6 +114,12 @@ export default function SystemsSheet(props: { systems: readonly string[] }) {
                     </span>
                     <span class="s">{d.bios!.note}{st().missing.length && (d.bios!.required || !st().have.length) ? ` — ${d.bios!.anyOf ? "one of" : "expects"}: ${st().missing.join(", ")}` : ""}</span>
                     <button class="hz-mini" onClick={() => pick(d.id)}>{filesFor(d.id).length ? "Add another file" : "Add BIOS file…"}</button>
+                    <Show when={d.bios!.howTo && !st().ok}>
+                      <span class="s hz-howto">
+                        Own the console? Dump its firmware yourself — the file names and checksums are in the{" "}
+                        <a href={d.bios!.howTo} target="_blank" rel="noopener noreferrer">core's documentation ↗</a>. Nothing here downloads it for you: it is the maker's copyright.
+                      </span>
+                    </Show>
                     <For each={filesFor(d.id)}>{(f) => (
                       <span class="hz-bios-file"><code>{f.name}</code><span class="s">{mb(f.size)}</span><button class="hz-mini warn" onClick={() => void remove(f)} aria-label={`Remove ${f.name}`}>remove</button></span>
                     )}</For>
