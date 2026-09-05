@@ -2556,14 +2556,28 @@ body.party-col .share-btn { right: calc(var(--pty-w) + clamp(12px, 2vw, 22px)); 
 .ai, .gbook, .chess, .guide, .trivia, .fullapp, .mapapp, .studio, .codeapp,
 .viz, .browser, .pcapp, .winamp, .apod, .tm, .gptest, .manual {
   /* veil light enough that the wave + theme tint glow through the blur —
-     PS4 system apps never sit on dead black */
-  background:
-    radial-gradient(130% 80% at 50% -15%, color-mix(in oklab, var(--xmb-tint) 24%, transparent), transparent 62%),
-    linear-gradient(180deg, rgba(9,13,24,0.56) 0%, rgba(4,7,14,0.72) 100%) !important;
-  -webkit-backdrop-filter: blur(30px) saturate(1.35);
-  backdrop-filter: blur(30px) saturate(1.35);
+     PS4 system apps never sit on dead black. The blur lives on a ::before
+     UNDERLAY, not on the container: a backdrop-filter on the container itself
+     made Chromium blur absolutely-positioned descendants too (Winamp's
+     windows came out as a smudge). isolation keeps the underlay's z-index
+     inside this app. */
+  background: transparent !important;
+  isolation: isolate;
   animation: appIn 0.34s cubic-bezier(0.2, 0.85, 0.3, 1);
 }
+.ai::before, .gbook::before, .chess::before, .guide::before, .trivia::before, .fullapp::before, .mapapp::before, .studio::before, .codeapp::before,
+.viz::before, .browser::before, .pcapp::before, .winamp::before, .apod::before, .tm::before, .gptest::before, .manual::before {
+  content: ""; position: absolute; inset: 0; z-index: -1; pointer-events: none;
+  background:
+    radial-gradient(130% 80% at 50% -15%, color-mix(in oklab, var(--xmb-tint) 24%, transparent), transparent 62%),
+    linear-gradient(180deg, rgba(9,13,24,0.56) 0%, rgba(4,7,14,0.72) 100%);
+  -webkit-backdrop-filter: blur(30px) saturate(1.35);
+  backdrop-filter: blur(30px) saturate(1.35);
+}
+/* Webamp mounts its windows straight under <body> (not inside .winamp), so they
+   painted BEHIND the app veil above and came out as a smudge. Lift them over it
+   (.winamp is z 32); the root only exists while the Winamp app is open. */
+#webamp { z-index: 33 !important; }
 @keyframes appIn { from { opacity: 0; transform: scale(0.99) translateY(8px); } }
 
 /* header bars — consistent height, hairline, subtle blur (layout left to each app) */
@@ -5366,3 +5380,65 @@ body.party-col .share-btn { right: calc(var(--pty-w) + clamp(12px, 2vw, 22px)); 
 @media (pointer: coarse) {
   .session-mp { top: 14px; bottom: auto; left: 14px; right: 120px; flex-wrap: wrap; row-gap: 6px; }
 }
+
+/* ═══════════ small screens & touch — one pass over every non-game app ═══════════
+   Findings from the device audit (phone 390×844, 844×390, tablet 820×1180):
+   status bar overflowed at 390px, its mic button was 17–26px; the crossbar's
+   items were 460px wide; inputs were 19px tall (iOS zooms on < 16px text);
+   Party / Board / Manual used 9–10px text; Share sat on the touch pad. */
+
+/* touch: everything you tap is at least 40px, inputs never trigger iOS zoom */
+@media (pointer: coarse) {
+  .fullapp input:not([type=checkbox]):not([type=radio]):not([type=range]):not([type=file]),
+  .panel input:not([type=checkbox]):not([type=radio]):not([type=range]):not([type=file]),
+  .browser-bar input, .set-search-input, .art-search input, .cin-search input, .lib-search input, .pod-search input, .wd-search input,
+  .gbook input, .gbook textarea, .wiki input, .tm input, .online-input, .bg-codein, .hz-filter {
+    font-size: 16px; min-height: 40px; padding-top: 8px; padding-bottom: 8px;
+  }
+  .status-mic { width: 40px; height: 40px; }
+  .set-chev { padding: 10px 14px; min-width: 44px; min-height: 44px; }
+  .manual-chap { min-height: 44px; padding: 12px 14px; }
+  .hz-mini, .ghost-btn, .ps-act, .hz-btn, .set-pill { min-height: 40px; }
+  .share-btn { bottom: calc(96px + env(safe-area-inset-bottom, 0px)); } /* clear of the on-screen pad */
+  .studio-cell { min-width: 34px; min-height: 34px; }
+}
+
+/* narrow: phones in portrait */
+@media (max-width: 480px) {
+  .status { top: 10px; right: 10px; left: 10px; gap: 10px; font-size: 12.5px; justify-content: flex-end; overflow: hidden; white-space: nowrap; }
+  .status-troph, .status-pad, .status-online, .status-batt .batt-pct { display: none; }
+  .item { width: calc(100vw - 32px); gap: 12px; }
+  .item-title { font-size: 15px; }
+  .item-sub { font-size: 11.5px; }
+  .panel { width: 100vw; padding: calc(40px + env(safe-area-inset-top, 0px)) 18px calc(16px + env(safe-area-inset-bottom, 0px)); border-left: 0; }
+  .panel-heading { font-size: 22px; margin-bottom: 16px; }
+  .panel-body p { padding-left: 12px; font-size: 14.5px; }
+  .set-val-text { min-width: 0; text-align: right; font-size: 13px; }
+  .set-row { gap: 10px; }
+  .ai-models { gap: 10px; }
+  .ai-model-card { width: 100%; padding: 14px 16px; grid-template-columns: 1fr auto; justify-items: start; text-align: left; }
+  .bg-tile-p, .man-src-label { font-size: 11px; }
+  .bg-tile-sub { max-width: none; -webkit-line-clamp: 2; }
+  .ph-game-need { font-size: 11px; }
+  .ctl-panel { padding: 18px; font-size: 14px; }
+  .ctl-keys { column-gap: 10px; }
+  .deskn { padding: 22px 18px; }
+}
+
+/* short: phones in landscape — the crossbar must leave room for the list, and
+   full-screen apps whose content is taller than the screen must scroll */
+@media (max-height: 520px) {
+  .ai, .trivia, .gbook, .guide, .tm, .viz { overflow-y: auto; -webkit-overflow-scrolling: touch; }
+  .cat-strip { top: 8vh; }
+  .cat { width: 84px; }
+  .cat-icon { width: 54px; height: 54px; }
+  .cat-label { font-size: 12px; }
+  .item-col { top: calc(8vh + 60px); }
+  .status { top: 8px; }
+  .panel { padding-top: 28px; }
+  .panel-heading { font-size: 20px; margin-bottom: 10px; }
+  .ctl-panel { max-height: 94vh; padding: 14px 18px; font-size: 13px; }
+  .ctl-head h3 { margin-bottom: 6px; font-size: 18px; }
+  .ctl-sec { margin-bottom: 8px; }
+}
+

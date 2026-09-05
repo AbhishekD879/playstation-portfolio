@@ -15,8 +15,14 @@ export default function Trivia(props: {
   const [reveal, setReveal] = createSignal(false);
   const [score, setScore] = createSignal(0);
   const [done, setDone] = createSignal(false);
+  const [err, setErr] = createSignal("");
 
-  onMount(() => { fetchTrivia().then(setQs).catch(() => setQs([])); });
+  // the Open Trivia DB rate-limits after a few rounds (HTTP 429) — say so and offer a retry
+  const load = () => {
+    setQs(null); setErr(""); setI(0); setSel(0); setReveal(false); setScore(0); setDone(false);
+    fetchTrivia().then(setQs).catch(() => { setErr("The question bank is busy — it rate-limits after a few rounds. Give it a minute and try again."); setQs([]); });
+  };
+  onMount(load);
 
   function answer() {
     if (reveal()) {
@@ -35,6 +41,11 @@ export default function Trivia(props: {
   }
 
   props.bind((a) => {
+    if (!done() && qs() && !qs()!.length && err()) {
+      if (a === "confirm") { sfx.confirm(); load(); }
+      if (a === "back") { sfx.back(); props.onClose(); }
+      return;
+    }
     if (done() || !qs()?.length) {
       if (a === "back" || a === "confirm") { sfx.back(); props.onClose(); }
       return;
@@ -50,7 +61,16 @@ export default function Trivia(props: {
       <Show when={qs()} fallback={<div class="guide-loading">Warming up the host…</div>}>
         <Show
           when={!done() && qs()!.length}
-          fallback={
+          fallback={err() && !done() ? (
+            <div class="trivia-end">
+              <div class="panel-tag">TRIVIA ARCADE</div>
+              <div class="trivia-verdict">{err()}</div>
+              <div class="panel-hint guide-hint" style="justify-content:center;gap:18px">
+                <button class="ps-act" onClick={load}><span class="btn-x" /> try again</button>
+                <button class="ps-act" onClick={props.onClose}><span class="btn-o" /> back</button>
+              </div>
+            </div>
+          ) : (
             <div class="trivia-end">
               <div class="panel-tag">FINAL SCORE</div>
               <div class="trivia-score">{score()} / {qs()!.length}</div>
@@ -59,7 +79,7 @@ export default function Trivia(props: {
               </div>
               <div class="panel-hint guide-hint"><span class="btn-x" /> done</div>
             </div>
-          }
+          )}
         >
           <div class="panel-tag">TRIVIA ARCADE — {qs()![i()].category.toUpperCase()} · {i() + 1}/{qs()!.length} · SCORE {score()}</div>
           <div class="trivia-q">{qs()![i()].q}</div>

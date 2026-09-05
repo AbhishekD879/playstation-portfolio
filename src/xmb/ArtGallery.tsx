@@ -13,22 +13,22 @@ export default function ArtGallery(props: { onClose: () => void; bind: (nav: (a:
   const [q, setQ] = createSignal("");
   const [sel, setSel] = createSignal(0);
   const [viewing, setViewing] = createSignal(false);
+  const [err, setErr] = createSignal(false);   // the collection API failed (network / CORS), not "no matches"
   let input: HTMLInputElement | undefined;
   let searchSeq = 0;
   let lastSearched = "";
 
-  onMount(() => {
-    searchArt("").then(setWorks).catch(() => setWorks([]));
-    setTimeout(() => input?.focus(), 60);
-  });
-
   async function runSearch(query: string) {
     lastSearched = query.trim();
     const seq = ++searchSeq;
-    setWorks(null);
-    const r = await searchArt(query).catch(() => []);
+    setWorks(null); setErr(false);
+    const r = await searchArt(query).catch(() => { if (seq === searchSeq) setErr(true); return [] as Artwork[]; });
     if (seq === searchSeq) { setWorks(r); setSel(0); }
   }
+  onMount(() => {
+    void runSearch("");
+    setTimeout(() => input?.focus(), 60);
+  });
 
   const move = (d: number) => {
     const n = works()?.length ?? 0;
@@ -87,6 +87,12 @@ export default function ArtGallery(props: { onClose: () => void; bind: (nav: (a:
           }}
         >
           <Show when={works()} fallback={<p class="hz-note">Unlocking the vault…</p>}>
+            <Show when={!works()!.length}>
+              <p class="hz-note">
+                {err() ? "The museum's collection API didn't answer — check the connection and " : "Nothing matches that — try another word, or "}
+                <button class="hz-mini" onClick={() => void runSearch(lastSearched)}>{err() ? "try again" : "show the highlights"}</button>
+              </p>
+            </Show>
             <TileGrid
               tiles={works()!.map((w) => ({ img: w.img, title: w.title, sub: w.artist }))}
               sel={sel()}

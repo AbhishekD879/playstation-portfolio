@@ -2015,7 +2015,20 @@ export default function XMB(props: {
   // item vertical layout — selected sits just under the icon row, previous
   // items stack compressed above it (authentic XMB cross layout)
   // clearance above the category label (d=0 at 118) and below the hint bar
-  const itemY = (d: number) => (d < 0 ? -92 + d * 52 : d === 0 ? 118 : 118 + 92 + (d - 1) * 80);
+  // row geometry: first item sits 118px under the icons, then 92px to the next,
+  // 80px per row; on a short screen (phone in landscape) everything is compressed
+  // so more than two rows fit under the crossbar
+  const [shortScreen, setShortScreen] = createSignal(matchMedia("(max-height: 520px)").matches);
+  onMount(() => {
+    const mq = matchMedia("(max-height: 520px)");
+    const on = () => setShortScreen(mq.matches);
+    mq.addEventListener("change", on);
+    onCleanup(() => mq.removeEventListener("change", on));
+  });
+  const itemY = (d: number) => {
+    const [first, gap, row, above] = shortScreen() ? [64, 52, 50, 34] : [118, 92, 80, 52];
+    return d < 0 ? -gap + d * above : d === 0 ? first : first + gap + (d - 1) * row;
+  };
 
   // is any app / modal / overlay open? (crossbar is "home" when this is false)
   const overlayOpen = () => !!(app() || panel() || tv() || guideOpen() || spotifyOpen() || news() || inputMode() || viewerOpen() || yt() || apod() || dict() || ccOpen() || searchOpen() || labsOpen() || soundOpen() || themesOpen() || trophiesOpen() || padTest() || saver());
