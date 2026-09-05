@@ -5430,6 +5430,7 @@ body.party-col .share-btn { right: calc(var(--pty-w) + clamp(12px, 2vw, 22px)); 
 @media (max-height: 520px) {
   .ai, .trivia, .gbook, .guide, .tm, .viz { overflow-y: auto; -webkit-overflow-scrolling: touch; }
   .cat-strip { top: 8vh; }
+  .item.selected .item-sub { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: calc(100vw - 120px); }
   .cat { width: 84px; }
   .cat-icon { width: 54px; height: 54px; }
   .cat-label { font-size: 12px; }

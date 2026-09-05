@@ -2026,7 +2026,7 @@ export default function XMB(props: {
     onCleanup(() => mq.removeEventListener("change", on));
   });
   const itemY = (d: number) => {
-    const [first, gap, row, above] = shortScreen() ? [64, 52, 50, 34] : [118, 92, 80, 52];
+    const [first, gap, row, above] = shortScreen() ? [62, 60, 50, 34] : [118, 92, 80, 52];
     return d < 0 ? -gap + d * above : d === 0 ? first : first + gap + (d - 1) * row;
   };
 

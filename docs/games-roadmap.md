@@ -358,6 +358,38 @@ system, app and web game has a **Controls card** (`src/controls.ts` data,
   or web game lacks a card with keys-or-mouse, a controller line, a touch
   line and an orientation.
 
+## Phase 10 — every other app, on every device (2026-09-05)
+
+The request: outside the game shelves, apps looked squeezed or broke on
+phones and tablets, and some did not work as intended. Method first, fixes
+second, so this can be rerun:
+
+- **Audit rig** (scratchpad `audit/`): a Playwright script visits the 13
+  category pages and 34 non-game apps at desktop 1280×800, tablet 820×1180,
+  phone 390×844 and 844×390 (viewport + Chrome touch/mobile emulation — a
+  CDP override alone does not move Playwright's viewport), dismisses the
+  intro and the phone card, and records per screen: console errors,
+  horizontal overflow, elements spilling past the viewport (SVG parts and
+  clipped containers excluded), clipped text, tap targets under 32px,
+  overlapping fixed controls, text under 10.5px, plus a screenshot; a
+  second script drives each content app (search, run, load) and records what
+  came back. Contact sheets of the screenshots are what the eyes judge.
+- **Found and fixed:** Winamp rendered as a smudge on every device (Webamp
+  mounts under `<body>`, behind the blurred app veil — veil moved to a
+  `::before` underlay, `#webamp` lifted); status bar overflowed at 390px;
+  crossbar rows were 460px wide; mic/chevron/chapter buttons 17–26px; inputs
+  19px tall (iOS zoom); AI model picker and Settings values squeezed; 9–10px
+  text in Party, Board, Manual; Share over the on-screen pad; landscape
+  phones showed two rows under the crossbar; `viewport-fit=cover` missing so
+  the 25 safe-area insets never applied; Trivia showed "0 / 0 — the buzzer
+  was broken" when Open Trivia DB rate-limited (now an honest card with
+  retry); Art Gallery silently emptied when the Met API failed (now "the API
+  didn't answer" with retry, distinct from "no matches"); the phone welcome
+  card told people the site was desktop-only.
+- **Not bugs:** System City and Free & Open ignore deep links unless their
+  Labs toggle is on (by design); Map/Chess canvases and Manual render fine —
+  the rig's first selectors were wrong, not the apps.
+
 ## Known constraints (from research, Sep 2026)
 
 - BIOS downloads (asked 2026-09-05): not possible for the systems that need
@@ -408,3 +440,4 @@ system, app and web game has a **Controls card** (`src/controls.ts` data,
 - 2026-09-05 · **Phase 8 deployed to production** (main `acbcc6e`). Regression pass preview vs previous production: captured non-Games lists identical, 31 routes error-free on both, four shelf boots identical.
 - 2026-09-05 · Phase 9: Controls card for every system and web game (auto on first boot, controls button, ? key, How to play in Game options); session bar moves off the touch pad.
 - 2026-09-05 · **Phase 9 deployed to production** (main `8a7e82d`). Regression pass preview vs previous production: captured non-Games lists identical, 31 routes error-free on both; the four shelf boots read dimmer on the preview only because the new Controls card covers a first boot — after "Got it" the NES canvas measures the same 0.817 as production.
+- 2026-09-05 · Phase 10: device audit rig + responsive/tap-target pass over the non-game apps; Winamp fixed; Trivia and Art error states.
