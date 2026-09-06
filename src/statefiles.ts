@@ -443,10 +443,19 @@ export async function importBackup(file: Blob, opts?: { reload?: boolean }): Pro
   return `restored ${d.rows} row${d.rows === 1 ? "" : "s"} across ${d.dbs} database${d.dbs === 1 ? "" : "s"} + ${d.keys} setting${d.keys === 1 ? "" : "s"}`;
 }
 
-/** What a file holds, WITHOUT applying it — for the confirm step. */
-export async function inspectBackup(file: Blob): Promise<string> {
+/** What a file holds, WITHOUT applying it — for the confirm step. `warning` is
+ *  scope-aware because the two scopes overwrite different things: telling
+ *  someone a saves backup will replace their games is both wrong and alarming. */
+export async function inspectBackup(file: Blob): Promise<{ text: string; warning: string; scope: BackupScope }> {
   const { manifest } = unpackBackup(new Uint8Array(await file.arrayBuffer()));
   const d = describeBackup(manifest);
   const when = new Date(d.at).toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" });
-  return `${d.scope === "all" ? "full console" : "saves & settings"} from ${when} — ${d.rows} rows, ${d.dbs} databases, ${d.keys} settings`;
+  const n = (count: number, one: string, many = `${one}s`) => `${count} ${count === 1 ? one : many}`;
+  return {
+    scope: d.scope,
+    text: `${d.scope === "all" ? "full console" : "saves & settings"} from ${when} — ${n(d.rows, "row")}, ${n(d.dbs, "database")}, ${n(d.keys, "setting")}`,
+    warning: d.scope === "all"
+      ? "this replaces the saves, games, photos and settings on this console. It cannot be undone."
+      : "this replaces the saves and settings on this console. Your games and photos are left alone. It cannot be undone.",
+  };
 }

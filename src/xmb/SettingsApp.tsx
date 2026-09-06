@@ -58,7 +58,7 @@ export default function SettingsApp(props: {
   const [wipeArmed, setWipeArmed] = createSignal(false);
   const [portMsg, setPortMsg] = createSignal("");
   const [sizes, setSizes] = createSignal<Awaited<ReturnType<typeof backupSize>> | null>(null);
-  const [pending, setPending] = createSignal<{ file: File; what: string } | null>(null);
+  const [pending, setPending] = createSignal<{ file: File; text: string; warning: string } | null>(null);
   const [busy, setBusy] = createSignal(false);
   let rail!: HTMLDivElement;
   let restoreInput!: HTMLInputElement;
@@ -532,13 +532,13 @@ export default function SettingsApp(props: {
                   if (!isBackupFile(f.name)) { setPortMsg("that isn't a .aspbackup file"); sfx.deny(); return; }
                   setPortMsg("reading…");
                   inspectBackup(f)
-                    .then((what) => { setPending({ file: f, what }); setPortMsg(""); sfx.tickH(); })
+                    .then((info) => { setPending({ file: f, ...info }); setPortMsg(""); sfx.tickH(); })
                     .catch((err) => { setPending(null); setPortMsg(String(err?.message ?? err)); sfx.deny(); });
                 }}
               />
               <Show when={pending()}>
-                <div class="set-sys-line">{pending()!.what}</div>
-                <div class="set-sys-line dim">restoring REPLACES the saves, games and settings on this console. This cannot be undone.</div>
+                <div class="set-sys-line">{pending()!.text}</div>
+                <div class="set-sys-line dim">{pending()!.warning}</div>
                 <div class="set-choices">
                   <button class="set-pill danger" disabled={!!busy()} onClick={() => { const p = pending()!; setPending(null); runBackup(importBackup(p.file)); }}>RESTORE & RELOAD</button>
                   <button class="set-pill" onClick={() => { setPending(null); sfx.back(); }}>CANCEL</button>
