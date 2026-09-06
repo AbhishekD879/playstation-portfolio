@@ -19,7 +19,8 @@ import {
 } from "../prefs";
 import { ICONS, Icon } from "./icons";
 import { trPct, trRetry, trStatus } from "../translate";
-import { canUseFolders, exportSavesToFolder, importSavesFromFolder, makeSetupLink } from "../statefiles";
+import { backupSize, canUseFolders, exportBackup, exportSavesToFolder, importBackup, importSavesFromFolder, inspectBackup, makeSetupLink } from "../statefiles";
+import { isBackupFile } from "../backup";
 
 const SECTIONS = ["APPEARANCE", "ICONS", "AUDIO", "LANGUAGE", "LABS", "SYSTEM"] as const;
 
@@ -56,7 +57,11 @@ export default function SettingsApp(props: {
   const [netHosts, setNetHosts] = createSignal<{ host: string; n: number }[]>([]);
   const [wipeArmed, setWipeArmed] = createSignal(false);
   const [portMsg, setPortMsg] = createSignal("");
+  const [sizes, setSizes] = createSignal<Awaited<ReturnType<typeof backupSize>> | null>(null);
+  const [pending, setPending] = createSignal<{ file: File; what: string } | null>(null);
+  const [busy, setBusy] = createSignal(false);
   let rail!: HTMLDivElement;
+  let restoreInput!: HTMLInputElement;
 
   onMount(() => {
     navigator.storage?.estimate?.().then((e) => {
@@ -69,6 +74,10 @@ export default function SettingsApp(props: {
       .sort((a, b) => b.bytes - a.bytes));
     void (indexedDB.databases?.() ?? Promise.resolve([])).then((dbs) =>
       setDbNames(dbs.map((d) => d.name ?? "?").filter(Boolean).sort()));
+    // What a backup would weigh, so the two buttons carry their own size and
+    // nobody starts a 40 GB export by accident. Best-effort: the buttons work
+    // without it, they just read without a number.
+    void backupSize().then(setSizes).catch(() => {});
     const hosts = new Map<string, number>();
     for (const e of performance.getEntriesByType("resource")) {
       try {
@@ -98,6 +107,18 @@ export default function SettingsApp(props: {
     setPortMsg("working…");
     job.then((m) => { setPortMsg(m); sfx.confirm(); })
       .catch((e) => setPortMsg(e?.name === "AbortError" ? "" : "couldn't access that folder"));
+  };
+
+  // Backups report their own reasons for failing — "too big to hold in one
+  // file", "not a backup", a quota error — so unlike runPort the real message
+  // is shown rather than a generic line. Also locks the buttons: a second
+  // export while the first is walking every store would double peak memory.
+  const runBackup = (job: Promise<string>) => {
+    setBusy(true);
+    setPortMsg("working…");
+    job.then((m) => { setPortMsg(m); sfx.confirm(); })
+      .catch((e) => { setPortMsg(e?.name === "AbortError" ? "" : String(e?.message ?? e)); sfx.deny(); })
+      .finally(() => setBusy(false));
   };
 
   // —— icon targets: categories first (the headline ask), then every app ——
@@ -486,19 +507,58 @@ export default function SettingsApp(props: {
               <div class="set-sys-line dim">profiles, trophies, saves & your game library live only in this browser</div>
             </div>
 
-            {/* —— Portable Save Data (Labs "portstate") —— */}
+            {/* —— Back up & restore — everything, one file, every browser —— */}
+            <div class="set-sys-card">
+              <div class="set-row-title">Back Up Your Data</div>
+              <div class="set-sys-line dim">one file holding your library, saves, memory cards, photos, profiles & settings — keep it anywhere</div>
+              <div class="set-choices">
+                <button class="set-pill" disabled={!!busy()} onClick={() => runBackup(exportBackup("saves"))}>
+                  SAVES & SETTINGS{sizes() ? ` · ${sizes()!.savesLabel}` : ""}
+                </button>
+                <button class="set-pill" disabled={!!busy()} onClick={() => runBackup(exportBackup("all"))}>
+                  EVERYTHING{sizes() ? ` · ${sizes()!.allLabel}` : ""}
+                </button>
+                <button class="set-pill" disabled={!!busy()} onClick={() => restoreInput.click()}>RESTORE FROM FILE…</button>
+              </div>
+              <Show when={sizes()?.games}>
+                <div class="set-sys-line dim">"everything" also carries {sizes()!.games} game file{sizes()!.games === 1 ? "" : "s"} and your photos</div>
+              </Show>
+              <input
+                ref={restoreInput} type="file" accept=".aspbackup,application/zip" class="set-hidden-file"
+                onChange={(e) => {
+                  const f = e.currentTarget.files?.[0];
+                  e.currentTarget.value = ""; // so picking the same file twice still fires
+                  if (!f) return;
+                  if (!isBackupFile(f.name)) { setPortMsg("that isn't a .aspbackup file"); sfx.deny(); return; }
+                  setPortMsg("reading…");
+                  inspectBackup(f)
+                    .then((what) => { setPending({ file: f, what }); setPortMsg(""); sfx.tickH(); })
+                    .catch((err) => { setPending(null); setPortMsg(String(err?.message ?? err)); sfx.deny(); });
+                }}
+              />
+              <Show when={pending()}>
+                <div class="set-sys-line">{pending()!.what}</div>
+                <div class="set-sys-line dim">restoring REPLACES the saves, games and settings on this console. This cannot be undone.</div>
+                <div class="set-choices">
+                  <button class="set-pill danger" disabled={!!busy()} onClick={() => { const p = pending()!; setPending(null); runBackup(importBackup(p.file)); }}>RESTORE & RELOAD</button>
+                  <button class="set-pill" onClick={() => { setPending(null); sfx.back(); }}>CANCEL</button>
+                </div>
+              </Show>
+              <Show when={portMsg()}><div class="set-sys-line">{portMsg()}</div></Show>
+            </div>
+
+            {/* —— Older, narrower exports (Labs "portstate") —— */}
             <Show when={labEnabled("portstate")}>
               <div class="set-sys-card">
-                <div class="set-row-title">Portable Save Data</div>
-                <div class="set-sys-line dim">game saves & settings only — photos and videos never leave this device</div>
+                <div class="set-row-title">Share Just Your Setup</div>
+                <div class="set-sys-line dim">a link carrying only look & feel — no saves, no personal data</div>
                 <div class="set-choices">
                   <button class="set-pill" onClick={() => { void makeSetupLink().then((url) => { void navigator.clipboard.writeText(url); setPortMsg("setup link copied — theme, Labs, fonts & language"); sfx.confirm(); }); }}>COPY SETUP LINK</button>
-                  <Show when={canUseFolders()} fallback={<span class="set-sys-line dim">folder export needs a Chromium browser</span>}>
-                    <button class="set-pill" onClick={() => runPort(exportSavesToFolder())}>EXPORT SAVES TO FOLDER</button>
-                    <button class="set-pill" onClick={() => runPort(importSavesFromFolder())}>IMPORT SAVES FROM FOLDER</button>
+                  <Show when={canUseFolders()}>
+                    <button class="set-pill" onClick={() => runPort(exportSavesToFolder())}>EMULATOR SAVES → FOLDER</button>
+                    <button class="set-pill" onClick={() => runPort(importSavesFromFolder())}>FOLDER → EMULATOR SAVES</button>
                   </Show>
                 </div>
-                <Show when={portMsg()}><div class="set-sys-line">{portMsg()}</div></Show>
               </div>
             </Show>
 

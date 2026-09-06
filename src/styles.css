@@ -1419,6 +1419,13 @@ body.party-col .share-btn { right: calc(var(--pty-w) + clamp(12px, 2vw, 22px)); 
 }
 .set-pill:hover { border-color: #fff; color: #fff; text-shadow: 0 0 8px rgba(255,255,255,0.7); }
 .set-pill.on { border-color: color-mix(in oklab, var(--xmb-tint) 75%, #fff); color: #fff; box-shadow: 0 0 14px color-mix(in oklab, var(--xmb-tint) 40%, transparent); }
+/* a step that overwrites data should not look like the one beside it that doesn't */
+.set-pill.danger { border-color: rgba(255,138,128,0.55); color: #ffb4ab; }
+.set-pill.danger:hover { border-color: #ff8a80; color: #fff; text-shadow: 0 0 8px rgba(255,138,128,0.8); }
+.set-pill:disabled { opacity: 0.4; cursor: progress; }
+.set-pill:disabled:hover { border-color: rgba(255,255,255,0.22); color: rgba(255,255,255,0.85); text-shadow: none; }
+/* the restore file input is driven by its own button */
+.set-hidden-file { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
 .set-note { font-size: 13px; color: var(--dim); line-height: 1.55; max-width: 760px; margin-bottom: 14px; }
 .set-note b { color: #e8c46a; font-weight: 500; }
 .set-vol { max-width: 420px; }
