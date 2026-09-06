@@ -154,12 +154,31 @@ async function dumpDb(
   } finally { db.close(); }
 }
 
+/** Restore a dump STORE BY STORE, never by replacing the database.
+ *
+ *  ★ Why this is not deleteDatabase + recreate, which is what it used to be.
+ *  A dump only holds the stores its scope carried. A "saves & settings" backup
+ *  carries asp-games/saves and asp-games/bios — so deleting asp-games and
+ *  rebuilding it from that dump would take the player's entire game library and
+ *  photo album with it. Restoring a save is not permission to erase the shelf.
+ *  Each carried store is cleared and refilled so the restore is exact; stores
+ *  the backup never mentioned are left exactly as they are. */
 async function restoreDb(dump: DumpedDb, xf: (v: unknown) => unknown = fromPortable): Promise<void> {
-  await new Promise<void>((res) => { const d = indexedDB.deleteDatabase(dump.name); d.onsuccess = d.onerror = d.onblocked = () => res(); });
+  // Opening a name that doesn't exist creates it empty at version 1; the
+  // upgrade below then fills it in, so this probe works either way.
+  const probe = await openDb(dump.name);
+  const existing = new Set([...probe.objectStoreNames]);
+  const atVersion = probe.version;
+  probe.close();
+
+  const missing = dump.stores.filter((s) => !existing.has(s.name));
+  // a version bump is the only moment a store can be created
+  const version = Math.max(dump.version, missing.length ? atVersion + 1 : atVersion);
+
   const db = await new Promise<IDBDatabase>((res, rej) => {
-    const req = indexedDB.open(dump.name, dump.version);
+    const req = indexedDB.open(dump.name, version);
     req.onupgradeneeded = () => {
-      for (const s of dump.stores) {
+      for (const s of missing) {
         const os = req.result.createObjectStore(s.name, { keyPath: s.keyPath ?? undefined, autoIncrement: s.autoIncrement });
         // indexes must be rebuilt here or every index() query throws later
         for (const ix of s.indexes ?? []) os.createIndex(ix.name, ix.keyPath, { unique: ix.unique, multiEntry: ix.multiEntry });
@@ -172,6 +191,7 @@ async function restoreDb(dump: DumpedDb, xf: (v: unknown) => unknown = fromPorta
     for (const s of dump.stores) {
       const tx = db.transaction(s.name, "readwrite");
       const os = tx.objectStore(s.name);
+      os.clear(); // exact for what we carry, silent about what we don't
       for (const r of s.rows) {
         const v = xf(r.v);
         if (os.keyPath != null || s.autoIncrement) os.put(v as any);
@@ -374,7 +394,10 @@ export async function buildBackup(scope: BackupScope = "saves"): Promise<{ name:
   for (const name of await backupDbNames()) {
     const skip = scope === "all" ? [] : (BULK[name] ?? []);
     const dump = await dumpIfReal(name, (v) => lift(v, files, next), skip);
-    if (dump) dbs.push(dump);
+    // A database whose every store was skipped carries nothing, so don't
+    // mention it — an entry with no stores is noise in the manifest and an
+    // invitation for a future restore to do something to it.
+    if (dump && dump.stores.length) dbs.push(dump);
   }
   const manifest: BackupManifest = {
     version: 1, at: Date.now(), scope, from: location.origin, local: localAll(), dbs,
