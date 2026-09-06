@@ -199,8 +199,10 @@ export default function SettingsApp(props: {
     const query = q().trim().toLowerCase();
     if (!query) return [];
     const hits: Hit[] = [];
-    const add = (s: (typeof SECTIONS)[number], r: number, title: string, sub?: string) => {
-      if (`${title} ${sub ?? ""}`.toLowerCase().includes(query)) hits.push({ sec: SECTIONS.indexOf(s), row: r, title, sub });
+    /** `keywords` widen what matches without appearing in the result — a row
+     *  found by searching "new phone" should still read like a sentence. */
+    const add = (s: (typeof SECTIONS)[number], r: number, title: string, sub?: string, keywords?: string) => {
+      if (`${title} ${sub ?? ""} ${keywords ?? ""}`.toLowerCase().includes(query)) hits.push({ sec: SECTIONS.indexOf(s), row: r, title, sub });
     };
     add("APPEARANCE", 0, "Console Font", "typeface for every label, applied live");
     add("APPEARANCE", 1, "Letter Spacing");
@@ -214,8 +216,28 @@ export default function SettingsApp(props: {
     iconTargets().forEach((t, i) => add("ICONS", i, `${t.label} icon`, t.kind));
     add("SYSTEM", 0, "This Console", "hardware, WebGPU, cores");
     add("SYSTEM", 0, "On-Device AI Memory", "resident models, free memory");
-    add("SYSTEM", 0, "Storage", "browser space used");
-    return hits.slice(0, 40);
+    add("SYSTEM", 0, "Storage", "browser space used", "space, quota, how much room");
+    // The one thing a visitor comes looking for by name. Nobody searches
+    // "system" to find their data, they search "backup" or "export", so the
+    // synonyms matter more here than anywhere else in this list.
+    add("SYSTEM", 0, "Back Up Your Data", "download one file with your saves, games and settings — or restore one",
+      "backup, back up, export, import, restore, transfer, another device, new phone, new laptop, aspbackup, copy my library, save data, move my saves");
+    add("SYSTEM", 0, "Share Just Your Setup", "a link carrying only your theme, fonts and Labs flags",
+      "setup link, export theme, share settings, folder export");
+    // Rank by how squarely the TITLE answers the query, because insertion
+    // order doesn't: searching "backup" used to put "Restore Backup icon"
+    // above the actual backup card. Punctuation and spaces are squashed so
+    // one-word "backup" reaches the two-word title "Back Up Your Data" — the
+    // reason that row scored worst on the very query it exists to answer.
+    const squash = (t: string) => t.toLowerCase().replace(/[^a-z0-9]/g, "");
+    const needle = squash(query);
+    const rank = (h: Hit) => {
+      const t = squash(h.title);
+      if (t.startsWith(needle)) return 0; // the row is named this
+      if (t.includes(needle)) return 1;   // the row mentions it
+      return 2;                           // found via description or keywords
+    };
+    return hits.sort((a, b) => rank(a) - rank(b)).slice(0, 40);
   };
   const jumpTo = (h: Hit) => {
     setSec(h.sec);
@@ -505,6 +527,10 @@ export default function SettingsApp(props: {
               <div class="set-row-title">Storage</div>
               <div class="set-sys-line">{storage() || "not reported by this browser"}</div>
               <div class="set-sys-line dim">profiles, trophies, saves & your game library live only in this browser</div>
+              {/* the moment someone reads "only in this browser" is the moment
+                  they want to know what to do about it — say it here, not two
+                  cards away where they have to already be looking */}
+              <div class="set-sys-line dim">clearing your browser data erases all of it — "Back Up Your Data" just below keeps a copy you own</div>
             </div>
 
             {/* —— Back up & restore — everything, one file, every browser —— */}

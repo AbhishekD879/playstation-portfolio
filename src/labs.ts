@@ -26,7 +26,7 @@ const FEATURE_GROUPS: FlagGroup[] = [
       { id: "restmode", title: "Rest Mode", desc: "Long idle fades the console to a breathing power light — any input resumes exactly where you were" },
       { id: "attract", title: "Attract Mode (first-visit tutor)", desc: "Idle at the home screen and the console demos its own controls — never shown once you've learned them" },
       { id: "photomode", title: "XMB Photo Mode", desc: "Snapshot the living console as a framed picture — share sheet or straight to disk" },
-      { id: "portstate", title: "Portable Save Data", desc: "Export game saves & settings to a folder, or share your setup as a link — photos never leave this device" },
+      { id: "portstate", title: "Extra Export Options", desc: "The narrow exports: share your setup as a link, or write emulator saves to a folder. Backing up everything needs no flag — it is always in SYSTEM" },
       { id: "privacylabel", title: "Privacy Nutrition Label", desc: "See every byte the console stores and every domain it talked to — plus a full wipe button" },
       { id: "renpyconvert", title: "Ren'Py Desktop Conversion (experimental)", desc: "Import a Ren'Py PC build and the console pairs its game files with the matching official WebAssembly engine — no re-export needed" },
       { id: "engineerrors", title: "Engine Error Overlay", desc: "Let a game engine show its own error banner over the picture. Off by default — a single failed asset otherwise covers the whole game; errors are still recorded in the diagnostics either way" },
@@ -219,8 +219,8 @@ const FEATURE_GUIDES: Record<string, LabGuide> = {
     go: "photo-mode-demo", goLabel: "TAKE A SNAPSHOT",
   },
   portstate: {
-    what: "Your save data, portable: export emulator saves + console settings to a real folder on disk (File System Access), import them on another machine, or share just your settings as a compressed link. Photos and videos are never included — media stays on this device.",
-    steps: ["Console Settings › SYSTEM › Portable Save Data", "COPY SETUP LINK shares your theme/flags/fonts as a URL", "EXPORT writes save databases + settings to a folder you pick"],
+    what: "Two narrow exports, for when the whole-console backup is more than you want. A setup LINK carries only look and feel — theme, fonts, Labs flags, language — so you can paste your setup to someone without handing over any personal data. A save FOLDER writes EmulatorJS's own save databases to a real directory on disk, which needs a Chromium browser. Neither is how you move your library: \"Back Up Your Data\" in SYSTEM does that, in one file, in any browser, and needs no flag.",
+    steps: ["Console Settings › SYSTEM › Share Just Your Setup", "COPY SETUP LINK shares your theme/flags/fonts as a URL", "EMULATOR SAVES → FOLDER writes save databases to a folder you pick (Chromium only)"],
     go: "app:settingshub", goLabel: "OPEN SETTINGS",
   },
   privacylabel: {
