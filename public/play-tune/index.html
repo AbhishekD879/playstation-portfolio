@@ -214,6 +214,17 @@
 
   window.gifTrace = () => (mod && mod.getGifTagTrace ? mod.getGifTagTrace() : null);
 
+  // How hard the framebuffer-feedback path is working, per frame.
+  window.feedback = () => {
+    if (!mod || !mod.getFeedbackDiag) return null;
+    const o = Object.fromEntries(mod.getFeedbackDiag().split(";").map((kv) => {
+      const [k, v] = kv.split("="); return [k, +v];
+    }));
+    o.frames = mod.getFrames();
+    o.blitsPerFrame = o.frames ? +(o.blits / o.frames).toFixed(2) : 0;
+    return o;
+  };
+
   // CLog writes to files, not the console. The diag core keeps it enabled, so
   // whatever the emulator complained about is sitting in MEMFS.
   window.logs = () => {
