@@ -20,6 +20,8 @@ import { makeRoomCode, startHost, startJoinerResilient, type HostHandle, type Re
 import { captureLocalInput, makeInjector, type PadState } from "../ps2mp/input";
 import { bumpPlays, resolveGameFile, type GameRecord } from "../gamesdb";
 import { clockDen, engineUrl, readClock, readEngine, readRes } from "../ps2/engineChoice";
+import { readTitleId } from "../ps2compat";
+import { buildGameConfigXml, elfNameFor, loadOverrides, overridesFor } from "../ps2knobs";
 import { frameGen, upscale } from "../theme";
 import PartyPanel, { type MicState } from "./PartyPanel";
 import { buildRoster, cleanName, cleanText, confirmLine, lineId, pushLine, type ChatLine, type Member } from "../ps2mp/party";
@@ -91,6 +93,7 @@ export default function Ps2(props: {
   // Same read-once rule as the engine: the clock is applied at boot, so it is
   // settled on PS2 home before this component exists.
   const eeClockDen = clockDen(readClock());
+  void loadOverrides(); // warm the per-game table before a disc arrives
   // A normal boot is still 1 player; the fork only enables a tap above two, so
   // one- and two-player sessions behave exactly as they did on stock.
   // Prop first (the PS2 home picker), URL as an override for testing.
@@ -655,9 +658,29 @@ export default function Ps2(props: {
     });
   });
 
-  function bootNow(f: File) {
+  // Per-game overrides. Read the disc's own title id (three 2 KB reads, no
+  // scanning), look it up, and hand the emulator both the clock this game needs
+  // and any GameConfig knobs we have for it. The engine and resolution are
+  // fixed at mount because changing them re-points the iframe, so only the
+  // clock and the knobs can be applied per disc — which is the pair that
+  // actually broke Urban Reign.
+  async function bootNow(f: File) {
     pending = null;
-    frame.contentWindow?.postMessage({ type: "play-boot", file: f, saveKey, players: players(), eeClockDen }, location.origin);
+    let den = eeClockDen;
+    let gameConfigXml: string | null = null;
+    try {
+      const id = await readTitleId(f);
+      const over = id ? overridesFor(id) : null;
+      if (over?.clock) den = clockDen(over.clock);
+      if (id && over?.knobs) {
+        const elf = elfNameFor(id);
+        if (elf) gameConfigXml = buildGameConfigXml(elf, over.knobs);
+      }
+    } catch { /* unreadable disc — boot it with the global settings */ }
+    frame.contentWindow?.postMessage(
+      { type: "play-boot", file: f, saveKey, players: players(), eeClockDen: den, gameConfigXml },
+      location.origin,
+    );
   }
 
   function insert(f: File) {

@@ -301,6 +301,24 @@
           const den = [1, 2, 3].includes(e.data.eeClockDen) ? e.data.eeClockDen : 1;
           mod.setEeFreqScale(1, den);
         }
+        // Per-game knobs, Play!'s own mechanism. It reads GameConfig.xml from
+        // its resources path on every boot — observed to be /usr/local/share in
+        // the emscripten build, and probed whether or not the file exists — and
+        // matches <GameConfig Executable="..."> against the boot ELF name. So
+        // the parent hands us finished XML and we drop it in before the disc
+        // spins. Writing it after bootDiscImage would be too late: the config is
+        // applied during VM startup.
+        if (typeof e.data.gameConfigXml === "string" && e.data.gameConfigXml) {
+          try {
+            mod.FS.mkdirTree("/usr/local/share");
+            mod.FS.writeFile("/usr/local/share/GameConfig.xml", e.data.gameConfigXml);
+            tell("play-gameconfig", { bytes: e.data.gameConfigXml.length });
+          } catch (err) {
+            // A knob we could not place is worth reporting but never fatal —
+            // the game still boots, just without the tweak.
+            tell("play-gameconfig", { error: String(err).slice(0, 120) });
+          }
+        }
         await restore(e.data.saveKey); // bring back this profile's memory card first
         const f = e.data.file, name = f.name;
         if (name.toLowerCase().endsWith(".elf")) {

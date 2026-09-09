@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>PS2 knob tuner</title>
+  <meta name="robots" content="noindex, nofollow">
+  <style>
+    body { margin: 0; background: #0b0f14; color: #dfe7ef; font: 13px/1.5 ui-monospace, monospace; }
+    #log { padding: 8px; white-space: pre-wrap; max-height: 45vh; overflow: auto; border-bottom: 1px solid #223; }
+    canvas { display: block; background: #000; }
+  </style>
+</head>
+<body>
+<div id="log"></div>
+<canvas id="outputCanvas" width="640" height="480" tabindex="0"></canvas>
+<script type="module">
+  // A bare rig for finding which GameConfig knobs make a game boot.
+  //
+  // The shipped boot page owns its module options, so it cannot be instrumented
+  // from outside. This page builds the module itself, which buys three things
+  // the real page cannot give us:
+  //   · every file path Play! opens, so we learn where it wants GameConfig.xml
+  //     instead of guessing at Framework's path helpers
+  //   · a place to write that XML before boot
+  //   · a knob set supplied per run via ?knobs=<base64 json>, so a sweep is a
+  //     sequence of page loads rather than a rebuild
+  //
+  // Test-only. Nothing here ships to a player.
+  import Play from "/play-mt/Play.js";
+
+  const logEl = document.getElementById("log");
+  const lines = [];
+  const say = (s) => { lines.push(s); if (lines.length > 400) lines.shift(); logEl.textContent = lines.join("\n"); logEl.scrollTop = 1e9; };
+  window.__tuneLog = lines;
+  window.__opened = [];          // every path Play! tried to open
+  window.__state = { booted: false, error: null, frames: 0 };
+
+  class DiscImageDevice {
+    constructor(m) { this.module = m; this.doneFlag = false; this.file = null; }
+    read(ptr, offset, size) {
+      this.doneFlag = false;
+      this.file.slice(offset, offset + size).arrayBuffer().then((b) => {
+        this.module.HEAPU8.set(new Uint8Array(b), ptr); this.doneFlag = true;
+      });
+    }
+    getFileSize() { return this.file.size; }
+    isDone() { return this.doneFlag; }
+    setFile(f) { this.file = f; }
+  }
+
+  const canvas = document.getElementById("outputCanvas");
+  const params = new URLSearchParams(location.search);
+
+  let mod = null;
+  Play({
+    canvas,
+    locateFile: (f) => "/play-mt/" + f,
+    mainScriptUrlOrBlob: location.origin + "/play-mt/Play.js",
+    print: (t) => say("out: " + t),
+    printErr: (t) => { say("ERR: " + t); if (/CompileError|abort|RuntimeError/i.test(t)) window.__state.error = t; },
+  }).then(async (m) => {
+    mod = m; window.__mod = m;
+
+    // —— watch every file open, so the config path is observed not assumed ——
+    const origOpen = m.FS.open.bind(m.FS);
+    m.FS.open = (path, flags, mode) => {
+      window.__opened.push(String(path));
+      return origOpen(path, flags, mode);
+    };
+    // stat is what a "does this file exist" probe usually goes through
+    const origStat = m.FS.stat.bind(m.FS);
+    m.FS.stat = (path, dontFollow) => {
+      window.__opened.push("stat:" + String(path));
+      return origStat(path, dontFollow);
+    };
+
+    m.discImageDevice = new DiscImageDevice(m);
+    try { m.FS.mkdirTree("/work"); } catch {}
+
+    // —— drop the caller's GameConfig.xml at every plausible location ————————
+    // Cheaper than reverse-engineering Framework's path helper: write it to all
+    // of them, then read the open log to see which one was actually consulted.
+    const xml = params.get("xml") ? atob(params.get("xml")) : null;
+    window.__xmlTargets = [];
+    if (xml) {
+      // Observed: the emscripten build's GetAppResourcesPath() resolves to
+      // /usr/local/share, so that is the only location Play! actually reads.
+      // The rest were candidates in the first probe run and are kept out now
+      // so a hit here is unambiguous.
+      const dirs = ["/usr/local/share"];
+      for (const d of dirs) {
+        try { m.FS.mkdirTree(d); } catch {}
+        const p = (d === "/" ? "" : d) + "/GameConfig.xml";
+        try { m.FS.writeFile(p, xml); window.__xmlTargets.push(p); } catch (e) { say("write failed " + p); }
+      }
+      say("wrote GameConfig.xml to " + window.__xmlTargets.length + " locations");
+    }
+
+    // Without this the VM does not exist and bootDiscImage asserts.
+    m.ccall("initVm", null, [], []);
+    say("module ready");
+    window.__state.booted = true;
+  }).catch((e) => { say("init failed: " + e); window.__state.error = String(e); });
+
+  // The harness is driven from Playwright: it sets #disc then calls boot().
+  const input = document.createElement("input");
+  input.type = "file"; input.id = "disc";
+  document.body.appendChild(input);
+
+  window.boot = async () => {
+    const f = input.files[0];
+    if (!f || !mod) return "not ready";
+    // knobs arrive as base64 JSON so a sweep is just a different URL
+    mod.discImageDevice.setFile(f);
+    mod.bootDiscImage(f.name);
+    canvas.focus();
+    say("booting " + f.name);
+    return "booting";
+  };
+
+  // Frame liveness: the only honest signal that a game got anywhere.
+  window.litShare = () => {
+    try {
+      const g = canvas.getContext("webgl2") || canvas.getContext("webgl");
+      if (!g) return -1;
+      const b = new Uint8Array(4 * 64 * 64);
+      g.readPixels(0, 0, 64, 64, g.RGBA, g.UNSIGNED_BYTE, b);
+      let lit = 0;
+      for (let i = 0; i < b.length; i += 4) if (b[i] + b[i + 1] + b[i + 2] > 30) lit++;
+      return Math.round(100 * lit / (b.length / 4));
+    } catch { return -2; }
+  };
+</script>
+</body>
+</html>
