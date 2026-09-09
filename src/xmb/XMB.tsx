@@ -40,6 +40,7 @@ import Photos from "./Photos";
 import GamepadTest from "./GamepadTest";
 import Ps2 from "./Ps2";
 import Ps2EnginePick from "./Ps2EnginePick";
+import Ps2CompatSheet from "./Ps2CompatSheet";
 import PcApp from "./PcApp";
 import Guestbook from "./Guestbook";
 import Browser from "./Browser";
@@ -2482,6 +2483,10 @@ export default function XMB(props: {
                   because every launch passes through this screen and the choice
                   has to be made before a disc spins. */}
               <Ps2EnginePick />
+              {/* What actually boots, before a disc is inserted. The old answer
+                  here was one line saying "many titles run slowly or not at
+                  all", which told nobody which half their game was in. */}
+              <Ps2CompatSheet />
             </>
           )}
         />
