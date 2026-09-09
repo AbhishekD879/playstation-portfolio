@@ -23,3 +23,10 @@ public/models/chess/
 
 # local mirror of the R2 bucket (big game binaries) — upload with scripts/r2-sync.mjs, never commit
 /r2/
+
+# Diagnostic emulator build. Local-only: it carries PC-sampling bindings and
+# CLog enabled, neither of which belongs in a shipped core.
+public/play-diag/
+
+# A/B baseline core (no WebGL feedback change). Local-only.
+public/play-oph/

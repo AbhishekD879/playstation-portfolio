@@ -26,7 +26,12 @@
   //     sequence of page loads rather than a rebuild
   //
   // Test-only. Nothing here ships to a player.
-  import Play from "/play-mt/Play.js";
+  //  Defaults to the core the site ships, so this page works in a plain
+  //  checkout. ?core=play-diag selects the local-only diagnostic build (CPU
+  //  sampling bindings, CLog enabled) when one has been placed there — it is
+  //  gitignored and absent in a deploy.
+  const CORE = "/" + (new URLSearchParams(location.search).get("core") || "play-mt");
+  const { default: Play } = await import(CORE + "/Play.js");
 
   const logEl = document.getElementById("log");
   const lines = [];
@@ -54,8 +59,8 @@
   let mod = null;
   Play({
     canvas,
-    locateFile: (f) => "/play-mt/" + f,
-    mainScriptUrlOrBlob: location.origin + "/play-mt/Play.js",
+    locateFile: (f) => CORE + "/" + f,
+    mainScriptUrlOrBlob: location.origin + CORE + "/Play.js",
     print: (t) => say("out: " + t),
     printErr: (t) => { say("ERR: " + t); if (/CompileError|abort|RuntimeError/i.test(t)) window.__state.error = t; },
   }).then(async (m) => {
@@ -129,6 +134,101 @@
       for (let i = 0; i < b.length; i += 4) if (b[i] + b[i + 1] + b[i + 2] > 30) lit++;
       return Math.round(100 * lit / (b.length / 4));
     } catch { return -2; }
+  };
+
+  // —— where is the EE actually stuck? ———————————————————————————————————————
+  //
+  // A game that boots and then stops drawing is either spinning on a condition
+  // that never becomes true, or waiting on a device that never answers. From
+  // outside the emulator those look identical: no error, no frames. The only
+  // thing that tells them apart is the program counter.
+  //
+  // The EE runs on its own pthread, so the heap it writes nPC into is shared
+  // and the main thread can read it while the CPU is mid-execution — genuine
+  // sampling, not a frame-boundary snapshot. Samples are taken in bursts: a
+  // spin loop is only a handful of instructions, so consecutive reads land on
+  // different addresses inside it and the loop's extent falls straight out of
+  // the histogram.
+  //
+  // Needs the diag core (?core=play-diag). Against the shipped core the
+  // bindings are absent and this reports that rather than pretending.
+  const hist = { ee: new Map(), vu1: new Map(), iop: new Map() };
+  let sampler = null;
+  window.__pc = { samples: 0, hist };
+
+  const bump = (m, v) => m.set(v, (m.get(v) || 0) + 1);
+
+  window.pcStart = (burst = 32, everyMs = 4) => {
+    if (!mod || typeof mod.getEePc !== "function") return "no diagnostics in this core";
+    if (sampler) return "already sampling";
+    hist.ee.clear(); hist.vu1.clear(); hist.iop.clear();
+    window.__pc.samples = 0;
+    sampler = setInterval(() => {
+      for (let i = 0; i < burst; i++) {
+        bump(hist.ee, mod.getEePc() >>> 0);
+        bump(hist.vu1, mod.getVu1Pc() >>> 0);
+        bump(hist.iop, mod.getIopPc() >>> 0);
+        window.__pc.samples++;
+      }
+    }, everyMs);
+    return "sampling";
+  };
+
+  window.pcStop = () => { if (sampler) clearInterval(sampler); sampler = null; return window.__pc.samples; };
+
+  const hex = (n) => "0x" + (n >>> 0).toString(16).padStart(8, "0");
+
+  window.pcTop = (which = "ee", n = 24) => {
+    const m = hist[which];
+    if (!m) return null;
+    const total = [...m.values()].reduce((a, b) => a + b, 0) || 1;
+    return {
+      samples: total,
+      distinct: m.size,
+      // The span matters as much as the counts: a handful of addresses inside a
+      // few hundred bytes is a spin loop; thousands spread over megabytes is a
+      // CPU that is still doing real work.
+      span: m.size ? hex(Math.min(...m.keys())) + " … " + hex(Math.max(...m.keys())) : "-",
+      top: [...m.entries()].sort((a, b) => b[1] - a[1]).slice(0, n)
+        .map(([pc, c]) => ({ pc: hex(pc), hits: c, pct: +(100 * c / total).toFixed(1) })),
+    };
+  };
+
+  window.eeState = () => {
+    if (!mod || typeof mod.getEeGpr !== "function") return null;
+    const gpr = {};
+    for (let i = 0; i < 32; i++) gpr[i] = hex(mod.getEeGpr(i));
+    return { pc: hex(mod.getEePc()), vu0: hex(mod.getVu0Pc()), vu1: hex(mod.getVu1Pc()), iop: hex(mod.getIopPc()), gpr };
+  };
+
+  window.readWord = (addr) => (mod && mod.readEeWord ? hex(mod.readEeWord(addr >>> 0)) : null);
+
+  // Why is GIF_STAT.OPH clear? Parsed into an object so a run can assert on it.
+  window.gif = () => {
+    if (!mod || !mod.getGifDiag) return null;
+    return Object.fromEntries(mod.getGifDiag().split(";").filter(Boolean).map((kv) => {
+      const [k, v] = kv.split("=");
+      return [k, k.startsWith("d") && v.length === 8 ? "0x" + v : +v];
+    }));
+  };
+
+  window.gifTrace = () => (mod && mod.getGifTagTrace ? mod.getGifTagTrace() : null);
+
+  // CLog writes to files, not the console. The diag core keeps it enabled, so
+  // whatever the emulator complained about is sitting in MEMFS.
+  window.logs = () => {
+    // Observed from the FS.open hook, not guessed: the emscripten build's
+    // personal-data path is /home/web_user/.local/share.
+    const root = "/home/web_user/.local/share/Play Data Files/logs";
+    const out = {};
+    try {
+      for (const f of mod.FS.readdir(root)) {
+        if (f === "." || f === "..") continue;
+        try { out[f] = mod.FS.readFile(root + "/" + f, { encoding: "utf8" }).slice(-4000); }
+        catch (e) { out[f] = "read failed: " + e; }
+      }
+    } catch (e) { return { error: String(e) }; }
+    return out;
   };
 </script>
 </body>
