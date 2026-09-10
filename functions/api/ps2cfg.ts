@@ -42,6 +42,7 @@ function clean(val: unknown): Record<string, unknown> | null {
   const v = val as Record<string, unknown>;
   const out: Record<string, unknown> = {};
   if (typeof v.why === "string") out.why = v.why.slice(0, 300);
+  if (typeof v.recommend === "boolean") out.recommend = v.recommend;
   if (typeof v.core === "string" && TUNED_CORES.has(v.core)) out.core = v.core;
   if (v.engine === "advanced" || v.engine === "native") out.engine = v.engine;
   if (v.clock === "full" || v.clock === "half" || v.clock === "third") out.clock = v.clock;

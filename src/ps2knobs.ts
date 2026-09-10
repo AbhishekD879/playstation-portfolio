@@ -40,8 +40,13 @@ export interface Ps2GameKnobs {
 }
 
 export interface Ps2Override {
-  /** Human note explaining WHY, so a future reader can undo it safely. */
+  /** Human note explaining WHY, so a future reader can undo it safely. Shown
+   *  to the player too, because it is what tells them how far we checked. */
   why?: string;
+  /** Default this tuning on? True unless stated. Set false for tuning we
+   *  believe in less than that — it fixes one thing and might cost another —
+   *  which then has to be asked for. See ps2/tunedChoice.ts. */
+  recommend?: boolean;
   /** A per-game emulator build (see ps2/tunedCores.ts), for the games that
    *  needed a change to the emulator rather than a setting. Must name a core
    *  we ship; anything else is dropped, so this can never become a path. */
@@ -90,6 +95,7 @@ export function sanitiseOverride(val: unknown): Ps2Override | null {
   const v = val as Record<string, unknown>;
   const out: Ps2Override = {};
   if (typeof v.why === "string") out.why = v.why.slice(0, 300);
+  if (typeof v.recommend === "boolean") out.recommend = v.recommend;
   if (isTunedCore(v.core)) out.core = v.core;
   if (v.engine === "advanced" || v.engine === "native") out.engine = v.engine;
   if (v.clock === "full" || v.clock === "half" || v.clock === "third") out.clock = v.clock;

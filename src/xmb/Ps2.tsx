@@ -21,8 +21,10 @@ import { captureLocalInput, makeInjector, type PadState } from "../ps2mp/input";
 import { bumpPlays, resolveGameFile, type GameRecord } from "../gamesdb";
 import { clockDen, engineUrl, readClock, readEngine, readRes } from "../ps2/engineChoice";
 import { readTitleId } from "../ps2compat";
+import Ps2TuningPick from "./Ps2TuningPick";
 import { tunedCoreAvailable, tunedCoreUrl } from "../ps2/tunedCores";
-import { buildGameConfigXml, elfNameFor, loadOverrides, overridesFor } from "../ps2knobs";
+import { activeOverride, effectiveChoice, type TunedChoice } from "../ps2/tunedChoice";
+import { buildGameConfigXml, elfNameFor, loadOverrides, overridesFor, type Ps2Override } from "../ps2knobs";
 import { frameGen, upscale } from "../theme";
 import PartyPanel, { type MicState } from "./PartyPanel";
 import { buildRoster, cleanName, cleanText, confirmLine, lineId, pushLine, type ChatLine, type Member } from "../ps2mp/party";
@@ -93,6 +95,13 @@ export default function Ps2(props: {
   // The shared core is what the frame loads while the user picks a disc. A disc
   // we have tuned re-points it once, at insert — see routeAndBoot.
   const [frameSrc, setFrameSrc] = createSignal(engineSrc);
+  // What we know about the disc that just went in, for the tuning picker.
+  // Bumped when a tuning choice changes, to force the frame to reload even
+  // when its URL is otherwise identical.
+  const [bootNonce, setBootNonce] = createSignal(0);
+  const [tuning, setTuning] = createSignal<
+    { id: string; over: Ps2Override; choice: TunedChoice } | null
+  >(null);
   // Same read-once rule as the engine: the clock is applied at boot, so it is
   // settled on PS2 home before this component exists.
   const eeClockDen = clockDen(readClock());
@@ -673,7 +682,9 @@ export default function Ps2(props: {
     let gameConfigXml: string | null = null;
     try {
       const id = await readTitleId(f);
-      const over = id ? overridesFor(id) : null;
+      // activeOverride, not overridesFor: declining the tuning has to decline
+      // all of it — the clock and the knobs as much as the build.
+      const over = id ? activeOverride(id, overridesFor(id)) : null;
       if (over?.clock) den = clockDen(over.clock);
       if (id && over?.knobs) {
         const elf = elfNameFor(id);
@@ -695,6 +706,21 @@ export default function Ps2(props: {
     void routeAndBoot(f);
   }
 
+  /** Start this disc over under a changed tuning choice.
+   *
+   *  The clock, the knobs and the build are all latched when a game boots, so
+   *  there is no applying any of it to a running VM. The nonce is what forces
+   *  the reload: the frame URL is often identical between the two choices —
+   *  only the clock or the knobs differ — and re-setting an unchanged src does
+   *  nothing. The memory card is keyed independently, so the player resumes
+   *  from their last save rather than the beginning. */
+  function reboot(f: File) {
+    pending = f;
+    ready = false;
+    setBootNonce((n) => n + 1);
+    void routeAndBoot(f);
+  }
+
   /** Send this disc to the build that runs it best.
    *
    *  A handful of games needed a change to the emulator itself rather than a
@@ -710,13 +736,18 @@ export default function Ps2(props: {
     let want = engineSrc;
     try {
       const id = await readTitleId(f);
-      const core = id ? overridesFor(id)?.core : null;
+      const known = id ? overridesFor(id) : null;
+      // Remember what we have for this disc, so the player can be offered the
+      // other way round — and told how far we actually checked.
+      setTuning(id && known ? { id, over: known, choice: effectiveChoice(id, known) } : null);
+      const core = id ? activeOverride(id, known)?.core : null;
       if (core && (await tunedCoreAvailable(core))) want = tunedCoreUrl(core) + coreQuery;
     } catch { /* unreadable disc — let the shared core read it and say why */ }
 
-    if (want !== frameSrc()) {
+    const withNonce = bootNonce() ? `${want}${want.includes("?") ? "&" : "?"}boot=${bootNonce()}` : want;
+    if (withNonce !== frameSrc()) {
       ready = false;      // the new frame's play-ready boots `pending`
-      setFrameSrc(want);
+      setFrameSrc(withNonce);
       return;
     }
     if (ready) bootNow(f);
@@ -879,6 +910,19 @@ export default function Ps2(props: {
               <button class="ghost-btn" classList={{ on: showPerf() }} aria-pressed={showPerf()}
                 onClick={togglePerf}>▤ fps</button>
               <button class="ghost-btn" onClick={() => requestSave()}>▪ save card</button>
+              {/* only for a disc we have tuning for; everything else has
+                  nothing to choose between, so it gets no pill. Here rather
+                  than on the insert screen because that screen is gone in a
+                  second or two, and because the moment a player wants this is
+                  the moment a game starts misbehaving. */}
+              <Show when={tuning()}>{(t) => (
+                <Ps2TuningPick
+                  titleId={t().id}
+                  over={t().over}
+                  choice={t().choice}
+                  onPick={(c) => { setTuning({ ...t(), choice: c }); if (disc()) reboot(disc()!); }}
+                />
+              )}</Show>
               <button class="ghost-btn" onClick={() => setHelp(true)} title="How to play (?)">? controls</button>
               <ControlsCard id="ps2" title="PlayStation 2" open={help()} onClose={() => setHelp(false)} onToggle={() => setHelp(!help())} />
               <button class="ghost-btn" classList={{ on: showDiag() }} onClick={() => setShowDiag((v) => !v)}>🩺 diagnostics</button>
