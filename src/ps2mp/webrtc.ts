@@ -35,6 +35,7 @@ export async function iceConfig(): Promise<RTCIceServer[]> {
 }
 
 import { GONE_ATTEMPTS, backoffMs, classify, retryLabel, shouldRetry, type Health } from "./reconnect";
+import { watchLink } from "./linkHealth";
 
 export interface Signaling {
   send(msg: Record<string, unknown>): void;
@@ -131,6 +132,9 @@ export function startHost(opts: {
   // channel instead of opening a second one — no extra negotiation, and a
   // player who can send input can always be talked to.
   const channels = new Map<string, RTCDataChannel>();
+  // One per joiner, so a transient ICE wobble is waited out instead of being
+  // reported as them leaving.
+  const linkWatchers = new Map<string, ReturnType<typeof watchLink>>();
   // Spectators live in the same peer map (they need the same offer/ICE dance)
   // but are tracked separately so they never look like players to the caller.
   const watching = new Set<string>();
@@ -176,13 +180,24 @@ export function startHost(opts: {
         dc.onopen = () => opts.onJoinerReady?.(id);
         dc.onmessage = (e) => { try { opts.onJoinerInput(id, JSON.parse(e.data)); } catch { /* ignore */ } };
       }
-      peer.pc.onconnectionstatechange = () => {
-        opts.onStatus?.(`${isWatcher ? "watcher" : "player"} ${id}: ${peer.pc.connectionState}`);
-        if (["failed", "closed", "disconnected"].includes(peer.pc.connectionState)) {
+      // "disconnected" is transient — see linkHealth.ts. Dropping the peer on
+      // it is what turned every wifi hiccup into someone leaving the game.
+      const who = isWatcher ? "watcher" : "player";
+      const health = watchLink(peer.pc, {
+        onWobble: () => opts.onStatus?.(`${who} ${id}: connection unstable`),
+        onRestored: () => opts.onStatus?.(`${who} ${id}: connected`),
+        onLost: () => {
           peers.delete(id); watching.delete(id); channels.delete(id);
           opts.onJoinerLeft?.(id);
           notify();
+        },
+      });
+      linkWatchers.set(id, health);
+      peer.pc.onconnectionstatechange = () => {
+        if (peer.pc.connectionState !== "disconnected") {
+          opts.onStatus?.(`${who} ${id}: ${peer.pc.connectionState}`);
         }
+        health.update();
       };
       const offer = await peer.pc.createOffer();
       await peer.pc.setLocalDescription(offer);
@@ -199,7 +214,25 @@ export function startHost(opts: {
     }
 
     if (m.t === "peer-left") {
-      peers.get(m.id)?.pc.close(); peers.delete(m.id); watching.delete(m.id); channels.delete(m.id);
+      // The signaling socket is not the session. The worker sends peer-left
+      // when a joiner's websocket closes OR errors, and that socket sits idle
+      // the whole time a game is running — so a phone changing network, a
+      // laptop waking, a proxy timing out or the room's Durable Object being
+      // recycled all produced a "peer-left" for someone whose video and input
+      // were still flowing. Killing the peer connection there is what dropped
+      // people mid-game for no reason they could see.
+      //
+      // A real departure still gets cleaned up: whoever actually left stops
+      // answering ICE, so their connection goes to disconnected and then
+      // failed, and the watcher above removes them. Slower, but only ever for
+      // people who are genuinely gone.
+      const peer = peers.get(m.id);
+      if (peer && peer.pc.connectionState === "connected") {
+        opts.onStatus?.(`${watching.has(m.id) ? "watcher" : "player"} ${m.id}: signaling lost, still playing`);
+        return;
+      }
+      linkWatchers.get(m.id)?.cancel(); linkWatchers.delete(m.id);
+      peer?.pc.close(); peers.delete(m.id); watching.delete(m.id); channels.delete(m.id);
       opts.onJoinerLeft?.(m.id);
       notify();
     }
@@ -214,7 +247,12 @@ export function startHost(opts: {
     watchers: () => watcherCount,
     send: sendTo,
     broadcast: (msg) => { for (const id of channels.keys()) sendTo(id, msg); },
-    stop: () => { for (const p of peers.values()) p.pc.close(); peers.clear(); watching.clear(); channels.clear(); sig.close(); },
+    stop: () => {
+      for (const w of linkWatchers.values()) w.cancel();
+      linkWatchers.clear();
+      for (const p of peers.values()) p.pc.close();
+      peers.clear(); watching.clear(); channels.clear(); sig.close();
+    },
   };
 }
 
@@ -244,6 +282,7 @@ export function startJoiner(opts: {
   const sig = connectSignaling(opts.room);
   let dc: RTCDataChannel | null = null;
   let peer: ReturnType<typeof makePeer> | null = null;
+  let joinHealth: ReturnType<typeof watchLink> | null = null;
   let micSender: RTCRtpSender | null = null;
   const early: any[] = []; // signals that arrive before ICE config resolves
 
@@ -288,7 +327,21 @@ export function startJoiner(opts: {
       if (dc.readyState === "open") opts.onReady?.();
       else dc.onopen = () => opts.onReady?.();
     };
-    peer.pc.onconnectionstatechange = () => peer && opts.onStatus?.(peer.pc.connectionState);
+    // Same reasoning as the host. classify() in reconnect.ts turns anything
+    // containing "disconnect" into "dropped", which starts a whole reconnect
+    // cycle — so a wobble must not be reported with that word until the grace
+    // period is up. "connection unstable" classifies as "connecting", which
+    // shows the player something without tearing the session down.
+    const health = watchLink(peer.pc, {
+      onWobble: () => opts.onStatus?.("connection unstable"),
+      onRestored: () => opts.onStatus?.("connected"),
+      onLost: () => opts.onStatus?.("disconnected"),
+    });
+    joinHealth = health;
+    peer.pc.onconnectionstatechange = () => {
+      if (peer && peer.pc.connectionState !== "disconnected") opts.onStatus?.(peer.pc.connectionState);
+      health.update();
+    };
     for (const m of early.splice(0)) handle(m); // drain buffered offers/candidates
   });
 
@@ -303,7 +356,7 @@ export function startJoiner(opts: {
     sendInput: send,
     send,
     setMic: (track) => { micSender?.replaceTrack(track).catch(() => {}); },
-    stop: () => { peer?.pc.close(); sig.close(); },
+    stop: () => { joinHealth?.cancel(); peer?.pc.close(); sig.close(); },
   };
 }
 
