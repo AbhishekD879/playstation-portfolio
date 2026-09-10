@@ -21,6 +21,7 @@ import { captureLocalInput, makeInjector, type PadState } from "../ps2mp/input";
 import { bumpPlays, resolveGameFile, type GameRecord } from "../gamesdb";
 import { clockDen, engineUrl, readClock, readEngine, readRes } from "../ps2/engineChoice";
 import { readTitleId } from "../ps2compat";
+import { tunedCoreAvailable, tunedCoreUrl } from "../ps2/tunedCores";
 import { buildGameConfigXml, elfNameFor, loadOverrides, overridesFor } from "../ps2knobs";
 import { frameGen, upscale } from "../theme";
 import PartyPanel, { type MicState } from "./PartyPanel";
@@ -87,9 +88,11 @@ export default function Ps2(props: {
   // so it is only requested when one of them is actually on.
   const res = readRes();
   const wantsFrames = upscale() !== "off" || frameGen() !== "off";
-  const engineSrc = engine === "advanced"
-    ? `${engineUrl(engine)}?res=${res}${wantsFrames ? "&keepbuf=1" : ""}`
-    : engineUrl(engine);
+  const coreQuery = engine === "advanced" ? `?res=${res}${wantsFrames ? "&keepbuf=1" : ""}` : "";
+  const engineSrc = engine === "advanced" ? `${engineUrl(engine)}${coreQuery}` : engineUrl(engine);
+  // The shared core is what the frame loads while the user picks a disc. A disc
+  // we have tuned re-points it once, at insert — see routeAndBoot.
+  const [frameSrc, setFrameSrc] = createSignal(engineSrc);
   // Same read-once rule as the engine: the clock is applied at boot, so it is
   // settled on PS2 home before this component exists.
   const eeClockDen = clockDen(readClock());
@@ -687,10 +690,37 @@ export default function Ps2(props: {
     sfx.confirm();
     setDisc(f);
     setStage("reading");
-    goFullscreen(); // still inside the user gesture
+    goFullscreen(); // still inside the user gesture — must stay synchronous
     pending = f;
+    void routeAndBoot(f);
+  }
+
+  /** Send this disc to the build that runs it best.
+   *
+   *  A handful of games needed a change to the emulator itself rather than a
+   *  setting, and each has its own build (ps2/tunedCores.ts). Routing happens
+   *  here because the title id does not exist until a disc is in, and because
+   *  re-pointing the frame is only safe before a game is running — the same
+   *  play-ready handshake that boots a pending disc re-establishes the input
+   *  bridge, so a reload costs a few seconds of wasm compile and nothing else.
+   *
+   *  Anything unrecognised, unreadable, or not actually deployed stays on the
+   *  shared core. A missing tuned build must never mean a game will not start. */
+  async function routeAndBoot(f: File) {
+    let want = engineSrc;
+    try {
+      const id = await readTitleId(f);
+      const core = id ? overridesFor(id)?.core : null;
+      if (core && (await tunedCoreAvailable(core))) want = tunedCoreUrl(core) + coreQuery;
+    } catch { /* unreadable disc — let the shared core read it and say why */ }
+
+    if (want !== frameSrc()) {
+      ready = false;      // the new frame's play-ready boots `pending`
+      setFrameSrc(want);
+      return;
+    }
     if (ready) bootNow(f);
-    // if not ready yet, play-ready handler boots it
+    // otherwise the play-ready handler boots it
   }
 
   // boot a library record: stream its file (zero-copy for a multi-GB ISO —
@@ -762,7 +792,7 @@ export default function Ps2(props: {
             ref={frame}
             class="ps2-frame"
             classList={{ live: stage() === "playing" }}
-            src={engineSrc}
+            src={frameSrc()}
             allow="autoplay; fullscreen; gamepad; cross-origin-isolated"
             title="PlayStation 2"
           />

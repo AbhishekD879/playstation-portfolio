@@ -28,6 +28,11 @@ const json = (data: unknown, status = 200, cache = "no-store") =>
 // Same shape the client enforces. Duplicated deliberately: the browser copy
 // protects a visitor from a bad write, and this one stops the bad write landing.
 const ID = /^[A-Z]{4}-\d{5}$/;
+// Per-game emulator builds we ship. Kept in step with src/ps2/tunedCores.ts by
+// hand: the client validates against its own copy, and an id that only one side
+// knows is simply dropped by the other, which is the safe direction. A free
+// string here would let a bad write point the emulator frame at any path.
+const TUNED_CORES = new Set<string>([]);
 const HEX = /^[0-9a-fA-F]{1,8}$/;
 const BLOCK_KEY = /^[0-9a-fA-F]{32};\d+$/;
 const MODES = ["NEAREST", "PLUSINFINITY", "MINUSINFINITY", "TRUNCATE"];
@@ -37,6 +42,7 @@ function clean(val: unknown): Record<string, unknown> | null {
   const v = val as Record<string, unknown>;
   const out: Record<string, unknown> = {};
   if (typeof v.why === "string") out.why = v.why.slice(0, 300);
+  if (typeof v.core === "string" && TUNED_CORES.has(v.core)) out.core = v.core;
   if (v.engine === "advanced" || v.engine === "native") out.engine = v.engine;
   if (v.clock === "full" || v.clock === "half" || v.clock === "third") out.clock = v.clock;
   if (v.res === 1 || v.res === 2 || v.res === 3) out.res = v.res;

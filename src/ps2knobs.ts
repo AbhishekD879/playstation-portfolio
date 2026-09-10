@@ -14,7 +14,10 @@
 // change rather than a build.
 //
 // Overrides are keyed by title id (SLUS-21198), which we read off the disc.
-// Pure: no relative imports, so node can load it for the tests.
+// The one relative import carries an explicit .ts extension so node can still
+// load this module directly for the tests.
+
+import { isTunedCore } from "./ps2/tunedCores.ts";
 
 export type Ps2Engine = "advanced" | "native";
 export type Ps2Clock = "full" | "half" | "third";
@@ -39,6 +42,10 @@ export interface Ps2GameKnobs {
 export interface Ps2Override {
   /** Human note explaining WHY, so a future reader can undo it safely. */
   why?: string;
+  /** A per-game emulator build (see ps2/tunedCores.ts), for the games that
+   *  needed a change to the emulator rather than a setting. Must name a core
+   *  we ship; anything else is dropped, so this can never become a path. */
+  core?: string;
   engine?: Ps2Engine;
   clock?: Ps2Clock;
   res?: Ps2Res;
@@ -83,6 +90,7 @@ export function sanitiseOverride(val: unknown): Ps2Override | null {
   const v = val as Record<string, unknown>;
   const out: Ps2Override = {};
   if (typeof v.why === "string") out.why = v.why.slice(0, 300);
+  if (isTunedCore(v.core)) out.core = v.core;
   if (v.engine === "advanced" || v.engine === "native") out.engine = v.engine;
   if (v.clock === "full" || v.clock === "half" || v.clock === "third") out.clock = v.clock;
   if (v.res === 1 || v.res === 2 || v.res === 3) out.res = v.res;
