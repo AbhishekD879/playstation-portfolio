@@ -1,7 +1,7 @@
 import { For, Show, createSignal, onCleanup, onMount } from "solid-js";
 import { fetchLive, type LiveRoom } from "../ps2mp/webrtc";
 import SeatPicker from "./SeatPicker";
-import Ps2EnginePick from "./Ps2EnginePick";
+import Ps2OnlineEmulator from "./Ps2OnlineEmulator";
 import PartyName from "./PartyName";
 import { seatPlan } from "../ps2/seatPlan";
 import * as sfx from "../audio";
@@ -171,19 +171,18 @@ export default function Online(props: {
           {/* ── what to play ──────────────────────────────────────────
               Verb first. A row that says "Start with Tekken" cannot be mistaken
               for a label, and the title is never truncated mid-word. */}
+          {/* How it runs, before what to run: the same order the screen already
+              follows — who is playing, how they get in, how it runs, then the
+              disc. Laid out inline rather than behind a pill, because every
+              other decision on this screen is visible too. */}
+          <Ps2OnlineEmulator />
+
           <div class="online-act">
             <p class="online-sub" style="margin:0">What do you want to play</p>
-            {/* The emulator choice belongs here as much as on PS2 home: this is
-                the screen you are on when the disc that matters is about to
-                boot, and hosting is exactly when it matters most — everyone in
-                the room sees the picture this build draws. Same component, so
-                the choice is the same one either way. */}
-            <Ps2EnginePick />
           </div>
           <p class="online-note">
             It boots, then opens the room — with {props.players - 1}{" "}
             {props.players === 2 ? "seat" : "seats"} for other people.
-            {" "}Your emulator settings run the game for everyone — the room watches your console.
           </p>
 
           <div class="oact-list">
