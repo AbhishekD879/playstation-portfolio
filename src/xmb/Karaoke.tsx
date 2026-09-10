@@ -485,7 +485,12 @@ export default function Karaoke(props: { onClose: () => void; bind: (nav: (a: Na
         </Show>
       </div>
       <div class="panel-hint guide-hint"><span class="btn-x" /> play/pause · ←→ seek · ↑↓ vocal cut · <span class="btn-o" /> back</div>
-      <input type="file" ref={fileInput} hidden accept="audio/*"
+      {/* Extensions as well as the wildcard. "audio/*" alone leaves it to the
+          OS to say what counts as audio, and that mapping is unreliable — it
+          was hiding mp3s in the picker and offering video files instead.
+          Naming the formats outright does not depend on any of that. */}
+      <input type="file" ref={fileInput} hidden
+        accept="audio/*,.mp3,.m4a,.aac,.flac,.wav,.ogg,.oga,.opus,.weba,.wma,.aif,.aiff,.alac,.mp4"
         onChange={(e) => { const f = e.currentTarget.files?.[0]; e.currentTarget.value = ""; if (f) load(f); }} />
     </div>
   );

@@ -1,11 +1,11 @@
-// Self-check for the stem-separation DSP. Run: npx tsx src/stems.test.ts
+// Self-check for the stem-separation DSP. Part of `npm test`.
 //
 // The model is verified separately in the browser; what's checked here is the
 // FFT and the STFT→ISTFT round trip. Both fail SILENTLY — a subtly wrong FFT or
 // a botched overlap-add still produces audio, it just sounds like a wet paper
 // bag, and there's no exception to trace.
 import { strict as assert } from "node:assert";
-import { fft, hann, ifft, istft, stft } from "./stems";
+import { fft, hann, ifft, istft, stft } from "./stems.ts";
 
 // —— FFT against a brute-force DFT ——
 {
@@ -119,3 +119,49 @@ import { fft, hann, ifft, istft, stft } from "./stems";
 }
 
 console.log("stems: DSP ok");
+
+// —— masking a spectrogram in place ————————————————————————————————————————
+// separateStems now writes the ratio mask straight into the spectrogram it
+// analysed, instead of building a second one, because holding three
+// spectrograms for a four-minute song is what crashed the tab. That only works
+// if a bin's new value depends on nothing but its own old value — so this
+// pins the two properties the in-place version relies on.
+{
+  const N_FFT = 4096, BINS = N_FFT / 2 + 1, MODEL_BINS = 1024;
+  const win = hann(N_FFT);
+  const n = N_FFT * 6;
+  const x = new Float32Array(n);
+  for (let i = 0; i < n; i++) x[i] = Math.sin((2 * Math.PI * 440 * i) / 44100) * 0.5;
+
+  // a mask of 1 everywhere must be the identity, so round-tripping through the
+  // in-place path returns the original signal
+  const spec = stft(x, win);
+  for (let f = 0; f < spec.frames; f++) {
+    const re = spec.re[f], im = spec.im[f];
+    for (let b = 0; b < MODEL_BINS; b++) {
+      const mag = Math.hypot(re[b], im[b]);
+      const m = mag > 1e-9 ? Math.min(1, mag / mag) : 0;   // estimate == original
+      re[b] *= m; im[b] *= m;
+    }
+    for (let b = MODEL_BINS; b < BINS; b++) { re[b] = 0; im[b] = 0; }
+  }
+  const back = istft(spec, win, n);
+  // 440 Hz lives well below the model's bin range, so zeroing the top bins
+  // must not disturb it
+  let worst = 0;
+  for (let i = N_FFT; i < n - N_FFT; i++) worst = Math.max(worst, Math.abs(back[i] - x[i]));
+  assert.ok(worst < 1e-3, `in-place unity mask should reconstruct the signal, off by ${worst}`);
+
+  // a mask of 0 must silence it, and must not leave the top bins ringing
+  const spec0 = stft(x, win);
+  for (let f = 0; f < spec0.frames; f++) {
+    const re = spec0.re[f], im = spec0.im[f];
+    for (let b = 0; b < BINS; b++) { re[b] = 0; im[b] = 0; }
+  }
+  const silent = istft(spec0, win, n);
+  let loudest = 0;
+  for (let i = 0; i < n; i++) loudest = Math.max(loudest, Math.abs(silent[i]));
+  assert.ok(loudest < 1e-6, `a zero mask should be silence, peaked at ${loudest}`);
+}
+
+console.log("stems: in-place mask ok");

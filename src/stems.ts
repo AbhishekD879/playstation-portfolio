@@ -184,10 +184,20 @@ export async function separateStems(
   const frames = specs[0].frames;
   const splits = Math.ceil(frames / FRAMES);
 
-  // the vocal magnitude the model predicts, per channel/frame/bin
-  const est: Float32Array[][] = [new Array(frames), new Array(frames)];
-  for (let f = 0; f < frames; f++) { est[0][f] = new Float32Array(BINS); est[1][f] = new Float32Array(BINS) }
-
+  // Memory, because this is what decided whether the tab survived.
+  //
+  // A 4-minute track is about 10,300 frames. Keeping the model's predicted
+  // magnitudes for the whole song (2 x frames x 2049 floats) is ~170 MB, and
+  // building a second full spectrogram for the masked result is another
+  // ~340 MB, on top of the ~340 MB the input spectrogram already costs. That
+  // total is what killed the page part-way through a real song — the six
+  // second clips this was tried on never got near it.
+  //
+  // Neither of those two is needed. The mask for a split can be applied the
+  // moment that split comes back, straight into the input spectrogram: every
+  // bin's new value depends only on its own old value, so it can be written in
+  // place. `specs` holds the vocal spectrogram by the end, and peak memory is
+  // one spectrogram plus one split's tensor instead of three spectrograms.
   for (let s = 0; s < splits; s++) {
     // one split at a time: the whole song at once is a 2x N x 512 x 1024 float
     // tensor, which for a 4-minute track is well over a gigabyte
@@ -205,38 +215,38 @@ export async function separateStems(
       x: new ort.Tensor("float32", data, [2, 1, FRAMES, MODEL_BINS]),
     });
     const y = out[session.outputNames[0]].data as Float32Array;
+    // A ratio mask (estimate / original) rather than the estimate itself: it
+    // keeps the original PHASE, and phase is most of what makes separated
+    // audio sound natural instead of watery.
     for (let ch = 0; ch < 2; ch++) {
       for (let t = 0; t < FRAMES; t++) {
         const f = s * FRAMES + t;
         if (f >= frames) break;
+        const re = specs[ch].re[f], im = specs[ch].im[f];
         const base = ch * FRAMES * MODEL_BINS + t * MODEL_BINS;
-        for (let b = 0; b < MODEL_BINS; b++) est[ch][f][b] = y[base + b];
+        for (let b = 0; b < MODEL_BINS; b++) {
+          const mag = Math.hypot(re[b], im[b]);
+          const m = mag > 1e-9 ? Math.min(1, y[base + b] / mag) : 0;
+          re[b] *= m; im[b] *= m;
+        }
+        // Bins above the model's range are not vocal as far as it is
+        // concerned, so they leave the vocal entirely and stay in the
+        // accompaniment rather than leaking hiss into both.
+        for (let b = MODEL_BINS; b < BINS; b++) { re[b] = 0; im[b] = 0; }
       }
     }
     onProgress?.({ stage: "separate", pct: Math.round(((s + 1) / splits) * 100) });
   }
 
-  // —— soft mask ——
-  // A ratio mask (estimate / original) rather than using the estimate directly:
-  // it keeps the original PHASE, and phase is most of what makes separated audio
-  // sound natural instead of watery.
+  // specs now holds the masked (vocal) spectrogram, so this is just the
+  // inverse transform. Each channel's spectrogram is released as soon as it
+  // has been turned back into samples — by the last channel that is the
+  // difference between holding one spectrogram and holding two.
   onProgress?.({ stage: "rebuild", pct: 0 });
   const vocalCh: Float32Array[] = [];
   for (let ch = 0; ch < 2; ch++) {
-    const vre: Float32Array[] = [], vim: Float32Array[] = [];
-    for (let f = 0; f < frames; f++) {
-      const re = specs[ch].re[f], im = specs[ch].im[f];
-      const nr = new Float32Array(BINS), ni = new Float32Array(BINS);
-      for (let b = 0; b < MODEL_BINS; b++) {
-        const mag = Math.hypot(re[b], im[b]);
-        const m = mag > 1e-9 ? Math.min(1, est[ch][f][b] / mag) : 0;
-        nr[b] = re[b] * m; ni[b] = im[b] * m;
-      }
-      // bins above the model's range are left out of the vocal entirely, so
-      // they stay in the accompaniment rather than leaking hiss into both
-      vre.push(nr); vim.push(ni);
-    }
-    vocalCh.push(istft({ re: vre, im: vim, frames }, win, len));
+    vocalCh.push(istft(specs[ch], win, len));
+    specs[ch] = { re: [], im: [], frames };   // let the spectrogram go
     onProgress?.({ stage: "rebuild", pct: Math.round(((ch + 1) / 2) * 100) });
   }
 
