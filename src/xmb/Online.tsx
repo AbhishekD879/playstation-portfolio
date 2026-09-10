@@ -1,6 +1,7 @@
 import { For, Show, createSignal, onCleanup, onMount } from "solid-js";
 import { fetchLive, type LiveRoom } from "../ps2mp/webrtc";
 import SeatPicker from "./SeatPicker";
+import Ps2EnginePick from "./Ps2EnginePick";
 import PartyName from "./PartyName";
 import { seatPlan } from "../ps2/seatPlan";
 import * as sfx from "../audio";
@@ -172,10 +173,17 @@ export default function Online(props: {
               for a label, and the title is never truncated mid-word. */}
           <div class="online-act">
             <p class="online-sub" style="margin:0">What do you want to play</p>
+            {/* The emulator choice belongs here as much as on PS2 home: this is
+                the screen you are on when the disc that matters is about to
+                boot, and hosting is exactly when it matters most — everyone in
+                the room sees the picture this build draws. Same component, so
+                the choice is the same one either way. */}
+            <Ps2EnginePick />
           </div>
           <p class="online-note">
             It boots, then opens the room — with {props.players - 1}{" "}
             {props.players === 2 ? "seat" : "seats"} for other people.
+            {" "}Your emulator settings run the game for everyone — the room watches your console.
           </p>
 
           <div class="oact-list">
@@ -207,6 +215,13 @@ export default function Online(props: {
           <p class="online-k">Open rooms</p>
           <button class="ps-act" onClick={load}>refresh</button>
         </div>
+        {/* Said once, plainly. Otherwise a joiner changes Engine or Picture,
+            sees no difference, and reasonably concludes the setting is broken. */}
+        <p class="online-note" style="margin:0 0 10px">
+          Joining runs no emulator on your machine — the host's console draws the game and you
+          get their picture, so their emulator settings are the ones in force. Yours apply when
+          you host.
+        </p>
 
         <Show when={state() !== "loading"} fallback={<p class="online-empty">Looking for open rooms…</p>}>
           <Show
