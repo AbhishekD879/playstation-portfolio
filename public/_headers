@@ -8,3 +8,73 @@
 /j2me/*
   ! Cross-Origin-Embedder-Policy
   ! Cross-Origin-Opener-Policy
+
+# —— iOS: the emulator frames ask for require-corp ————————————————————————
+#
+# Safari has never supported COEP: credentialless — it only accepts require-corp
+# — so on iPhone and iPad none of this site is cross-origin isolated, which
+# means no SharedArrayBuffer, which means no threads in any emulator. That is
+# the single biggest reason the console is worse on Apple hardware.
+#
+# The main document cannot switch: require-corp blocks every cross-origin
+# no-cors subresource, and that document embeds YouTube, Spotify, map tiles and
+# remote thumbnails. (CORS-mode fetch() is unaffected either way — COEP does not
+# police it — so none of the site's ~19 JSON APIs are at stake here.)
+#
+# But COEP is per document, and the heavy emulators each run in their own
+# same-origin frame that loads nothing cross-origin at all. Those frames can ask
+# for the stricter policy without the main document changing, which is what
+# gives Safari its threads. Audited: every path below has no cross-origin
+# subresource of any kind.
+#
+# Not listed, deliberately:
+#   · EmulatorJS mounts in the TOP document (iframes lose gamepad access — see
+#     emulator/GameSession.tsx), so it shares the main document's policy and
+#     cannot be isolated without taking YouTube and the rest down with it.
+#   · jazz2 loads googletagmanager, micropolis loads snap.berkeley.edu.
+
+# Only the directories that no Pages Function serves. quake, duke, diablo,
+# openttd, descent, gorescript, hexgl and openhv are handed to
+# functions/<dir>/[[file]].ts, and a Function's response never passes through
+# _headers — those set the same policy in r2serve.ts instead. Both lists were
+# audited the same way and have to stay in step.
+
+/play/*
+  ! Cross-Origin-Embedder-Policy
+  Cross-Origin-Embedder-Policy: require-corp
+
+/play/
+  ! Cross-Origin-Embedder-Policy
+  Cross-Origin-Embedder-Policy: require-corp
+
+/play-mt/*
+  ! Cross-Origin-Embedder-Policy
+  Cross-Origin-Embedder-Policy: require-corp
+
+/play-mt/
+  ! Cross-Origin-Embedder-Policy
+  Cross-Origin-Embedder-Policy: require-corp
+
+/play-tune/*
+  ! Cross-Origin-Embedder-Policy
+  Cross-Origin-Embedder-Policy: require-corp
+
+/play-tune/
+  ! Cross-Origin-Embedder-Policy
+  Cross-Origin-Embedder-Policy: require-corp
+
+/wolf/*
+  ! Cross-Origin-Embedder-Policy
+  Cross-Origin-Embedder-Policy: require-corp
+
+/wolf/
+  ! Cross-Origin-Embedder-Policy
+  Cross-Origin-Embedder-Policy: require-corp
+
+/jazz/*
+  ! Cross-Origin-Embedder-Policy
+  Cross-Origin-Embedder-Policy: require-corp
+
+/jazz/
+  ! Cross-Origin-Embedder-Policy
+  Cross-Origin-Embedder-Policy: require-corp

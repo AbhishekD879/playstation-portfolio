@@ -22,9 +22,22 @@ const TYPES: Record<string, string> = {
 };
 const typeOf = (key: string) => TYPES[key.split(".").pop()?.toLowerCase() ?? ""] ?? "application/octet-stream";
 
-const isolate = (h: Headers) => {
+// Which of these directories can ask for the stricter policy.
+//
+// Safari has never supported COEP: credentialless — it only accepts
+// require-corp — so on iPhone and iPad nothing here is cross-origin isolated
+// and no emulator gets threads. A frame may ask for require-corp instead, but
+// only if it loads NO cross-origin no-cors subresource, because require-corp
+// blocks every one of those. (CORS-mode fetch is untouched by COEP either way.)
+//
+// Audited per directory. jazz2 is absent on purpose: it loads googletagmanager,
+// which would be blocked. Keep this in step with the same list in
+// public/_headers, which covers the directories no Function serves.
+const ISOLATED = new Set(["quake", "duke", "diablo", "openttd", "descent", "gorescript", "hexgl", "openhv"]);
+
+const isolate = (h: Headers, dir: string) => {
   h.set("cross-origin-opener-policy", "same-origin");
-  h.set("cross-origin-embedder-policy", "credentialless");
+  h.set("cross-origin-embedder-policy", ISOLATED.has(dir) ? "require-corp" : "credentialless");
   h.set("cross-origin-resource-policy", "same-origin");
   return h;
 };
@@ -34,14 +47,14 @@ export async function serveFromR2(ctx: EventContext<R2Env, string, unknown>, dir
   const url = new URL(request.url);
   const key = decodeURIComponent(url.pathname.slice(1)); // "quake/qwasm-gl.wasm"
   const isGet = request.method === "GET" || request.method === "HEAD";
-  if (!isGet || !key.startsWith(`${dir}/`) || key.includes("..")) return fallback(ctx);
+  if (!isGet || !key.startsWith(`${dir}/`) || key.includes("..")) return fallback(ctx, dir);
 
   const cache = caches.default;
   const cacheKey = new Request(`${url.origin}${url.pathname}`, { method: "GET" });
   let res = await cache.match(cacheKey);
   if (!res) {
     const obj = await env.R2.get(key);
-    if (!obj) return fallback(ctx);
+    if (!obj) return fallback(ctx, dir);
     const h = new Headers();
     obj.writeHttpMetadata(h);
     if (!h.get("content-type") || h.get("content-type") === "application/octet-stream") h.set("content-type", typeOf(key));
@@ -49,7 +62,7 @@ export async function serveFromR2(ctx: EventContext<R2Env, string, unknown>, dir
     h.set("etag", obj.httpEtag);
     h.set("cache-control", "public, max-age=86400, stale-while-revalidate=604800");
     h.set("x-asset-source", "r2");
-    isolate(h);
+    isolate(h, dir);
     res = new Response(obj.body, { status: 200, headers: h });
     ctx.waitUntil(cache.put(cacheKey, res.clone()));
   }
@@ -57,9 +70,9 @@ export async function serveFromR2(ctx: EventContext<R2Env, string, unknown>, dir
 }
 
 // the static file, with the isolation headers _headers would have added
-async function fallback(ctx: EventContext<R2Env, string, unknown>): Promise<Response> {
+async function fallback(ctx: EventContext<R2Env, string, unknown>, dir: string): Promise<Response> {
   const res = await ctx.env.ASSETS.fetch(ctx.request);
-  const h = isolate(new Headers(res.headers));
+  const h = isolate(new Headers(res.headers), dir);
   h.set("x-asset-source", "static");
   return new Response(res.body, { status: res.status, statusText: res.statusText, headers: h });
 }
