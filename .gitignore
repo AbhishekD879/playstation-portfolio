@@ -30,3 +30,9 @@ public/play-diag/
 
 # A/B baseline core (no WebGL feedback change). Local-only.
 public/play-oph/
+
+# Self-hosted game builds — not redistributed with this repo, supplied by the
+# owner and deployed from their machine. See src/webgames.ts and
+# docs/self-hosted-games.md.
+public/hl2/
+public/pepsiman/

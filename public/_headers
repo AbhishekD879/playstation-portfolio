@@ -78,3 +78,23 @@
 /jazz/
   ! Cross-Origin-Embedder-Policy
   Cross-Origin-Embedder-Policy: require-corp
+
+# Self-hosted builds that are not in this repository (see src/webgames.ts).
+# Both want threads — Source is a threaded engine, and a recompilation expects
+# the same — and both are same-origin-only, so they take the strict policy too.
+# Harmless when absent: a rule for a path that 404s changes nothing.
+/hl2/*
+  ! Cross-Origin-Embedder-Policy
+  Cross-Origin-Embedder-Policy: require-corp
+
+/hl2/
+  ! Cross-Origin-Embedder-Policy
+  Cross-Origin-Embedder-Policy: require-corp
+
+/pepsiman/*
+  ! Cross-Origin-Embedder-Policy
+  Cross-Origin-Embedder-Policy: require-corp
+
+/pepsiman/
+  ! Cross-Origin-Embedder-Policy
+  Cross-Origin-Embedder-Policy: require-corp

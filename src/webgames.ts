@@ -10,6 +10,15 @@ export interface WebGame {
   icon: string;      // key into icons.tsx
   licence: string;
   source: string;    // upstream project
+  /** Not in this repository — the owner drops the build into public/<id>/
+   *  themselves, and it only appears on the shelf once it is actually there.
+   *
+   *  Everything else here ships with the site under a licence that permits it
+   *  (shareware terms, GPL, MIT, CC). These do not: their engine or their data
+   *  belongs to someone else, so the console carries the plumbing and the
+   *  owner supplies the build. A clone of this repo shows nothing extra, which
+   *  is the point — the probe in selfHostedPresent() is what reveals them. */
+  selfHosted?: boolean;
 }
 
 export const WEB_GAMES: Record<string, WebGame> = {
@@ -61,6 +70,68 @@ export const WEB_GAMES: Record<string, WebGame> = {
     id: "openhv", title: "OpenHV", sub: "A sci-fi real-time strategy game on the OpenRA engine — every asset original and freely licensed",
     url: "/openhv/index.html", icon: "chip", licence: "OpenRA engine and OpenHV mod GPL-3.0 · Hard Vacuum art and audio under Creative Commons", source: "https://github.com/OpenHV/OpenHV",
   },
+  // —— self-hosted, not shipped ————————————————————————————————————————————
+  hl2: {
+    id: "hl2", title: "Half-Life 2", sub: "Valve's 2004 shooter, compiled to WebAssembly — your own build, streamed map by map",
+    url: "/hl2/index.html", icon: "lightning", selfHosted: true,
+    licence: "NOT REDISTRIBUTED — supply your own build and your own game data. The port derives from nillerusr/source-engine, a fork of leaked Source code, and the assets are Valve's.",
+    source: "https://hl2.slqnt.dev",
+  },
+  pepsiman: {
+    id: "pepsiman", title: "Pepsiman", sub: "The 1999 PS1 runner, statically recompiled to WebAssembly — native, not emulated",
+    url: "/pepsiman/index.html", icon: "star", selfHosted: true,
+    licence: "NOT REDISTRIBUTED — supply your own build. A PSXRecomp recompilation of a commercial game; the data is KID's.",
+    source: "https://github.com/N64Recomp/PSXRecomp",
+  },
 };
 
 export const WEB_GAME_IDS = Object.keys(WEB_GAMES);
+
+/** The ones that ship with the site — always safe to show. */
+export const BUNDLED_WEB_GAME_IDS = WEB_GAME_IDS.filter((id) => !WEB_GAMES[id].selfHosted);
+export const SELF_HOSTED_WEB_GAME_IDS = WEB_GAME_IDS.filter((id) => WEB_GAMES[id].selfHosted);
+
+/** Is a self-hosted build actually sitting under public/<id>/?
+ *
+ *  Status alone cannot answer this. An unknown path on Pages does not 404 — it
+ *  serves the console's own index.html, so a HEAD of /hl2/index.html comes back
+ *  200 whether the build is there or not, and every tile would always show.
+ *
+ *  So compare the body against the shell instead: if the path returns exactly
+ *  what "/" returns, it is the single-page fallback and the build is absent.
+ *  That needs no marker file and no magic string to keep in sync — it stays
+ *  correct even if the shell's markup changes completely.
+ *
+ *  One probe per game, remembered for the page's life, same shape as the
+ *  multitap and tuned-core probes. */
+const probes = new Map<string, Promise<boolean>>();
+let shellText: Promise<string> | null = null;
+
+export function selfHostedPresent(id: string, doFetch: typeof fetch = fetch): Promise<boolean> {
+  const game = WEB_GAMES[id];
+  if (!game?.selfHosted) return Promise.resolve(false);
+  let probe = probes.get(id);
+  if (!probe) {
+    shellText ??= doFetch("/index.html").then((r) => (r.ok ? r.text() : "")).catch(() => "");
+    probe = (async () => {
+      try {
+        const res = await doFetch(game.url);
+        if (!res.ok) return false;
+        const body = await res.text();
+        const shell = await shellText;
+        // identical to the shell → the fallback answered, nothing is installed
+        return body.length > 0 && body !== shell;
+      } catch {
+        return false;
+      }
+    })();
+    probes.set(id, probe);
+  }
+  return probe;
+}
+
+/** Only for tests — the probe cache is per-page otherwise. */
+export function resetSelfHostedProbes(): void {
+  probes.clear();
+  shellText = null;
+}

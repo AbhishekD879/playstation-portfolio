@@ -152,6 +152,22 @@ export const SCHEMES: Record<string, ControlScheme> = {
     touch: "Keyboard only — pair a keyboard or play on a computer.",
     orientation: "landscape",
   },
+  // Self-hosted builds (see src/webgames.ts). The bindings are the port's own,
+  // not ours, so these describe the defaults each one ships with.
+  hl2: {
+    keys: [["W A S D", "move"], ["Space", "jump"], ["Ctrl", "crouch"], ["Shift", "sprint"], ["E", "use"], ["R", "reload"], ["1 – 6", "weapons"], ["Esc", "menu"]],
+    mouse: "Click the picture to capture the mouse: look, fire and the gravity gun's right-click punt.",
+    pad: "Not used — the browser build takes keyboard and mouse.",
+    touch: "Not playable by touch; it wants a keyboard and a mouse.",
+    orientation: "landscape",
+  },
+  pepsiman: {
+    keys: [["← →", "steer"], ["↑", "accelerate"], ["↓", "brake"], ["Space", "jump"], ["Enter", "start"]],
+    mouse: "Not used.",
+    pad: "A controller works — it is a recompilation, so the original pad layout applies.",
+    touch: "Not playable by touch.",
+    orientation: "landscape",
+  },
   quake: {
     keys: [["W A S D · ← ↑ → ↓", "move"], ["Ctrl", "fire"], ["Space", "jump"], ["Tab", "scores"], ["Esc", "menu"], ["1 – 8", "weapons"]],
     mouse: "Click the picture to capture the mouse: look and fire.",

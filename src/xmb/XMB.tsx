@@ -24,7 +24,7 @@ import PalmSession from "../emulator/PalmSession";
 import FramePlayer from "../emulator/FramePlayer";
 import { bootJ2me } from "../j2me";
 import { biosState } from "../bios";
-import { WEB_GAMES, WEB_GAME_IDS } from "../webgames";
+import { BUNDLED_WEB_GAME_IDS, SELF_HOSTED_WEB_GAME_IDS, WEB_GAMES, selfHostedPresent } from "../webgames";
 import WebGameApp from "../emulator/WebGameApp";
 import { tr } from "../translate";
 import { startTabSync } from "../sync";
@@ -365,6 +365,17 @@ export default function XMB(props: {
   const retroCount = () => games().filter((g) => g.sys !== "ps2" && g.core !== "psp" && g.core !== "psx").length;
   const [rpgCount, setRpgCount] = createSignal(0);
   const [renpyCount, setRenpyCount] = createSignal(0);
+  // Self-hosted builds (Half-Life 2, Pepsiman) are not in this repository. Probe
+  // for each once and only list the ones that are really there, so a fresh
+  // clone — or a deploy where the owner has not added them — shows no tile that
+  // would 404.
+  const [selfHostedReady, setSelfHostedReady] = createSignal<string[]>([]);
+  onMount(() => {
+    void Promise.all(
+      SELF_HOSTED_WEB_GAME_IDS.map(async (id) => ((await selfHostedPresent(id)) ? id : null)),
+    ).then((ids) => setSelfHostedReady(ids.filter((id): id is string => !!id)));
+  });
+
   const [godotCount, setGodotCount] = createSignal(0);
   const [unityCount, setUnityCount] = createSignal(0);
   const [html5Count, setHtml5Count] = createSignal(0);
@@ -415,8 +426,12 @@ export default function XMB(props: {
     { id: "godot", title: "Godot", sub: `Drop a Godot Web export (.zip) — runs natively${godotCount() ? ` · ${godotCount()} in your library` : ""}`, icon: "gamepad", action: { type: "godot" as const } },
     { id: "unity", title: "Unity", sub: `Drop a Unity WebGL build (.zip) — runs natively${unityCount() ? ` · ${unityCount()} in your library` : ""}`, icon: "gamepad", action: { type: "unity" as const } },
     { id: "html5", title: "HTML5 / WebGL", sub: `Drop any web-exported game with an index.html${html5Count() ? ` · ${html5Count()} in your library` : ""}`, icon: "gamepad", action: { type: "html5" as const } },
-    // self-hosted web games with free data — play now, nothing to bring
-    ...WEB_GAME_IDS.map((id) => ({ id, title: WEB_GAMES[id].title, sub: WEB_GAMES[id].sub, icon: WEB_GAMES[id].icon, action: { type: "webgame" as const, id } })),
+    // web games with free data that ship with the site — play now, nothing to bring
+    ...BUNDLED_WEB_GAME_IDS.map((id) => ({ id, title: WEB_GAMES[id].title, sub: WEB_GAMES[id].sub, icon: WEB_GAMES[id].icon, action: { type: "webgame" as const, id } })),
+    // and the ones whose build is not in this repository: shown only once the
+    // owner has actually put it under public/<id>/, so a clone offers nothing
+    // that would 404
+    ...selfHostedReady().map((id) => ({ id, title: WEB_GAMES[id].title, sub: WEB_GAMES[id].sub, icon: WEB_GAMES[id].icon, action: { type: "webgame" as const, id } })),
     { id: "lichesstv", title: "Lichess TV", sub: "Spectate · live grandmaster games", icon: "knight", action: { type: "lichess-tv" } },
   ]);
 
