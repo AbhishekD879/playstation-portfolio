@@ -88,8 +88,12 @@ export const WEB_GAMES: Record<string, WebGame> = {
     url: "/cdda/index.html", icon: "skull", licence: "Cataclysm-DDA CC-BY-SA-3.0 (engine and content) · web build from nornagon/play-cdda", source: "https://github.com/CleverRaven/Cataclysm-DDA",
   },
   endlesssky: {
-    id: "endlesssky", title: "Endless Sky", sub: "Space trading and combat in the Escape Velocity line — hundreds of hours, all of it free",
+    id: "endlesssky", title: "Endless Sky", sub: "Space trading and combat in the Escape Velocity line — hundreds of hours free, once a 400 MB first load is done",
     url: "/endlesssky/index.html", icon: "star", licence: "Endless Sky GPL-3.0 · art and audio CC-BY-SA-4.0 / CC-BY-4.0 · web build from thomasballinger/endless-web", source: "https://github.com/endless-sky/endless-sky",
+  },
+  warzone: {
+    id: "warzone", title: "Warzone 2100", sub: "The 1999 3D real-time strategy game — full campaign, music and all, official web build",
+    url: "/warzone/index.html", icon: "knight", licence: "GPL-2.0-or-later — engine, and every asset: Eidos released the source and most data in 2004, then in 2008 clarified the licence to free the music and cutscenes too", source: "https://github.com/Warzone2100/warzone2100",
   },
   // —— self-hosted, not shipped ————————————————————————————————————————————
   openrct2: {

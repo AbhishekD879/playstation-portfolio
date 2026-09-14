@@ -58,8 +58,13 @@ for (const d of fromHeaders) {
 }
 
 // —— the actual requirement: no cross-origin subresource ————————————————————
-// src= and the CSS url() form. href= is deliberately not checked: a link is a
-// navigation, which COEP does not police.
+// src=, the CSS url() form, and <link href> — a stylesheet or preload IS a
+// subresource and require-corp blocks it exactly like a script. Only a plain
+// <a href> is a navigation, which COEP does not police, so that stays exempt.
+//
+// The <link> case was missed at first, and Warzone 2100 walked straight into
+// it: its page pulls Bootstrap's CSS from cdnjs by href, which this checked
+// nothing about while happily catching the matching <script src>.
 const walk = (dir, out = []) => {
   for (const name of readdirSync(dir)) {
     const p = join(dir, name);
@@ -70,19 +75,23 @@ const walk = (dir, out = []) => {
 };
 
 const CROSS_ORIGIN = /(?:src\s*=\s*["']|url\(\s*["']?|importScripts\(\s*["'])(https?:)?\/\/([A-Za-z0-9.-]+)/gi;
+// a <link> of any rel — stylesheet, preload, prefetch, icon — fetches a file
+const CROSS_ORIGIN_LINK = /<link\b[^>]*?href\s*=\s*["'](https?:)?\/\/([A-Za-z0-9.-]+)/gi;
 
 for (const dir of [...fromHeaders, ...fromFunctions]) {
   const root = join("public", dir);
   if (!existsSync(root)) continue;   // R2-only directory, nothing local to scan
   for (const file of walk(root)) {
     const text = readFileSync(file, "utf8");
-    for (const m of text.matchAll(CROSS_ORIGIN)) {
-      const host = m[2];
-      assert.fail(
-        `${file} loads a cross-origin subresource from ${host}. ` +
-        `${dir} claims COEP: require-corp, which blocks that silently — ` +
-        `either self-host it, confirm it sends Cross-Origin-Resource-Policy, or drop ${dir} from the isolated list.`,
-      );
+    for (const re of [CROSS_ORIGIN, CROSS_ORIGIN_LINK]) {
+      for (const m of text.matchAll(re)) {
+        const host = m[2];
+        assert.fail(
+          `${file} loads a cross-origin subresource from ${host}. ` +
+          `${dir} claims COEP: require-corp, which blocks that silently — ` +
+          `either self-host it, confirm it sends Cross-Origin-Resource-Policy, or drop ${dir} from the isolated list.`,
+        );
+      }
     }
   }
 }

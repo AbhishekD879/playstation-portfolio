@@ -261,6 +261,14 @@ export const SCHEMES: Record<string, ControlScheme> = {
     orientation: "landscape",
     tip: "Supply your own RollerCoaster Tycoon 2 data — see docs/self-hosted-games.md.",
   },
+  warzone: {
+    keys: [["← ↑ → ↓", "scroll the battlefield"], ["Ctrl + 0-9", "assign a control group"], ["0 – 9", "select a control group"], ["Ctrl + A", "select all units"], ["Esc", "menu"]],
+    mouse: "Left click selects, left-drag boxes a group, right click orders a move, attack or build. The wheel zooms, the middle button rotates.",
+    pad: "Not used — this is a mouse-and-keyboard strategy game.",
+    touch: "Playable but cramped: it really wants a mouse.",
+    orientation: "landscape",
+    tip: "Start with Campaign, not Skirmish — the first mission doubles as the tutorial. Research is the whole game: keep a lab busy from minute one.",
+  },
   luanti: {
     keys: [["W A S D", "move"], ["Space", "jump"], ["Shift", "sneak"], ["I", "inventory"], ["1 – 8", "hotbar"], ["Esc", "menu"]],
     mouse: "Click the picture to capture the mouse: look around, left click digs, right click places.",

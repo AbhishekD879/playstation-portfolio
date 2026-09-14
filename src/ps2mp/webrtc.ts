@@ -35,35 +35,26 @@ export async function iceConfig(): Promise<RTCIceServer[]> {
 }
 
 import { GONE_ATTEMPTS, backoffMs, classify, retryLabel, shouldRetry, type Health } from "./reconnect";
+import { reconnectingSocket, type Signaling } from "./signalSocket";
 import { watchLink } from "./linkHealth";
 
-export interface Signaling {
-  send(msg: Record<string, unknown>): void;
-  onMessage(cb: (m: any) => void): void;
-  onOpen(cb: () => void): void;
-  onClose(cb: () => void): void;
-  close(): void;
-}
+export type { Signaling } from "./signalSocket";
 
-export function connectSignaling(room: string): Signaling {
-  const ws = new WebSocket(wsUrl(room));
-  const msgCbs: ((m: any) => void)[] = [];
-  const openCbs: (() => void)[] = [];
-  const closeCbs: (() => void)[] = [];
-  // Keepalive: a tiny no-op the server ignores, so a quiet signaling socket
-  // (idle once the datachannel is up) never gets idle-closed by the edge/proxy.
-  // Without it the WS silently dies and reconnection/new joiners can't signal.
-  const ka = setInterval(() => { if (ws.readyState === WebSocket.OPEN) ws.send('{"t":"ping"}'); }, 25000);
-  ws.onmessage = (e) => { let m; try { m = JSON.parse(e.data); } catch { return; } if (m?.t === "pong") return; msgCbs.forEach((cb) => cb(m)); };
-  ws.onopen = () => openCbs.forEach((cb) => cb());
-  ws.onclose = () => { clearInterval(ka); closeCbs.forEach((cb) => cb()); };
-  return {
-    send: (msg) => { if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(msg)); },
-    onMessage: (cb) => msgCbs.push(cb),
-    onOpen: (cb) => { if (ws.readyState === WebSocket.OPEN) cb(); else openCbs.push(cb); },
-    onClose: (cb) => closeCbs.push(cb),
-    close: () => { clearInterval(ka); ws.close(); },
-  };
+/**
+ * @param reconnect reopen the socket if it drops, keeping every peer alive.
+ *
+ * Off by default, and only the HOST turns it on. A joiner already heals by
+ * rebuilding its whole session (startJoinerResilient), so a socket that also
+ * reconnected underneath it would leave two live sockets racing for one room.
+ *
+ * The host cannot use that approach: rebuilding would drop every player in the
+ * room to repair a channel that only matters for admitting the next one. Left
+ * as it was, a host whose socket died kept the players it had — peer
+ * connections are peer-to-peer and do not notice — but silently admitted nobody
+ * else and vanished from the room listing, with nothing on screen to say so.
+ */
+export function connectSignaling(room: string, reconnect = false): Signaling {
+  return reconnectingSocket(() => new WebSocket(wsUrl(room)), { backoff: backoffMs, reconnect });
 }
 
 // —— one host<->joiner connection ————————————————————————————————————————
@@ -125,7 +116,9 @@ export function startHost(opts: {
   onWatcherChange?: (n: number) => void;
   onStatus?: (s: string) => void;
 }): HostHandle {
-  const sig = connectSignaling(opts.room);
+  // reconnect: true — the host's peers survive a dropped control socket, but
+  // without reopening it the room admits nobody else and drops off the listing.
+  const sig = connectSignaling(opts.room, true);
   const peers = new Map<string, ReturnType<typeof makePeer>>();
   // The input channel is bidirectional and was previously write-only from the
   // joiner side. Keeping the host's end lets roster and chat ride the same

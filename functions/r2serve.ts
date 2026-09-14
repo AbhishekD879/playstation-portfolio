@@ -33,7 +33,7 @@ const typeOf = (key: string) => TYPES[key.split(".").pop()?.toLowerCase() ?? ""]
 // Audited per directory. jazz2 is absent on purpose: it loads googletagmanager,
 // which would be blocked. Keep this in step with the same list in
 // public/_headers, which covers the directories no Function serves.
-const ISOLATED = new Set(["quake", "duke", "diablo", "openttd", "descent", "gorescript", "hexgl", "openhv", "opentyrian", "cdda", "endlesssky"]);
+const ISOLATED = new Set(["quake", "duke", "diablo", "openttd", "descent", "gorescript", "hexgl", "openhv", "opentyrian", "cdda", "endlesssky", "warzone"]);
 
 const isolate = (h: Headers, dir: string) => {
   h.set("cross-origin-opener-policy", "same-origin");
