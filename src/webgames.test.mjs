@@ -45,9 +45,27 @@ const gitignore = readFileSync(".gitignore", "utf8");
 for (const id of SELF_HOSTED_WEB_GAME_IDS) {
   const dir = WEB_GAMES[id].url.split("/")[1];
   assert.match(gitignore, new RegExp(`^public/${dir}/\\s*$`, "m"),
-    `public/${dir}/ must be gitignored — ${id} is not ours to redistribute`);
-  assert.match(WEB_GAMES[id].licence, /NOT REDISTRIBUTED/,
-    `${id}: the licence field must say plainly that it is not redistributed`);
+    `public/${dir}/ must be gitignored — a build dropped there must never be committed`);
+
+  // Two very different reasons wear the same mechanism, and conflating them is
+  // how a licence claim goes quietly wrong. Say which, and only the one that
+  // really is someone else's has to carry the warning.
+  const { absent, licence } = WEB_GAMES[id];
+  assert.ok(absent === "not-ours" || absent === "no-build",
+    `${id}: a self-hosted entry must say why it is absent — "not-ours" or "no-build"`);
+  if (absent === "not-ours") {
+    assert.match(licence, /NOT REDISTRIBUTED/,
+      `${id}: the licence field must say plainly that it is not redistributed`);
+  } else {
+    assert.doesNotMatch(licence, /NOT REDISTRIBUTED/,
+      `${id} is freely redistributable — it is absent for want of a build, so do not claim otherwise`);
+  }
+}
+// the reverse: nothing bundled may claim to be unshippable
+for (const id of BUNDLED_WEB_GAME_IDS) {
+  assert.equal(WEB_GAMES[id].absent, undefined, `${id} ships — it cannot also be absent`);
+  assert.doesNotMatch(WEB_GAMES[id].licence, /NOT REDISTRIBUTED/,
+    `${id} is in this repository, so its licence cannot say it is not redistributed`);
 }
 
 // —— a self-hosted game appears only when its build is really there ————————

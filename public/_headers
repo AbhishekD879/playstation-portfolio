@@ -98,3 +98,23 @@
 /pepsiman/
   ! Cross-Origin-Embedder-Policy
   Cross-Origin-Embedder-Policy: require-corp
+
+# openrct2 needs RollerCoaster Tycoon 2 data the owner supplies; luanti is free
+# software with no upstream web build, so the owner produces one. Both want
+# threads — the Luanti Emscripten port says so outright in its .htaccess, and
+# OpenRCT2's build is threaded too. Harmless while the directories are absent.
+/openrct2/*
+  ! Cross-Origin-Embedder-Policy
+  Cross-Origin-Embedder-Policy: require-corp
+
+/openrct2/
+  ! Cross-Origin-Embedder-Policy
+  Cross-Origin-Embedder-Policy: require-corp
+
+/luanti/*
+  ! Cross-Origin-Embedder-Policy
+  Cross-Origin-Embedder-Policy: require-corp
+
+/luanti/
+  ! Cross-Origin-Embedder-Policy
+  Cross-Origin-Embedder-Policy: require-corp

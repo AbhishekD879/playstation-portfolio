@@ -13,11 +13,11 @@
 export const ROUTE_APPS = new Set([
   "doom", "doomrtx", "worlddrive", "chess", "trivia", "flash", "cinema", "podcasts", "library", "map", "ai", "webamp",
   "youtube", "timemachine", "art", "wiki", "lichess", "ps2", "pc", "guestbook", "browser", "visualizer", "studio", "code",
-  "manual", "ps2home", "ps1home", "psphome", "retrohome", "nintendohome", "segahome", "arcadehome", "consoleshome", "computershome", "mobilehome", "palm", "fantasyhome", "frame", "micropolis", "jazz", "wolf", "quake", "openttd", "diablo", "jazz2", "descent", "duke", "gorescript", "hexgl", "openhv", "scummvm", "karaoke", "strudel",
+  "manual", "ps2home", "ps1home", "psphome", "retrohome", "nintendohome", "segahome", "arcadehome", "consoleshome", "computershome", "mobilehome", "palm", "fantasyhome", "frame", "micropolis", "jazz", "wolf", "quake", "openttd", "diablo", "jazz2", "descent", "duke", "gorescript", "hexgl", "openhv", "opentyrian", "cdda", "endlesssky", "scummvm", "karaoke", "strudel",
   "settingshub", "videoplayer", "reporewind", "rpgmaker", "renpy", "godot", "unity", "html5", "privacy", "watch", "syscity",
   "cs", "party", "board", "voiceavatar", "retrojoin", "consoletv", "analytics",
   // self-hosted builds, hidden until present — see src/webgames.ts
-  "hl2", "pepsiman",
+  "hl2", "pepsiman", "openrct2", "luanti",
 ]);
 
 export const routeSlug = (a: string) => (a === "ps2" ? "ps2home" : a);

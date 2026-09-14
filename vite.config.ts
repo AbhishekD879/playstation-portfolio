@@ -1,5 +1,5 @@
 import { createReadStream, existsSync, statSync } from "node:fs";
-import { resolve } from "node:path";
+import { resolve, sep } from "node:path";
 import { defineConfig } from "vite";
 import solid from "vite-plugin-solid";
 import { multiplayerSignaling } from "./vite-plugin-mp";
@@ -22,16 +22,33 @@ export default defineConfig({
     // Java ME player opens as its own tab because CheerpJ's helper frame cannot
     // be embedded under COEP. Mirrors the production rule for local testing.
     {
-      // Big binaries (Quake, OpenTTD, Diablo, Jazz²) are not in public/ — they
-      // live in R2 and, for dev, in the gitignored r2/ mirror at the same paths.
+      // Big binaries (Quake, OpenTTD, Diablo, Jazz², Cataclysm, Endless Sky…)
+      // are not in public/ — they live in R2 and, for dev, in the gitignored
+      // r2/ mirror at the same paths.
+      //
+      // Which directories those are is NOT listed here. It was, and the list
+      // silently went stale the moment a game was added: the new files fell
+      // through to the single-page fallback and every request answered 200 with
+      // the console's own index.html, which looks exactly like a broken build.
+      // The mirror's own contents are the authority — a file either is in r2/
+      // or it is not — so the only checks left are the ones that matter:
+      // it resolves inside the mirror, and it is a real file.
       name: "r2-mirror",
       configureServer(server) {
+        const root = resolve("r2");
+        const TYPES: Record<string, string> = {
+          wasm: "application/wasm", js: "text/javascript", json: "application/json",
+          ttf: "font/ttf", woff2: "font/woff2", mp3: "audio/mpeg", ogg: "audio/ogg",
+          png: "image/png", jpg: "image/jpeg", webp: "image/webp", css: "text/css",
+        };
         server.middlewares.use((req, res, next) => {
           const path = decodeURIComponent((req.url ?? "").split("?")[0]);
-          const file = resolve("r2", "." + path);
-          if (!/^\/(quake|openttd|diablo|jazz2|descent|duke|gorescript|hexgl|openhv)\//.test(path) || path.includes("..") || !existsSync(file) || !statSync(file).isFile()) return next();
-          const ext = path.split(".").pop() ?? "";
-          res.setHeader("content-type", ext === "wasm" ? "application/wasm" : ext === "js" ? "text/javascript" : "application/octet-stream");
+          if (!path.startsWith("/") || path.includes("..")) return next();
+          const file = resolve(root, "." + path);
+          // resolve() has already normalised the path; this is what stops a
+          // crafted request reading outside the mirror.
+          if (!file.startsWith(root + sep) || !existsSync(file) || !statSync(file).isFile()) return next();
+          res.setHeader("content-type", TYPES[path.split(".").pop() ?? ""] ?? "application/octet-stream");
           res.setHeader("content-length", String(statSync(file).size));
           res.setHeader("x-asset-source", "r2-mirror");
           createReadStream(file).pipe(res);

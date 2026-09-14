@@ -33,7 +33,7 @@ const typeOf = (key: string) => TYPES[key.split(".").pop()?.toLowerCase() ?? ""]
 // Audited per directory. jazz2 is absent on purpose: it loads googletagmanager,
 // which would be blocked. Keep this in step with the same list in
 // public/_headers, which covers the directories no Function serves.
-const ISOLATED = new Set(["quake", "duke", "diablo", "openttd", "descent", "gorescript", "hexgl", "openhv"]);
+const ISOLATED = new Set(["quake", "duke", "diablo", "openttd", "descent", "gorescript", "hexgl", "openhv", "opentyrian", "cdda", "endlesssky"]);
 
 const isolate = (h: Headers, dir: string) => {
   h.set("cross-origin-opener-policy", "same-origin");
@@ -54,7 +54,7 @@ export async function serveFromR2(ctx: EventContext<R2Env, string, unknown>, dir
   let res = await cache.match(cacheKey);
   if (!res) {
     const obj = await env.R2.get(key);
-    if (!obj) return fallback(ctx, dir);
+    if (!obj) return (await serveParts(ctx, key, dir)) ?? fallback(ctx, dir);
     const h = new Headers();
     obj.writeHttpMetadata(h);
     if (!h.get("content-type") || h.get("content-type") === "application/octet-stream") h.set("content-type", typeOf(key));
@@ -67,6 +67,36 @@ export async function serveFromR2(ctx: EventContext<R2Env, string, unknown>, dir
     ctx.waitUntil(cache.put(cacheKey, res.clone()));
   }
   return request.method === "HEAD" ? new Response(null, { status: res.status, headers: res.headers }) : res;
+}
+
+// An object that was stored in parts, asked for as a whole.
+//
+// Wrangler refuses to upload anything over 300 MiB and has no multipart mode,
+// so scripts/r2-sync.mjs slices a bigger file into <key>.part0, <key>.part1, …
+// of 200 MiB each. The client is what reassembles them — see the split-resource
+// block in public/endlesssky/cached-resource-*.js.
+//
+// This deliberately does NOT stitch them here. That was tried, twice, and a
+// Worker cannot stream a 400 MiB response to the end: it is cut off part-way
+// while still reporting 200 and the full Content-Length, so the truncation is
+// invisible to the browser, to curl and to the game's loader. Measured at
+// 209,833,984 and then 160,234,240 bytes of an expected 401,639,029; only a
+// checksum against the original found it.
+//
+// What is left is the useful half: say so, loudly. Without this the request
+// falls through to the single-page app and answers 200 with the console's own
+// index.html, which is the failure that hid the bug in the first place.
+async function serveParts(ctx: EventContext<R2Env, string, unknown>, key: string, dir: string): Promise<Response | null> {
+  const first = await ctx.env.R2.head(`${key}.part0`);
+  if (!first) return null;
+  const h = isolate(new Headers({ "content-type": "text/plain; charset=utf-8" }), dir);
+  h.set("x-asset-source", "r2-split");
+  return new Response(
+    `${key} is stored in parts (${key}.part0, .part1, …) because it is larger than ` +
+    `the 300 MiB wrangler can upload. Fetch the parts and concatenate them client-side; ` +
+    `a Worker cannot stream a body this large to completion. See functions/r2serve.ts.\n`,
+    { status: 404, headers: h },
+  );
 }
 
 // the static file, with the isolation headers _headers would have added

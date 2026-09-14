@@ -36,3 +36,8 @@ public/play-oph/
 # docs/self-hosted-games.md.
 public/hl2/
 public/pepsiman/
+
+# Self-hosted builds the owner supplies. openrct2 needs RollerCoaster Tycoon 2
+# data that is not ours; luanti is free software with no upstream web build.
+public/openrct2/
+public/luanti/

@@ -228,6 +228,47 @@ export const SCHEMES: Record<string, ControlScheme> = {
     orientation: "landscape",
     tip: "Start with Singleplayer, then Skirmish. The first load pulls a large asset bundle, so give it a minute.",
   },
+  opentyrian: {
+    keys: [["← ↑ → ↓", "fly"], ["Ctrl", "fire"], ["Space", "change front weapon mode"], ["Alt", "sidekicks"], ["Esc", "menu"]],
+    pad: "Not used in this build.",
+    touch: "Keyboard only — play on a computer.",
+    orientation: "landscape",
+    rebind: "Title screen → Options → Keyboard Settings.",
+    tip: "Money carries between levels: spend it in the shop between missions rather than hoarding it.",
+  },
+  cdda: {
+    keys: [["Numpad / H J K L Y U B N", "move (eight directions)"], ["5 or .", "wait one turn"], ["I", "inventory"], ["G", "pick up"], ["E", "examine / eat"], ["?", "help and the full key list"], ["Esc", "menu"]],
+    mouse: "The gear in the top-left corner toggles fullscreen and exports your saves as a zip.",
+    pad: "Not used — a roguelike needs far more keys than a pad has.",
+    touch: "Keyboard only — play on a computer.",
+    orientation: "landscape",
+    tip: "Press ? first. This is the deepest roguelike there is and the tutorial in New Game is worth the half hour.",
+  },
+  endlesssky: {
+    keys: [["← →", "turn"], ["↑", "thrust"], ["↓", "turn around"], ["Tab", "afterburner"], ["L", "land"], ["J", "jump to the next system"], ["M", "map"], ["Esc", "menu"]],
+    mouse: "Click a ship, planet or star to target it; the map is mouse-driven.",
+    pad: "Not used.",
+    touch: "Keyboard only — play on a computer.",
+    orientation: "landscape",
+    rebind: "In-game menu → Preferences → Controls.",
+    tip: "The first download is around 400 MB and is then cached, so the wait is once per browser, not once per session.",
+  },
+  openrct2: {
+    keys: [["← ↑ → ↓", "scroll the park"], ["Z", "zoom out"], ["X", "zoom in"], ["Esc", "close the open window"]],
+    mouse: "Everything: build with the toolbar, drag to lay track, wheel to zoom, right-drag to scroll.",
+    pad: "Not used — this is a mouse game.",
+    touch: "Playable but cramped: it really wants a mouse.",
+    orientation: "landscape",
+    tip: "Supply your own RollerCoaster Tycoon 2 data — see docs/self-hosted-games.md.",
+  },
+  luanti: {
+    keys: [["W A S D", "move"], ["Space", "jump"], ["Shift", "sneak"], ["I", "inventory"], ["1 – 8", "hotbar"], ["Esc", "menu"]],
+    mouse: "Click the picture to capture the mouse: look around, left click digs, right click places.",
+    pad: "Not used.",
+    touch: "The web port draws its own on-screen controls, but a keyboard and mouse are far better.",
+    orientation: "landscape",
+    tip: "The engine ships almost empty on purpose — pick a game from the Content tab before starting a world.",
+  },
 };
 
 // family fallbacks for systems added later without a card of their own

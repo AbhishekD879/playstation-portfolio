@@ -19,6 +19,15 @@ export interface WebGame {
    *  owner supplies the build. A clone of this repo shows nothing extra, which
    *  is the point — the probe in selfHostedPresent() is what reveals them. */
   selfHosted?: boolean;
+  /** Why a self-hosted entry is absent. Two different things wear the same
+   *  mechanism and must not be confused:
+   *    "not-ours"  the engine or the data belongs to someone else, so shipping
+   *                it would be redistribution we have no right to do.
+   *    "no-build"  freely redistributable, but no browser build exists to ship.
+   *                Upstream has no web target and building it is the owner's job.
+   *  Only "not-ours" has to say NOT REDISTRIBUTED in its licence field, and
+   *  src/webgames.test.mjs holds that line. */
+  absent?: "not-ours" | "no-build";
 }
 
 export const WEB_GAMES: Record<string, WebGame> = {
@@ -70,16 +79,40 @@ export const WEB_GAMES: Record<string, WebGame> = {
     id: "openhv", title: "OpenHV", sub: "A sci-fi real-time strategy game on the OpenRA engine — every asset original and freely licensed",
     url: "/openhv/index.html", icon: "chip", licence: "OpenRA engine and OpenHV mod GPL-3.0 · Hard Vacuum art and audio under Creative Commons", source: "https://github.com/OpenHV/OpenHV",
   },
+  opentyrian: {
+    id: "opentyrian", title: "OpenTyrian", sub: "Tyrian, the 1995 vertical shooter — the whole game, released as freeware by its author",
+    url: "/opentyrian/index.html", icon: "spark", licence: "OpenTyrian GPL-2.0 · Tyrian game data released as freeware by Eclipse Software (2004)", source: "https://github.com/opentyrian/opentyrian",
+  },
+  cdda: {
+    id: "cdda", title: "Cataclysm: DDA", sub: "The deepest survival roguelike there is — free engine, free content, the whole thing",
+    url: "/cdda/index.html", icon: "skull", licence: "Cataclysm-DDA CC-BY-SA-3.0 (engine and content) · web build from nornagon/play-cdda", source: "https://github.com/CleverRaven/Cataclysm-DDA",
+  },
+  endlesssky: {
+    id: "endlesssky", title: "Endless Sky", sub: "Space trading and combat in the Escape Velocity line — hundreds of hours, all of it free",
+    url: "/endlesssky/index.html", icon: "star", licence: "Endless Sky GPL-3.0 · art and audio CC-BY-SA-4.0 / CC-BY-4.0 · web build from thomasballinger/endless-web", source: "https://github.com/endless-sky/endless-sky",
+  },
   // —— self-hosted, not shipped ————————————————————————————————————————————
+  openrct2: {
+    id: "openrct2", title: "OpenRCT2", sub: "RollerCoaster Tycoon 2, open-sourced — your own copy's data, your own park",
+    url: "/openrct2/index.html", icon: "wave", selfHosted: true, absent: "not-ours",
+    licence: "OpenRCT2 engine is GPL-3.0, but the game data is NOT REDISTRIBUTED — supply your own RollerCoaster Tycoon 2 files. The graphics, music and scenarios are Atari's and Chris Sawyer's.",
+    source: "https://github.com/Mstrodl/ORCT2-web",
+  },
+  luanti: {
+    id: "luanti", title: "Luanti", sub: "The open voxel sandbox formerly called Minetest — build a world, or load someone else's",
+    url: "/luanti/index.html", icon: "cube", selfHosted: true, absent: "no-build",
+    licence: "Luanti engine LGPL-2.1+, game content CC-BY-SA-3.0 — freely redistributable. Absent only because upstream has no web target: the browser port (paradust7/luanti-wasm) is an experimental Emscripten build that has to be produced on Linux. Build it, drop it in, and the tile appears.",
+    source: "https://github.com/paradust7/luanti-wasm",
+  },
   hl2: {
     id: "hl2", title: "Half-Life 2", sub: "Valve's 2004 shooter, compiled to WebAssembly — your own build, streamed map by map",
-    url: "/hl2/index.html", icon: "lightning", selfHosted: true,
+    url: "/hl2/index.html", icon: "lightning", selfHosted: true, absent: "not-ours",
     licence: "NOT REDISTRIBUTED — supply your own build and your own game data. The port derives from nillerusr/source-engine, a fork of leaked Source code, and the assets are Valve's.",
     source: "https://hl2.slqnt.dev",
   },
   pepsiman: {
     id: "pepsiman", title: "Pepsiman", sub: "The 1999 PS1 runner, statically recompiled to WebAssembly — native, not emulated",
-    url: "/pepsiman/index.html", icon: "star", selfHosted: true,
+    url: "/pepsiman/index.html", icon: "star", selfHosted: true, absent: "not-ours",
     licence: "NOT REDISTRIBUTED — supply your own build. A PSXRecomp recompilation of a commercial game; the data is KID's.",
     source: "https://github.com/N64Recomp/PSXRecomp",
   },

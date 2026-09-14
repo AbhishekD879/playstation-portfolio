@@ -1,0 +1,154 @@
+<!doctype html>
+<html lang="en-us">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no, minimum-scale=1, maximum-scale=1, viewport-fit=cover">
+<title>Cataclysm: Dark Days Ahead</title>
+<style>
+  @font-face { font-family: Terminus; src: url("Terminus.ttf"); font-display: swap; }
+  html, body { height: 100%; margin: 0; padding: 0; overflow: hidden; background: #000; }
+  canvas {
+    display: block; position: absolute; inset: 0 auto auto 0;
+    width: 100%; height: 100%; margin: 0; border: 0; outline: none;
+    background: #000; image-rendering: pixelated; z-index: 1;
+  }
+  #loading-message {
+    position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+    z-index: 4; color: #fff; font: 30px Terminus, ui-monospace, monospace; text-align: center;
+  }
+  #settings-gear {
+    position: absolute; top: 10px; left: 10px; z-index: 2;
+    background: none; border: 0; padding: 4px; cursor: pointer;
+    color: #fff; opacity: .5; font-size: 20px; line-height: 1;
+  }
+  #settings-gear:hover, #settings-gear:focus-visible { opacity: 1; }
+  #settings-menu {
+    position: absolute; top: 40px; left: 10px; z-index: 3;
+    display: none; flex-direction: column; gap: 10px; align-items: stretch;
+    padding: 15px; border: 1px solid #fff; border-radius: 5px;
+    background: #000; color: #fff;
+  }
+  #settings-menu[data-open] { display: flex; }
+  .menu-button {
+    background: none; border: 0; padding: 0; text-align: left;
+    font: 20px Terminus, ui-monospace, monospace; color: #fff; opacity: .7; cursor: pointer;
+  }
+  .menu-button:hover, .menu-button:focus-visible { opacity: 1; }
+  a.menu-button { text-decoration: none; display: block; }
+</style>
+</head>
+<body>
+
+<button id="settings-gear" type="button" aria-label="Settings">&#9881;</button>
+<div id="settings-menu">
+  <button id="toggle-fullscreen" class="menu-button" type="button">Toggle Fullscreen</button>
+  <button id="export-saves" class="menu-button" type="button">Export Saves</button>
+  <a class="menu-button" target="_blank" rel="noopener" href="https://github.com/CleverRaven/Cataclysm-DDA">Browse Code</a>
+</div>
+
+<canvas id="canvas" tabindex="-1"></canvas>
+<div id="loading-message">Loading…</div>
+
+<script src="jszip.js"></script>
+<script>
+// Upstream's bootstrap (play-cdda v/0.I-web-0-i1-e526f4835d/index.html) with the
+// three cdnjs dependencies removed, because this directory takes
+// COEP: require-corp and that blocks every cross-origin no-cors subresource:
+//   · font-awesome  → the gear is a text glyph
+//   · screenfull    → the native Fullscreen API, which is all it wrapped
+//   · FileSaver     → a Blob object URL on a generated <a download>
+// JSZip is still needed to build the save archive, so it is served from here.
+const canvas = document.getElementById("canvas");
+const loadingMessage = document.getElementById("loading-message");
+const settingsMenu = document.getElementById("settings-menu");
+let menuReady = false;
+let tilesetDownloadActive = false;
+
+window.addEventListener("menuready", () => {
+  menuReady = true;
+  window.dispatchEvent(new UIEvent("resize"));
+  if (!tilesetDownloadActive) loadingMessage.style.display = "none";
+});
+
+window.beginTilesetDownload = (id, size) => {
+  tilesetDownloadActive = true;
+  loadingMessage.style.display = "block";
+  loadingMessage.textContent = `Downloading ${id} (${(size / 1048576).toFixed(1)} MB)…`;
+};
+window.endTilesetDownload = () => {
+  tilesetDownloadActive = false;
+  if (menuReady) loadingMessage.style.display = "none";
+};
+
+document.getElementById("settings-gear").onclick = () => {
+  if (settingsMenu.hasAttribute("data-open")) settingsMenu.removeAttribute("data-open");
+  else settingsMenu.setAttribute("data-open", "");
+};
+canvas.addEventListener("click", () => settingsMenu.removeAttribute("data-open"));
+
+document.getElementById("toggle-fullscreen").onclick = () => {
+  if (document.fullscreenElement) document.exitFullscreen();
+  else document.documentElement.requestFullscreen?.();
+};
+
+document.getElementById("export-saves").onclick = async () => {
+  const zip = new JSZip();
+  const isRealDir = (p) => p !== "." && p !== "..";
+  const recurse = (fsPath, zipPath) => {
+    for (const entry of Module.FS.readdir(fsPath).filter(isRealDir)) {
+      const from = fsPath + "/" + entry;
+      const to = zipPath + "/" + entry;
+      const stat = Module.FS.stat(from);
+      if (Module.FS.isDir(stat.mode)) recurse(from, to);
+      else if (Module.FS.isFile(stat.mode)) zip.file(to, Module.FS.readFile(from, { encoding: "binary" }));
+    }
+  };
+  recurse("/home/web_user/.cataclysm-dda", "");
+  const blob = await zip.generateAsync({ type: "blob" });
+  const url = URL.createObjectURL(blob);
+  const a = Object.assign(document.createElement("a"), { href: url, download: "cdda-saves.zip" });
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 60_000);
+};
+
+var Module = {
+  preRun: [],
+  postRun: [],
+  canvas: (function () {
+    canvas.addEventListener("webglcontextlost", (e) => {
+      alert("WebGL context lost. You will need to reload the page.");
+      e.preventDefault();
+    }, false);
+    return canvas;
+  })(),
+  setStatus: function (text) {
+    if (!text) { loadingMessage.textContent = "Starting…"; return; }
+    const progress = /^Downloading data\.\.\. \((\d+)\/(\d+)\)$/.exec(text);
+    if (progress) {
+      const done = Number(progress[1]) / 1048576, total = Number(progress[2]) / 1048576;
+      text = `Downloading data… (${done.toFixed(1)}/${total.toFixed(1)} MB)`;
+    }
+    loadingMessage.textContent = text;
+  },
+  totalDependencies: 0,
+  monitorRunDependencies: function (left) {
+    this.totalDependencies = Math.max(this.totalDependencies, left);
+    Module.setStatus(left
+      ? "Preparing… (" + (this.totalDependencies - left) + "/" + this.totalDependencies + ")"
+      : "All downloads complete.");
+  },
+  locateFile: (path) => new URL(path, window.location.href).href,
+};
+Module.setStatus("Downloading…");
+window.onerror = function (event, source, lineno, colno, error) {
+  if (typeof error === "number" && Module.getExceptionMessage) console.log(Module.getExceptionMessage(error));
+  alert("Exception thrown, see JavaScript console.");
+};
+window.onbeforeunload = (e) => { if (window.game_unsaved) e.preventDefault(); };
+</script>
+<script async src="cataclysm-tiles.data.js"></script>
+<script async src="cataclysm-tiles.js"></script>
+</body>
+</html>

@@ -1,0 +1,107 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,height=device-height,initial-scale=1,maximum-scale=1,user-scalable=0,viewport-fit=cover">
+<meta name="description" content="OpenTyrian — the 1995 vertical shooter Tyrian, open-sourced and compiled to WebAssembly.">
+<title>OpenTyrian</title>
+<style>
+  html { height: 100vh; }
+  body {
+    margin: 0; background: #000; color: #ccc;
+    font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 15px;
+    display: flex; align-items: center; justify-content: center;
+  }
+  canvas { display: block; overflow: auto; width: 100vw; outline: none; }
+  @media screen and (min-width: 576px) {
+    canvas { height: 100vh; height: 100dvh; width: auto; }
+  }
+  .overlay {
+    position: absolute; inset: 0; margin: auto;
+    width: 240px; height: 200px; text-align: center;
+    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px;
+  }
+  #spinner {
+    width: 44px; height: 44px; border-radius: 50%;
+    border: 5px solid #2a2a2a; border-top-color: #867ae0;
+    animation: spin .8s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  @media (prefers-reduced-motion: reduce) { #spinner { animation-duration: 3s; } }
+  progress { width: 200px; height: 8px; }
+</style>
+</head>
+<body>
+<canvas id="canvas" oncontextmenu="event.preventDefault()" tabindex="-1"></canvas>
+
+<div class="overlay" id="loading">
+  <div id="spinner"></div>
+  <div id="status">Loading…</div>
+  <progress value="0" max="100" id="progress" hidden></progress>
+</div>
+
+<script>
+// Upstream's own bootstrap (https://midzer.de/wasm/opentyrian/), with one
+// change: the console has already asked the player to pick this game, so the
+// "click here to load" gate is gone and index.js starts immediately.
+var statusElement = document.getElementById('status');
+var progressElement = document.getElementById('progress');
+var spinnerElement = document.getElementById('spinner');
+var loadingElement = document.getElementById('loading');
+
+var Module = {
+  preRun: [],
+  postRun: [],
+  print: function (text) {
+    if (arguments.length > 1) text = Array.prototype.slice.call(arguments).join(' ');
+    console.log(text);
+  },
+  canvas: document.getElementById('canvas'),
+  setStatus: function (text) {
+    if (!Module.setStatus.last) Module.setStatus.last = { time: Date.now(), text: '' };
+    if (text === Module.setStatus.last.text) return;
+    var m = text.match(/([^(]+)\((\d+(\.\d+)?)\/(\d+)\)/);
+    var now = Date.now();
+    if (m && now - Module.setStatus.last.time < 30) return;  // progress tick, too soon
+    Module.setStatus.last.time = now;
+    Module.setStatus.last.text = text;
+    if (m) {
+      text = m[1];
+      progressElement.value = parseInt(m[2]) * 100;
+      progressElement.max = parseInt(m[4]) * 100;
+      progressElement.hidden = false;
+      spinnerElement.hidden = false;
+    } else {
+      progressElement.value = null;
+      progressElement.max = null;
+      progressElement.hidden = true;
+      if (!text) {
+        spinnerElement.hidden = true;
+        loadingElement.style.display = 'none';
+      }
+    }
+    statusElement.textContent = text;
+  },
+  totalDependencies: 0,
+  monitorRunDependencies: function (left) {
+    Module.totalDependencies = Math.max(Module.totalDependencies, left);
+    Module.setStatus(left
+      ? 'preparing… (' + (Module.totalDependencies - left) + '/' + Module.totalDependencies + ')'
+      : 'all downloads complete.');
+  }
+};
+
+Module.setStatus('downloading…');
+window.onerror = function () {
+  Module.setStatus('Exception thrown, see JavaScript console');
+  loadingElement.style.display = 'block';
+  spinnerElement.style.display = 'none';
+  Module.setStatus = function (text) { if (text) console.error('[post-exception status] ' + text); };
+};
+
+var s = document.createElement('script');
+s.src = 'index.js';
+document.head.appendChild(s);
+</script>
+</body>
+</html>
