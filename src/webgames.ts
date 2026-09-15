@@ -108,6 +108,12 @@ export const WEB_GAMES: Record<string, WebGame> = {
     licence: "Luanti engine LGPL-2.1+, game content CC-BY-SA-3.0 — freely redistributable. Absent only because upstream has no web target: the browser port (paradust7/luanti-wasm) is an experimental Emscripten build that has to be produced on Linux. Build it, drop it in, and the tile appears.",
     source: "https://github.com/paradust7/luanti-wasm",
   },
+  gtavc: {
+    id: "gtavc", title: "GTA: Vice City", sub: "The 2002 open world, reverse-engineered and compiled to WebAssembly — your own copy's files, kept on your device",
+    url: "/gtavc/index.html", icon: "mask", selfHosted: true, absent: "not-ours",
+    licence: "reVCDOS is MIT, but the game is NOT REDISTRIBUTED — supply your own Vice City files from a copy you own. The engine is a reverse-engineered reimplementation (the reVC lineage); every texture, model, script and sound is Rockstar's. The port imports your files into OPFS, so they stay on your device and are never uploaded.",
+    source: "https://github.com/Lolendor/reVCDOS",
+  },
   hl2: {
     id: "hl2", title: "Half-Life 2", sub: "Valve's 2004 shooter, compiled to WebAssembly — your own build, streamed map by map",
     url: "/hl2/index.html", icon: "lightning", selfHosted: true, absent: "not-ours",

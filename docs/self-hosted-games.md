@@ -4,7 +4,7 @@ Most of the PC Games shelf ships with this repository, because every one of
 those carries a licence that permits it — id's and 3D Realms' shareware terms,
 GPL, MIT, Creative Commons. `src/webgames.ts` records which, per entry.
 
-Four do not, and are handled differently — but for **two different reasons**,
+Five do not, and are handled differently — but for **two different reasons**,
 which `src/webgames.ts` records in an `absent` field rather than leaving to
 guesswork:
 
@@ -14,6 +14,7 @@ guesswork:
 | **Pepsiman** | `not-ours` | A recompilation of a commercial PS1 game; the data is KID's. |
 | **OpenRCT2** | `not-ours` | The engine is GPL-3.0, but the graphics, music and scenarios are Atari's and Chris Sawyer's. |
 | **Luanti** | `no-build` | Freely redistributable. Absent only because upstream has no web target. |
+| **GTA: Vice City** | `not-ours` | The engine is a reverse-engineered reimplementation under MIT, but every asset is Rockstar's. |
 
 The distinction matters. Only `not-ours` entries have to say **NOT
 REDISTRIBUTED** in their licence field, and `src/webgames.test.mjs` enforces
@@ -22,8 +23,8 @@ fails just as loudly as a `not-ours` entry that forgets to say so. Luanti is
 free software; the only thing standing between it and the shelf is a build.
 
 Nothing about any of them is in this repository — no engine, no assets, not a
-byte. `public/hl2/`, `public/pepsiman/`, `public/openrct2/` and `public/luanti/`
-are gitignored, and the shelf probes for each at boot and shows a tile **only if
+byte. `public/hl2/`, `public/pepsiman/`, `public/openrct2/`, `public/luanti/`
+and `public/gtavc/` are gitignored, and the shelf probes for each at boot and shows a tile **only if
 the build is actually there**. A fresh clone, or a deploy by anyone who has not
 added them, shows nothing at all.
 
@@ -36,6 +37,7 @@ point:
 public/hl2/index.html          ← plus its .wasm, .data, map chunks…
 public/pepsiman/index.html     ← plus its .wasm and data
 public/openrct2/index.html     ← plus your RollerCoaster Tycoon 2 data
+public/gtavc/index.html        ← reVCDOS; it asks for your game files on first run
 public/luanti/index.html       ← the contents of luanti-wasm's www/
 ```
 
@@ -56,7 +58,7 @@ directory that is present.
 
 ## Where the builds come from
 
-**Checked 2026-09-14: three of the four upstreams are gone.** This section
+**Checked 2026-09-14: three of these upstreams are gone.** This section
 records what they were and what state they are in, because the URLs below no
 longer answer and a future reader will otherwise assume they made a mistake.
 
@@ -83,6 +85,20 @@ longer answer and a future reader will otherwise assume they made a mistake.
   `openrct2online.com` does serve a working build, but it is a third-party
   wrapper carrying AdSense and Google Analytics, of unclear provenance; it is
   not a source to mirror from.
+- **GTA: Vice City** — <https://github.com/Lolendor/reVCDOS> (MIT), a browser
+  port of the reverse-engineered engine. It imports your game files into OPFS on
+  first run, so the data stays on the device and is never uploaded — which is
+  exactly why only the plumbing lives here.
+
+  On the legal position, because it is easy to get wrong in both directions:
+  Take-Two sued the re3/reVC authors in 2021, and the case **settled out of
+  court** — a stipulation of dismissal was filed on 3 April 2023 and the claims
+  were dismissed **with prejudice**, each side bearing its own costs. The
+  litigation is over. What did not happen is the source returning: `halpz/re3`
+  and `GTAmodding/re3` are both gone, the settlement terms are not public, and
+  no licence to Rockstar's assets exists or ever did. So: run it with a copy you
+  own, and do not redistribute the game.
+
 - **Luanti** — <https://github.com/paradust7/luanti-wasm>, an experimental
   Emscripten port of the voxel engine formerly called Minetest. There is no
   official web target and no published artefact: `./build_all.sh` produces a
@@ -114,5 +130,5 @@ longer answer and a future reader will otherwise assume they made a mistake.
   Multiplayer needs a WebSocket proxy, because a browser
   cannot open the UDP socket the protocol expects.
 
-Hosting either one publicly is a distribution decision, and this repository
+Hosting any of these publicly is a distribution decision, and this repository
 does not make it for you — which is exactly why the builds live outside it.

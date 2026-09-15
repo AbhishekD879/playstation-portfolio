@@ -269,6 +269,14 @@ export const SCHEMES: Record<string, ControlScheme> = {
     orientation: "landscape",
     tip: "Start with Campaign, not Skirmish — the first mission doubles as the tutorial. Research is the whole game: keep a lab busy from minute one.",
   },
+  gtavc: {
+    keys: [["W A S D", "drive / walk"], ["Mouse", "look"], ["Left click", "fire"], ["Space", "handbrake / jump"], ["F", "enter or leave a vehicle"], ["Esc", "menu"]],
+    mouse: "Click the picture to capture the mouse: look and aim.",
+    pad: "A controller works — the port supports gamepads.",
+    touch: "On-screen controls exist, but an open world really wants a keyboard and mouse.",
+    orientation: "landscape",
+    tip: "You supply the game files on first run; they are imported into the browser's own storage and never leave your device. See docs/self-hosted-games.md.",
+  },
   luanti: {
     keys: [["W A S D", "move"], ["Space", "jump"], ["Shift", "sneak"], ["I", "inventory"], ["1 – 8", "hotbar"], ["Esc", "menu"]],
     mouse: "Click the picture to capture the mouse: look around, left click digs, right click places.",

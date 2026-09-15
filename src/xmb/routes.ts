@@ -17,7 +17,7 @@ export const ROUTE_APPS = new Set([
   "settingshub", "videoplayer", "reporewind", "rpgmaker", "renpy", "godot", "unity", "html5", "privacy", "watch", "syscity",
   "cs", "party", "board", "voiceavatar", "retrojoin", "consoletv", "analytics",
   // self-hosted builds, hidden until present — see src/webgames.ts
-  "hl2", "pepsiman", "openrct2", "luanti",
+  "hl2", "pepsiman", "openrct2", "luanti", "gtavc",
 ]);
 
 export const routeSlug = (a: string) => (a === "ps2" ? "ps2home" : a);

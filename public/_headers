@@ -118,3 +118,14 @@
 /luanti/
   ! Cross-Origin-Embedder-Policy
   Cross-Origin-Embedder-Policy: require-corp
+
+# GTA: Vice City (reVCDOS). Threaded Emscripten build, same-origin only, and it
+# keeps your imported game files in OPFS — which needs a secure, isolated
+# context. Harmless while the directory is absent.
+/gtavc/*
+  ! Cross-Origin-Embedder-Policy
+  Cross-Origin-Embedder-Policy: require-corp
+
+/gtavc/
+  ! Cross-Origin-Embedder-Policy
+  Cross-Origin-Embedder-Policy: require-corp

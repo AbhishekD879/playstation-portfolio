@@ -41,3 +41,7 @@ public/pepsiman/
 # data that is not ours; luanti is free software with no upstream web build.
 public/openrct2/
 public/luanti/
+
+# GTA: Vice City — reverse-engineered engine, but the game data is Rockstar's.
+# Supply your own from a copy you own. See docs/self-hosted-games.md.
+public/gtavc/
