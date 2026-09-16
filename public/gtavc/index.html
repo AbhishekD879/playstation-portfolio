@@ -480,6 +480,7 @@ async function boot(install) {
           logEl.classList.add("quiet");
           logToggle.hidden = false;
           document.body.classList.add("playing");
+          syncModePolling();
           $("canvas").focus();
         } catch (error) {
           setNote(`Could not mount the install: ${error.message}`);
@@ -645,10 +646,39 @@ function initTouch() {
   addEventListener("blur", releaseAll);
   document.addEventListener("visibilitychange", () => { if (document.hidden) releaseAll(); });
 
-  // Four times a second is far below the frame rate and well above human reaction — getting in or
-  // out of a car swaps the layout before a thumb can reach for the wrong button.
   document.body.classList.add("onfoot");
-  setInterval(refreshMode, 250);
+  syncModePolling();
+}
+
+/** Run the layout poll only while the on-screen pad is actually up.
+ *
+ *  refreshMode() reaches into the engine, and the only thing that consumes its answer is the
+ *  #touch CSS. With the pad hidden — every desktop, and any phone with TOUCH switched off — the
+ *  poll fed nothing and still called into wasm four times a second, for the whole session.
+ *
+ *  That is not merely wasted work. This build is compiled with ASYNCIFY, and Emscripten is
+ *  explicit that wasm must not be re-entered while an unwind or rewind is in progress. A timer
+ *  firing inside one of those windows does exactly that, and the engine hands out no way to
+ *  check: Asyncify is internal to the glue and is not exposed on the Module. So the only
+ *  defence available here is not to make the call when nothing is asking for the answer. */
+let modeTimer = null;
+function syncModePolling() {
+  const wanted = document.body.classList.contains("coarse") && document.body.classList.contains("playing");
+  if (wanted === (modeTimer !== null)) return;
+  if (wanted) {
+    // Four times a second is far below the frame rate and well above human reaction — getting in
+    // or out of a car swaps the layout before a thumb can reach for the wrong button.
+    modeTimer = setInterval(refreshMode, 250);
+    refreshMode();
+    return;
+  }
+  clearInterval(modeTimer);
+  modeTimer = null;
+  // The classes only drive the pad's layout, and the pad is going away. Leave them in the state a
+  // fresh start expects rather than frozen mid-drive.
+  releaseAll();
+  document.body.classList.remove("driving", "in-menu");
+  document.body.classList.add("onfoot");
 }
 
 // Coarse pointer = phone or tablet. Desktop keeps the screen clear; a keyboard or a real pad works
@@ -661,7 +691,10 @@ const coarseQuery = matchMedia("(pointer: coarse)");
 // Not a one-off read at startup: the pointer type genuinely changes under you — a tablet gains a
 // mouse, a phone is docked, a device profile is switched in devtools. An explicit choice from the
 // console still wins, because the message handler below sets the class directly.
-const applyCoarse = () => document.body.classList.toggle("coarse", coarseQuery.matches);
+const applyCoarse = () => {
+  document.body.classList.toggle("coarse", coarseQuery.matches);
+  syncModePolling();
+};
 applyCoarse();
 coarseQuery.addEventListener("change", applyCoarse);
 
@@ -673,6 +706,7 @@ addEventListener("message", (event) => {
   document.body.classList.toggle("coarse", !!data.on);
   // Buttons held when the pad is taken away would stay held in the engine.
   if (!data.on) releaseAll();
+  syncModePolling();
 });
 
 initTouch();

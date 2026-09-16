@@ -8,7 +8,7 @@
 // that distinction eroding by accident.
 import assert from "node:assert/strict";
 import { existsSync } from "node:fs";
-import { readFileSync } from "node:fs";
+import { execFileSync } from "node:child_process";
 const {
   WEB_GAMES, WEB_GAME_IDS, BUNDLED_WEB_GAME_IDS, SELF_HOSTED_WEB_GAME_IDS,
   selfHostedPresent, resetSelfHostedProbes,
@@ -41,11 +41,40 @@ for (const id of BUNDLED_WEB_GAME_IDS) {
 
 // —— and the self-hosted ones are NOT committed ————————————————————————————
 // This is the one that matters. If a build ever lands in the repo, this fails.
-const gitignore = readFileSync(".gitignore", "utf8");
+//
+// Asked of git rather than of .gitignore's text. A rule can be spelled several
+// ways — `public/x/`, or `public/x/*` with one file re-included, which is what
+// gtavc needs so its hand-written host page can be tracked — and matching the
+// spelling would reject a correct rule while still passing on a build that was
+// force-added past a correct one. So: ask whether these paths are ignored, and
+// separately what is actually tracked.
+const ignored = (path) => {
+  try {
+    execFileSync("git", ["check-ignore", "-q", "--no-index", path], { stdio: "ignore" });
+    return true;
+  } catch { return false; }
+};
+const tracked = (dir) => execFileSync("git", ["ls-files", `public/${dir}`], { encoding: "utf8" })
+  .split("\n").filter(Boolean);
+
+// Hand-written source that happens to live beside a build. Anything else under a
+// self-hosted directory is someone else's to distribute, not ours.
+const OURS = new Set(["public/gtavc/index.html"]);
+
+// What a dropped build or a supplied game looks like, whatever the game.
+const BUILD_SHAPED = ["engine.wasm", "engine.js", "game.data", "assets/blob.bin",
+                      "models/gta3.img", "data/gta_vc.dat"];
+
 for (const id of SELF_HOSTED_WEB_GAME_IDS) {
   const dir = WEB_GAMES[id].url.split("/")[1];
-  assert.match(gitignore, new RegExp(`^public/${dir}/\\s*$`, "m"),
-    `public/${dir}/ must be gitignored — a build dropped there must never be committed`);
+  for (const probe of BUILD_SHAPED) {
+    assert.ok(ignored(`public/${dir}/${probe}`),
+      `public/${dir}/${probe} must be gitignored — a build dropped there must never be committed`);
+  }
+  for (const path of tracked(dir)) {
+    assert.ok(OURS.has(path),
+      `${path} is committed under a self-hosted directory — that is not ours to redistribute`);
+  }
 
   // Two very different reasons wear the same mechanism, and conflating them is
   // how a licence claim goes quietly wrong. Say which, and only the one that
