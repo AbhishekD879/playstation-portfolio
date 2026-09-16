@@ -28,6 +28,10 @@ export interface WebGame {
    *  Only "not-ours" has to say NOT REDISTRIBUTED in its licence field, and
    *  src/webgames.test.mjs holds that line. */
   absent?: "not-ours" | "no-build";
+  /** The page draws its own on-screen pad and honours a {type:"touch-controls"}
+   *  postMessage. Shows the TOUCH toggle beside EJECT — see emulator/WebGameApp.tsx.
+   *  Absent means the game has no on-screen controls to offer, so no button appears. */
+  touchControls?: boolean;
 }
 
 export const WEB_GAMES: Record<string, WebGame> = {
@@ -110,7 +114,7 @@ export const WEB_GAMES: Record<string, WebGame> = {
   },
   gtavc: {
     id: "gtavc", title: "GTA: Vice City", sub: "The 2002 open world, reverse-engineered and compiled to WebAssembly — your own copy's files, kept on your device",
-    url: "/gtavc/index.html", icon: "mask", selfHosted: true, absent: "not-ours",
+    url: "/gtavc/index.html", icon: "mask", selfHosted: true, absent: "not-ours", touchControls: true,
     licence: "reVCDOS is MIT, but the game is NOT REDISTRIBUTED — supply your own Vice City files from a copy you own. The engine is a reverse-engineered reimplementation (the reVC lineage); every texture, model, script and sound is Rockstar's. The port imports your files into OPFS, so they stay on your device and are never uploaded.",
     source: "https://github.com/Lolendor/reVCDOS",
   },

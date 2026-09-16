@@ -5348,6 +5348,9 @@ body.party-col .share-btn { right: calc(var(--pty-w) + clamp(12px, 2vw, 22px)); 
 .palm-msg { max-width: 34ch; text-align: center; color: #9fb8e0; font: 13px/1.6 ui-monospace, Menlo, monospace; letter-spacing: 0.3em; }
 .palm-msg span { display: block; margin-top: 12px; letter-spacing: 0.06em; opacity: 0.7; font-size: 12.5px; }
 .palm-eject { position: absolute; top: 16px; right: 16px; font: inherit; font-size: 12px; letter-spacing: 0.12em; padding: 10px 16px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.18); background: rgba(8,13,22,0.85); color: #fff; cursor: pointer; }
+.palm-touch { position: absolute; top: 16px; right: 132px; z-index: 12; font: inherit; font-size: 12px; letter-spacing: 0.12em; padding: 10px 16px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.18); background: rgba(8,13,22,0.85); color: #fff; cursor: pointer; }
+.palm-touch:hover { background: rgba(255,255,255,0.14); }
+.palm-touch[aria-pressed="true"] { border-color: rgba(120,215,255,0.55); color: #8fdcff; }
 .frame-session iframe { width: 100vw; height: min(100vh, 100dvh); border: 0; background: #000; }
 
 /* saved-progress thumbnail on the Continue row */
