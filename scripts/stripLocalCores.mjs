@@ -27,7 +27,11 @@ const { WEB_GAMES, SELF_HOSTED_WEB_GAME_IDS } = await import("../src/webgames.ts
 const LOCAL_ONLY = ["play-diag", "play-oph"];
 
 const notOurs = SELF_HOSTED_WEB_GAME_IDS
-  .filter((id) => WEB_GAMES[id].absent === "not-ours")
+  // publishEngine opts a slot back in: its directory holds an engine and a host
+  // page, no game data, and the owner has decided to serve it. The default is
+  // still to strip, so a slot whose folder would carry someone's game assets
+  // cannot be published by forgetting something.
+  .filter((id) => WEB_GAMES[id].absent === "not-ours" && !WEB_GAMES[id].publishEngine)
   // the directory is the first segment of the url, e.g. "/gtavc/index.html"
   .map((id) => WEB_GAMES[id].url.split("/")[1]);
 

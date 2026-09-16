@@ -32,6 +32,19 @@ export interface WebGame {
    *  postMessage. Shows the TOUCH toggle beside EJECT — see emulator/WebGameApp.tsx.
    *  Absent means the game has no on-screen controls to offer, so no button appears. */
   touchControls?: boolean;
+  /** Publish this slot's own files even though it is marked "not-ours".
+   *
+   *  The two are not in conflict. "not-ours" says the GAME is not ours to give
+   *  away, and that stays true — no asset of Rockstar's is in this repository or
+   *  on the deploy, because the player supplies the install from their own disk
+   *  and it never leaves their machine. This flag says the directory itself
+   *  holds no such asset: only the engine build and our own host page.
+   *
+   *  Set deliberately by the owner, per entry, because it is their call and
+   *  their risk — see docs/self-hosted-games.md. Absent, the deploy strips the
+   *  directory, which is what keeps a slot whose folder WOULD carry game data
+   *  (hl2, pepsiman, openrct2) from ever being served. */
+  publishEngine?: boolean;
 }
 
 export const WEB_GAMES: Record<string, WebGame> = {
@@ -114,8 +127,8 @@ export const WEB_GAMES: Record<string, WebGame> = {
   },
   gtavc: {
     id: "gtavc", title: "GTA: Vice City", sub: "The 2002 open world, reverse-engineered and compiled to WebAssembly — your own copy's files, kept on your device",
-    url: "/gtavc/index.html", icon: "mask", selfHosted: true, absent: "not-ours", touchControls: true,
-    licence: "reVCDOS is MIT, but the game is NOT REDISTRIBUTED — supply your own Vice City files from a copy you own. The engine is a reverse-engineered reimplementation (the reVC lineage); every texture, model, script and sound is Rockstar's. The port imports your files into OPFS, so they stay on your device and are never uploaded.",
+    url: "/gtavc/index.html", icon: "mask", selfHosted: true, absent: "not-ours", touchControls: true, publishEngine: true,
+    licence: "Engine: reVC (mrxenginner/reVC), a reverse-engineered reimplementation — its authors state they are not in a position to license it, and it is credited in full on the page. Browser port and Emscripten build: origami-ltd/wasm-revc, MIT with a proof-of-usage condition, © 2026 Erasmo Bellumat / Origami. The host page and on-screen controls are ours. The GAME is NOT REDISTRIBUTED — supply your own Vice City files from a copy you own; they are read from your disk into the browser and never leave your device",
     source: "https://github.com/Lolendor/reVCDOS",
   },
   hl2: {
