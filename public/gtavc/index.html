@@ -185,6 +185,18 @@
 // MEMFS. The cost is a slower first load and ~1.5 GB of tab memory; the benefit is no worker, no
 // SharedArrayBuffer and no chunk bookkeeping to get wrong.
 const GAME_ROOT = "/gtavc";
+
+/** ?debug=1 runs the assertions build instead of the release one.
+ *
+ *  Same engine, same fork, built with -sASSERTIONS=2 -sSTACK_OVERFLOW_CHECK=2. It is bigger and
+ *  slower, and that is the whole point: where the release build corrupts itself quietly and hangs,
+ *  this one stops and says what happened. It carries the checks that matter here — the asyncify
+ *  stack, the C stack, and "Waking up (starting to rewind) must be done from JS, without compiled
+ *  code on the stack", which is the one that fires if a timer re-enters wasm mid-unwind.
+ *
+ *  If the game freezes on the release build, run it again with ?debug=1 and play until it goes:
+ *  the log panel will name the fault instead of the tab simply dying. */
+const ENGINE_DIR = new URLSearchParams(location.search).has("debug") ? "./debug/" : "./";
 let engine;  // the Emscripten instance, once preRun has it
 
 const $ = (id) => document.getElementById(id);
@@ -219,8 +231,92 @@ function renderLog() {
   logEl.scrollTop = logEl.scrollHeight;
 }
 
+/* ------------------------------------------------------------------ black box */
+/**
+ * A freeze leaves nothing behind. The tab stops answering, DevTools cannot evaluate, the console
+ * is lost with the process, and the next thing anyone sees is a fresh page — so every hang so far
+ * has been described from memory rather than from evidence, and every fix for it has been a guess.
+ *
+ * This is the recorder that ends that. A worker has its own thread, so it keeps running while the
+ * main thread is wedged: it is sent a heartbeat four times a second carrying the last thing the
+ * engine printed and how much memory is in use, and it writes that to IndexedDB. When the
+ * heartbeats stop for longer than a frame could explain, it writes a `hang` record — from its own
+ * thread, after the main thread has already died. The next page load finds it.
+ *
+ * Deliberately passive: it never calls into the engine. The exports are there and would be
+ * informative, but this build is ASYNCIFY and calling in from a timer can land inside an unwind.
+ * A recorder that can cause the fault it is trying to record is worth nothing.
+ */
+const HANG_MS = 4000;
+let blackBox = null;
+let lastLine = "";
+
+function startBlackBox() {
+  const src = `
+    let db = null;
+    const open = indexedDB.open("gtavc-blackbox", 1);
+    open.onupgradeneeded = (e) => e.target.result.createObjectStore("events", { autoIncrement: true });
+    open.onsuccess = (e) => { db = e.target.result; };
+    const put = (record) => {
+      if (!db) return;
+      try { db.transaction("events", "readwrite").objectStore("events").add(record); } catch (e) { /* closing */ }
+    };
+    let last = Date.now(), state = null, reported = false;
+    onmessage = (e) => { last = Date.now(); state = e.data; reported = false; };
+    setInterval(() => {
+      const gap = Date.now() - last;
+      if (gap > ${HANG_MS} && !reported && state) {
+        reported = true;   // one record per freeze, not one per tick
+        put({ kind: "hang", at: new Date().toISOString(), frozenForMs: gap, ...state });
+      }
+    }, 1000);
+  `;
+  const worker = new Worker(URL.createObjectURL(new Blob([src], { type: "text/javascript" })));
+  setInterval(() => {
+    let mem = 0;
+    try { mem = Math.round(performance.memory.usedJSHeapSize / 1048576); } catch { /* not Chrome */ }
+    worker.postMessage({
+      playedMs: Math.round(performance.now()),
+      heapMB: mem,
+      lastEngineLine: lastLine.slice(-300),
+      tail: lines.slice(-6).join(" ").slice(-700),
+    });
+  }, 250);
+  blackBox = worker;
+}
+
+/** Read back whatever the last session recorded, and say so plainly. */
+async function reportLastHang() {
+  const db = await new Promise((resolve) => {
+    const open = indexedDB.open("gtavc-blackbox", 1);
+    open.onupgradeneeded = (e) => e.target.result.createObjectStore("events", { autoIncrement: true });
+    open.onsuccess = (e) => resolve(e.target.result);
+    open.onerror = () => resolve(null);
+  });
+  if (!db) return;
+  const events = await new Promise((resolve) => {
+    try {
+      const request = db.transaction("events", "readonly").objectStore("events").getAll();
+      request.onsuccess = () => resolve(request.result || []);
+      request.onerror = () => resolve([]);
+    } catch { resolve([]); }
+  });
+  if (!events.length) return;
+  const last = events[events.length - 1];
+  log(`— previous session froze after ${(last.playedMs / 1000).toFixed(0)}s of play, ` +
+      `heap ${last.heapMB} MB, stuck ${(last.frozenForMs / 1000).toFixed(0)}s before this was written —`);
+  log(`— the engine's last output was: ${last.lastEngineLine} —`);
+  // Keep a short history; a freeze that only happens on the tenth run still wants its predecessors.
+  if (events.length > 20) {
+    try { db.transaction("events", "readwrite").objectStore("events").clear(); } catch { /* fine */ }
+  }
+  window.gtavcHangs = events;   // for anyone who wants the lot from the console
+  log(`— ${events.length} recorded so far; window.gtavcHangs has them all —`);
+}
+
 const log = (line) => {
   logEl.hidden = false;
+  lastLine = line;
   lines.push(line);
   if (lines.length > LOG_LINES) lines.splice(0, lines.length - LOG_LINES);
   // Drop from the front until the tail fits. One `line` can be tens of KB on its own, so this
@@ -377,7 +473,7 @@ const startEngineDownload = () => {
 
 let engineReported = false;
 async function fetchEngine() {
-  const response = await fetch("./reVC.wasm");
+  const response = await fetch(`${ENGINE_DIR}reVC.wasm`);
   if (!response.ok) throw new Error(`engine download failed: HTTP ${response.status}`);
   // Cloudflare serves the wasm brotli-encoded and sends no content-length with it, so there is
   // usually no total to divide by. Count up rather than inventing a denominator — a bar that
@@ -445,7 +541,9 @@ async function mountSaves(instance) {
 async function boot(install) {
   log(`${install.files.length} files, ${mb(install.bytes)} MB.`);
 
-  const { default: createReVC } = await import("./reVC.js");
+  // A bare import() would be rewritten at build time; the URL keeps the choice at runtime.
+  const { default: createReVC } = await import(/* @vite-ignore */ new URL(`${ENGINE_DIR}reVC.js`, import.meta.url).href);
+  if (ENGINE_DIR !== "./") log("Running the assertions build — slower, but it names what goes wrong.");
   startEngineDownload();           // a no-op if the picker already started it
   engineReported = true;
   setNote("Downloading the engine…");
@@ -485,6 +583,7 @@ async function boot(install) {
           logToggle.hidden = false;
           document.body.classList.add("playing");
           syncModePolling();
+          startBlackBox();
           $("canvas").focus();
         } catch (error) {
           setNote(`Could not mount the install: ${error.message}`);
@@ -714,6 +813,9 @@ addEventListener("message", (event) => {
 });
 
 initTouch();
+// Before anything else: if the last session ended in a freeze, say so — that report is the whole
+// point of the recorder, and it is worthless if nobody is shown it.
+reportLastHang();
 
 /* ------------------------------------------------------------------- gate */
 
