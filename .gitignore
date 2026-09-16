@@ -44,4 +44,14 @@ public/luanti/
 
 # GTA: Vice City — reverse-engineered engine, but the game data is Rockstar's.
 # Supply your own from a copy you own. See docs/self-hosted-games.md.
-public/gtavc/
+#
+# The directory is excluded by its contents, not as a whole, because index.html is
+# ours: a hand-written host page, not a build artifact, and the only file here that
+# cannot be regenerated from upstream. git cannot re-include a file whose parent
+# directory is excluded, hence `public/gtavc/*` rather than `public/gtavc/`.
+#
+# Everything else stays out and must stay out: reVC.js and reVC.wasm are the
+# Emscripten build, gamecontrollerdb.txt is SDL's, LICENSE-wasm-revc.md is upstream's,
+# and any game data belongs to whoever owns the copy it came from.
+public/gtavc/*
+!public/gtavc/index.html

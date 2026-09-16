@@ -1,0 +1,734 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>GTA: Vice City</title>
+<style>
+  :root { color-scheme: dark; }
+  html, body { height: 100%; margin: 0; background: #0a0710; color: #e8e2f0;
+    font: 14px/1.5 ui-monospace, Menlo, Consolas, monospace; overflow: hidden; }
+  #canvas { display: block; width: 100vw; height: 100vh; background: #000;
+    outline: none; image-rendering: auto; }
+  #gate {
+    position: fixed; inset: 0; display: grid; place-items: center;
+    background: radial-gradient(circle at 50% 35%, #2a1038, #0a0710 70%); z-index: 10;
+    text-align: center; padding: 24px;
+  }
+  #gate[hidden] { display: none; }
+  .card { max-width: 560px; }
+  h1 { font: 600 28px/1.2 ui-sans-serif, system-ui, sans-serif; margin: 0 0 6px;
+    letter-spacing: .02em; color: #ff8ad8; }
+  .sub { color: #a99ab8; margin: 0 0 22px; }
+  button {
+    font: 600 15px/1 ui-sans-serif, system-ui, sans-serif; color: #120a18; background: #ff8ad8; border: 0; border-radius: 999px;
+    padding: 13px 26px; cursor: pointer;
+  }
+  button:hover { background: #ffa3e1; }
+  button:disabled { background: #4a3f55; color: #8e8499; cursor: default; }
+  .note { color: #8e8499; font-size: 12.5px; margin-top: 18px; }
+  .credit { color: #6f6780; font-size: 11.5px; line-height: 1.6; margin-top: 16px;
+            border-top: 1px solid #241c2e; padding-top: 14px; }
+  .credit a { color: #a98fc0; }
+  #log {
+    position: fixed; left: 0; right: 0; bottom: 0; max-height: 28vh; overflow: auto;
+    margin: 0; padding: 8px 12px; background: rgba(8,5,12,.86);
+    border-top: 1px solid #2a2033; font-size: 12px; color: #a99ab8;
+    white-space: pre-wrap; z-index: 5;
+  }
+  #log[hidden] { display: none; }
+  #log.quiet { max-height: 0; padding: 0; border: 0; }
+  #logtoggle {
+    position: fixed; right: 10px; bottom: 10px; z-index: 6;
+    font: 500 11px/1 ui-monospace, monospace; color: #a99ab8;
+    background: rgba(8,5,12,.8); border: 1px solid #2a2033; border-radius: 6px;
+    padding: 6px 9px; cursor: pointer;
+  }
+  #logtoggle[hidden] { display: none; }
+
+  /* ---- touch controls, laid out like the mobile releases ----------------
+     Two sets, swapped on the engine's own vehicle flag: on foot gets a stick and
+     action buttons, driving gets a steering stick and pedals. Only one is ever
+     displayed, so a pedal never sits under a thumb that wants to jump. */
+  #touch { position: fixed; inset: 0; z-index: 4; display: none; touch-action: none;
+           -webkit-user-select: none; user-select: none; }
+  body.playing.coarse #touch { display: block; }
+  /* The frontend is a pointer UI — it wants taps on the canvas, not a look layer over it. The
+     overlay stands down whenever the menu is up, which is also when none of its buttons apply. */
+  /* Must out-specify the rule above: two classes there, so two here — otherwise the overlay
+     stays up through the whole frontend and eats every tap meant for the menu. */
+  body.playing.coarse.in-menu #touch { display: none; }
+  #touch [data-mode] { display: none; }
+  body.onfoot  #touch [data-mode="foot"] { display: block; }
+  body.driving #touch [data-mode="car"]  { display: block; }
+
+  #touch .pad {
+    position: absolute; left: 4vmin; bottom: 5vmin; width: 32vmin; height: 32vmin;
+    border-radius: 50%; background: rgba(0,0,0,.28); border: 2px solid rgba(255,255,255,.28);
+  }
+  #touch .nub {
+    position: absolute; left: 50%; top: 50%; width: 13vmin; height: 13vmin; margin: -6.5vmin 0 0 -6.5vmin;
+    border-radius: 50%; background: rgba(255,255,255,.42); pointer-events: none;
+  }
+  /* The camera takes the whole free area, as it does on mobile — anywhere that is not a control. */
+  #touch .look { position: absolute; inset: 0; }
+
+  #touch .btn {
+    position: absolute; border-radius: 50%; padding: 0;
+    background: rgba(0,0,0,.34); border: 2px solid rgba(255,255,255,.30);
+    color: #fff; font: 600 2.5vmin/1 ui-sans-serif, system-ui, sans-serif;
+    display: grid; place-items: center; text-align: center;
+  }
+  #touch .btn.on { background: rgba(255,255,255,.34); }
+  #touch .big { width: 17vmin; height: 17vmin; font-size: 2.8vmin; }
+  #touch .mid { width: 13vmin; height: 13vmin; }
+  #touch .sml { width: 10.5vmin; height: 10.5vmin; font-size: 2.1vmin; }
+
+  /* on foot — fire under the thumb, everything else around it */
+  #touch .f-fire   { right: 5vmin;  bottom: 20vmin; }
+  #touch .f-jump   { right: 23vmin; bottom: 15vmin; }
+  #touch .f-enter  { right: 6vmin;  bottom: 5vmin; }
+  #touch .f-crouch { right: 21vmin; bottom: 3vmin; }
+  #touch .f-run    { right: 34vmin; bottom: 8vmin; }
+  /* weapon cycle, where the mobile HUD keeps it */
+  #touch .f-prev   { right: 19vmin; top: 4vmin; }
+  #touch .f-next   { right: 5vmin;  top: 4vmin; }
+
+  /* driving — pedals right, the rest around them */
+  #touch .c-gas    { right: 5vmin;  bottom: 20vmin; }
+  #touch .c-brake  { right: 5vmin;  bottom: 4vmin; }
+  #touch .c-hand   { right: 22vmin; bottom: 14vmin; }
+  #touch .c-exit   { right: 21vmin; bottom: 2vmin; }
+  #touch .c-horn   { right: 36vmin; bottom: 10vmin; }
+  #touch .c-radio  { right: 5vmin;  top: 4vmin; }
+  #touch .c-fire   { right: 19vmin; top: 4vmin; }
+
+  #touch .b-menu   { left: 4vmin; top: 4vmin; }
+</style>
+</head>
+<body>
+
+<canvas id="canvas" tabindex="-1"></canvas>
+
+<div id="gate">
+  <div class="card">
+    <h1>Grand Theft Auto: Vice City</h1>
+    <p class="sub">reVC compiled to WebAssembly. Runs your own installed copy.</p>
+    <button id="pick" type="button">Select your Vice City folder</button>
+    <input id="fallback" type="file" webkitdirectory directory multiple hidden>
+    <div class="bar"><i id="bar"></i></div>
+    <p class="note" id="note">
+      Nothing is downloaded and nothing is uploaded — the files are read from your disk
+      and stay on this device. Needs <code>models/gta3.img</code> and <code>data/gta_vc.dat</code>.
+    </p>
+    <p class="credit">
+      Engine: <a href="https://github.com/mrxenginner/reVC" target="_blank" rel="noopener">reVC</a>,
+      a reverse-engineered reimplementation of the Vice City engine — every line of game logic is
+      theirs. Browser port and Emscripten build:
+      <a href="https://github.com/origami-ltd/wasm-revc" target="_blank" rel="noopener">origami-ltd/wasm-revc</a>
+      (MIT, © 2026 Erasmo Bellumat / Origami 限). This page and its on-screen controls are ours.
+      <br>
+      No game data is distributed here. Vice City itself is Rockstar's, and you bring your own copy.
+    </p>
+  </div>
+</div>
+
+<div id="touch" aria-hidden="true">
+  <div class="look" id="look"></div>
+  <div class="pad" id="pad"><div class="nub" id="nub"></div></div>
+  <button class="btn sml b-menu" data-key="menu" type="button">MENU</button>
+
+  <div data-mode="foot">
+    <button class="btn big f-fire"   data-key="fire"   type="button">FIRE</button>
+    <button class="btn mid f-jump"   data-key="jump"   type="button">JUMP</button>
+    <button class="btn mid f-enter"  data-key="enter"  type="button">ENTER</button>
+    <button class="btn sml f-crouch" data-key="crouch" type="button">DUCK</button>
+    <button class="btn sml f-run"    data-key="run"    type="button">RUN</button>
+    <button class="btn sml f-prev"   data-key="prev"   type="button">&#9664;</button>
+    <button class="btn sml f-next"   data-key="next"   type="button">&#9654;</button>
+  </div>
+
+  <div data-mode="car">
+    <button class="btn big c-gas"   data-key="gas"   type="button">GAS</button>
+    <button class="btn mid c-brake" data-key="brake" type="button">BRAKE</button>
+    <button class="btn mid c-hand"  data-key="hand"  type="button">HAND</button>
+    <button class="btn sml c-exit"  data-key="enter" type="button">EXIT</button>
+    <button class="btn sml c-horn"  data-key="horn"  type="button">HORN</button>
+    <button class="btn sml c-radio" data-key="radio" type="button">RADIO</button>
+    <button class="btn sml c-fire"  data-key="fire"  type="button">FIRE</button>
+  </div>
+</div>
+
+<pre id="log" hidden></pre>
+<button id="logtoggle" type="button" hidden>log</button>
+
+<script type="module">
+// A host page for the reVC WebAssembly engine.
+//
+// The engine (reVC.js / reVC.wasm) is built from origami-ltd/wasm-revc. Its own page depends on
+// @wasm/runtime and @wasm/shell, which that repository does not publish, so this is a replacement
+// host written against the same contract its published sources describe:
+//
+//   · the engine is an ES6 module factory, EXPORT_NAME=createReVC
+//   · the game mounts at /gtavc and the engine chdir()s there before main()
+//   · saves live in /gtavc/userfiles and must survive a reload, so that one directory is IDBFS
+//   · an install is recognised by models/gta3.img + data/gta_vc.dat, either case
+//
+// Where this differs, deliberately: upstream streams the huge archives in chunks through a reader
+// worker. That matters when memory is scarce. It is not needed here, because MEMFS keeps file
+// contents in ordinary JS typed arrays rather than in the wasm heap — the fixed 1 GiB heap
+// (INITIAL_MEMORY, no growth) is never charged for game data. So every file is read straight into
+// MEMFS. The cost is a slower first load and ~1.5 GB of tab memory; the benefit is no worker, no
+// SharedArrayBuffer and no chunk bookkeeping to get wrong.
+const GAME_ROOT = "/gtavc";
+let engine;  // the Emscripten instance, once preRun has it
+
+const $ = (id) => document.getElementById(id);
+const gate = $("gate"), logEl = $("log"), bar = $("bar"), note = $("note"), pick = $("pick");
+const fallback = $("fallback"), logToggle = $("logtoggle");
+logToggle.addEventListener("click", () => {
+  logEl.classList.toggle("quiet");
+  renderLog();
+});
+
+/** The engine's transcript.
+ *
+ *  Writing it straight to the DOM on every call cost 14.6 ms measured — a whole frame at 60 Hz —
+ *  because each call rebuilt a 300 KB text node and then read scrollHeight, which forces a
+ *  synchronous layout. That is invisible while the game idles and ruinous when it streams: a
+ *  world load prints in the thousands inside one task, and the tab stops for that many frames.
+ *  A 16 s block during the first load traced back to exactly this.
+ *
+ *  So the buffer is the log, and the DOM is only a view of it: appended to here, flushed at most
+ *  once a frame, and not at all while the panel is collapsed (the `log` button shows it). */
+const LOG_LINES = 400;
+const LOG_CHARS = 60000;   // reVC prints long runs with no newline in them, so lines alone is no cap
+const lines = [];
+let logDirty = false;
+
+const logVisible = () => !logEl.hidden && !logEl.classList.contains("quiet");
+
+function renderLog() {
+  logDirty = false;
+  if (!logVisible()) return;
+  logEl.textContent = lines.join("\n");
+  logEl.scrollTop = logEl.scrollHeight;
+}
+
+const log = (line) => {
+  logEl.hidden = false;
+  lines.push(line);
+  if (lines.length > LOG_LINES) lines.splice(0, lines.length - LOG_LINES);
+  // Drop from the front until the tail fits. One `line` can be tens of KB on its own, so this
+  // trims by what is actually in the buffer rather than by how many pushes there have been.
+  let chars = 0;
+  for (let i = lines.length - 1; i >= 0; i--) {
+    chars += lines[i].length + 1;
+    if (chars > LOG_CHARS) { lines.splice(0, i + 1); break; }
+  }
+  if (logDirty || !logVisible()) return;
+  logDirty = true;
+  requestAnimationFrame(renderLog);
+};
+const setNote = (text) => { note.textContent = text; };
+const setBar = (fraction) => { bar.style.width = `${Math.max(0, Math.min(1, fraction)) * 100}%`; };
+
+/** Hand the main thread back so the note and the bar actually repaint. Both loading loops are
+ *  long runs of `await`s that resolve straight from a microtask, which never yields a frame — so
+ *  without this the page sets a dozen notes the player never sees and looks frozen.
+ *
+ *  Throttled, because one frame per item is not free: the install is 1416 files, and yielding a
+ *  frame to each would add 20-odd seconds of waiting to a loop whose whole point is to be quick.
+ *  Ten frames a second is smooth to read and costs a rounding error. */
+let lastPaint = 0;
+const paint = async (force) => {
+  const now = performance.now();
+  if (!force && now - lastPaint < 100) return;
+  lastPaint = now;
+  await new Promise((resolve) => requestAnimationFrame(() => resolve()));
+};
+
+/* ---------------------------------------------------------------- install */
+
+/** The two files every Vice City install has and no other GTA does. Spellings vary by installer,
+ *  and getFileHandle is case-sensitive, so both are tried. */
+async function looksLikeViceCity(dir) {
+  const child = async (parent, name) => { try { return await parent.getDirectoryHandle(name); } catch { return undefined; } };
+  const has = async (parent, name) => {
+    if (!parent) return false;
+    try { await parent.getFileHandle(name); return true; } catch { return false; }
+  };
+  const models = (await child(dir, "models")) ?? (await child(dir, "MODELS"));
+  const data = (await child(dir, "data")) ?? (await child(dir, "DATA"));
+  return ((await has(models, "gta3.img")) || (await has(models, "GTA3.IMG")))
+      && ((await has(data, "gta_vc.dat")) || (await has(data, "GTA_VC.DAT")));
+}
+
+/** Steam and the disc installer both nest the game a level or two under whatever the player
+ *  picks, so look down a little rather than demanding they land on it exactly. */
+async function findInstallRoot(root, depth = 3) {
+  if (await looksLikeViceCity(root)) return root;
+  if (depth <= 0) return undefined;
+  for await (const [, handle] of root.entries()) {
+    if (handle.kind !== "directory") continue;
+    const found = await findInstallRoot(handle, depth - 1);
+    if (found) return found;
+  }
+  return undefined;
+}
+
+/** Things an install carries that the engine never opens. Skipping them saves reading a good
+ *  fraction of a gigabyte that would only sit in memory unused. */
+const SKIP_DIR = new Set(["uninstall", "movies", "skins"]);
+const SKIP_EXT = new Set(["exe", "dll", "isl", "ico", "png", "txt", "url", "cnt", "hlp"]);
+const skipped = (path) => {
+  const top = path.split("/")[0].toLowerCase();
+  if (SKIP_DIR.has(top)) return true;
+  const dot = path.lastIndexOf(".");
+  return dot > 0 && SKIP_EXT.has(path.slice(dot + 1).toLowerCase());
+};
+
+/** Every file the engine may open. Both pickers end up here in the same shape — a path and a
+ *  way to get the bytes — so nothing downstream cares which one the player used. */
+async function readInstall(root) {
+  const files = [];
+  let bytes = 0;
+  const visit = async (dir, prefix) => {
+    for await (const [name, handle] of dir.entries()) {
+      const path = prefix ? `${prefix}/${name}` : name;
+      if (handle.kind === "directory") { await visit(handle, path); continue; }
+      if (skipped(path)) continue;
+      const file = await handle.getFile();
+      files.push({ path, size: file.size, get: () => handle.getFile() });
+      bytes += file.size;
+      // One getFile() per entry is a real filesystem round trip, and an install is well over a
+      // thousand of them — say how far along it is rather than sitting on one note throughout.
+      setNote(`Reading the install — ${files.length} files, ${mb(bytes)} MB…`);
+      await paint();
+    }
+  };
+  await visit(root, "");
+  return { files, bytes };
+}
+
+/** The <input webkitdirectory> path, for browsers without showDirectoryPicker. Each File carries
+ *  webkitRelativePath, which starts with the folder the player chose — that first segment is
+ *  dropped so paths match the handle walk. */
+function readInstallFromFileList(fileList) {
+  const files = [];
+  let bytes = 0;
+  for (const file of fileList) {
+    const rel = file.webkitRelativePath || file.name;
+    const path = rel.includes("/") ? rel.slice(rel.indexOf("/") + 1) : rel;
+    if (!path || skipped(path)) continue;
+    files.push({ path, size: file.size, get: async () => file });
+    bytes += file.size;
+  }
+  return { files, bytes };
+}
+
+/** Same test as looksLikeViceCity, against a flat path list. */
+const fileListIsViceCity = (install) => {
+  const lower = new Set(install.files.map((f) => f.path.toLowerCase()));
+  return lower.has("models/gta3.img") && lower.has("data/gta_vc.dat");
+};
+
+/* -------------------------------------------------------------------- FS */
+
+const mb = (n) => (n / 1048576).toFixed(0);
+
+/** Copy the install into MEMFS. Big archives go in whole: MEMFS holds them as JS typed arrays,
+ *  outside the wasm heap, so a 312 MB gta3.img costs tab memory and not engine memory. */
+async function mountInstall(FS, install) {
+  const made = new Set();
+  let done = 0;
+  for (const entry of install.files) {
+    const slash = entry.path.lastIndexOf("/");
+    const dir = slash < 0 ? GAME_ROOT : `${GAME_ROOT}/${entry.path.slice(0, slash)}`;
+    if (!made.has(dir)) { FS.mkdirTree(dir); made.add(dir); }
+    const bytes = new Uint8Array(await (await entry.get()).arrayBuffer());
+    // canOwn: hand the array to MEMFS rather than letting it copy a second one.
+    FS.writeFile(`${GAME_ROOT}/${entry.path}`, bytes, { canOwn: true });
+    done += entry.size;
+    setBar(done / install.bytes);
+    setNote(`Loading ${entry.path} — ${mb(done)} / ${mb(install.bytes)} MB`);
+    await paint();
+  }
+}
+
+/** Fetch the engine ourselves instead of letting Emscripten do it, purely so there is a bar over
+ *  it. It is 5 MB, and on a cold load the download, the compile and the 1 GB heap reservation add
+ *  up to the better part of a minute in which createReVC() reports nothing at all — which reads
+ *  as a hang. Module.wasmBinary is the documented way to supply the bytes instead. */
+let enginePromise;
+/** Kick the engine download off the moment the player commits to a folder, so it overlaps the
+ *  walk and the reads instead of queueing behind them. Nothing awaits it here — boot() does. */
+const startEngineDownload = () => {
+  if (enginePromise) return;
+  enginePromise = fetchEngine();
+  // Nothing awaits it until boot(), and a folder that turns out not to be Vice City means boot()
+  // never runs — so claim the rejection here. The await in boot() still sees it.
+  enginePromise.catch(() => {});
+};
+
+let engineReported = false;
+async function fetchEngine() {
+  const response = await fetch("./reVC.wasm");
+  if (!response.ok) throw new Error(`engine download failed: HTTP ${response.status}`);
+  // Cloudflare serves the wasm brotli-encoded and sends no content-length with it, so there is
+  // usually no total to divide by. Count up rather than inventing a denominator — a bar that
+  // reads "3 / 3 MB" while three more are still coming is worse than no bar.
+  const total = Number(response.headers.get("content-length")) || 0;
+  // No body stream (an old browser, or a proxy that dropped it) — take the whole thing at once
+  // and leave the bar where it is rather than failing over a progress bar.
+  if (!response.body) return await response.arrayBuffer();
+  const chunks = [];
+  let got = 0;
+  const reader = response.body.getReader();
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    chunks.push(value);
+    got += value.length;
+    // Silent while it is overlapping the install read — that phase owns the note. It only starts
+    // reporting once boot() is actually waiting on it, which is the only time it is the holdup.
+    if (engineReported) {
+      if (total) setBar(got / total);
+      setNote(total
+        ? `Downloading the engine — ${mb(got)} / ${mb(total)} MB`
+        : `Downloading the engine — ${mb(got)} MB so far…`);
+      await paint();
+    }
+  }
+  const binary = new Uint8Array(got);
+  let at = 0;
+  for (const chunk of chunks) { binary.set(chunk, at); at += chunk.length; }
+  return binary;
+}
+
+/** SDL looks for gamecontrollerdb.txt in the working directory and warns when it is missing.
+ *  Browsers expose every pad through one standard mapping so SDL copes without it, but the db is
+ *  what gives an Xbox pad its proper button names instead of a generic fallback. Shipped next to
+ *  the engine and written in before the install so a game folder can never shadow it. */
+async function mountControllerDb(FS) {
+  try {
+    const response = await fetch("./gamecontrollerdb.txt");
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    FS.writeFile(`${GAME_ROOT}/gamecontrollerdb.txt`, new Uint8Array(await response.arrayBuffer()));
+  } catch (error) {
+    log(`Gamepad mappings unavailable (${error.message}) — pads still work via SDL's default.`);
+  }
+}
+
+/** The one directory that has to outlive the tab. Everything else is MEMFS and may die with it;
+ *  progress may not, so userfiles is IDBFS and is read back here at boot. */
+async function mountSaves(instance) {
+  const FS = instance.FS, path = `${GAME_ROOT}/userfiles`;
+  FS.mkdirTree(path);
+  FS.mount(instance.IDBFS, {}, path);
+  await new Promise((resolve) => FS.syncfs(true, (err) => {
+    if (err) log(`Saves: could not read IndexedDB (${err.message ?? err}) — progress will not persist.`);
+    resolve();
+  }));
+  try {
+    const names = FS.readdir(path).filter((n) => n !== "." && n !== "..");
+    log(names.length ? `Saved data: ${names.join(", ")}` : "Saved data: nothing yet.");
+  } catch { /* a fresh mount lists nothing */ }
+}
+
+/* ------------------------------------------------------------------ boot */
+
+async function boot(install) {
+  log(`${install.files.length} files, ${mb(install.bytes)} MB.`);
+
+  const { default: createReVC } = await import("./reVC.js");
+  startEngineDownload();           // a no-op if the picker already started it
+  engineReported = true;
+  setNote("Downloading the engine…");
+  setBar(0);
+  await paint(true);
+  const wasmBinary = await enginePromise;
+
+  // Compiling 5 MB of wasm and reserving the fixed 1 GB heap is seconds of blocked main thread,
+  // and nothing inside createReVC reports progress — so say what is happening before it starts.
+  setNote("Starting the engine — this takes a moment on the first load…");
+  setBar(0);
+  await paint(true);
+
+  await createReVC({
+    canvas: $("canvas"),
+    arguments: [],
+    wasmBinary,
+    print: (line) => log(line),
+    printErr: (line) => log(line),
+    preRun: [(instance) => {
+      engine = instance;
+      // Hold main() until the install is in the FS — the engine opens gta_vc.dat immediately.
+      instance.addRunDependency("vice-assets");
+      void (async () => {
+        try {
+          setNote(`Copying ${install.files.length} files into the game's filesystem…`);
+          await paint(true);
+          instance.FS.mkdirTree(GAME_ROOT);
+          await mountControllerDb(instance.FS);
+          await mountInstall(instance.FS, install);
+          await mountSaves(instance);
+          instance.FS.chdir(GAME_ROOT);
+          log("Install mounted. Starting engine.");
+          gate.hidden = true;
+          // The log did its job while loading; from here the game owns the screen.
+          logEl.classList.add("quiet");
+          logToggle.hidden = false;
+          document.body.classList.add("playing");
+          $("canvas").focus();
+        } catch (error) {
+          setNote(`Could not mount the install: ${error.message}`);
+          log(`mount failed: ${error.stack ?? error}`);
+        } finally {
+          instance.removeRunDependency("vice-assets");
+        }
+      })();
+    }],
+  });
+}
+
+/* ---------------------------------------------------------------- touch */
+/**
+ * On-screen controls in the shape of the mobile releases.
+ *
+ * The engine has no touch input at all — it reads the keyboard and a real pad — so none of this
+ * "adds touch support". It synthesises the same KeyboardEvents SDL already listens for, and
+ * mousemove for the camera.
+ *
+ * Every key below is reVC's own default, read out of src/core/ControllerConfig.cpp rather than
+ * guessed. The two layouts swap on ViceInVehicle(), an export added to the engine for this: on
+ * foot you get a stick and action buttons, driving you get steering and pedals — which is what
+ * the mobile versions do, and the reason a single fixed layout always feels wrong in a car.
+ */
+const KEYS = {
+  // movement / steering
+  w:      { key: "w", code: "KeyW", keyCode: 87 },
+  a:      { key: "a", code: "KeyA", keyCode: 65 },
+  s:      { key: "s", code: "KeyS", keyCode: 83 },
+  d:      { key: "d", code: "KeyD", keyCode: 68 },
+  // on foot
+  fire:   { key: "Control", code: "ControlLeft", keyCode: 17 },
+  jump:   { key: " ", code: "Space", keyCode: 32 },
+  enter:  { key: "f", code: "KeyF", keyCode: 70 },
+  run:    { key: "Shift", code: "ShiftLeft", keyCode: 16 },
+  crouch: { key: "c", code: "KeyC", keyCode: 67 },
+  prev:   { key: "Decimal", code: "NumpadDecimal", keyCode: 110 },   // PED_CYCLE_WEAPON_LEFT
+  next:   { key: "Enter", code: "NumpadEnter", keyCode: 13, loc: 3 },// PED_CYCLE_WEAPON_RIGHT
+  // driving
+  gas:    { key: "w", code: "KeyW", keyCode: 87 },
+  brake:  { key: "s", code: "KeyS", keyCode: 83 },
+  hand:   { key: " ", code: "Space", keyCode: 32 },                  // VEHICLE_HANDBRAKE
+  horn:   { key: "Shift", code: "ShiftLeft", keyCode: 16 },          // VEHICLE_HORN
+  radio:  { key: "r", code: "KeyR", keyCode: 82 },
+  menu:   { key: "Escape", code: "Escape", keyCode: 27 },
+};
+
+const held = new Set();
+function sendKey(name, down) {
+  const def = KEYS[name];
+  if (!def) return;
+  if (down ? held.has(name) : !held.has(name)) return;
+  down ? held.add(name) : held.delete(name);
+  const event = new KeyboardEvent(down ? "keydown" : "keyup", {
+    key: def.key, code: def.code, keyCode: def.keyCode, which: def.keyCode,
+    location: def.loc ?? 0, bubbles: true, cancelable: true,
+  });
+  // SDL registers on the document; the canvas gets it too so the event still lands if a future
+  // build moves the listeners.
+  document.dispatchEvent(event);
+  $("canvas").dispatchEvent(event);
+}
+const releaseAll = () => { for (const name of [...held]) sendKey(name, false); };
+
+/** On foot or driving, straight from the engine — plus whether the frontend has the screen. */
+function refreshMode() {
+  let driving = false, menu = false;
+  try {
+    driving = engine?._ViceInVehicle?.() === 1;
+    menu = engine?._ViceMenuActive?.() === 1;
+  } catch { /* not up yet */ }
+  const body = document.body;
+  if (menu !== body.classList.contains("in-menu")) {
+    // Leaving a key held into a menu, or out of one, sticks it — release on every transition.
+    releaseAll();
+    body.classList.toggle("in-menu", menu);
+  }
+  if (driving === body.classList.contains("driving")) return;
+  // Everything held belongs to the layout being left — a pedal still down when the player steps
+  // out would drive the next car by itself.
+  releaseAll();
+  body.classList.toggle("driving", driving);
+  body.classList.toggle("onfoot", !driving);
+}
+
+function initTouch() {
+  const pad = $("pad"), nub = $("nub"), look = $("look");
+
+  /* —— left stick: movement on foot, steering in a car —— */
+  let padId = null;
+  const DEAD = 0.28;
+  const applyStick = (nx, ny, live) => {
+    const driving = document.body.classList.contains("driving");
+    sendKey("a", live && nx < -0.38);
+    sendKey("d", live && nx > 0.38);
+    // In a car the pedals are buttons, so the stick only steers — pushing forward must not
+    // secretly hold the accelerator as well.
+    if (!driving) {
+      sendKey("w", live && ny < -0.38);
+      sendKey("s", live && ny > 0.38);
+    }
+  };
+  const clearStick = () => { for (const k of ["w", "a", "s", "d"]) sendKey(k, false); };
+
+  pad.addEventListener("pointerdown", (e) => {
+    padId = e.pointerId; pad.setPointerCapture(padId); e.preventDefault();
+  });
+  pad.addEventListener("pointermove", (e) => {
+    if (e.pointerId !== padId) return;
+    const box = pad.getBoundingClientRect();
+    const r = box.width / 2;
+    const dx = e.clientX - (box.left + r), dy = e.clientY - (box.top + r);
+    const len = Math.hypot(dx, dy) || 1;
+    const clamped = Math.min(1, len / r) * r, angle = Math.atan2(dy, dx);
+    nub.style.transform = `translate(${Math.cos(angle) * clamped}px, ${Math.sin(angle) * clamped}px)`;
+    applyStick(dx / len, dy / len, len / r > DEAD);
+  });
+  const endPad = (e) => {
+    if (padId !== null && e.pointerId !== padId) return;
+    padId = null; nub.style.transform = ""; clearStick();
+  };
+  pad.addEventListener("pointerup", endPad);
+  pad.addEventListener("pointercancel", endPad);
+  // Capture can vanish without a pointerup (a system gesture, a finger dragged off the glass).
+  // Without this the nub stays put and the keys stay held, which reads as a stuck stick.
+  pad.addEventListener("lostpointercapture", endPad);
+
+  /* —— free area: drag to look —— */
+  let lookId = null, lastX = 0, lastY = 0;
+  look.addEventListener("pointerdown", (e) => {
+    lookId = e.pointerId; lastX = e.clientX; lastY = e.clientY;
+    look.setPointerCapture(lookId); e.preventDefault();
+  });
+  look.addEventListener("pointermove", (e) => {
+    if (e.pointerId !== lookId) return;
+    const dx = e.clientX - lastX, dy = e.clientY - lastY;
+    lastX = e.clientX; lastY = e.clientY;
+    // movementX/Y is what the camera reads under pointer lock, and a synthesised event can carry
+    // it through the constructor — so the existing camera path is used untouched.
+    $("canvas").dispatchEvent(new MouseEvent("mousemove", {
+      movementX: dx, movementY: dy, clientX: e.clientX, clientY: e.clientY,
+      bubbles: true, cancelable: true,
+    }));
+  });
+  const endLook = (e) => { if (e.pointerId === lookId) lookId = null; };
+  look.addEventListener("pointerup", endLook);
+  look.addEventListener("pointercancel", endLook);
+  look.addEventListener("lostpointercapture", endLook);
+
+  /* —— buttons: hold to hold —— */
+  for (const button of document.querySelectorAll("#touch .btn")) {
+    const name = button.dataset.key;
+    const press = (e) => { e.preventDefault(); button.classList.add("on"); sendKey(name, true); };
+    const lift = (e) => { e.preventDefault(); button.classList.remove("on"); sendKey(name, false); };
+    button.addEventListener("pointerdown", press);
+    button.addEventListener("pointerup", lift);
+    button.addEventListener("pointercancel", lift);
+    button.addEventListener("pointerleave", lift);
+  }
+
+  // A key still held when the tab goes away stays held in the engine forever.
+  addEventListener("blur", releaseAll);
+  document.addEventListener("visibilitychange", () => { if (document.hidden) releaseAll(); });
+
+  // Four times a second is far below the frame rate and well above human reaction — getting in or
+  // out of a car swaps the layout before a thumb can reach for the wrong button.
+  document.body.classList.add("onfoot");
+  setInterval(refreshMode, 250);
+}
+
+// Coarse pointer = phone or tablet. Desktop keeps the screen clear; a keyboard or a real pad works
+// there natively, and reVC reads a pad through SDL without any help from this page.
+//
+// That sniff is only the default. The console shows a TOUCH toggle next to EJECT and tells this
+// page which way the player wants it — a laptop with a touchscreen reads as coarse and should not
+// get a pad uninvited, and someone on a tablet with a keyboard may want one anyway.
+const coarseQuery = matchMedia("(pointer: coarse)");
+// Not a one-off read at startup: the pointer type genuinely changes under you — a tablet gains a
+// mouse, a phone is docked, a device profile is switched in devtools. An explicit choice from the
+// console still wins, because the message handler below sets the class directly.
+const applyCoarse = () => document.body.classList.toggle("coarse", coarseQuery.matches);
+applyCoarse();
+coarseQuery.addEventListener("change", applyCoarse);
+
+addEventListener("message", (event) => {
+  // Same-origin only: the console frames this page itself, so anything from elsewhere is not it.
+  if (event.origin !== location.origin) return;
+  const data = event.data;
+  if (!data || data.type !== "touch-controls") return;
+  document.body.classList.toggle("coarse", !!data.on);
+  // Buttons held when the pad is taken away would stay held in the engine.
+  if (!data.on) releaseAll();
+});
+
+initTouch();
+
+/* ------------------------------------------------------------------- gate */
+
+const NOT_VICE_CITY =
+  "No Vice City install under that folder — it needs models/gta3.img and data/gta_vc.dat.";
+
+async function start(install) {
+  pick.disabled = true;
+  try {
+    await boot(install);
+  } catch (error) {
+    pick.disabled = false;
+    setNote(`Failed to start: ${error.message}`);
+    log(String(error.stack ?? error));
+  }
+}
+
+pick.addEventListener("click", async () => {
+  // Without showDirectoryPicker (Firefox, Safari) fall back to the file input, which reaches the
+  // same place with a flat list instead of handles.
+  if (!window.showDirectoryPicker) { fallback.click(); return; }
+  let picked;
+  try {
+    picked = await window.showDirectoryPicker({ id: "gtavc", mode: "read" });
+  } catch {
+    return; // the player cancelled
+  }
+  pick.disabled = true;
+  startEngineDownload();
+  setNote("Looking for the install…");
+  const root = await findInstallRoot(picked);
+  if (!root) {
+    pick.disabled = false;
+    setNote(NOT_VICE_CITY);
+    return;
+  }
+  setNote("Reading the install…");
+  await start(await readInstall(root));
+});
+
+fallback.addEventListener("change", async () => {
+  if (!fallback.files?.length) return;
+  pick.disabled = true;
+  startEngineDownload();
+  setNote("Reading the install…");
+  const install = readInstallFromFileList(fallback.files);
+  if (!fileListIsViceCity(install)) {
+    pick.disabled = false;
+    setNote(NOT_VICE_CITY);
+    return;
+  }
+  await start(install);
+});
+</script>
+</body>
+</html>
