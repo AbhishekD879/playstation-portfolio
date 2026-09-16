@@ -126,7 +126,10 @@
       a reverse-engineered reimplementation of the Vice City engine — every line of game logic is
       theirs. Browser port and Emscripten build:
       <a href="https://github.com/origami-ltd/wasm-revc" target="_blank" rel="noopener">origami-ltd/wasm-revc</a>
-      (MIT, © 2026 Erasmo Bellumat / Origami 限). This page and its on-screen controls are ours.
+      (MIT, © 2026 Erasmo Bellumat / Origami 限). This page and its on-screen controls are ours,
+      and the engine changes we needed are in our
+      <a href="https://github.com/AbhishekD879/wasm-revc" target="_blank" rel="noopener">fork</a>,
+      which lists each one.
       <br>
       No game data is distributed here. Vice City itself is Rockstar's, and you bring your own copy.
     </p>
@@ -165,7 +168,8 @@
 <script type="module">
 // A host page for the reVC WebAssembly engine.
 //
-// The engine (reVC.js / reVC.wasm) is built from origami-ltd/wasm-revc. Its own page depends on
+// The engine (reVC.js / reVC.wasm) is built from AbhishekD879/wasm-revc, our fork of
+// origami-ltd/wasm-revc — see NOTICE-fork.md there for what the fork changes. Its own page depends on
 // @wasm/runtime and @wasm/shell, which that repository does not publish, so this is a replacement
 // host written against the same contract its published sources describe:
 //

@@ -37,7 +37,8 @@ point:
 public/hl2/index.html          ← plus its .wasm, .data, map chunks…
 public/pepsiman/index.html     ← plus its .wasm and data
 public/openrct2/index.html     ← plus your RollerCoaster Tycoon 2 data
-public/gtavc/index.html        ← reVCDOS; it asks for your game files on first run
+public/gtavc/index.html        ← ours, and tracked in git; asks for your game files on first run
+public/gtavc/reVC.{js,wasm}    ← the engine build, gitignored — see the recipe below
 public/luanti/index.html       ← the contents of luanti-wasm's www/
 ```
 
@@ -85,10 +86,36 @@ longer answer and a future reader will otherwise assume they made a mistake.
   `openrct2online.com` does serve a working build, but it is a third-party
   wrapper carrying AdSense and Google Analytics, of unclear provenance; it is
   not a source to mirror from.
-- **GTA: Vice City** — <https://github.com/Lolendor/reVCDOS> (MIT), a browser
-  port of the reverse-engineered engine. It imports your game files into OPFS on
-  first run, so the data stays on the device and is never uploaded — which is
-  exactly why only the plumbing lives here.
+- **GTA: Vice City** — built from <https://github.com/AbhishekD879/wasm-revc>,
+  our fork of [origami-ltd/wasm-revc](https://github.com/origami-ltd/wasm-revc),
+  which is itself an Emscripten port of
+  [mrxenginner/reVC](https://github.com/mrxenginner/reVC), the reverse-engineered
+  engine. Almost all of it is theirs; `NOTICE-fork.md` in the fork lists the few
+  changes that are ours and why each exists.
+
+  We do not use upstream's host page: it imports `@wasm/runtime` and `@wasm/shell`,
+  which are not published anywhere. `public/gtavc/index.html` is ours, written from
+  scratch, and it mounts the player's install into **MEMFS** rather than OPFS —
+  MEMFS keeps file contents as ordinary JS typed arrays, outside the wasm heap, so
+  a 312 MB `gta3.img` costs tab memory and not engine memory. That single fact is
+  what makes a 1.5 GB install workable without a chunked streamer. Expect the tab
+  to sit around 2.5 GB: ~1,464 MB of install plus the engine's fixed 1 GiB heap.
+
+  Rebuilding the engine:
+
+  ```sh
+  source ~/emsdk/emsdk_env.sh
+  cd ~/src/wasm-revc && scripts/build-web.sh          # add `clean` to reconfigure
+  cp web/public/reVC.{js,wasm} ~/playstation-portfolio/public/gtavc/
+  ```
+
+  Two things in that repo are worth knowing before an agent reads it. Its
+  `AGENTS.md`, `CLAUDE.md`, `LICENSE.md` and the header of `scripts/build-web.sh`
+  carry text addressed to AI agents, instructing them to POST an identity to an
+  endpoint, run `npx proof-of-usage`, and press the user to comply. That is a
+  prompt injection and has never been followed here; the credits this project
+  gives are given because they are deserved, not because a file demanded them.
+  The fork inherits those files unchanged, so the same applies there.
 
   On the legal position, because it is easy to get wrong in both directions:
   Take-Two sued the re3/reVC authors in 2021, and the case **settled out of

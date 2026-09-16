@@ -128,8 +128,8 @@ export const WEB_GAMES: Record<string, WebGame> = {
   gtavc: {
     id: "gtavc", title: "GTA: Vice City", sub: "The 2002 open world, reverse-engineered and compiled to WebAssembly — your own copy's files, kept on your device",
     url: "/gtavc/index.html", icon: "mask", selfHosted: true, absent: "not-ours", touchControls: true, publishEngine: true,
-    licence: "Engine: reVC (mrxenginner/reVC), a reverse-engineered reimplementation — its authors state they are not in a position to license it, and it is credited in full on the page. Browser port and Emscripten build: origami-ltd/wasm-revc, MIT with a proof-of-usage condition, © 2026 Erasmo Bellumat / Origami. The host page and on-screen controls are ours. The GAME is NOT REDISTRIBUTED — supply your own Vice City files from a copy you own; they are read from your disk into the browser and never leave your device",
-    source: "https://github.com/Lolendor/reVCDOS",
+    licence: "Engine: reVC (mrxenginner/reVC), a reverse-engineered reimplementation — its authors state they are not in a position to license it, and it is credited in full on the page. Browser port and Emscripten build: origami-ltd/wasm-revc, MIT with a proof-of-usage condition, © 2026 Erasmo Bellumat / Origami. The host page and on-screen controls are ours, and the engine changes we needed are published in our fork at AbhishekD879/wasm-revc with a NOTICE describing each one. The GAME is NOT REDISTRIBUTED — supply your own Vice City files from a copy you own; they are read from your disk into the browser and never leave your device",
+    source: "https://github.com/AbhishekD879/wasm-revc",
   },
   hl2: {
     id: "hl2", title: "Half-Life 2", sub: "Valve's 2004 shooter, compiled to WebAssembly — your own build, streamed map by map",
