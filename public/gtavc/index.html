@@ -261,13 +261,26 @@ function startBlackBox() {
       if (!db) return;
       try { db.transaction("events", "readwrite").objectStore("events").add(record); } catch (e) { /* closing */ }
     };
-    let last = Date.now(), state = null, reported = false;
-    onmessage = (e) => { last = Date.now(); state = e.data; reported = false; };
+    let last = Date.now(), state = null, reported = false, upload = false;
+    onmessage = (e) => { last = Date.now(); state = e.data; upload = e.data.upload; reported = false; };
     setInterval(() => {
       const gap = Date.now() - last;
       if (gap > ${HANG_MS} && !reported && state) {
         reported = true;   // one record per freeze, not one per tick
-        put({ kind: "hang", at: new Date().toISOString(), frozenForMs: gap, ...state });
+        const record = { kind: "hang", at: new Date().toISOString(), frozenForMs: gap, ...state };
+        put(record);
+        // The point of doing this here rather than on the main thread: the main thread is gone.
+        // This worker is still scheduled, so the report leaves the machine even though the tab
+        // that produced it is wedged and about to be killed. Only under ?debug=1.
+        if (upload) {
+          // Absolute, because this worker is made from a blob: URL and a blob has no usable base
+          // to resolve a relative path against — fetch("/api/hang") in here throws
+          // "Failed to parse URL". The main thread knows the origin, so it hands it over.
+          fetch(${JSON.stringify(new URL("/api/hang", location.origin).href)}, {
+            method: "POST", headers: { "content-type": "application/json" },
+            body: JSON.stringify(record), keepalive: true,
+          }).catch(() => { /* offline, or the tab died first — the IndexedDB copy still stands */ });
+        }
       }
     }, 1000);
   `;
@@ -280,6 +293,10 @@ function startBlackBox() {
       heapMB: mem,
       lastEngineLine: lastLine.slice(-300),
       tail: lines.slice(-6).join(" ").slice(-700),
+      engine: ENGINE_DIR === "./" ? "release" : "debug",
+      // Ordinary play reports nothing anywhere. ?debug=1 is a deliberate act by someone who wants
+      // the freeze diagnosed, and it is the only mode that sends anything off the device.
+      upload: ENGINE_DIR !== "./",
     });
   }, 250);
   blackBox = worker;
@@ -816,6 +833,22 @@ initTouch();
 // Before anything else: if the last session ended in a freeze, say so — that report is the whole
 // point of the recorder, and it is worthless if nobody is shown it.
 reportLastHang();
+
+// The page promises that nothing is uploaded, and under ?debug=1 that stops being true — a freeze
+// report is sent so the fault can be read rather than remembered. Say it plainly, where the
+// promise itself is made, rather than leaving the claim standing when it no longer holds.
+if (ENGINE_DIR !== "./") {
+  const where = document.querySelector(".note");
+  if (where) {
+    const said = document.createElement("span");
+    said.style.color = "#ffd479";
+    said.textContent = " Diagnostic mode: if the game freezes, a report of what the engine was "
+      + "doing — timings, memory and its own log lines — is sent so it can be diagnosed. "
+      + "Your game files are not part of that and still never leave this device. "
+      + "Drop the ?debug=1 to send nothing.";
+    where.appendChild(said);
+  }
+}
 
 /* ------------------------------------------------------------------- gate */
 
