@@ -266,6 +266,37 @@ const frameSeries = [];
 const longTasks = [];
 let glInfo = {};
 let contextLost = false;
+const engineState = [];   // is the game loop still turning, or is one frame never ending?
+
+/** The engine's own counters, sampled from JS.
+ *
+ *  This is the difference between "the tab froze" and "the tab froze inside CStreaming with
+ *  logical frame 41 231 never completing". Without it a report says where the engine last printed,
+ *  which is a guess at where it stopped; with it, a frame counter that stops while wall-clock
+ *  keeps running says the loop never returned, and one that keeps moving says the fault is
+ *  somewhere else entirely.
+ *
+ *  Debug builds only. Calling into wasm from a timer can land inside an ASYNCIFY unwind, and the
+ *  release build would fail silently at it — but the assertions build raises "Waking up (starting
+ *  to rewind) must be done from JS, without compiled code on the stack" if this is unsafe, which
+ *  is an answer either way and one worth having. */
+function sampleEngine() {
+  if (ENGINE_DIR === "./" || !engine) return;
+  try {
+    engineState.push({
+      at: Math.round(performance.now()),
+      frames: engine._ViceLogicalFrames?.() ?? -1,
+      state: engine._ViceGameState?.() ?? -1,
+      idle: engine._ViceIdleCount?.() ?? -1,
+      engineMs: engine._ViceTimeMs?.() ?? -1,
+      inVehicle: engine._ViceInVehicle?.() ?? -1,
+      menu: engine._ViceMenuActive?.() ?? -1,
+    });
+    if (engineState.length > 80) engineState.shift();
+  } catch (error) {
+    noteFault("engine.sample", error.message);
+  }
+}
 
 /** Lines the engine prints that are worth pulling out of the noise. An assertions build says
  *  exactly what went wrong here, and it would otherwise be one line among thousands.
@@ -318,6 +349,7 @@ function snapshot() {
     longTasks: longTasks.slice(-20),
     faults: faults.slice(-12),
     gl: { ...glInfo, contextLost },
+    engineState: engineState.slice(-40),
     lastEngineLine: lastLine.slice(-400),
     // The whole tail, not a sample. This is the one field most likely to name the cause.
     engineLog: engineLog.slice(-LOG_KEEP),
@@ -381,7 +413,7 @@ function startBlackBox() {
   `;
   const worker = new Worker(URL.createObjectURL(new Blob([src], { type: "text/javascript" })));
   blackBox = worker;
-  setInterval(() => worker.postMessage(snapshot()), 250);
+  setInterval(() => { sampleEngine(); worker.postMessage(snapshot()); }, 250);
 
   // A freeze report can be lost: the browser may kill the tab, or be force-quit, before the
   // watchdog even notices. A checkpoint every half minute means the worst case is still knowing
