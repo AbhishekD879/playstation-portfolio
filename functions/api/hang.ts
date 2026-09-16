@@ -19,6 +19,7 @@ interface Env {
 }
 
 const MAX_FIELD = 2000;
+const LOG_LINES = 300;
 const KEEP_DAYS = 14;
 const PAGE = 100;
 
@@ -42,14 +43,28 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
   await env.GB.put(rlKey, String(seen + 1), { expirationTtl: 60 });
 
   const t = Date.now();
+  // Kept whole rather than flattened. The point of the report is that one freeze answers the
+  // question, and the answer is usually in the parts that a summary would drop: the engine's last
+  // few hundred lines, the heap series that says climb-versus-cliff, the frame times before it
+  // seized, the fault that was already recorded minutes earlier.
   const record = {
     t,
     kind: field(body?.kind, 40) || "hang",
+    session: field(body?.session, 40),
+    engine: field(body?.engine, 40),          // "release" or "debug"
     frozenForMs: Number(body?.frozenForMs) || 0,
     playedMs: Number(body?.playedMs) || 0,
     heapMB: Number(body?.heapMB) || 0,
-    engine: field(body?.engine, 40),          // "release" or "debug"
+    mem: body?.mem ?? {},
+    heapSeries: Array.isArray(body?.heapSeries) ? body.heapSeries.slice(-200) : [],
+    frames: body?.frames ?? {},
+    longTasks: Array.isArray(body?.longTasks) ? body.longTasks.slice(-30) : [],
+    faults: Array.isArray(body?.faults) ? body.faults.slice(-15) : [],
+    gl: body?.gl ?? {},
     lastEngineLine: field(body?.lastEngineLine, 600),
+    engineLog: Array.isArray(body?.engineLog)
+      ? body.engineLog.slice(-LOG_LINES).map((l: unknown) => field(l, 600))
+      : [],
     tail: field(body?.tail, MAX_FIELD),
     ua: field(request.headers.get("user-agent"), 200),
   };

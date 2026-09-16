@@ -233,23 +233,102 @@ function renderLog() {
 
 /* ------------------------------------------------------------------ black box */
 /**
- * A freeze leaves nothing behind. The tab stops answering, DevTools cannot evaluate, the console
- * is lost with the process, and the next thing anyone sees is a fresh page — so every hang so far
- * has been described from memory rather than from evidence, and every fix for it has been a guess.
+ * Everything worth knowing about a freeze, captured before it happens and sent after.
  *
- * This is the recorder that ends that. A worker has its own thread, so it keeps running while the
- * main thread is wedged: it is sent a heartbeat four times a second carrying the last thing the
- * engine printed and how much memory is in use, and it writes that to IndexedDB. When the
- * heartbeats stop for longer than a frame could explain, it writes a `hang` record — from its own
- * thread, after the main thread has already died. The next page load finds it.
+ * A wedged tab answers nothing: DevTools cannot evaluate, the console dies with the process, and
+ * the page that comes back knows nothing about the one that died. Three fixes for this hang were
+ * guesses for exactly that reason. So the rule here is that one freeze has to be enough — if a
+ * report arrives and still leaves the cause open, this file is what needs fixing, not the guess.
  *
- * Deliberately passive: it never calls into the engine. The exports are there and would be
- * informative, but this build is ASYNCIFY and calling in from a timer can land inside an unwind.
- * A recorder that can cause the fault it is trying to record is worth nothing.
+ * A worker holds the evidence, because it has its own thread and keeps running while the main
+ * thread is gone. It is fed a snapshot four times a second and writes to IndexedDB always, and to
+ * /api/hang when ?debug=1 asked for it.
+ *
+ * It never calls into the engine. The exports would be informative and this build is ASYNCIFY,
+ * where calling in from a timer can land inside an unwind — a recorder that can cause the fault it
+ * is recording is worth nothing.
  */
 const HANG_MS = 4000;
+const LOG_KEEP = 300;          // engine lines kept for the report, independent of what is displayed
+const SERIES = 120;            // 30s of heap and frame samples at 4 Hz
+const SESSION = Math.random().toString(36).slice(2, 10);
+
 let blackBox = null;
 let lastLine = "";
+const engineLog = [];          // the report's own ring; the display ring is trimmed for the DOM
+const faults = [];             // anything that looked like a failure, in order
+const heapSeries = [];
+const frameSeries = [];
+const longTasks = [];
+let glInfo = {};
+let contextLost = false;
+
+/** Lines the engine prints that are worth pulling out of the noise. An assertions build says
+ *  exactly what went wrong here, and it would otherwise be one line among thousands.
+ *
+ *  Only the engine's own output is scanned. This page writes to the same log, and its very first
+ *  message under ?debug=1 — "Running the assertions build" — matched on `assert` and filed itself
+ *  as the fault. One piece of noise is enough to bury the line that matters. */
+const FAULT = /abort|assert|RuntimeError|overflow|out of memory|OOM|cannot enlarge|unreachable|Fatal|exception|corrupt|invalid/i;
+
+/** Types worth interrupting for. Plain stderr chatter is recorded but not sent: the engine can be
+ *  wordy on that channel, and one upload per line would burn the rate limit and bury the report
+ *  that matters under the noise it was meant to surface. */
+const URGENT = new Set(["window.error", "unhandledrejection", "Module.onAbort",
+                        "webglcontextlost", "webglcontextcreationerror", "engine"]);
+
+function noteFault(type, message, extra) {
+  faults.push({ type, message: String(message ?? "").slice(0, 1200), at: Math.round(performance.now()), ...extra });
+  if (faults.length > 40) faults.shift();
+  // A fault is not always a freeze — an abort stops the engine dead while the page stays
+  // responsive, and nothing would ever trigger the hang path. Send those immediately.
+  if (blackBox && URGENT.has(type)) blackBox.postMessage({ sendNow: true, ...snapshot() });
+}
+
+/** Everything the worker is given. Cheap enough for 4 Hz: no wasm calls, no DOM reads, no layout. */
+function snapshot() {
+  let mem = {};
+  try {
+    mem = {
+      usedMB: Math.round(performance.memory.usedJSHeapSize / 1048576),
+      totalMB: Math.round(performance.memory.totalJSHeapSize / 1048576),
+      limitMB: Math.round(performance.memory.jsHeapSizeLimit / 1048576),
+    };
+  } catch { /* not Chrome */ }
+  const sorted = frameSeries.slice().sort((a, b) => a - b);
+  return {
+    session: SESSION,
+    engine: ENGINE_DIR === "./" ? "release" : "debug",
+    playedMs: Math.round(performance.now()),
+    heapMB: mem.usedMB ?? 0,
+    mem,
+    // A slow climb into the ceiling and a sudden cliff look nothing alike, and only a series
+    // tells them apart.
+    heapSeries: heapSeries.slice(-SERIES),
+    frames: {
+      p50: Math.round(sorted[Math.floor(sorted.length * 0.5)] ?? 0),
+      p99: Math.round(sorted[Math.floor(sorted.length * 0.99)] ?? 0),
+      worst: Math.round(sorted[sorted.length - 1] ?? 0),
+      recent: frameSeries.slice(-40).map((n) => Math.round(n)),
+    },
+    longTasks: longTasks.slice(-20),
+    faults: faults.slice(-12),
+    gl: { ...glInfo, contextLost },
+    lastEngineLine: lastLine.slice(-400),
+    // The whole tail, not a sample. This is the one field most likely to name the cause.
+    engineLog: engineLog.slice(-LOG_KEEP),
+    tail: engineLog.slice(-12).join(" ").slice(-1500),
+    upload: ENGINE_DIR !== "./",
+  };
+}
+
+/** Engine output. Everything the engine says is logged; what looks like a failure is also filed
+ *  as a fault, and anything on stderr is treated as suspicious regardless of wording. */
+function logEngine(line, stderr) {
+  log(line);
+  if (FAULT.test(line)) noteFault("engine", line);
+  else if (stderr && String(line).trim()) noteFault("engine.stderr", line);
+}
 
 function startBlackBox() {
   const src = `
@@ -261,45 +340,102 @@ function startBlackBox() {
       if (!db) return;
       try { db.transaction("events", "readwrite").objectStore("events").add(record); } catch (e) { /* closing */ }
     };
-    let last = Date.now(), state = null, reported = false, upload = false;
-    onmessage = (e) => { last = Date.now(); state = e.data; upload = e.data.upload; reported = false; };
+    const ENDPOINT = ${JSON.stringify(new URL("/api/hang", location.origin).href)};
+    // Absolute, because this worker is made from a blob: URL and a blob has no usable base to
+    // resolve a relative path against — fetch("/api/hang") in here throws "Failed to parse URL",
+    // which failed every upload silently while the local copy looked perfect.
+    const send = (record) => {
+      if (!record.upload) return;
+      fetch(ENDPOINT, {
+        method: "POST", headers: { "content-type": "application/json" },
+        body: JSON.stringify(record), keepalive: true,
+      }).catch(() => { /* offline, or the tab died first — the IndexedDB copy still stands */ });
+    };
+
+    let last = Date.now(), state = null, reported = false;
+    onmessage = (e) => {
+      last = Date.now();
+      const data = e.data;
+      if (data.sendNow) {                       // a fault, which may never become a freeze
+        const record = { kind: "fault", at: new Date().toISOString(), frozenForMs: 0, ...data };
+        put(record); send(record);
+        return;
+      }
+      state = data; reported = false;
+    };
     setInterval(() => {
       const gap = Date.now() - last;
       if (gap > ${HANG_MS} && !reported && state) {
         reported = true;   // one record per freeze, not one per tick
         const record = { kind: "hang", at: new Date().toISOString(), frozenForMs: gap, ...state };
         put(record);
-        // The point of doing this here rather than on the main thread: the main thread is gone.
-        // This worker is still scheduled, so the report leaves the machine even though the tab
-        // that produced it is wedged and about to be killed. Only under ?debug=1.
-        if (upload) {
-          // Absolute, because this worker is made from a blob: URL and a blob has no usable base
-          // to resolve a relative path against — fetch("/api/hang") in here throws
-          // "Failed to parse URL". The main thread knows the origin, so it hands it over.
-          fetch(${JSON.stringify(new URL("/api/hang", location.origin).href)}, {
-            method: "POST", headers: { "content-type": "application/json" },
-            body: JSON.stringify(record), keepalive: true,
-          }).catch(() => { /* offline, or the tab died first — the IndexedDB copy still stands */ });
-        }
+        // The main thread is gone by now — that is what is being reported. This worker is still
+        // scheduled, so the report leaves the machine anyway.
+        send(record);
       }
     }, 1000);
   `;
   const worker = new Worker(URL.createObjectURL(new Blob([src], { type: "text/javascript" })));
-  setInterval(() => {
-    let mem = 0;
-    try { mem = Math.round(performance.memory.usedJSHeapSize / 1048576); } catch { /* not Chrome */ }
-    worker.postMessage({
-      playedMs: Math.round(performance.now()),
-      heapMB: mem,
-      lastEngineLine: lastLine.slice(-300),
-      tail: lines.slice(-6).join(" ").slice(-700),
-      engine: ENGINE_DIR === "./" ? "release" : "debug",
-      // Ordinary play reports nothing anywhere. ?debug=1 is a deliberate act by someone who wants
-      // the freeze diagnosed, and it is the only mode that sends anything off the device.
-      upload: ENGINE_DIR !== "./",
-    });
-  }, 250);
   blackBox = worker;
+  setInterval(() => worker.postMessage(snapshot()), 250);
+}
+
+/** Watchers that have to be up before the engine is, so nothing is missed during the load. */
+function watchForFaults() {
+  addEventListener("error", (e) => noteFault("window.error", e.message, {
+    at_source: `${e.filename ?? ""}:${e.lineno ?? 0}`, stack: String(e.error?.stack ?? "").slice(0, 900),
+  }));
+  addEventListener("unhandledrejection", (e) => noteFault("unhandledrejection",
+    e.reason?.message ?? e.reason, { stack: String(e.reason?.stack ?? "").slice(0, 900) }));
+
+  // A lost GL context wedges rendering and can take the whole browser's GPU process with it, which
+  // is the one cause that would explain a freeze reaching beyond this tab.
+  const canvas = $("canvas");
+  canvas.addEventListener("webglcontextlost", (e) => {
+    contextLost = true;
+    noteFault("webglcontextlost", e.statusMessage || "GL context lost");
+  });
+  canvas.addEventListener("webglcontextcreationerror", (e) =>
+    noteFault("webglcontextcreationerror", e.statusMessage || "GL context could not be created"));
+
+  // Frame gaps and long tasks, so the report can show whether it seized or slid into it.
+  let prev = performance.now();
+  const tick = () => {
+    const now = performance.now();
+    frameSeries.push(now - prev);
+    if (frameSeries.length > 600) frameSeries.shift();
+    prev = now;
+    requestAnimationFrame(tick);
+  };
+  requestAnimationFrame(tick);
+  try {
+    new PerformanceObserver((list) => {
+      for (const entry of list.getEntries()) {
+        longTasks.push({ at: Math.round(entry.startTime), ms: Math.round(entry.duration) });
+        if (longTasks.length > 60) longTasks.shift();
+      }
+    }).observe({ entryTypes: ["longtask"] });
+  } catch { /* not supported */ }
+
+  setInterval(() => {
+    try {
+      heapSeries.push(Math.round(performance.memory.usedJSHeapSize / 1048576));
+      if (heapSeries.length > 600) heapSeries.shift();
+    } catch { /* not Chrome */ }
+  }, 250);
+}
+
+/** Which GPU is actually running this — driver-specific hangs are real and worth naming. */
+function noteGl() {
+  try {
+    const gl = $("canvas").getContext("webgl2") || $("canvas").getContext("webgl");
+    if (!gl) return;
+    const dbg = gl.getExtension("WEBGL_debug_renderer_info");
+    glInfo = {
+      renderer: dbg ? gl.getParameter(dbg.UNMASKED_RENDERER_WEBGL) : gl.getParameter(gl.RENDERER),
+      vendor: dbg ? gl.getParameter(dbg.UNMASKED_VENDOR_WEBGL) : gl.getParameter(gl.VENDOR),
+    };
+  } catch { /* the engine owns the context; not worth fighting for */ }
 }
 
 /** Read back whatever the last session recorded, and say so plainly. */
@@ -320,20 +456,27 @@ async function reportLastHang() {
   });
   if (!events.length) return;
   const last = events[events.length - 1];
-  log(`— previous session froze after ${(last.playedMs / 1000).toFixed(0)}s of play, ` +
-      `heap ${last.heapMB} MB, stuck ${(last.frozenForMs / 1000).toFixed(0)}s before this was written —`);
+  log(`— last session ended in a ${last.kind} after ${(last.playedMs / 1000).toFixed(0)}s of play, ` +
+      `heap ${last.heapMB} MB${last.mem?.limitMB ? ` of ${last.mem.limitMB} MB` : ""}, ` +
+      `stuck ${(last.frozenForMs / 1000).toFixed(0)}s —`);
+  if (last.faults?.length) {
+    for (const f of last.faults.slice(-3)) log(`— fault: ${f.type}: ${f.message} —`);
+  }
   log(`— the engine's last output was: ${last.lastEngineLine} —`);
-  // Keep a short history; a freeze that only happens on the tenth run still wants its predecessors.
   if (events.length > 20) {
     try { db.transaction("events", "readwrite").objectStore("events").clear(); } catch { /* fine */ }
   }
-  window.gtavcHangs = events;   // for anyone who wants the lot from the console
-  log(`— ${events.length} recorded so far; window.gtavcHangs has them all —`);
+  window.gtavcHangs = events;
+  log(`— ${events.length} recorded; window.gtavcHangs has them in full —`);
 }
 
 const log = (line) => {
   logEl.hidden = false;
   lastLine = line;
+  // The report keeps its own, longer ring: the display trims hard for the DOM's sake, and the
+  // line that names the fault is usually further back than the display would still be holding.
+  engineLog.push(line);
+  if (engineLog.length > LOG_KEEP) engineLog.shift();
   lines.push(line);
   if (lines.length > LOG_LINES) lines.splice(0, lines.length - LOG_LINES);
   // Drop from the front until the tail fits. One `line` can be tens of KB on its own, so this
@@ -578,8 +721,11 @@ async function boot(install) {
     canvas: $("canvas"),
     arguments: [],
     wasmBinary,
-    print: (line) => log(line),
-    printErr: (line) => log(line),
+    // Emscripten calls this before it throws, and the assertions build puts the real reason here
+    // — the asyncify stack, the C stack, or "Waking up (starting to rewind) must be done from JS".
+    onAbort: (reason) => noteFault("Module.onAbort", reason),
+    print: (line) => logEngine(line),
+    printErr: (line) => logEngine(line, true),
     preRun: [(instance) => {
       engine = instance;
       // Hold main() until the install is in the FS — the engine opens gta_vc.dat immediately.
@@ -600,6 +746,7 @@ async function boot(install) {
           logToggle.hidden = false;
           document.body.classList.add("playing");
           syncModePolling();
+          noteGl();
           startBlackBox();
           $("canvas").focus();
         } catch (error) {
@@ -833,6 +980,9 @@ initTouch();
 // Before anything else: if the last session ended in a freeze, say so — that report is the whole
 // point of the recorder, and it is worthless if nobody is shown it.
 reportLastHang();
+// These go up before the engine does. A fault while the install is still loading is exactly the
+// kind that would otherwise be missed, and it is the cheapest one to catch.
+watchForFaults();
 
 // The page promises that nothing is uploaded, and under ?debug=1 that stops being true — a freeze
 // report is sent so the fault can be read rather than remembered. Say it plainly, where the
