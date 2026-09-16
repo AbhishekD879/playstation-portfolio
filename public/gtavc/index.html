@@ -248,7 +248,11 @@ function renderLog() {
  * where calling in from a timer can land inside an unwind — a recorder that can cause the fault it
  * is recording is worth nothing.
  */
-const HANG_MS = 4000;
+// Low enough that a report is away before a wedged tab gets killed or force-quit, high enough
+// that a bad streaming frame is not called a freeze. The first real hang produced no report at
+// all because the tab died inside the old four-second window.
+const HANG_MS = 2500;
+const CHECKPOINT_MS = 30000;
 const LOG_KEEP = 300;          // engine lines kept for the report, independent of what is displayed
 const SERIES = 120;            // 30s of heap and frame samples at 4 Hz
 const SESSION = Math.random().toString(36).slice(2, 10);
@@ -356,8 +360,8 @@ function startBlackBox() {
     onmessage = (e) => {
       last = Date.now();
       const data = e.data;
-      if (data.sendNow) {                       // a fault, which may never become a freeze
-        const record = { kind: "fault", at: new Date().toISOString(), frozenForMs: 0, ...data };
+      if (data.sendNow) {                       // a fault or checkpoint, not necessarily a freeze
+        const record = { at: new Date().toISOString(), frozenForMs: 0, kind: "fault", ...data };
         put(record); send(record);
         return;
       }
@@ -373,11 +377,21 @@ function startBlackBox() {
         // scheduled, so the report leaves the machine anyway.
         send(record);
       }
-    }, 1000);
+    }, 400);
   `;
   const worker = new Worker(URL.createObjectURL(new Blob([src], { type: "text/javascript" })));
   blackBox = worker;
   setInterval(() => worker.postMessage(snapshot()), 250);
+
+  // A freeze report can be lost: the browser may kill the tab, or be force-quit, before the
+  // watchdog even notices. A checkpoint every half minute means the worst case is still knowing
+  // how far play got, what the heap was doing and what the engine was saying shortly beforehand —
+  // which is most of the answer, and infinitely more than nothing.
+  worker.postMessage({ sendNow: true, kind: "start", ...snapshot() });
+  setInterval(() => worker.postMessage({ sendNow: true, kind: "checkpoint", ...snapshot() }), CHECKPOINT_MS);
+
+  // One last go as the page goes away, for the freeze that ends in a close rather than a kill.
+  addEventListener("pagehide", () => worker.postMessage({ sendNow: true, kind: "pagehide", ...snapshot() }));
 }
 
 /** Watchers that have to be up before the engine is, so nothing is missed during the load. */
@@ -468,6 +482,37 @@ async function reportLastHang() {
   }
   window.gtavcHangs = events;
   log(`— ${events.length} recorded; window.gtavcHangs has them in full —`);
+
+  // Anything recorded but never sent gets another go now. The first real freeze produced a
+  // perfectly good local record and no report, because the tab died before the watchdog could
+  // get it out — so a record stranded on the device is the expected case, not the odd one.
+  if (ENGINE_DIR === "./") return;                   // release mode sends nothing, ever
+  const pending = events.filter((e) => !e.sent);
+  if (!pending.length) return;
+  let sent = 0;
+  for (const record of pending) {
+    try {
+      const response = await fetch("/api/hang", {
+        method: "POST", headers: { "content-type": "application/json" },
+        body: JSON.stringify({ ...record, kind: `${record.kind}-recovered` }),
+      });
+      if (response.ok) sent++;
+    } catch { /* still offline; it stays pending for next time */ }
+  }
+  if (sent) {
+    log(`— sent ${sent} earlier record(s) that never made it off the device —`);
+    // Mark them so they are not sent again on every load from here on.
+    try {
+      const store = db.transaction("events", "readwrite").objectStore("events");
+      const all = store.openCursor();
+      all.onsuccess = (e) => {
+        const cursor = e.target.result;
+        if (!cursor) return;
+        if (!cursor.value.sent) cursor.update({ ...cursor.value, sent: true });
+        cursor.continue();
+      };
+    } catch { /* not worth failing the boot over */ }
+  }
 }
 
 const log = (line) => {

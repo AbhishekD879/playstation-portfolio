@@ -39,7 +39,9 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
   // still useless to anyone pointing a script at this.
   const rlKey = `hrl:${ip}`;
   const seen = Number((await env.GB.get(rlKey)) ?? 0);
-  if (seen >= 10) return json({ error: "rate limited" }, 429);
+  // Sized for a session that checkpoints every 30s, plus a burst of recovered records on a
+  // reload, plus the dying tab itself — still far too low to be worth pointing a script at.
+  if (seen >= 40) return json({ error: "rate limited" }, 429);
   await env.GB.put(rlKey, String(seen + 1), { expirationTtl: 60 });
 
   const t = Date.now();
