@@ -11,10 +11,17 @@
 // nothing at all.
 //
 // Reading is keyed, because these are logs and logs are not for everyone. Writing is not, because
-// a page in the middle of dying cannot be asked for a credential — spam is held off with the same
-// per-IP rate limit the guestbook uses, and a short TTL keeps the namespace from filling up.
+// a page in the middle of dying cannot be asked for a credential.
+//
+// Stored in R2, not KV. KV was the wrong home: its write quota is 1000 a day on this plan and it
+// is shared with the guestbook, so a burst of diagnostics spent the day's budget for the whole
+// site and then rejected the very reports it existed to collect — reads included, since an
+// over-quota namespace throws on both. R2 counts writes in millions and is already bound here for
+// the game binaries. A freeze is at most a few hundred KB of JSON; there is no reason for it to
+// compete with anything.
 interface Env {
-  GB: KVNamespace;
+  R2: R2Bucket;
+  GB: KVNamespace;      // still here for the guestbook; this endpoint no longer writes to it
   HANG_KEY?: string;
 }
 
@@ -43,34 +50,20 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
 };
 
 const handlePost: PagesFunction<Env> = async ({ request, env }) => {
-  const t0 = Date.now();
+  const t = Date.now();
   let body: any;
   try { body = await request.json(); } catch { return json({ error: "bad json" }, 400); }
 
-  // Checkpoints are local-only now; if an older page still sends one, drop it before it costs
-  // anything. Reads are free-ish, writes are the metered thing.
+  // Checkpoints are recorded locally and never uploaded; refuse an older page's before it costs
+  // anything.
   if (field(body?.kind, 40) === "checkpoint") return json({ ok: true, ignored: "checkpoint" });
 
-  // One read to rate-limit, and at most two writes per stored report. It used to be three writes
-  // for every upload — a per-IP counter, an hourly counter, and the record — on a namespace that
-  // is shared with the guestbook and metered daily. Uploading a checkpoint every five seconds on
-  // top of that spent the quota, and a rejected write surfaced on the page as a raw 1101.
-  const ip = request.headers.get("cf-connecting-ip") ?? "unknown";
-  const rlKey = `hrl:${ip}`;
-  const seen = Number((await env.GB.get(rlKey)) ?? 0);
-  if (seen >= 12) return json({ error: "rate limited" }, 429);
-
-  const t = t0;
-  // Kept whole rather than flattened. The point of the report is that one freeze answers the
-  // question, and the answer is usually in the parts that a summary would drop: the engine's last
-  // few hundred lines, the heap series that says climb-versus-cliff, the frame times before it
-  // seized, the fault that was already recorded minutes earlier.
   const record = {
     t,
     kind: field(body?.kind, 40) || "hang",
     session: field(body?.session, 40),
     build: field(body?.build, 60),
-    engine: field(body?.engine, 40),          // "release" or "debug"
+    engine: field(body?.engine, 40),
     frozenForMs: Number(body?.frozenForMs) || 0,
     playedMs: Number(body?.playedMs) || 0,
     heapMB: Number(body?.heapMB) || 0,
@@ -92,35 +85,33 @@ const handlePost: PagesFunction<Env> = async ({ request, env }) => {
     ua: field(request.headers.get("user-agent"), 200),
   };
 
-  // Checkpoints overwrite one key per session; everything else gets its own.
-  //
-  // At one every five seconds a long session wrote hundreds of rows and pushed every other
-  // report out of a 100-row listing — the heartbeat drowned the thing it was there to preserve.
-  // Only the newest checkpoint of a session is worth keeping, and a fixed key gives exactly that
-  // while a freeze, a fault or a start still lands as its own row.
+  // Newest first when listed, same inverted-timestamp trick as before.
   const invTs = String(1e13 - t).padStart(13, "0");
-  const key = `hang:${invTs}:${Math.random().toString(36).slice(2, 8)}`;
+  const key = `hang/${invTs}-${Math.random().toString(36).slice(2, 8)}.json`;
   try {
-    await env.GB.put(rlKey, String(seen + 1), { expirationTtl: 60 });
-    await env.GB.put(key, JSON.stringify(record), {
-      expirationTtl: KEEP_DAYS * 86400,
-      metadata: { t, frozenForMs: record.frozenForMs, playedMs: record.playedMs, heapMB: record.heapMB, engine: record.engine },
+    await env.R2.put(key, JSON.stringify(record), {
+      httpMetadata: { contentType: "application/json" },
     });
   } catch (error) {
-    // Out of quota, most likely. Say so plainly and let the page keep its local copy to re-send
-    // another day, instead of throwing and showing the visitor a Cloudflare error page.
-    return json({ ok: false, stored: false, why: String((error as Error).message).slice(0, 120) }, 503);
+    // Never throw at a page that is in the middle of dying. It keeps its local copy and re-sends.
+    return json({ ok: false, stored: false, why: String((error as Error)?.message ?? error).slice(0, 160) }, 503);
   }
   return json({ ok: true });
 };
 
 export const onRequestGet: PagesFunction<Env> = async ({ request, env }) => {
-  const key = new URL(request.url).searchParams.get("key");
-  if (!env.HANG_KEY || key !== env.HANG_KEY) return json({ error: "not found" }, 404);
+  const url = new URL(request.url);
+  if (!env.HANG_KEY || url.searchParams.get("key") !== env.HANG_KEY) return json({ error: "not found" }, 404);
 
-  const list = await env.GB.list({ prefix: "hang:", limit: PAGE });
-  const reports = await Promise.all(
-    list.keys.map(async (k) => JSON.parse((await env.GB.get(k.name)) ?? "null")),
-  );
-  return json({ reports: reports.filter(Boolean) });
+  const limit = Math.min(Number(url.searchParams.get("limit")) || 20, PAGE);
+  try {
+    const listed = await env.R2.list({ prefix: "hang/", limit });
+    const reports = await Promise.all(listed.objects.map(async (o) => {
+      const got = await env.R2.get(o.key);
+      return got ? JSON.parse(await got.text()) : null;
+    }));
+    return json({ reports: reports.filter(Boolean) });
+  } catch (error) {
+    return json({ error: String((error as Error)?.message ?? error).slice(0, 160) }, 503);
+  }
 };
