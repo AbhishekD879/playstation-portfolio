@@ -252,7 +252,12 @@ function renderLog() {
 // that a bad streaming frame is not called a freeze. The first real hang produced no report at
 // all because the tab died inside the old four-second window.
 const HANG_MS = 2500;
-const CHECKPOINT_MS = 30000;
+// Every 30s left a blind spot exactly where it mattered. A freeze that takes the whole browser
+// down takes the worker's report with it — the network stack is not in this process — so the last
+// checkpoint IS the evidence, and it was up to 30 seconds stale while the probe ring held only
+// 10. Five seconds costs a dozen writes a minute and guarantees a snapshot from within five
+// seconds of the fault, with the full ring behind it.
+const CHECKPOINT_MS = 5000;
 const LOG_KEEP = 300;          // engine lines kept for the report, independent of what is displayed
 const SERIES = 120;            // 30s of heap and frame samples at 4 Hz
 const SESSION = Math.random().toString(36).slice(2, 10);
@@ -319,7 +324,7 @@ function sampleProbes() {
     row.glMs = +(performance.now() - before).toFixed(2);
   }
   probes.push(row);
-  if (probes.length > 80) probes.shift();
+  if (probes.length > 120) probes.shift();   // 30s, comfortably past the checkpoint interval
 }
 
 /** The engine's own counters, sampled from JS.
@@ -346,7 +351,7 @@ function sampleEngine() {
       inVehicle: engine._ViceInVehicle?.() ?? -1,
       menu: engine._ViceMenuActive?.() ?? -1,
     });
-    if (engineState.length > 80) engineState.shift();
+    if (engineState.length > 120) engineState.shift();   // 30s, as above
   } catch (error) {
     noteFault("engine.sample", error.message);
   }
@@ -403,8 +408,8 @@ function snapshot() {
     longTasks: longTasks.slice(-20),
     faults: faults.slice(-12),
     gl: { ...glInfo, contextLost },
-    engineState: engineState.slice(-40),
-    probes: probes.slice(-40),
+    engineState: engineState.slice(-60),
+    probes: probes.slice(-60),
     lastEngineLine: lastLine.slice(-400),
     // The whole tail, not a sample. This is the one field most likely to name the cause.
     engineLog: engineLog.slice(-LOG_KEEP),

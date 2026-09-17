@@ -41,7 +41,7 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
   const seen = Number((await env.GB.get(rlKey)) ?? 0);
   // Sized for a session that checkpoints every 30s, plus a burst of recovered records on a
   // reload, plus the dying tab itself — still far too low to be worth pointing a script at.
-  if (seen >= 40) return json({ error: "rate limited" }, 429);
+  if (seen >= 120) return json({ error: "rate limited" }, 429);  // 5s checkpoints = 12/min, plus recovery bursts
   await env.GB.put(rlKey, String(seen + 1), { expirationTtl: 60 });
 
   const t = Date.now();
@@ -63,8 +63,8 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
     longTasks: Array.isArray(body?.longTasks) ? body.longTasks.slice(-30) : [],
     faults: Array.isArray(body?.faults) ? body.faults.slice(-15) : [],
     gl: body?.gl ?? {},
-    engineState: Array.isArray(body?.engineState) ? body.engineState.slice(-40) : [],
-    probes: Array.isArray(body?.probes) ? body.probes.slice(-40) : [],
+    engineState: Array.isArray(body?.engineState) ? body.engineState.slice(-60) : [],
+    probes: Array.isArray(body?.probes) ? body.probes.slice(-60) : [],
     lastEngineLine: field(body?.lastEngineLine, 600),
     engineLog: Array.isArray(body?.engineLog)
       ? body.engineLog.slice(-LOG_LINES).map((l: unknown) => field(l, 600))
