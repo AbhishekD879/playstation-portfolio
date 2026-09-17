@@ -66,6 +66,7 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
     gl: body?.gl ?? {},
     engineState: Array.isArray(body?.engineState) ? body.engineState.slice(-60) : [],
     probes: Array.isArray(body?.probes) ? body.probes.slice(-60) : [],
+    bufSrcPeak: Number(body?.bufSrcPeak) || 0,
     totalMem: body?.totalMem ?? {},
     lastEngineLine: field(body?.lastEngineLine, 600),
     engineLog: Array.isArray(body?.engineLog)

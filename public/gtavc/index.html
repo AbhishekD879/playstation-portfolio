@@ -292,6 +292,34 @@ const probes = [];        // is a shared browser process dying, rather than this
  * taking milliseconds, it is the GPU process. If both stay clean to the last sample, it is
  * neither, and that rules out the two candidates left.
  */
+/**
+ * Count what Emscripten's OpenAL actually does on the main thread.
+ *
+ * It does not run inside the engine's frame. It installs its own timer —
+ *
+ *     interval: setInterval(() => AL.scheduleContextAudio(ctx), AL.QUEUE_INTERVAL)   // 25ms
+ *
+ * — so forty times a second, on the main thread, it walks every source (about fifty of them) and
+ * every buffer queued on each, and mints an AudioBufferSourceNode for anything inside a 0.1s
+ * lookahead. The engine's own counters cannot see any of this, which is why a game loop measured
+ * healthy to its final millisecond told us nothing about why the page stopped answering.
+ *
+ * If that scheduler is the thing seizing, it shows up as a flood of createBufferSource calls.
+ * Wrapping the constructor is the cheapest possible way to watch it, and it needs no access to
+ * AL's internals, which are closed over inside the module.
+ */
+let bufferSourcesMade = 0;
+function watchAudioScheduler() {
+  const proto = window.AudioContext && window.AudioContext.prototype;
+  if (!proto || proto.__viceCounted) return;
+  const original = proto.createBufferSource;
+  proto.createBufferSource = function (...args) {
+    bufferSourcesMade++;
+    return original.apply(this, args);
+  };
+  proto.__viceCounted = true;
+}
+
 let probeAudioCtx = null;
 let probeGlCtx = null;
 let totalMem = {};        // the whole renderer, not the JS heap
@@ -315,6 +343,7 @@ async function sampleTotalMemory() {
 }
 
 function startProbes() {
+  watchAudioScheduler();
   try {
     probeAudioCtx = new (window.AudioContext || window.webkitAudioContext)();
     // Silence: a zero-gain node keeps the context running without being heard.
@@ -333,7 +362,13 @@ function startProbes() {
 }
 
 function sampleProbes() {
-  const row = { at: Math.round(performance.now()) };
+  const now = Math.round(performance.now());
+  const row = { at: now };
+  // Per second, so a spike is obvious at a glance. Healthy play is a few dozen; the failure mode
+  // this is looking for is thousands.
+  const elapsed = probes.length ? (now - probes[probes.length - 1].at) || 250 : 250;
+  row.bufSrcPerSec = Math.round((bufferSourcesMade * 1000) / elapsed);
+  bufferSourcesMade = 0;
   if (probeAudioCtx) {
     // An audio clock that stops while wall-clock runs is the audio service in trouble, and it is
     // measured here on a context the engine has never touched.
@@ -455,6 +490,9 @@ function snapshot() {
     gl: { ...glInfo, contextLost },
     engineState: engineState.slice(-60),
     probes: probes.slice(-60),
+    // The single number that says whether Emscripten's audio scheduler is the thing eating the
+    // main thread. Healthy play is dozens a second.
+    bufSrcPeak: probes.reduce((peak, p) => Math.max(peak, p.bufSrcPerSec || 0), 0),
     totalMem,
     lastEngineLine: lastLine.slice(-400),
     // The whole tail, not a sample. This is the one field most likely to name the cause.
@@ -503,9 +541,11 @@ function startBlackBox() {
     onmessage = (e) => {
       last = Date.now();
       const data = e.data;
+      if (data.beat) { reported = false; return; }   // liveness only, deliberately tiny
       if (data.sendNow) {                       // a fault or checkpoint, not necessarily a freeze
         const record = { at: new Date().toISOString(), frozenForMs: 0, kind: "fault", ...data };
         put(record); send(record);
+        state = data;                           // keep it: a freeze report is built from this
         return;
       }
       state = data; reported = false;
@@ -524,9 +564,20 @@ function startBlackBox() {
   `;
   const worker = new Worker(URL.createObjectURL(new Blob([src], { type: "text/javascript" })));
   blackBox = worker;
-  setInterval(() => { sampleEngine(); sampleProbes(); worker.postMessage(snapshot()); }, 250);
+  // The heartbeat is a heartbeat: cheap, and only what the watchdog needs to know the thread is
+  // alive. Sending the full snapshot four times a second meant structured-cloning 600 log lines
+  // and every series with it — hundreds of KB per second of main-thread work, added by the very
+  // thing that is supposed to be watching the main thread. The full picture goes with the
+  // checkpoint every 5s, and with the freeze report itself.
+  setInterval(() => {
+    sampleEngine();
+    sampleProbes();
+    worker.postMessage({ beat: true, at: Math.round(performance.now()) });
+  }, 250);
+  // measureUserAgentSpecificMemory walks the whole renderer at a GC boundary, and this one is
+  // over 3 GB. Every 10s was asking for a pause; a minute is plenty to see a trend.
   sampleTotalMemory();
-  setInterval(sampleTotalMemory, 10000);
+  setInterval(sampleTotalMemory, 60000);
 
   // A freeze report can be lost: the browser may kill the tab, or be force-quit, before the
   // watchdog even notices. A checkpoint every half minute means the worst case is still knowing
