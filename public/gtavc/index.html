@@ -264,7 +264,7 @@ const SESSION = Math.random().toString(36).slice(2, 10);
 // Stamped at build time so a report says which page produced it. Two freezes have now gone
 // unreported because the tab was running a page from before the change that would have reported
 // them, and there was no way to tell that apart from "the upload failed".
-const PAGE_BUILD = "2026-09-17T22:25Z-r9";
+const PAGE_BUILD = "2026-09-17T23:05Z-r10-lazyfs";
 
 let blackBox = null;
 let lastLine = "";
@@ -427,6 +427,11 @@ function sampleEngine() {
       // allocated, and CStreaming budgets itself half the TOTAL heap for models alone
       // (_dwMemAvailPhys = emscripten_get_heap_size()), so this is where it would run out.
       heapUsedMB: Math.round((engine._ViceHeapUsed?.() ?? 0) / 1048576),
+      // Whether reading from disk instead of memory is actually working. A hit rate that collapses
+      // means the cache is too small or the access pattern is not what was assumed, and the cure
+      // would be worse than the disease.
+      lazyMB: chunkCache.size,
+      lazyHitPct: cacheHits + cacheMisses ? Math.round((cacheHits * 100) / (cacheHits + cacheMisses)) : -1,
       state: engine._ViceGameState?.() ?? -1,
       idle: engine._ViceIdleCount?.() ?? -1,
       engineMs: engine._ViceTimeMs?.() ?? -1,
@@ -896,21 +901,135 @@ const mb = (n) => (n / 1048576).toFixed(0);
 
 /** Copy the install into MEMFS. Big archives go in whole: MEMFS holds them as JS typed arrays,
  *  outside the wasm heap, so a 312 MB gta3.img costs tab memory and not engine memory. */
+/* ------------------------------------------------------- lazy install files */
+/**
+ * Big files are read from disk on demand instead of being held in memory.
+ *
+ * Copying the whole install into MEMFS cost 1.46 GB of tab memory for the entire session, and
+ * that is what has been killing the page: Chrome terminated the renderer six times over, every
+ * dump saying `is-dump-process-without-crashing` with no exception — a deliberate kill, not a
+ * crash. Emscripten's own tracker calls MEMFS unsuitable for this and closed the report wontfix
+ * (emscripten-core/emscripten#8351: memory for deleted files is never reclaimed), and IDBFS is no
+ * better because it also keeps everything in RAM.
+ *
+ * The engine reads these archives a couple of kilobytes at a time. Holding 312 MB of gta3.img and
+ * a gigabyte of audio in memory to serve that was always the wrong shape.
+ *
+ * What makes an alternative possible: a blob: URL over a picked File is backed by the file on
+ * disk, and a synchronous XHR against one honours Range. Measured here at 0.346 ms per 64 KB,
+ * about 185 MB/s, which is far more than the engine asks for. The obvious routes are all closed —
+ * OPFS sync access handles do not exist on the main thread, Atomics.wait is barred there too, and
+ * Emscripten's own createLazyFile refuses to run outside a worker — so this does the same job
+ * without the parts that cannot work here.
+ */
+const LAZY_ABOVE = 8 * 1024 * 1024;    // below this, memory is cheaper than a round trip
+const CHUNK = 1024 * 1024;
+const CACHE_CHUNKS = 96;               // 96 MB ceiling across every lazy file, evicted least-used first
+
+const chunkCache = new Map();          // "path#n" -> Uint8Array, in insertion order for eviction
+let cacheHits = 0, cacheMisses = 0;
+
+/** One synchronous ranged read from a blob: URL. responseType cannot be set on a sync XHR in a
+ *  document, so the bytes come back through the x-user-defined charset — the same trick
+ *  Emscripten uses, one character per byte. */
+function readRange(url, from, to) {
+  const request = new XMLHttpRequest();
+  request.open("GET", url, false);
+  request.setRequestHeader("Range", `bytes=${from}-${to}`);
+  request.overrideMimeType("text/plain; charset=x-user-defined");
+  request.send(null);
+  if (request.status !== 206 && request.status !== 200) {
+    throw new Error(`range read failed: HTTP ${request.status}`);
+  }
+  const text = request.responseText;
+  const bytes = new Uint8Array(text.length);
+  for (let i = 0; i < text.length; i++) bytes[i] = text.charCodeAt(i) & 255;
+  return bytes;
+}
+
+function getChunk(file, index) {
+  const key = `${file.key}#${index}`;
+  const held = chunkCache.get(key);
+  if (held) {
+    cacheHits++;
+    chunkCache.delete(key);        // reinsert so the most recently used sits at the end
+    chunkCache.set(key, held);
+    return held;
+  }
+  cacheMisses++;
+  const from = index * CHUNK;
+  const to = Math.min(from + CHUNK, file.size) - 1;
+  const bytes = readRange(file.url, from, to);
+  chunkCache.set(key, bytes);
+  while (chunkCache.size > CACHE_CHUNKS) {
+    chunkCache.delete(chunkCache.keys().next().value);   // oldest first
+  }
+  return bytes;
+}
+
+/** Bulk copy out of the cache. Emscripten's lazy files read byte by byte through contents.get(),
+ *  which would be tens of thousands of calls for one audio buffer; this copies whole spans. */
+function lazyRead(file, buffer, offset, length, position) {
+  if (position >= file.size) return 0;
+  const size = Math.min(file.size - position, length);
+  let done = 0;
+  while (done < size) {
+    const at = position + done;
+    const index = (at / CHUNK) | 0;
+    const within = at - index * CHUNK;
+    const chunk = getChunk(file, index);
+    const take = Math.min(chunk.length - within, size - done);
+    buffer.set(chunk.subarray(within, within + take), offset + done);
+    done += take;
+  }
+  return done;
+}
+
+function mountLazyFile(FS, path, file) {
+  const slash = path.lastIndexOf("/");
+  const dir = slash < 0 ? GAME_ROOT : `${GAME_ROOT}/${path.slice(0, slash)}`;
+  const name = slash < 0 ? path : path.slice(slash + 1);
+  FS.mkdirTree(dir);
+  const node = FS.createFile(dir, name, { isDevice: false, contents: null }, true, false);
+  Object.defineProperty(node, "usedBytes", { get: () => file.size });
+  const ops = Object.create(node.stream_ops);
+  ops.read = (stream, buffer, offset, length, position) => lazyRead(file, buffer, offset, length, position);
+  // Nothing writes to the install, and silently accepting a write that goes nowhere would be
+  // worse than refusing it.
+  ops.write = () => { throw new FS.ErrnoError(70); };
+  node.stream_ops = ops;
+  return node;
+}
+
 async function mountInstall(FS, install) {
   const made = new Set();
   let done = 0;
+  let lazyBytes = 0, eagerBytes = 0;
   for (const entry of install.files) {
     const slash = entry.path.lastIndexOf("/");
     const dir = slash < 0 ? GAME_ROOT : `${GAME_ROOT}/${entry.path.slice(0, slash)}`;
     if (!made.has(dir)) { FS.mkdirTree(dir); made.add(dir); }
-    const bytes = new Uint8Array(await (await entry.get()).arrayBuffer());
-    // canOwn: hand the array to MEMFS rather than letting it copy a second one.
-    FS.writeFile(`${GAME_ROOT}/${entry.path}`, bytes, { canOwn: true });
+
+    if (entry.size >= LAZY_ABOVE) {
+      const handle = await entry.get();
+      mountLazyFile(FS, entry.path, {
+        key: entry.path, size: entry.size, url: URL.createObjectURL(handle),
+      });
+      lazyBytes += entry.size;
+    } else {
+      const bytes = new Uint8Array(await (await entry.get()).arrayBuffer());
+      // canOwn: hand the array to MEMFS rather than letting it copy a second one.
+      FS.writeFile(`${GAME_ROOT}/${entry.path}`, bytes, { canOwn: true });
+      eagerBytes += entry.size;
+    }
+
     done += entry.size;
     setBar(done / install.bytes);
-    setNote(`Loading ${entry.path} — ${mb(done)} / ${mb(install.bytes)} MB`);
+    setNote(`Preparing ${entry.path} — ${mb(done)} / ${mb(install.bytes)} MB`);
     await paint();
   }
+  log(`${mb(eagerBytes)} MB held in memory, ${mb(lazyBytes)} MB read from disk on demand `
+    + `(${CACHE_CHUNKS} MB cache).`);
 }
 
 /** Fetch the engine ourselves instead of letting Emscripten do it, purely so there is a bar over
