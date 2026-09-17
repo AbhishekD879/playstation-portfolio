@@ -264,7 +264,7 @@ const SESSION = Math.random().toString(36).slice(2, 10);
 // Stamped at build time so a report says which page produced it. Two freezes have now gone
 // unreported because the tab was running a page from before the change that would have reported
 // them, and there was no way to tell that apart from "the upload failed".
-const PAGE_BUILD = "2026-09-17T22:15Z-r8";
+const PAGE_BUILD = "2026-09-17T22:25Z-r9";
 
 let blackBox = null;
 let lastLine = "";
@@ -666,6 +666,15 @@ function noteGl() {
   } catch { /* the engine owns the context; not worth fighting for */ }
 }
 
+/** Post one record outside the worker — used at boot, when the worker of the session being
+ *  reported on is long gone. */
+function blackBoxSend(record) {
+  fetch("/api/hang", {
+    method: "POST", headers: { "content-type": "application/json" },
+    body: JSON.stringify(record),
+  }).catch(() => { /* offline; the local copy stands */ });
+}
+
 /** Read back whatever the last session recorded, and say so plainly. */
 async function reportLastHang() {
   const db = await new Promise((resolve) => {
@@ -700,6 +709,36 @@ async function reportLastHang() {
   // Anything recorded but never sent gets another go now. The first real freeze produced a
   // perfectly good local record and no report, because the tab died before the watchdog could
   // get it out — so a record stranded on the device is the expected case, not the odd one.
+  // Classify how the last session ended, because "stuck" covers two very different faults and
+  // they need opposite fixes.
+  //
+  //   a hang     the watchdog sees the main thread stop for 2.5s and writes a `hang`.
+  //   a close    pagehide fires and writes a `pagehide`.
+  //   neither    the renderer went away between one checkpoint and the next, with no chance to
+  //              run anything. That is a crash, not a hang, and no amount of looking for a stuck
+  //              loop will ever explain it.
+  //
+  // Every session recovered so far that ended "stuck" has fallen in the third case.
+  const bySession = new Map();
+  for (const e of events) {
+    if (!e.session) continue;
+    const seen = bySession.get(e.session) || { rows: [], hang: false, closed: false };
+    seen.rows.push(e);
+    if (String(e.kind).startsWith("hang")) seen.hang = true;
+    if (String(e.kind).startsWith("pagehide")) seen.closed = true;
+    bySession.set(e.session, seen);
+  }
+  for (const [id, seen] of bySession) {
+    if (id === SESSION || seen.hang || seen.closed) continue;
+    const final = seen.rows[seen.rows.length - 1];
+    if (!final || final.crashReported) continue;
+    log(`— session ${id} ended without warning after ${(final.playedMs / 1000).toFixed(0)}s: `
+      + `no stall was detected and the page was never closed, so the renderer was lost. —`);
+    // Send it as its own kind. A crash and a hang look identical from the outside and are not
+    // the same bug.
+    blackBoxSend({ ...final, kind: "renderer-crash", crashReported: true });
+  }
+
   const pending = events.filter((e) => !e.sent);
   if (!pending.length) return;
   let sent = 0;
