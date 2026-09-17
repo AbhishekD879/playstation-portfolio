@@ -258,7 +258,7 @@ const HANG_MS = 2500;
 // 10. Five seconds costs a dozen writes a minute and guarantees a snapshot from within five
 // seconds of the fault, with the full ring behind it.
 const CHECKPOINT_MS = 5000;
-const LOG_KEEP = 300;          // engine lines kept for the report, independent of what is displayed
+const LOG_KEEP = 600;          // engine lines kept for the report, independent of what is displayed
 const SERIES = 120;            // 30s of heap and frame samples at 4 Hz
 const SESSION = Math.random().toString(36).slice(2, 10);
 
@@ -290,6 +290,25 @@ const probes = [];        // is a shared browser process dying, rather than this
  */
 let probeAudioCtx = null;
 let probeGlCtx = null;
+let totalMem = {};        // the whole renderer, not the JS heap
+
+/** performance.measureUserAgentSpecificMemory() is the only API that reports the renderer whole —
+ *  wasm heap, DOM, canvas and all. usedJSHeapSize excludes the engine's entire 1.5 GiB heap, which
+ *  is why every "heap is flat" reading in this investigation was about the wrong memory. It needs
+ *  crossOriginIsolated (this page has it) and takes a moment, so it runs every 10s, not per frame. */
+async function sampleTotalMemory() {
+  try {
+    const r = await performance.measureUserAgentSpecificMemory();
+    const by = {};
+    for (const b of r.breakdown) {
+      if (b.bytes < 1048576) continue;
+      by[(b.types || []).join("/") || "other"] = Math.round(b.bytes / 1048576);
+    }
+    totalMem = { totalMB: Math.round(r.bytes / 1048576), by, at: Math.round(performance.now()) };
+  } catch (error) {
+    totalMem = { err: String(error.message ?? error).slice(0, 120) };
+  }
+}
 
 function startProbes() {
   try {
@@ -339,12 +358,33 @@ function sampleProbes() {
  *  release build would fail silently at it — but the assertions build raises "Waking up (starting
  *  to rewind) must be done from JS, without compiled code on the stack" if this is unsafe, which
  *  is an answer either way and one worth having. */
+// A door for automated soaks: one call returns the numbers that matter, so a driver script can
+// watch the wasm heap without waiting for a freeze report.
+window.gtavcProbe = () => {
+  const e = engineState[engineState.length - 1] || {};
+  const p = probes[probes.length - 1] || {};
+  let jsMB = 0;
+  try { jsMB = Math.round(performance.memory.usedJSHeapSize / 1048576); } catch { /* no */ }
+  return { heapUsedMB: e.heapUsedMB, engineMs: e.engineMs, state: e.state, jsMB,
+           glMs: p.glMs, audioState: p.audioState, lastLine: lastLine.slice(-90) };
+};
+
 function sampleEngine() {
-  if (ENGINE_DIR === "./" || !engine) return;
+  // Both builds now. This was debug-only out of caution about re-entering wasm from a timer, and
+  // the assertions build has since run it for whole sessions without raising "Waking up (starting
+  // to rewind) must be done from JS" — so the caution cost the one number that mattered on the
+  // build people actually play.
+  if (!engine) return;
   try {
     engineState.push({
       at: Math.round(performance.now()),
       frames: engine._ViceLogicalFrames?.() ?? -1,
+      // The wasm heap, which is fixed at 1 GiB with growth disabled and is the one number never
+      // yet measured. usedJSHeapSize does not include it, so every "heap is flat" reading so far
+      // has been about the wrong heap. mallinfo().uordblks is what the engine has actually
+      // allocated, and CStreaming budgets itself half the TOTAL heap for models alone
+      // (_dwMemAvailPhys = emscripten_get_heap_size()), so this is where it would run out.
+      heapUsedMB: Math.round((engine._ViceHeapUsed?.() ?? 0) / 1048576),
       state: engine._ViceGameState?.() ?? -1,
       idle: engine._ViceIdleCount?.() ?? -1,
       engineMs: engine._ViceTimeMs?.() ?? -1,
@@ -410,11 +450,17 @@ function snapshot() {
     gl: { ...glInfo, contextLost },
     engineState: engineState.slice(-60),
     probes: probes.slice(-60),
+    totalMem,
     lastEngineLine: lastLine.slice(-400),
     // The whole tail, not a sample. This is the one field most likely to name the cause.
     engineLog: engineLog.slice(-LOG_KEEP),
     tail: engineLog.slice(-12).join(" ").slice(-1500),
-    upload: ENGINE_DIR !== "./",
+    // Sent from both builds now. Requiring ?debug=1 meant a freeze on the normal page left
+    // evidence nobody could reach, and it cost an afternoon reproducing a fault that had already
+    // happened. What goes is diagnostics — timings, memory counters, the engine's own log lines.
+    // The game files are not part of it and never leave the device, and the page says so next to
+    // the promise it makes about them.
+    upload: true,
   };
 }
 
@@ -474,6 +520,8 @@ function startBlackBox() {
   const worker = new Worker(URL.createObjectURL(new Blob([src], { type: "text/javascript" })));
   blackBox = worker;
   setInterval(() => { sampleEngine(); sampleProbes(); worker.postMessage(snapshot()); }, 250);
+  sampleTotalMemory();
+  setInterval(sampleTotalMemory, 10000);
 
   // A freeze report can be lost: the browser may kill the tab, or be force-quit, before the
   // watchdog even notices. A checkpoint every half minute means the worst case is still knowing
@@ -579,16 +627,6 @@ async function reportLastHang() {
   // perfectly good local record and no report, because the tab died before the watchdog could
   // get it out — so a record stranded on the device is the expected case, not the odd one.
   const pending = events.filter((e) => !e.sent);
-  // Release mode sends nothing, ever — but it should still say that it is holding something,
-  // because otherwise a freeze recorded here is invisible to everyone including the person who
-  // wants it diagnosed. Telling them how to send it keeps the choice theirs.
-  if (ENGINE_DIR === "./") {
-    if (pending.length) {
-      log(`— ${pending.length} unsent report(s) held on this device. Nothing is uploaded from this `
-        + `page. To send them, open this page with ?debug=1 —`);
-    }
-    return;
-  }
   if (!pending.length) return;
   let sent = 0;
   for (const record of pending) {
@@ -1134,15 +1172,18 @@ watchForFaults();
 // The page promises that nothing is uploaded, and under ?debug=1 that stops being true — a freeze
 // report is sent so the fault can be read rather than remembered. Say it plainly, where the
 // promise itself is made, rather than leaving the claim standing when it no longer holds.
-if (ENGINE_DIR !== "./") {
+{
   const where = document.querySelector(".note");
   if (where) {
     const said = document.createElement("span");
     said.style.color = "#ffd479";
-    said.textContent = " Diagnostic mode: if the game freezes, a report of what the engine was "
-      + "doing — timings, memory and its own log lines — is sent so it can be diagnosed. "
-      + "Your game files are not part of that and still never leave this device. "
-      + "Drop the ?debug=1 to send nothing.";
+    said.textContent = ENGINE_DIR === "./"
+      ? " If the game freezes, a report of what the engine was doing — timings, memory counters "
+        + "and its own log lines — is sent so the fault can be diagnosed. Your game files are not "
+        + "part of that and never leave this device."
+      : " Diagnostic build: slower, and it names faults the normal build cannot. Freeze reports "
+        + "are sent, as on the normal page. Your game files are not part of them and never leave "
+        + "this device.";
     where.appendChild(said);
   }
 }

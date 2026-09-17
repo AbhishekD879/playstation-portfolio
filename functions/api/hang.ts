@@ -19,7 +19,7 @@ interface Env {
 }
 
 const MAX_FIELD = 2000;
-const LOG_LINES = 300;
+const LOG_LINES = 600;
 const KEEP_DAYS = 14;
 const PAGE = 100;
 
@@ -65,6 +65,7 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
     gl: body?.gl ?? {},
     engineState: Array.isArray(body?.engineState) ? body.engineState.slice(-60) : [],
     probes: Array.isArray(body?.probes) ? body.probes.slice(-60) : [],
+    totalMem: body?.totalMem ?? {},
     lastEngineLine: field(body?.lastEngineLine, 600),
     engineLog: Array.isArray(body?.engineLog)
       ? body.engineLog.slice(-LOG_LINES).map((l: unknown) => field(l, 600))
