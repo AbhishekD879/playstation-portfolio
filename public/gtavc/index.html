@@ -544,7 +544,11 @@ function startBlackBox() {
       if (data.beat) { reported = false; return; }   // liveness only, deliberately tiny
       if (data.sendNow) {                       // a fault or checkpoint, not necessarily a freeze
         const record = { at: new Date().toISOString(), frozenForMs: 0, kind: "fault", ...data };
-        put(record); send(record);
+        put(record);
+        // localOnly marks the routine heartbeat-to-disk. Only the exceptional things — a freeze,
+        // a fault, a start — are worth a network write, and the store they go to is shared and
+        // metered.
+        if (!data.localOnly) send(record);
         state = data;                           // keep it: a freeze report is built from this
         return;
       }
@@ -584,11 +588,17 @@ function startBlackBox() {
   // how far play got, what the heap was doing and what the engine was saying shortly beforehand —
   // which is most of the answer, and infinitely more than nothing.
   worker.postMessage({ sendNow: true, kind: "start", ...snapshot() });
-  // Only while the game is actually running. A tab left on the frontend menu checkpointed for
-  // forty-seven minutes and filled the store with rows that said nothing.
+  // Checkpoints are recorded locally and NOT uploaded.
+  //
+  // Uploading one every five seconds was twelve KV writes a minute, which exhausted the daily
+  // quota on a shared namespace — the guestbook lives there too. It was also redundant: the
+  // reason checkpoints existed was that a hard kill loses the freeze report, and recovery already
+  // covers that. The record is written to IndexedDB regardless, and the next page load re-sends
+  // anything unsent. A freeze therefore still reaches the server, on the next visit, at a cost of
+  // one write instead of hundreds.
   setInterval(() => {
     if (!document.body.classList.contains("playing")) return;
-    worker.postMessage({ sendNow: true, kind: "checkpoint", ...snapshot() });
+    worker.postMessage({ sendNow: true, localOnly: true, kind: "checkpoint", ...snapshot() });
   }, CHECKPOINT_MS);
 
   // One last go as the page goes away, for the freeze that ends in a close rather than a kill.

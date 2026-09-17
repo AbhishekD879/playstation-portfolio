@@ -30,21 +30,37 @@ const json = (data: unknown, status = 200) =>
 const field = (value: unknown, limit = MAX_FIELD) =>
   typeof value === "number" ? value : String(value ?? "").slice(0, limit);
 
-export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
+export const onRequestPost: PagesFunction<Env> = async (context) => {
+  // Every KV touch can throw when the namespace is over its daily quota — reads included, not
+  // just writes. An uncaught one becomes a Cloudflare 1101 error page in front of whoever is
+  // playing, which is a worse outcome than losing a diagnostic. Fail soft, always: the page keeps
+  // its local copy and re-sends another day.
+  try {
+    return await handlePost(context);
+  } catch (error) {
+    return json({ ok: false, stored: false, why: String((error as Error)?.message ?? error).slice(0, 160) }, 503);
+  }
+};
+
+const handlePost: PagesFunction<Env> = async ({ request, env }) => {
+  const t0 = Date.now();
   let body: any;
   try { body = await request.json(); } catch { return json({ error: "bad json" }, 400); }
 
+  // Checkpoints are local-only now; if an older page still sends one, drop it before it costs
+  // anything. Reads are free-ish, writes are the metered thing.
+  if (field(body?.kind, 40) === "checkpoint") return json({ ok: true, ignored: "checkpoint" });
+
+  // One read to rate-limit, and at most two writes per stored report. It used to be three writes
+  // for every upload — a per-IP counter, an hourly counter, and the record — on a namespace that
+  // is shared with the guestbook and metered daily. Uploading a checkpoint every five seconds on
+  // top of that spent the quota, and a rejected write surfaced on the page as a raw 1101.
   const ip = request.headers.get("cf-connecting-ip") ?? "unknown";
-  // A wedged tab can report more than once as it dies; ten a minute is generous for that and
-  // still useless to anyone pointing a script at this.
   const rlKey = `hrl:${ip}`;
   const seen = Number((await env.GB.get(rlKey)) ?? 0);
-  // Sized for a session that checkpoints every 30s, plus a burst of recovered records on a
-  // reload, plus the dying tab itself — still far too low to be worth pointing a script at.
-  if (seen >= 120) return json({ error: "rate limited" }, 429);  // 5s checkpoints = 12/min, plus recovery bursts
-  await env.GB.put(rlKey, String(seen + 1), { expirationTtl: 60 });
+  if (seen >= 12) return json({ error: "rate limited" }, 429);
 
-  const t = Date.now();
+  const t = t0;
   // Kept whole rather than flattened. The point of the report is that one freeze answers the
   // question, and the answer is usually in the parts that a summary would drop: the engine's last
   // few hundred lines, the heap series that says climb-versus-cliff, the frame times before it
@@ -83,13 +99,18 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
   // Only the newest checkpoint of a session is worth keeping, and a fixed key gives exactly that
   // while a freeze, a fault or a start still lands as its own row.
   const invTs = String(1e13 - t).padStart(13, "0");
-  const key = record.kind === "checkpoint" && record.session
-    ? `hang:zz-live:${record.session}`
-    : `hang:${invTs}:${Math.random().toString(36).slice(2, 8)}`;
-  await env.GB.put(key, JSON.stringify(record), {
-    expirationTtl: KEEP_DAYS * 86400,
-    metadata: { t, frozenForMs: record.frozenForMs, playedMs: record.playedMs, heapMB: record.heapMB, engine: record.engine },
-  });
+  const key = `hang:${invTs}:${Math.random().toString(36).slice(2, 8)}`;
+  try {
+    await env.GB.put(rlKey, String(seen + 1), { expirationTtl: 60 });
+    await env.GB.put(key, JSON.stringify(record), {
+      expirationTtl: KEEP_DAYS * 86400,
+      metadata: { t, frozenForMs: record.frozenForMs, playedMs: record.playedMs, heapMB: record.heapMB, engine: record.engine },
+    });
+  } catch (error) {
+    // Out of quota, most likely. Say so plainly and let the page keep its local copy to re-send
+    // another day, instead of throwing and showing the visitor a Cloudflare error page.
+    return json({ ok: false, stored: false, why: String((error as Error).message).slice(0, 120) }, 503);
+  }
   return json({ ok: true });
 };
 
