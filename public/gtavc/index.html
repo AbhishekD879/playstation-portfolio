@@ -518,8 +518,17 @@ async function reportLastHang() {
   // Anything recorded but never sent gets another go now. The first real freeze produced a
   // perfectly good local record and no report, because the tab died before the watchdog could
   // get it out — so a record stranded on the device is the expected case, not the odd one.
-  if (ENGINE_DIR === "./") return;                   // release mode sends nothing, ever
   const pending = events.filter((e) => !e.sent);
+  // Release mode sends nothing, ever — but it should still say that it is holding something,
+  // because otherwise a freeze recorded here is invisible to everyone including the person who
+  // wants it diagnosed. Telling them how to send it keeps the choice theirs.
+  if (ENGINE_DIR === "./") {
+    if (pending.length) {
+      log(`— ${pending.length} unsent report(s) held on this device. Nothing is uploaded from this `
+        + `page. To send them, open this page with ?debug=1 —`);
+    }
+    return;
+  }
   if (!pending.length) return;
   let sent = 0;
   for (const record of pending) {
