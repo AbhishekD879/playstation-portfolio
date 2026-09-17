@@ -64,6 +64,7 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
     faults: Array.isArray(body?.faults) ? body.faults.slice(-15) : [],
     gl: body?.gl ?? {},
     engineState: Array.isArray(body?.engineState) ? body.engineState.slice(-40) : [],
+    probes: Array.isArray(body?.probes) ? body.probes.slice(-40) : [],
     lastEngineLine: field(body?.lastEngineLine, 600),
     engineLog: Array.isArray(body?.engineLog)
       ? body.engineLog.slice(-LOG_LINES).map((l: unknown) => field(l, 600))

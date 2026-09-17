@@ -267,6 +267,60 @@ const longTasks = [];
 let glInfo = {};
 let contextLost = false;
 const engineState = [];   // is the game loop still turning, or is one frame never ending?
+const probes = [];        // is a shared browser process dying, rather than this page?
+
+/**
+ * Two probes the page owns outright, to tell apart the only two things that can take a whole
+ * browser down with one tab.
+ *
+ * The engine's loop was measured healthy to the final millisecond of the last freeze — real-time
+ * clock, 8 ms frames, flat heap — and then it stopped dead. Nothing inside the wasm does that to
+ * itself. What can is a process shared with every other tab: the audio service, or the GPU.
+ *
+ * So: an AudioContext of our own, and a 1x1 WebGL context of our own. Neither has anything to do
+ * with the engine, which is the point — if OUR audio clock stalls, the audio service is choking
+ * and the engine's streams are a symptom rather than the disease. If OUR trivial GL call starts
+ * taking milliseconds, it is the GPU process. If both stay clean to the last sample, it is
+ * neither, and that rules out the two candidates left.
+ */
+let probeAudioCtx = null;
+let probeGlCtx = null;
+
+function startProbes() {
+  try {
+    probeAudioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    // Silence: a zero-gain node keeps the context running without being heard.
+    const gain = probeAudioCtx.createGain();
+    gain.gain.value = 0;
+    gain.connect(probeAudioCtx.destination);
+    const osc = probeAudioCtx.createOscillator();
+    osc.connect(gain);
+    osc.start();
+  } catch (error) { noteFault("probe.audio.init", error.message); }
+  try {
+    const canvas = document.createElement("canvas");
+    canvas.width = canvas.height = 1;
+    probeGlCtx = canvas.getContext("webgl");
+  } catch (error) { noteFault("probe.gl.init", error.message); }
+}
+
+function sampleProbes() {
+  const row = { at: Math.round(performance.now()) };
+  if (probeAudioCtx) {
+    // An audio clock that stops while wall-clock runs is the audio service in trouble, and it is
+    // measured here on a context the engine has never touched.
+    row.audioTime = +probeAudioCtx.currentTime.toFixed(3);
+    row.audioState = probeAudioCtx.state;
+  }
+  if (probeGlCtx) {
+    const before = performance.now();
+    probeGlCtx.clear(probeGlCtx.COLOR_BUFFER_BIT);
+    probeGlCtx.getError();            // a sync round trip to the GPU process
+    row.glMs = +(performance.now() - before).toFixed(2);
+  }
+  probes.push(row);
+  if (probes.length > 80) probes.shift();
+}
 
 /** The engine's own counters, sampled from JS.
  *
@@ -350,6 +404,7 @@ function snapshot() {
     faults: faults.slice(-12),
     gl: { ...glInfo, contextLost },
     engineState: engineState.slice(-40),
+    probes: probes.slice(-40),
     lastEngineLine: lastLine.slice(-400),
     // The whole tail, not a sample. This is the one field most likely to name the cause.
     engineLog: engineLog.slice(-LOG_KEEP),
@@ -413,7 +468,7 @@ function startBlackBox() {
   `;
   const worker = new Worker(URL.createObjectURL(new Blob([src], { type: "text/javascript" })));
   blackBox = worker;
-  setInterval(() => { sampleEngine(); worker.postMessage(snapshot()); }, 250);
+  setInterval(() => { sampleEngine(); sampleProbes(); worker.postMessage(snapshot()); }, 250);
 
   // A freeze report can be lost: the browser may kill the tab, or be force-quit, before the
   // watchdog even notices. A checkpoint every half minute means the worst case is still knowing
@@ -833,6 +888,7 @@ async function boot(install) {
           document.body.classList.add("playing");
           syncModePolling();
           noteGl();
+          startProbes();
           startBlackBox();
           $("canvas").focus();
         } catch (error) {
