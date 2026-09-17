@@ -53,6 +53,7 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
     t,
     kind: field(body?.kind, 40) || "hang",
     session: field(body?.session, 40),
+    build: field(body?.build, 60),
     engine: field(body?.engine, 40),          // "release" or "debug"
     frozenForMs: Number(body?.frozenForMs) || 0,
     playedMs: Number(body?.playedMs) || 0,
@@ -74,10 +75,17 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
     ua: field(request.headers.get("user-agent"), 200),
   };
 
-  // Newest first, same inverted-timestamp trick as the guestbook. The body carries the trail
-  // because it can run past what KV allows in metadata.
+  // Checkpoints overwrite one key per session; everything else gets its own.
+  //
+  // At one every five seconds a long session wrote hundreds of rows and pushed every other
+  // report out of a 100-row listing — the heartbeat drowned the thing it was there to preserve.
+  // Only the newest checkpoint of a session is worth keeping, and a fixed key gives exactly that
+  // while a freeze, a fault or a start still lands as its own row.
   const invTs = String(1e13 - t).padStart(13, "0");
-  await env.GB.put(`hang:${invTs}:${Math.random().toString(36).slice(2, 8)}`, JSON.stringify(record), {
+  const key = record.kind === "checkpoint" && record.session
+    ? `hang:zz-live:${record.session}`
+    : `hang:${invTs}:${Math.random().toString(36).slice(2, 8)}`;
+  await env.GB.put(key, JSON.stringify(record), {
     expirationTtl: KEEP_DAYS * 86400,
     metadata: { t, frozenForMs: record.frozenForMs, playedMs: record.playedMs, heapMB: record.heapMB, engine: record.engine },
   });

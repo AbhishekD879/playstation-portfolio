@@ -261,6 +261,10 @@ const CHECKPOINT_MS = 5000;
 const LOG_KEEP = 600;          // engine lines kept for the report, independent of what is displayed
 const SERIES = 120;            // 30s of heap and frame samples at 4 Hz
 const SESSION = Math.random().toString(36).slice(2, 10);
+// Stamped at build time so a report says which page produced it. Two freezes have now gone
+// unreported because the tab was running a page from before the change that would have reported
+// them, and there was no way to tell that apart from "the upload failed".
+const PAGE_BUILD = "2026-09-17T18:30Z-r7";
 
 let blackBox = null;
 let lastLine = "";
@@ -432,6 +436,7 @@ function snapshot() {
   const sorted = frameSeries.slice().sort((a, b) => a - b);
   return {
     session: SESSION,
+    build: PAGE_BUILD,
     engine: ENGINE_DIR === "./" ? "release" : "debug",
     playedMs: Math.round(performance.now()),
     heapMB: mem.usedMB ?? 0,
@@ -528,7 +533,12 @@ function startBlackBox() {
   // how far play got, what the heap was doing and what the engine was saying shortly beforehand —
   // which is most of the answer, and infinitely more than nothing.
   worker.postMessage({ sendNow: true, kind: "start", ...snapshot() });
-  setInterval(() => worker.postMessage({ sendNow: true, kind: "checkpoint", ...snapshot() }), CHECKPOINT_MS);
+  // Only while the game is actually running. A tab left on the frontend menu checkpointed for
+  // forty-seven minutes and filled the store with rows that said nothing.
+  setInterval(() => {
+    if (!document.body.classList.contains("playing")) return;
+    worker.postMessage({ sendNow: true, kind: "checkpoint", ...snapshot() });
+  }, CHECKPOINT_MS);
 
   // One last go as the page goes away, for the freeze that ends in a close rather than a kill.
   addEventListener("pagehide", () => worker.postMessage({ sendNow: true, kind: "pagehide", ...snapshot() }));
@@ -1164,6 +1174,7 @@ addEventListener("message", (event) => {
 initTouch();
 // Before anything else: if the last session ended in a freeze, say so — that report is the whole
 // point of the recorder, and it is worthless if nobody is shown it.
+log(`Page build ${PAGE_BUILD} — freeze reporting is on.`);
 reportLastHang();
 // These go up before the engine does. A fault while the install is still loading is exactly the
 // kind that would otherwise be missed, and it is the cheapest one to catch.
