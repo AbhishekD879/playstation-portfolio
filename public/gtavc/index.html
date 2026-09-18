@@ -264,7 +264,7 @@ const SESSION = Math.random().toString(36).slice(2, 10);
 // Stamped at build time so a report says which page produced it. Two freezes have now gone
 // unreported because the tab was running a page from before the change that would have reported
 // them, and there was no way to tell that apart from "the upload failed".
-const PAGE_BUILD = "2026-09-18T13:05Z-r12";
+const PAGE_BUILD = "2026-09-18T13:20Z-r13";
 
 let blackBox = null;
 let lastLine = "";
@@ -979,6 +979,12 @@ function getChunk(file, index) {
   const from = index * CHUNK;
   const to = Math.min(from + CHUNK, file.size) - 1;
   const bytes = readRange(file.url, from, to);
+  // A chunk that came back short is never cached and never returned. It used to be, and the
+  // caller then made no progress through it — see lazyRead.
+  const expected = to - from + 1;
+  if (bytes.length !== expected) {
+    throw new Error(`short read on ${file.key}: asked ${expected} bytes at ${from}, got ${bytes.length}`);
+  }
   chunkCache.set(key, bytes);
   while (chunkCache.size > CACHE_CHUNKS) {
     chunkCache.delete(chunkCache.keys().next().value);   // oldest first
@@ -998,6 +1004,17 @@ function lazyRead(file, buffer, offset, length, position) {
     const within = at - index * CHUNK;
     const chunk = getChunk(file, index);
     const take = Math.min(chunk.length - within, size - done);
+    // This is the line that wedged a tab for the first time in this project's history and could
+    // not even be interrupted by a debugger. `done += take` with take at zero advances nothing,
+    // and the loop had no other way out — a tight JavaScript loop on the main thread, which no
+    // in-page watchdog can report and no crash dump records, because nothing crashes.
+    //
+    // A read that cannot make progress is an I/O error. The engine copes with one of those far
+    // better than the browser copes with a thread that never returns.
+    if (take <= 0) {
+      throw new Error(`no progress reading ${file.key} at ${at}: chunk ${index} holds `
+        + `${chunk.length} bytes, needed an offset of ${within}`);
+    }
     buffer.set(chunk.subarray(within, within + take), offset + done);
     done += take;
   }
@@ -1012,7 +1029,15 @@ function mountLazyFile(FS, path, file) {
   const node = FS.createFile(dir, name, { isDevice: false, contents: null }, true, false);
   Object.defineProperty(node, "usedBytes", { get: () => file.size });
   const ops = Object.create(node.stream_ops);
-  ops.read = (stream, buffer, offset, length, position) => lazyRead(file, buffer, offset, length, position);
+  ops.read = (stream, buffer, offset, length, position) => {
+    try {
+      return lazyRead(file, buffer, offset, length, position);
+    } catch (error) {
+      // Recorded before it is thrown, because the next thing that happens is inside the engine.
+      noteFault("lazyfs.read", error.message);
+      throw new FS.ErrnoError(5);   // EIO
+    }
+  };
   // Nothing writes to the install, and silently accepting a write that goes nowhere would be
   // worse than refusing it.
   ops.write = () => { throw new FS.ErrnoError(70); };
