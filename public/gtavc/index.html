@@ -264,7 +264,7 @@ const SESSION = Math.random().toString(36).slice(2, 10);
 // Stamped at build time so a report says which page produced it. Two freezes have now gone
 // unreported because the tab was running a page from before the change that would have reported
 // them, and there was no way to tell that apart from "the upload failed".
-const PAGE_BUILD = "2026-09-18T13:20Z-r13";
+const PAGE_BUILD = "2026-09-18T14:35Z-r14";
 
 let blackBox = null;
 let lastLine = "";
@@ -941,9 +941,24 @@ const mb = (n) => (n / 1048576).toFixed(0);
  * Emscripten's own createLazyFile refuses to run outside a worker — so this does the same job
  * without the parts that cannot work here.
  */
-const LAZY_ABOVE = 8 * 1024 * 1024;    // below this, memory is cheaper than a round trip
+/** Which files are worth reading from disk, decided by how the engine reads them rather than by
+ *  size.
+ *
+ *  Size alone was wrong and it wedged the page. models/gta3.img is 312 MB and the engine reads it
+ *  at random, constantly, all game — against a 96 MB cache that is a miss nearly every time, and a
+ *  miss costs a synchronous XHR plus 1.9 ms of charCodeAt per megabyte, measured, on the main
+ *  thread. Thousands of those in a row is not a hang in any loop; it is the thread never getting
+ *  a turn. 81.9% CPU, three minutes, no progress.
+ *
+ *  Audio is the opposite: about a gigabyte of it, read sequentially by the streamers, so a chunk
+ *  is used many times before it ages out. That is the shape this technique is good at, and it is
+ *  where nearly all of the memory was anyway.
+ *
+ *  So: audio is read from disk, everything else is held in memory. Roughly 1 GB saved of the
+ *  1.46 GB, without putting the archives the engine lives in behind a blocking read. */
+const lazyWanted = (path) => /^audio\//i.test(path);
 const CHUNK = 1024 * 1024;
-const CACHE_CHUNKS = 96;               // 96 MB ceiling across every lazy file, evicted least-used first
+const CACHE_CHUNKS = 160;              // 160 MB, sized for several radio streams at once
 
 const chunkCache = new Map();          // "path#n" -> Uint8Array, in insertion order for eviction
 let cacheHits = 0, cacheMisses = 0;
@@ -1054,7 +1069,7 @@ async function mountInstall(FS, install) {
     const dir = slash < 0 ? GAME_ROOT : `${GAME_ROOT}/${entry.path.slice(0, slash)}`;
     if (!made.has(dir)) { FS.mkdirTree(dir); made.add(dir); }
 
-    if (entry.size >= LAZY_ABOVE) {
+    if (lazyWanted(entry.path)) {
       const handle = await entry.get();
       mountLazyFile(FS, entry.path, {
         key: entry.path, size: entry.size, url: URL.createObjectURL(handle),
