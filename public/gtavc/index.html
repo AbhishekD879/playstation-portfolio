@@ -264,7 +264,7 @@ const SESSION = Math.random().toString(36).slice(2, 10);
 // Stamped at build time so a report says which page produced it. Two freezes have now gone
 // unreported because the tab was running a page from before the change that would have reported
 // them, and there was no way to tell that apart from "the upload failed".
-const PAGE_BUILD = "2026-09-18T16:10Z-r15-pad";
+const PAGE_BUILD = "2026-09-18T16:25Z-r16-pad";
 
 let blackBox = null;
 let lastLine = "";
@@ -1451,6 +1451,26 @@ addEventListener("message", (event) => {
   if (!data.on) releaseAll();
   syncModePolling();
 });
+
+// Say when a controller appears, and say what to do when none has.
+//
+// A fresh document sees no gamepads at all until a button is pressed on one — Chrome reveals them
+// per document, not per session — so a pad that worked a minute ago in another tab looks broken
+// here through no fault of the game. That is worth one line of explanation rather than a mystery.
+addEventListener("gamepadconnected", (e) => {
+  log(`Controller detected: ${e.gamepad.id} (${e.gamepad.buttons.length} buttons). `
+    + `The engine picks it up within a second.`);
+});
+addEventListener("gamepaddisconnected", (e) => log(`Controller disconnected: ${e.gamepad.id}`));
+{
+  const pads = (navigator.getGamepads?.() ?? []).filter(Boolean);
+  if (!pads.length) {
+    log("No controller visible yet — press any button on it with this window focused, "
+      + "and it will appear. Browsers hide gamepads from a page until then.");
+  } else {
+    log(`Controller already visible: ${pads.map((p) => p.id).join(", ")}`);
+  }
+}
 
 initTouch();
 // Before anything else: if the last session ended in a freeze, say so — that report is the whole
