@@ -25,7 +25,10 @@ self.addEventListener("fetch", (e) => {
   // don't touch the huge self-hosted payloads or API calls
   // /rpgm/ is owned by rpgm-sw + static (engine wasm, on-demand RTP); the app
   // shell SW must never precache the heavy RPG Maker payloads.
-  if (/^\/(cesium|play|pc|rpgm|assets\/.*(cesium|kokoro|transformers|CesiumGlobe))/.test(url.pathname) || url.pathname.startsWith("/api/")) return;
+  // gtavc is excluded because a cached copy of its host page is actively harmful: the version
+  // before the lazy filesystem held a 1.5 GB install in memory and Chrome killed the renderer for
+  // it. A stale page there is not a stale page, it is a crash.
+  if (/^\/(cesium|play|pc|rpgm|gtavc|assets\/.*(cesium|kokoro|transformers|CesiumGlobe))/.test(url.pathname) || url.pathname.startsWith("/api/")) return;
 
   // network-first: always try the network so a new deploy shows immediately;
   // fall back to the cache only when offline.

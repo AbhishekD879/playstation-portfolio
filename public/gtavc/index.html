@@ -264,7 +264,7 @@ const SESSION = Math.random().toString(36).slice(2, 10);
 // Stamped at build time so a report says which page produced it. Two freezes have now gone
 // unreported because the tab was running a page from before the change that would have reported
 // them, and there was no way to tell that apart from "the upload failed".
-const PAGE_BUILD = "2026-09-17T23:05Z-r10-lazyfs";
+const PAGE_BUILD = "2026-09-18T12:50Z-r11";
 
 let blackBox = null;
 let lastLine = "";
@@ -1397,6 +1397,35 @@ initTouch();
 // Before anything else: if the last session ended in a freeze, say so — that report is the whole
 // point of the recorder, and it is worthless if nobody is shown it.
 log(`Page build ${PAGE_BUILD} — freeze reporting is on.`);
+
+/**
+ * Refuse to run a stale copy of this page.
+ *
+ * Every renderer Chrome has killed was a tab running the version before the lazy filesystem, one
+ * of them still open today from before the fix existed, holding 1.5 GB of install in memory.
+ * Asking someone to remember to open a fresh tab is not a fix; a long-lived tab never re-fetches
+ * its own HTML, and no cache header changes that.
+ *
+ * build.txt is written at deploy time. If it disagrees with what this page was built as, the page
+ * is old and reloads itself once — at boot, before any files are chosen, so nothing is lost. The
+ * sessionStorage guard means a genuine mismatch cannot turn into a reload loop.
+ */
+(async () => {
+  try {
+    const response = await fetch(`./build.txt?t=${Date.now()}`, { cache: "no-store" });
+    if (!response.ok) return;
+    const live = (await response.text()).trim();
+    if (!live || live === PAGE_BUILD) return;
+    log(`— this page is build ${PAGE_BUILD}, the site is on ${live} —`);
+    if (sessionStorage.getItem("asp.gtavc.reloaded") === live) {
+      log("— already tried reloading for this build; continuing on the old page —");
+      return;
+    }
+    sessionStorage.setItem("asp.gtavc.reloaded", live);
+    log("— reloading to pick it up —");
+    location.reload();
+  } catch { /* offline, or no build.txt — carry on rather than block the game */ }
+})();
 reportLastHang();
 // These go up before the engine does. A fault while the install is still loading is exactly the
 // kind that would otherwise be missed, and it is the cheapest one to catch.
