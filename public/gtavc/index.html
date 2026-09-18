@@ -264,7 +264,7 @@ const SESSION = Math.random().toString(36).slice(2, 10);
 // Stamped at build time so a report says which page produced it. Two freezes have now gone
 // unreported because the tab was running a page from before the change that would have reported
 // them, and there was no way to tell that apart from "the upload failed".
-const PAGE_BUILD = "2026-09-18T16:25Z-r16-pad";
+const PAGE_BUILD = "2026-09-18T16:30Z-r17";
 
 let blackBox = null;
 let lastLine = "";
@@ -549,7 +549,11 @@ function startBlackBox() {
     onmessage = (e) => {
       last = Date.now();
       const data = e.data;
-      if (data.beat) { reported = false; return; }   // liveness only, deliberately tiny
+      if (data.beat) {
+        reported = false;
+        state = data;      // keep it: this is what a freeze report is built from
+        return;
+      }
       if (data.sendNow) {                       // a fault or checkpoint, not necessarily a freeze
         const record = { at: new Date().toISOString(), frozenForMs: 0, kind: "fault", ...data };
         put(record);
@@ -584,7 +588,28 @@ function startBlackBox() {
   setInterval(() => {
     sampleEngine();
     sampleProbes();
-    worker.postMessage({ beat: true, at: Math.round(performance.now()) });
+    // The beat carries a little state, not none.
+    //
+    // It used to be a bare liveness ping, and the worker only kept state from a checkpoint — so a
+    // session that wedged before its first checkpoint reported nothing at all, which is exactly
+    // what happened at 16:13: a start record, then two minutes of 100% CPU and silence. Sending
+    // the full snapshot four times a second was the other extreme and cost hundreds of KB of
+    // cloning. This is the small middle: the handful of fields that say what the engine was doing,
+    // and nothing that has to be walked to copy.
+    const engine = engineState[engineState.length - 1] || {};
+    worker.postMessage({
+      beat: true,
+      at: Math.round(performance.now()),
+      playedMs: Math.round(performance.now()),
+      heapMB: (() => { try { return Math.round(performance.memory.usedJSHeapSize / 1048576); } catch { return 0; } })(),
+      wasmMB: engine.heapUsedMB, engineMs: engine.engineMs, gameState: engine.state,
+      lazyMB: engine.lazyMB, lazyHitPct: engine.lazyHitPct,
+      lastEngineLine: lastLine.slice(-300),
+      tail: engineLog.slice(-4).join(" ").slice(-800),
+      build: PAGE_BUILD, session: SESSION,
+      engine: ENGINE_DIR === "./" ? "release" : "debug",
+      upload: true,
+    });
   }, 250);
   // measureUserAgentSpecificMemory walks the whole renderer at a GC boundary, and this one is
   // over 3 GB. Every 10s was asking for a pause; a minute is plenty to see a trend.
