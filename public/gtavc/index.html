@@ -264,7 +264,7 @@ const SESSION = Math.random().toString(36).slice(2, 10);
 // Stamped at build time so a report says which page produced it. Two freezes have now gone
 // unreported because the tab was running a page from before the change that would have reported
 // them, and there was no way to tell that apart from "the upload failed".
-const PAGE_BUILD = "2026-09-18T16:30Z-r17";
+const PAGE_BUILD = "2026-09-18T16:40Z-r18-pad";
 
 let blackBox = null;
 let lastLine = "";
@@ -1486,7 +1486,8 @@ addEventListener("gamepadconnected", (e) => {
   log(`Controller detected: ${e.gamepad.id} (${e.gamepad.buttons.length} buttons). `
     + `The engine picks it up within a second.`);
 });
-addEventListener("gamepaddisconnected", (e) => log(`Controller disconnected: ${e.gamepad.id}`));
+addEventListener("gamepaddisconnected", (e) => log(`Controller disconnected: ${e.gamepad.id}. `
+  + `Wireless pads sleep when idle — press a button and it comes back.`));
 {
   const pads = (navigator.getGamepads?.() ?? []).filter(Boolean);
   if (!pads.length) {
