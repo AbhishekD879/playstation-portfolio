@@ -264,7 +264,7 @@ const SESSION = Math.random().toString(36).slice(2, 10);
 // Stamped at build time so a report says which page produced it. Two freezes have now gone
 // unreported because the tab was running a page from before the change that would have reported
 // them, and there was no way to tell that apart from "the upload failed".
-const PAGE_BUILD = "2026-09-18T12:50Z-r11";
+const PAGE_BUILD = "2026-09-18T13:05Z-r12";
 
 let blackBox = null;
 let lastLine = "";
@@ -609,8 +609,27 @@ function startBlackBox() {
     worker.postMessage({ sendNow: true, localOnly: true, kind: "checkpoint", ...snapshot() });
   }, CHECKPOINT_MS);
 
-  // One last go as the page goes away, for the freeze that ends in a close rather than a kill.
-  addEventListener("pagehide", () => worker.postMessage({ sendNow: true, kind: "pagehide", ...snapshot() }));
+  // How the page ends, told apart properly.
+  //
+  // A session died today at 406s with no crash dump anywhere on the machine, no jetsam kill in
+  // the system log, no stall seen by the watchdog and no pagehide. Chrome had not killed
+  // anything — so the remaining explanations are a tab Chrome froze or discarded to save memory,
+  // or a browser force-quit, and nothing here could tell those apart.
+  //
+  // sendBeacon rather than fetch: the browser is obliged to deliver a beacon queued during
+  // unload, where a fetch can simply be cancelled with the page.
+  const beacon = (kind) => {
+    try {
+      navigator.sendBeacon("/api/hang", new Blob(
+        [JSON.stringify({ kind, ...snapshot() })], { type: "application/json" }));
+    } catch { /* nothing left to do at this point */ }
+    worker.postMessage({ sendNow: true, localOnly: true, kind, ...snapshot() });
+  };
+  addEventListener("pagehide", () => beacon("pagehide"));
+  // Page Lifecycle: Chrome fires freeze before it discards a tab, and resume if it changes its
+  // mind. A discard leaves exactly the evidence this session left — which is to say none.
+  addEventListener("freeze", () => beacon("chrome-froze-tab"));
+  addEventListener("resume", () => log("— Chrome had frozen this tab and has resumed it —"));
 }
 
 /** Watchers that have to be up before the engine is, so nothing is missed during the load. */
@@ -1397,6 +1416,19 @@ initTouch();
 // Before anything else: if the last session ended in a freeze, say so — that report is the whole
 // point of the recorder, and it is worthless if nobody is shown it.
 log(`Page build ${PAGE_BUILD} — freeze reporting is on.`);
+// wasDiscarded is the browser admitting it threw the previous tab away to reclaim memory, and
+// navigation type separates a reload from a fresh visit. Between them they account for endings
+// that leave no crash dump and no pagehide.
+{
+  const nav = performance.getEntriesByType("navigation")[0];
+  if (document.wasDiscarded) {
+    log("— Chrome discarded the previous tab to reclaim memory; this is its replacement —");
+    fetch("/api/hang", { method: "POST", headers: { "content-type": "application/json" },
+      body: JSON.stringify({ kind: "chrome-discarded-tab", build: PAGE_BUILD, session: SESSION,
+        navType: nav?.type }) }).catch(() => {});
+  }
+  log(`Navigation: ${nav?.type ?? "unknown"}.`);
+}
 
 /**
  * Refuse to run a stale copy of this page.
