@@ -359,6 +359,21 @@ export default function Ps2(props: {
   };
 
   /** Host says a line: it is authoritative the moment it exists locally. */
+  // ★ A departure is announced on a delay, and a return inside it cancels both
+  // lines. Reconnecting is normal — a phone changing wifi, a laptop waking —
+  // and announcing it turns a two-second blip into "X left" / "X joined"
+  // scrolling past. Held names stay in jNames so the return is not mistaken
+  // for a new arrival either.
+  const LEAVE_GRACE_MS = 6000;
+  const leaveTimers = new Map<string, ReturnType<typeof setTimeout>>();
+  const cancelPendingLeave = (id: string) => {
+    const t = leaveTimers.get(id);
+    if (t === undefined) return false;
+    clearTimeout(t);
+    leaveTimers.delete(id);
+    return true;                      // they were only gone for a moment
+  };
+
   const hostSay = (from: string, text: string, system = false) => {
     const line: ChatLine = { id: lineId(), from, text, at: Date.now(), system: system || undefined };
     setChat((l) => pushLine(l, line));
@@ -423,9 +438,12 @@ export default function Ps2(props: {
         // browser is cleaned before it is stored, let alone re-broadcast.
         if (data?.t === "hello") {
           const name = cleanName(data.name);
+          // Came back before the grace expired: no "left" was ever printed, so
+          // there is no "joined" to print either.
+          const returning = cancelPendingLeave(id);
           const first = !jNames.has(id);
           jNames.set(id, name);
-          if (first) hostSay(name, `${name} joined`, true);
+          if (first && !returning) hostSay(name, `${name} joined`, true);
           pushRoster(true);
           return;
         }
@@ -462,9 +480,17 @@ export default function Ps2(props: {
       onJoinerLeft: (id) => {
         const name = jNames.get(id);
         hostVoice?.removeRemote(id);
-        jNames.delete(id); jMics.delete(id);
-        if (name) hostSay(name, `${name} left`, true);
-        pushRoster(true);
+        jMics.delete(id);
+        pushRoster(true);            // the seat frees immediately either way
+        if (!name) return;
+        cancelPendingLeave(id);
+        leaveTimers.set(id, setTimeout(() => {
+          leaveTimers.delete(id);
+          // Still gone once the grace is up — now it is a real departure.
+          jNames.delete(id);
+          hostSay(name, `${name} left`, true);
+          pushRoster(true);
+        }, LEAVE_GRACE_MS));
       },
     });
   }
@@ -474,6 +500,9 @@ export default function Ps2(props: {
     clearInterval(levelTimer); levelTimer = undefined;
     hostVoice?.stop(); hostVoice = null;
     closeMic();
+    // Pending "X left" lines must not fire into a room that no longer exists.
+    for (const t of leaveTimers.values()) clearTimeout(t);
+    leaveTimers.clear();
     setMembers([]); setChat([]); jNames.clear(); jMics.clear(); setChatOverride(null);
     injector?.release(); injector = null;
     for (const inj of netInjectors.values()) inj.release();
@@ -1195,8 +1224,22 @@ export default function Ps2(props: {
                   autofocus
                   value={joinInput()}
                   onInput={(e) => setJoinInput(e.currentTarget.value.toUpperCase().replace(/[^A-Z0-9]/g, ""))}
-                  onKeyDown={(e) => { if (e.key === "Enter" && joinInput().length === 4) joinGame(joinInput()); }}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && joinInput().length === 4) joinGame(joinInput());
+                    // Backspace and Delete edit the field and nothing else. The
+                    // emulator binds Backspace to SELECT and the shelf binds it
+                    // to "remove game", so it must not travel any further than
+                    // this input while a code is being typed.
+                    if (e.key === "Backspace" || e.key === "Delete") e.stopPropagation();
+                  }}
                 />
+                {/* A visible way back out. On a pad or a TV there is no physical
+                    delete key, and the on-screen keyboard is not always what a
+                    player reaches for. */}
+                <button
+                  class="ps2-code-clear" type="button" disabled={!joinInput()}
+                  onClick={() => { sfx.back(); setJoinInput(""); }}
+                >Clear</button>
                 <button class="ps2-launch" disabled={joinInput().length !== 4} onClick={() => joinGame(joinInput())}>▶ &nbsp;CONNECT</button>
                 <button class="ps2-join-btn" onClick={() => { sfx.back(); setJoinStage(""); }}>↩ &nbsp;BACK</button>
               </div>

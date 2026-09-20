@@ -275,7 +275,12 @@ export default function Online(props: {
           <input
             class="online-input" maxLength={4} placeholder="ABCD" value={code()} aria-label="Room code"
             onInput={(e) => setCode(e.currentTarget.value.toUpperCase().replace(/[^A-Z0-9]/g, ""))}
+            onKeyDown={(e) => { if (e.key === "Backspace" || e.key === "Delete") e.stopPropagation(); }}
           />
+          {/* Without this there is no way off a mistyped code on a pad or a TV,
+              where there is no physical delete key. */}
+          <button class="online-btn ghost ps2-code-clear" type="button" disabled={!code()}
+            onClick={() => setCode("")}>Clear</button>
           <button class="online-btn ghost" disabled={code().length !== 4}>Join with code</button>
           <span class="online-note">
             Invite-only rooms are not listed above — you need the code or the link from whoever is

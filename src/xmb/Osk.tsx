@@ -6,6 +6,7 @@
 // While open it claims the pad (setOskBlock) so XMB nav stays quiet, and it
 // bows out the moment real keyboard typing is detected.
 import { For, Show, createSignal, onCleanup, onMount } from "solid-js";
+import { applyBackspace } from "./oskEdit";
 import { primaryPad, setOskBlock } from "../input";
 import { labEnabled } from "../labs";
 import * as sfx from "../audio";
@@ -84,7 +85,7 @@ export default function Osk() {
     sfx.tickH();
   };
   const backspace = () => {
-    write((cur, s, e) => (s === e && s > 0 ? [cur.slice(0, s - 1) + cur.slice(e), s - 1] : [cur.slice(0, s) + cur.slice(e), s]));
+    write((cur, s, e) => applyBackspace(cur, s, e));
     sfx.tickH();
   };
   const submit = () => {

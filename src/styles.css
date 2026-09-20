@@ -1229,6 +1229,12 @@ img.status-avatar, img.ptile-avatar { object-fit: cover; border: 1px solid rgba(
 body.party-col .ps2-bar { padding-right: calc(var(--pty-w) + 14px); }
 body.party-col .ps2-perf { right: calc(var(--pty-w) + 16px); }
 body.party-col .share-btn { right: calc(var(--pty-w) + clamp(12px, 2vw, 22px)); }
+/* The joiner's game-volume slider, same reason as the three above: the party
+   column owns the right edge, so anything pinned to right:16px ends up BEHIND
+   it. It was invisible for every joiner with the party panel open, which is
+   the default — reported as "the other players have no way to reduce the
+   in-game volume". */
+body.party-col .ps2-vol-join { right: calc(var(--pty-w) + 16px); }
 
 /* the first-run name prompt, inside the column */
 .pty-name { padding: 12px 14px 4px; border-bottom: 1px solid rgba(255,255,255,0.08); }
@@ -1246,6 +1252,8 @@ body.party-col .share-btn { right: calc(var(--pty-w) + clamp(12px, 2vw, 22px)); 
   /* a sheet, so the chrome moves up rather than sideways */
   body.party-col .ps2-bar, body.party-col .ps2-perf { padding-right: 0; right: 16px; }
   body.party-col .share-btn { right: clamp(12px, 2vw, 22px); bottom: calc(min(62vh, 460px) + 12px); }
+  /* the column is a bottom sheet here, so the slider moves up, not sideways */
+  body.party-col .ps2-vol-join { right: 16px; bottom: calc(min(62vh, 460px) + 12px); }
 }
 @media (prefers-reduced-motion: reduce) {
   .pty-ring { transition: none; }
@@ -1311,6 +1319,16 @@ body.party-col .share-btn { right: calc(var(--pty-w) + clamp(12px, 2vw, 22px)); 
 
 /* The joiner has no action row — their slider sits over the picture, bottom
    right, clear of the "tap for sound" area in the middle. */
+/* Sits next to CONNECT on the code screens. Quiet by default — it is the way
+   back from a typo, not the thing anyone is aiming for. */
+.ps2-code-clear {
+  background: transparent; color: var(--dim);
+  border: 1px solid rgba(255,255,255,0.18);
+  padding: 7px 16px; letter-spacing: 0.1em; font-size: 11px; cursor: pointer;
+}
+.ps2-code-clear:hover:not(:disabled), .ps2-code-clear:focus-visible { color: var(--text); background: rgba(255,255,255,0.07); }
+.ps2-code-clear:disabled { opacity: 0.3; cursor: default; }
+
 .ps2-lab-btn { display: inline-flex; align-items: center; gap: 6px; }
 .ps2-lab-btn svg { width: 13px; height: 13px; }
 /* Inline icons inside running text take their size from the type around them
@@ -1321,6 +1339,15 @@ body.party-col .share-btn { right: calc(var(--pty-w) + clamp(12px, 2vw, 22px)); 
 .status-troph svg, .ptile-meta svg, .sdx-next svg {
   width: 1.05em; height: 1.05em; vertical-align: -0.16em;
 }
+/* The same treatment wherever an icon sits beside a label rather than alone:
+   an em box keeps it on the baseline as the copy scales. */
+.rpgplay-actions .ps-act svg,
+.mapapp-bar .ghost-btn svg,
+.browser-start-big svg,
+.tour-iss svg {
+  width: 1.05em; height: 1.05em; vertical-align: -0.16em; flex-shrink: 0;
+}
+.mapapp-bar .ghost-btn, .rpgplay-actions .ps-act { display: inline-flex; align-items: center; gap: 6px; }
 
 .ps2-vol-join {
   position: absolute; right: 16px; bottom: 16px; z-index: 9;
@@ -1940,7 +1967,9 @@ body.party-col .share-btn { right: calc(var(--pty-w) + clamp(12px, 2vw, 22px)); 
 .rpgplay-sheet-row:active { background: rgba(255,255,255,0.14); }
 .rpgplay-sheet-row.on { background: color-mix(in oklab, var(--xmb-tint) 30%, rgba(255,255,255,0.05)); border-color: color-mix(in oklab, var(--xmb-tint) 55%, #fff); }
 .rpgplay-sheet-row.danger { color: #ff6b61; }
-.rpgplay-sheet-ico { font-size: 19px; width: 24px; text-align: center; flex-shrink: 0; }
+.rpgplay-sheet-ico { display: inline-flex; align-items: center; justify-content: center;
+  width: 24px; height: 19px; flex-shrink: 0; color: currentColor; }
+.rpgplay-sheet-ico svg { width: 19px; height: 19px; }
 .rpgplay-sheet-lbl { flex: 1; }
 .rpgplay-sheet-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; background: color-mix(in oklab, var(--xmb-tint) 80%, #fff); }
 .rpgplay-toast {
@@ -2987,7 +3016,11 @@ body.party-col .share-btn { right: calc(var(--pty-w) + clamp(12px, 2vw, 22px)); 
   color: #fff; transform: translateY(-4px);
   box-shadow: 0 0 22px color-mix(in oklab, var(--xmb-tint) 40%, transparent);
 }
-.cc-tile-icon { font-size: 26px; line-height: 1; }
+.cc-tile-icon { display: inline-flex; width: 26px; height: 26px; line-height: 1; color: var(--text); }
+.cc-tile-icon svg { width: 100%; height: 100%; }
+/* No crossed-out speaker in the set, so Mute is the same icon dimmed — the
+   tile's own label is what names it. Matches the PS2 volume slider. */
+.cc-tile-icon.off { opacity: 0.45; }
 .cc-tile-label { font-size: 12.5px; letter-spacing: 0.08em; }
 .cc-tile-sub { font-size: 10.5px; letter-spacing: 0.04em; color: rgba(255,255,255,0.45); max-width: 150px; text-align: center; }
 .cc-legend { display: flex; justify-content: center; align-items: center; gap: 22px; font-size: 11.5px; letter-spacing: 0.1em; color: rgba(255,255,255,0.45); }

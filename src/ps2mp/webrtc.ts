@@ -145,6 +145,28 @@ export function startHost(opts: {
     if (m.t === "joiner") {
       const id = m.id as string;
       const isWatcher = !!m.watch;
+      // ★ A joiner can announce itself again on the SAME id — the signalling
+      // socket re-announces whenever it reopens, so any wifi blip produces a
+      // second "joiner" for somebody already here.
+      //
+      // Replacing the map entries alone was not enough and actively caused
+      // harm: the previous peer's link watcher was overwritten, never
+      // cancelled, and kept watching the connection it was made for. That one
+      // went quiet — it had been superseded — so the watcher declared it lost
+      // and ran onJoinerLeft(id), which deleted the NEW, live peer from the
+      // map. The room then said "X left", the next hello said "X joined", and
+      // it repeated for as long as the link kept wobbling.
+      //
+      // Tear the old one down first, and do NOT report a departure: nobody
+      // left, the same person is reconnecting.
+      const prior = peers.get(id);
+      if (prior) {
+        linkWatchers.get(id)?.cancel();
+        linkWatchers.delete(id);
+        channels.delete(id);
+        try { prior.pc.close(); } catch { /* already closed */ }
+        peers.delete(id);
+      }
       if (isWatcher) watching.add(id);
       const ice = await iceConfig();
       const peer = makePeer(ice, (c) => sig.send({ t: "signal", to: id, data: { candidate: c } }));

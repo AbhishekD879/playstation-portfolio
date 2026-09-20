@@ -5,6 +5,7 @@
 // into the game/app underneath. Pad input arrives two ways: via XMB nav
 // routing (crossbar contexts) and via synthesized arrow keys (inside apps).
 import { For, Show, createEffect, createSignal, onCleanup, onMount } from "solid-js";
+import { Icon } from "./icons";
 import { renderSVG } from "uqr";
 import { phoneOn, phonePadUrl, phoneRoom, startPhonePad, stopPhonePad } from "../phonePad";
 import { dsBattery, dsConnect, dsDisconnect, dsName, dsSupported, dsSyncLightbar } from "../dualsense";
@@ -39,25 +40,25 @@ export default function ControlCenter(props: {
   const tiles = (): Tile[] => [
     { id: "home", icon: "⌂", label: "Home", show: () => props.appOpen, act: () => { sfx.back(); props.onHome(); props.onClose(); } },
     {
-      id: "phone", icon: "📱", label: "Phone Controller",
+      id: "phone", icon: "phone", label: "Phone Controller",
       show: () => labEnabled("phonepad"),
       sub: () => (phoneOn() ? "connected" : phoneRoom() ? `room ${phoneRoom()}` : "scan to connect"),
       act: () => { sfx.confirm(); if (!phoneRoom()) startPhonePad(); setQr(!qr()); },
     },
     {
-      id: "vol", icon: "♪", label: "Volume",
+      id: "vol", icon: "speaker", label: "Volume",
       sub: () => (tick(), `${Math.round(sfx.getVolume() * 100)}%  ↑↓`),
       act: () => {},
       adjust: (d: number) => { sfx.setVolume(sfx.getVolume() + d * 0.05); sfx.tickH(); bump(); },
     },
     {
-      id: "mute", icon: "🔇", label: "Mute",
+      id: "mute", icon: "speaker", label: "Mute",
       sub: () => (tick(), sfx.isMuted() ? "muted" : "sound on"),
       act: () => { sfx.toggleMute(); bump(); },
     },
     { id: "theme", icon: "◐", label: "Theme", act: () => { props.onClose(); props.onTheme(); } },
     {
-      id: "ds", icon: "🎮", label: "DualSense",
+      id: "ds", icon: "gamepad", label: "DualSense",
       show: () => dsSupported() && labEnabled("dualsense"),
       sub: () => (dsName() ? `${dsName()}${dsBattery() != null ? ` · ${dsBattery()}%` : ""} — lightbar synced` : "connect via USB/BT"),
       act: async () => { if (dsName()) { dsDisconnect(); sfx.back(); } else { (await dsConnect()) ? sfx.confirm() : sfx.deny(); } bump(); },
@@ -121,7 +122,7 @@ export default function ControlCenter(props: {
             {(t, i) => (
               <button class="cc-tile" classList={{ focus: sel() === i() && !qr() }}
                 onClick={() => { setSel(i()); t.act(); }}>
-                <span class="cc-tile-icon">{t.icon}</span>
+                <span class="cc-tile-icon" classList={{ off: t.id === "mute" }}><Icon name={t.icon} /></span>
                 <span class="cc-tile-label">{t.label}</span>
                 <Show when={t.sub}><span class="cc-tile-sub">{t.sub!()}</span></Show>
               </button>

@@ -6,6 +6,7 @@
 // into the game (errors + stuck/failed asset loads) so a hang is legible even
 // on mobile where there's no console.
 import { For, Show, createSignal, onCleanup, onMount } from "solid-js";
+import { Icon } from "./icons";
 import * as sfx from "../audio";
 import type { NavAction } from "../input";
 import { holdWakeLock } from "../wakelock";
@@ -193,13 +194,13 @@ export default function RpgPlayer(props: {
   // so there's a single source of truth and no button drift between them.
   type MenuItem = { id: string; ico: string; label: string; on?: boolean; show: boolean; danger?: boolean; run: () => void };
   const menuItems = (): MenuItem[] => [
-    { id: "save", ico: "💾", label: "Save state", show: canTrain, run: quickSave },
+    { id: "save", ico: "disc", label: "Save state", show: canTrain, run: quickSave },
     { id: "load", ico: "↺", label: "Load state", show: canTrain && hasState(), run: quickLoad },
-    { id: "controls", ico: "🎮", label: showPad() ? "Hide controls" : "On-screen controls", on: showPad(), show: true, run: () => setShowPad((v) => !v) },
-    { id: "trainer", ico: "✨", label: "Trainer", on: showTrainer(), show: canTrain, run: () => { setShowTrainer((v) => !v); setShowDiag(false); } },
-    { id: "fs", ico: "⛶", label: "Full screen", show: true, run: goFullscreen },
-    { id: "diag", ico: "🩺", label: "Diagnostics", on: showDiag(), show: true, run: () => { setShowDiag((v) => !v); setShowTrainer(false); } },
-    { id: "quit", ico: "✕", label: "Quit game", show: true, danger: true, run: quit },
+    { id: "controls", ico: "gamepad", label: showPad() ? "Hide controls" : "On-screen controls", on: showPad(), show: true, run: () => setShowPad((v) => !v) },
+    { id: "trainer", ico: "spark", label: "Trainer", on: showTrainer(), show: canTrain, run: () => { setShowTrainer((v) => !v); setShowDiag(false); } },
+    { id: "fs", ico: "monitor", label: "Full screen", show: true, run: goFullscreen },
+    { id: "diag", ico: "info", label: "Diagnostics", on: showDiag(), show: true, run: () => { setShowDiag((v) => !v); setShowTrainer(false); } },
+    { id: "quit", ico: "power", label: "Quit game", show: true, danger: true, run: quit },
   ];
   // Save keeps the sheet open (so the toast shows + Load appears); everything
   // else closes it — the overlays it opens (pad/trainer/diag) need the screen.
@@ -346,7 +347,7 @@ export default function RpgPlayer(props: {
             <For each={menuItems().filter((m) => m.show)}>
               {(it) => (
                 <button class="ps-act" classList={{ on: !!it.on }} onClick={() => { it.run(); flashBar(); }}>
-                  {it.ico} {it.label}
+                  <Icon name={it.ico} /> {it.label}
                 </button>
               )}
             </For>
@@ -382,7 +383,7 @@ export default function RpgPlayer(props: {
           <For each={menuItems().filter((m) => m.show)}>
             {(it) => (
               <button class="rpgplay-sheet-row" classList={{ on: !!it.on, danger: !!it.danger }} onClick={() => runFromSheet(it)}>
-                <span class="rpgplay-sheet-ico">{it.ico}</span>
+                <span class="rpgplay-sheet-ico"><Icon name={it.ico} /></span>
                 <span class="rpgplay-sheet-lbl">{it.label}</span>
                 <Show when={it.on}><span class="rpgplay-sheet-dot" /></Show>
               </button>

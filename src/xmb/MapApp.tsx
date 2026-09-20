@@ -3,6 +3,7 @@
 // Plus the "Life with PlayStation" layer: live ISS overhead (wheretheiss.at)
 // and a world tour that drifts between cities with their current weather.
 import { Show, Suspense, createSignal, lazy, onCleanup, onMount } from "solid-js";
+import { Icon } from "./icons";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import { fetchHN, fetchQuakes, rainTiles, wmo, type Quake } from "../apps";
@@ -283,11 +284,11 @@ export default function MapApp(props: { onClose: () => void; initialAction?: "to
       <div class="mapapp-bar">
         <div class="panel-tag">PLANET EARTH — LIVE</div>
         <button class="ghost-btn" classList={{ on: mode() === "3d" }} onClick={() => { setMode(mode() === "3d" ? "2d" : "3d"); sfx.tickH(); }}>
-          {mode() === "3d" ? "🗺 flat map" : "🌐 3D globe"}
+          <Icon name="globe" /> {mode() === "3d" ? "flat map" : "3D globe"}
         </button>
         <Show when={labEnabled("vibe")}>
           <button class="ghost-btn" classList={{ on: vibeMode() }} title="Vibe search — type a feeling, fly there"
-            onClick={() => { setVibeMode(!vibeMode()); sfx.tickH(); }}>✨ vibe</button>
+            onClick={() => { setVibeMode(!vibeMode()); sfx.tickH(); }}><Icon name="spark" /> vibe</button>
         </Show>
         <input
           class="mapapp-search"
@@ -300,10 +301,10 @@ export default function MapApp(props: { onClose: () => void; initialAction?: "to
         />
         <button class="ghost-btn" onClick={whereAmI}>⌖ where am I</button>
         <button class="ghost-btn" classList={{ on: quakesOn() }} onClick={toggleQuakes}>◉ quakes 24h</button>
-        <button class="ghost-btn" classList={{ on: rainOn() }} onClick={toggleRain}>🌧 rain radar</button>
+        <button class="ghost-btn" classList={{ on: rainOn() }} onClick={toggleRain}><Icon name="cloud" /> rain radar</button>
         <button class="ghost-btn" classList={{ on: sat() }} onClick={() => { if (mode() === "3d") setMode("2d"); setSatellite(!sat()); setTimeout(() => map.invalidateSize(), 60); sfx.tickH(); }}>⬒ satellite</button>
-        <button class="ghost-btn" onClick={flyToIss}>🛰 ISS</button>
-        <button class="ghost-btn" classList={{ on: tour() }} onClick={toggleTour}>🌏 world tour</button>
+        <button class="ghost-btn" onClick={flyToIss}><Icon name="broadcast" /> ISS</button>
+        <button class="ghost-btn" classList={{ on: tour() }} onClick={toggleTour}><Icon name="globe" /> world tour</button>
         <button class="ps-act" onClick={() => { sfx.back(); props.onClose(); }}><span class="btn-o" /> back</button>
       </div>
       <div class="mapapp-map" ref={mapEl} style={{ display: mode() === "2d" ? "block" : "none" }} />
@@ -326,7 +327,7 @@ export default function MapApp(props: { onClose: () => void; initialAction?: "to
             <div class="tour-desc">{wmo(wx()[tourIdx()]!.code)[1]}</div>
           </Show>
           <Show when={iss()}>
-            <div class="tour-iss">🛰 ISS · {iss()!.alt} km · {iss()!.vel.toLocaleString()} km/h</div>
+            <div class="tour-iss"><Icon name="broadcast" /> ISS · {iss()!.alt} km · {iss()!.vel.toLocaleString()} km/h</div>
           </Show>
         </div>
         <Show when={ticker()}>

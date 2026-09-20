@@ -2,6 +2,7 @@
 // fetches + sanitizes the page (scripts stripped), and it renders in a
 // sandboxed iframe. Links stay inside the reader. Read-only, rate-limited.
 import { Show, createSignal, onCleanup, onMount } from "solid-js";
+import { Icon } from "./icons";
 import { setNavEnabled } from "../input";
 import * as sfx from "../audio";
 
@@ -82,7 +83,7 @@ export default function Browser(props: { onClose: () => void }) {
           when={url()}
           fallback={
             <div class="browser-start">
-              <div class="browser-start-big">🌐 Reader Browser</div>
+              <div class="browser-start-big"><Icon name="globe" /> Reader Browser</div>
               <p>Type a search or a web address above. Pages open in a clean, reader-friendly view — text and images, no scripts or ads. Read-only.</p>
               <div class="browser-quick">
                 {["wikipedia.org", "news.ycombinator.com", "bbc.com/news", "en.wikipedia.org/wiki/PlayStation_3"].map((s) => (
