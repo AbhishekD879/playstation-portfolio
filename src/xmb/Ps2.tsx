@@ -349,6 +349,21 @@ export default function Ps2(props: {
     if (!canvas || !win?.__p2codes || !(canvas as any).captureStream) { setMpStatus("emulator not ready — boot a game first"); return; }
     sfx.confirm();
     const stream = (canvas as any).captureStream(30) as MediaStream;
+    // ★ The game's sound, as its own track alongside the picture.
+    //
+    // A canvas has no audio, so captureStream gives video and nothing else —
+    // which meant a joiner watched in silence and only ever heard the game as
+    // bleed through the host's microphone, after echo cancellation and noise
+    // suppression had finished mangling it. The emulator page tees its WebAudio
+    // output into a MediaStream for us (see __gameAudio there).
+    //
+    // It goes into the SAME MediaStream as the video on purpose: startHost adds
+    // every track of this stream to the connection, and the joiner attaches
+    // that one stream to its <video>, which plays the audio with it. No second
+    // element, no way to mix the two up with the voice mix, and nothing about
+    // the voice path changes.
+    const gameAudio = (win.__gameAudio?.() as MediaStream | null | undefined) ?? null;
+    for (const t of gameAudio?.getAudioTracks() ?? []) stream.addTrack(t);
     // Remote capacity follows the host's chosen player count: the host is pad 0,
     // so N players leaves N-1 remote seats. Per-pad key sets exist only on the
     // multitap engine; on stock we keep the proven single-pad path.
@@ -562,7 +577,17 @@ export default function Ps2(props: {
       },
       onStream: (stream) => {
         setJoinStage("live"); setMpStatus("connected");
-        if (joinVideo) { joinVideo.srcObject = stream; joinVideo.play().catch(() => {}); }
+        if (joinVideo) {
+          joinVideo.srcObject = stream;
+          joinVideo.muted = false;
+          joinVideo.play().catch(() => {
+            // Autoplay with sound was refused. Show the game rather than
+            // nothing, and say why the sound is missing.
+            joinVideo!.muted = true;
+            joinVideo!.play().catch(() => { /* nothing more to try */ });
+            setMpStatus("connected · tap the picture for sound");
+          });
+        }
       },
       onStatus: (s) => setMpStatus(s),
     });
@@ -865,7 +890,19 @@ export default function Ps2(props: {
             <div class="ps2-rejoin"><span class="ps2-rejoin-dot" />{rejoin()}</div>
           </Show>
           <div class="ps2-join-view">
-            <video ref={joinVideo} class="ps2-join-video" classList={{ live: joinStage() === "live" }} autoplay playsinline muted />
+            {/* Not muted: the stream now carries the game's audio, and this is
+                what plays it. Autoplay with sound needs a gesture, and joining
+                is one — onStream falls back to muted if the browser refuses, so
+                a blocked autoplay costs the sound and never the picture. */}
+            <video ref={joinVideo} class="ps2-join-video" classList={{ live: joinStage() === "live" }}
+              autoplay playsinline
+              onClick={() => {
+                // The gesture the browser was waiting for. Harmless when the
+                // sound is already playing.
+                if (!joinVideo) return;
+                joinVideo.muted = false;
+                joinVideo.play().then(() => setMpStatus("connected")).catch(() => {});
+              }} />
             <Show when={joinStage() !== "live"}>
               <div class="ps2-gate ps2-join-connecting">
                 <div class="session-disc ps2-spin"><div class="session-disc-hole" /></div>

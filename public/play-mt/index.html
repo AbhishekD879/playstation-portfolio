@@ -26,6 +26,53 @@
   // against itself. Derive the directory from the URL instead; both
   // "/play-fast/index.html" and a bare "/play-fast/" give "/play-fast/".
   const BASE = location.pathname.replace(/[^/]*$/, "");
+
+  // —— a copy of the game's sound, for the people watching ————————————————
+  //
+  // A canvas has no audio, so canvas.captureStream() is video and nothing else
+  // — which meant a joiner saw the game in silence and only ever heard it as
+  // bleed through the host's microphone, mangled by the echo cancellation and
+  // noise suppression a voice pipeline applies. This gives the game its own
+  // track instead.
+  //
+  // Emscripten's OpenAL builds one master gain per AL context and connects it
+  // straight to ctx.destination (library_openal.js: `gain.connect(ac.destination)`),
+  // so everything the emulator plays crosses exactly one edge. Rather than
+  // reach into emscripten's internals for that node, mirror any connection
+  // made to the speakers into a MediaStreamDestination as well. Version-proof,
+  // and it cannot miss a source.
+  //
+  // Installed BEFORE Play.js is imported, because the context is created during
+  // module start-up and a tap fitted afterwards would miss the wiring.
+  let gameAudioTap = null;
+  {
+    const OrigAudioContext = window.AudioContext || window.webkitAudioContext;
+    if (OrigAudioContext) {
+      const origConnect = AudioNode.prototype.connect;
+      const Tapped = function (...args) {
+        const ctx = new OrigAudioContext(...args);
+        if (!gameAudioTap) {
+          gameAudioTap = ctx.createMediaStreamDestination();
+          AudioNode.prototype.connect = function (target, ...rest) {
+            // Tee, never reroute: the speakers still get exactly what they got
+            // before, and the tap gets a second copy.
+            if (target === ctx.destination) {
+              try { origConnect.call(this, gameAudioTap); } catch { /* one edge is enough */ }
+            }
+            return origConnect.call(this, target, ...rest);
+          };
+        }
+        return ctx;
+      };
+      Tapped.prototype = OrigAudioContext.prototype;
+      window.AudioContext = Tapped;
+      if (window.webkitAudioContext) window.webkitAudioContext = Tapped;
+    }
+  }
+  /** The game's audio as a MediaStream, or null before the emulator has made a
+   *  sound. The parent adds this to the stream it shares with joiners. */
+  window.__gameAudio = () => gameAudioTap?.stream ?? null;
+
   const { default: Play } = await import(BASE + "Play.js");
   // The wasm reads the disc through this device (mirrors upstream's wiring).
   class DiscImageDevice {
