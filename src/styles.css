@@ -1271,6 +1271,47 @@ body.party-col .share-btn { right: calc(var(--pty-w) + clamp(12px, 2vw, 22px)); 
 .ps2-perf-sep { width: 1px; height: 12px; margin: 0 4px; align-self: center; background: rgba(255,255,255,0.22); }
 .ps2-perf-na { font-size: 10.5px; letter-spacing: 0.09em; color: var(--dim); }
 
+/* —— Game volume ————————————————————————————————————————————————————
+   A slider, not a pill-and-sheet: the whole point is to nudge it while the
+   game is running and hear the result, which a two-click panel ruins. It sits
+   in the action row with the other live controls and stays compact enough not
+   to push them around. */
+.ps2-vol {
+  display: inline-flex; align-items: center; gap: 7px;
+  padding: 0 10px; height: 30px;
+  border: 1px solid rgba(255,255,255,0.14);
+  background: rgba(255,255,255,0.04);
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+}
+.ps2-vol:hover, .ps2-vol:focus-within { background: rgba(255,255,255,0.08); }
+.ps2-vol-k { font-size: 12px; line-height: 1; }
+.ps2-vol-n { font-size: 10.5px; letter-spacing: 0.06em; color: var(--dim); min-width: 3.1em; text-align: right; }
+.ps2-vol input[type="range"] {
+  -webkit-appearance: none; appearance: none;
+  width: 84px; height: 3px; margin: 0; padding: 0;
+  background: rgba(255,255,255,0.22);
+  cursor: pointer;
+}
+.ps2-vol input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none; appearance: none;
+  width: 12px; height: 12px; border-radius: 50%; border: 0;
+  background: var(--text);
+}
+.ps2-vol input[type="range"]::-moz-range-thumb {
+  width: 12px; height: 12px; border-radius: 50%; border: 0;
+  background: var(--text);
+}
+.ps2-vol input[type="range"]:focus-visible { outline: 2px solid var(--xmb-tint); outline-offset: 4px; }
+
+/* The joiner has no action row — their slider sits over the picture, bottom
+   right, clear of the "tap for sound" area in the middle. */
+.ps2-vol-join {
+  position: absolute; right: 16px; bottom: 16px; z-index: 9;
+  background: linear-gradient(180deg, rgba(6,10,20,0.82), rgba(6,10,20,0.62));
+  border-color: rgba(255,255,255,0.18);
+}
+
 /* —— Engine lab (?perf=1) ——————————————————————————————————————————————
    Numbers first, chrome second: this panel exists to be read at a glance while
    a game is running, so the figures are large and tabular and everything

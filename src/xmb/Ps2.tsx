@@ -22,6 +22,7 @@ import { bumpPlays, resolveGameFile, type GameRecord } from "../gamesdb";
 import { clockDen, engineUrl, readClock, readEngine, readRes,
          type Ps2Clock, type Ps2Res } from "../ps2/engineChoice";
 import { readVariant, variantUrl } from "../ps2/engineVariants";
+import { readVolume, writeVolume, volumePercent } from "../ps2/gameVolume";
 import { read as readCounters, sample as sampleCounters, type Counters, type Reading }
   from "../ps2/enginePerf";
 import Ps2EngineLab from "./Ps2EngineLab";
@@ -200,6 +201,27 @@ export default function Ps2(props: {
   // be an older build that lacks one.
   // The engine boots with the limiter ON; nothing reads it back, so this
   // mirrors what we have set rather than claiming to know the engine's mind.
+  // —— how loud the game is, for whoever is listening ————————————————————
+  //
+  // Two sliders, never one. The host's moves a gain on the SPEAKER branch
+  // inside the emulator page; the stream to joiners leaves at full level and
+  // each joiner sets their own on the element playing it. A host turning the
+  // game down to hear friends on a voice call must not reach into the room and
+  // quieten it for everyone watching.
+  const [gameVol, setGameVol] = createSignal(readVolume("host"));
+  const applyGameVol = (v: number) => {
+    const g = writeVolume("host", v);
+    setGameVol(g);
+    (frame?.contentWindow as { __setGameVolume?: (v: number) => void } | null)
+      ?.__setGameVolume?.(g);
+  };
+  const [remoteVol, setRemoteVol] = createSignal(readVolume("joiner"));
+  const applyRemoteVol = (v: number) => {
+    const g = writeVolume("joiner", v);
+    setRemoteVol(g);
+    if (joinVideo) joinVideo.volume = g;
+  };
+
   const [frameLimit, setFrameLimit] = createSignal(true);
   const applyFrameLimit = (on: boolean) => {
     const m = engineModule() as { setFrameLimit?: (on: boolean) => void } | null;
@@ -580,6 +602,9 @@ export default function Ps2(props: {
         if (joinVideo) {
           joinVideo.srcObject = stream;
           joinVideo.muted = false;
+          // The host sends at full level and cannot change this — how loud the
+          // game sits next to their voice is the joiner's own call.
+          joinVideo.volume = remoteVol();
           joinVideo.play().catch(() => {
             // Autoplay with sound was refused. Show the game rather than
             // nothing, and say why the sound is missing.
@@ -657,6 +682,10 @@ export default function Ps2(props: {
       if (e.origin !== location.origin || !e.data?.type) return;
       if (e.data.type === "play-ready") {
         ready = true;
+        // Re-apply the remembered volume: the frame is new (first boot, a disc
+        // change, or an engine switch) and its audio graph starts at full.
+        (frame?.contentWindow as { __setGameVolume?: (v: number) => void } | null)
+          ?.__setGameVolume?.(gameVol());
         if (pending) bootNow(pending);
         else if (props.initialGame) bootRecord(props.initialGame, true); // auto-boot the library pick
       }
@@ -903,6 +932,22 @@ export default function Ps2(props: {
                 joinVideo.muted = false;
                 joinVideo.play().then(() => setMpStatus("connected")).catch(() => {});
               }} />
+            <Show when={joinStage() === "live"}>
+              {/* The joiner's own game volume. The host's slider moves their
+                  speakers only — the stream arrives at full level, so this is
+                  the one that decides how loud the game sits next to whoever
+                  you are talking to. */}
+              <label class="ps2-vol ps2-vol-join" title="Game volume (yours)">
+                <span class="ps2-vol-k" aria-hidden="true">{remoteVol() === 0 ? "🔇" : "🔊"}</span>
+                <input
+                  type="range" min="0" max="100" step="5"
+                  value={volumePercent(remoteVol())}
+                  aria-label="Game volume"
+                  onInput={(e) => applyRemoteVol(Number(e.currentTarget.value) / 100)}
+                />
+                <span class="ps2-vol-n">{volumePercent(remoteVol())}%</span>
+              </label>
+            </Show>
             <Show when={joinStage() !== "live"}>
               <div class="ps2-gate ps2-join-connecting">
                 <div class="session-disc ps2-spin"><div class="session-disc-hole" /></div>
@@ -973,6 +1018,19 @@ export default function Ps2(props: {
               </Show>
               <button class="ghost-btn" classList={{ on: showPerf() }} aria-pressed={showPerf()}
                 onClick={togglePerf}>▤ fps</button>
+              {/* Live, and inline rather than behind a pill: the point is to
+                  nudge it while the game is running and hear the result. Only
+                  this machine's speakers — joiners set their own. */}
+              <label class="ps2-vol" title="Game volume (yours only — joiners set their own)">
+                <span class="ps2-vol-k" aria-hidden="true">{gameVol() === 0 ? "🔇" : "🔊"}</span>
+                <input
+                  type="range" min="0" max="100" step="5"
+                  value={volumePercent(gameVol())}
+                  aria-label="Game volume"
+                  onInput={(e) => applyGameVol(Number(e.currentTarget.value) / 100)}
+                />
+                <span class="ps2-vol-n">{volumePercent(gameVol())}%</span>
+              </label>
               {/* Advanced engine only: the native build exports none of the
                   counters this panel is made of, so there would be nothing to
                   show. Which BUILD of the advanced engine runs is chosen under
