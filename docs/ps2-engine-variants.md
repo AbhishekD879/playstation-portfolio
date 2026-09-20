@@ -191,35 +191,65 @@ A good check that it worked — the JIT counters come out byte-identical on both
 builds (1053 blocks compiled, 23,224 live), because the same emulated span
 compiles the same blocks.
 
-### play-fast vs play-prof
+### Attributing the gain: all five builds, one sitting
 
-`WASM_EH` + `SIMD`, same disc, ~6000 fields:
+Shadow of the Colossus, full clock, limiter unlocked, ~6000 fields each, six
+runs back to back on an otherwise idle machine. The baseline ran **first and
+last** so thermal drift over 35 minutes would show up as a disagreement rather
+than hide in the deltas — it came out 22.59 and 22.68 fields/sec, agreeing
+within 0.4%, so the deltas below are real.
 
-| | `play-prof` | `play-fast` | |
+| build | flags | fields/sec | vs baseline |
 | --- | --- | --- | --- |
-| fields | 6006 | 5996 | |
-| seconds | 264.5 | 246.5 | −6.8% |
-| fields/sec | 22.7 | **24.3** | **+7.1%** |
-| speed | 37.9% | 40.6% | |
+| `prof` | — | 22.59 / 22.68 | — |
+| `ehx` | WASM_EH | **23.91** | **+5.6%** |
+| `simd` | SIMD | 22.68 | **+0.2%** |
+| `fast` | WASM_EH + SIMD | 24.24 | +7.1% |
+| `lto` | WASM_EH + SIMD + LTO | 24.41 | +7.8% |
 
-Shares converted back to absolute time, which is what actually moved:
+**`WASM_EH` is the lever.** It carries +5.6% of the +7.8% on its own, and it
+does it while making the binary 197KB *smaller*. Best value by a wide margin.
 
-| zone | change | kind |
-| --- | --- | --- |
-| GPU feed (GIF) | **−17%** | ahead-of-time C++ |
-| Vector feed (VIF) | **−9%** | ahead-of-time C++ |
-| Vector units (VU) | −6.6% | recompiled |
-| CPU (EE) | −2% | recompiled |
+**`SIMD` alone does nothing measurable** (+0.2%, inside the 0.4% run-to-run
+spread). It contributes only in combination (`ehx` 23.91 to `fast` 24.24, about
++1.4%), which is roughly three times the noise floor, so probably real but
+small. The reading matches the zone kinds: the hot work is either recompiled
+(VU + EE, two-thirds of the thread) or not autovectorisable.
 
-The shape is what the zone kinds predict: `SIMD` reaches the two ahead-of-time
-transfer units hardest, `WASM_EH` gives a broad smaller win across the
-recompiled zones. Note EE's *share* rose (29.9% to 31.4%) while its absolute
-time fell — a share going up only means everything around it got faster.
+**`LTO` adds +0.7%** on top of `fast`, which is under two times the noise
+floor. It also costs 138KB of inlined code. Marginal.
 
-**+7% is not free but it is not transformative either.** Worth taking; not
-worth expecting it to turn 40% speed into playable. Build `ehx` and `simd`
-separately if the split between the two levers matters — on this evidence
-`SIMD` is carrying more of it than the code-size win from `WASM_EH` suggested.
+#### A correction worth keeping
+
+Comparing only `fast` against `prof` showed GIF time down 17% and VIF down 9%,
+and that was first attributed to `SIMD` — those two zones being the
+ahead-of-time C++ that `-msimd128` can reach. **Wrong.** Isolating the flags
+shows `WASM_EH` produced all of it:
+
+| zone absolute time | `prof` | `ehx` (EH only) | `simd` (SIMD only) |
+| --- | --- | --- | --- |
+| GIF | 27.35 | **23.09 (−15.6%)** | 27.27 (−0.3%) |
+
+The GIF and VIF transfer loops are call-heavy, and every call that could throw
+was wrapped in an `invoke_*` trampoline. Plausible reasoning about which flag
+*should* reach which zone picked the wrong one; only the one-flag-per-build
+sweep settled it. That is the entire reason the variants exist rather than a
+single combined "fast" build.
+
+Note also that EE's *share* rises with the levers (29.7% to 32.2%) while its
+absolute time falls — a share going up only means everything around it got
+faster.
+
+### Recommendation
+
+Promote `PORTFOLIO_WASM_EH` into the shared core: +5.6% and 197KB smaller, one
+flag, no downside found. `SIMD` and `LTO` together buy the remaining ~2.2% for
++150KB and two more things that can break a link; take them only if that 2.2%
+matters.
+
+Requires Chrome 95+, Safari 15.2+, Firefox 131+ for native wasm exception
+handling. The recompiler already emits SIMD, so those browser floors are
+already in force for this core regardless.
 
 ## These are local-only
 

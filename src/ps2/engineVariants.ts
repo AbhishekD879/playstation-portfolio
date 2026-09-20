@@ -9,15 +9,20 @@
 //   WASM_EH   Emscripten's default -fexceptions routes every call that COULD
 //             throw through an invoke_* trampoline in JS, so the cost lands on
 //             every call site rather than on a throw. Native wasm EH deletes
-//             the trampolines: measured here at 184KB (9%) less code and 10KB
-//             less JS glue on an otherwise identical build.
+//             the trampolines: 197KB less code, and MEASURED +5.6% — almost
+//             all of the gain any combination here produces. The one to
+//             promote. Needs Chrome 95+, Safari 15.2+, Firefox 131+.
 //   SIMD      -msimd128 vectorises the AHEAD-OF-TIME C++ only — the SPU mixer,
 //             VIF/GIF unpack loops, IPU MPEG decode. It does NOT touch
 //             recompiled code: the JIT already hand-emits v128 (see
 //             Jitter_CodeGen_Wasm_Md.cpp). That covers the VU as well as the
 //             EE, because CVuExecutor extends the same CGenericMipsExecutor —
 //             so both of those zones may not move at all while sound and the
-//             transfer units do.
+//             transfer units do. MEASURED: +0.2% on its own, i.e. nothing.
+//             Reasoning about which zone a flag *should* reach picked this one
+//             as the likely winner from the combined build's numbers, and the
+//             one-flag-per-build sweep proved that wrong — see
+//             docs/ps2-engine-variants.md.
 //   LTO       Cross-translation-unit inlining. Matters mostly for the
 //             MemoryUtils_*Proxy calls that JIT'd blocks make constantly.
 //
@@ -65,28 +70,28 @@ export const ENGINE_VARIANTS: readonly EngineVariant[] = [
     id: "fast",
     label: "Wasm EH + SIMD",
     levers: ["PROFILE", "PORTFOLIO_WASM_EH", "PORTFOLIO_SIMD"],
-    why: "Both levers at once, profiled. Use this to find out whether there is any gain worth chasing before splitting them apart.",
+    why: "Both levers at once. MEASURED +7.1%, of which wasm EH is +5.6% — so SIMD only contributes alongside it, and only by about 1.4%.",
     profiled: true,
   },
   {
     id: "ehx",
     label: "Wasm EH only",
     levers: ["PROFILE", "PORTFOLIO_WASM_EH"],
-    why: "Isolates native exception handling. Build this only if the combined build showed a gain worth attributing.",
+    why: "Isolates native exception handling. MEASURED +5.6% on Shadow of the Colossus and 197KB smaller — this one flag carries almost all of the combined gain, and it is the one to promote into the shared core.",
     profiled: true,
   },
   {
     id: "simd",
     label: "SIMD only",
     levers: ["PROFILE", "PORTFOLIO_SIMD"],
-    why: "Isolates vectorising the ahead-of-time C++. Expect it in sound and the transfer units, not in CPU or vector-unit time — those are recompiled, and the recompiler already emits SIMD.",
+    why: "Isolates vectorising the ahead-of-time C++. MEASURED +0.2% — nothing, inside the run-to-run spread. The hot work is either recompiled (VU and EE are two thirds of the thread) or does not autovectorise.",
     profiled: true,
   },
   {
     id: "lto",
     label: "Wasm EH + SIMD + LTO",
     levers: ["PROFILE", "PORTFOLIO_WASM_EH", "PORTFOLIO_SIMD", "PORTFOLIO_LTO"],
-    why: "Adds link-time optimisation on top. Slowest to build and the likeliest to break the link, so it is kept separate from the combined build.",
+    why: "Adds link-time optimisation on top. MEASURED +7.8%, so LTO is worth +0.7% over the combined build for 138KB of inlined code. The fastest build here, and marginal.",
     profiled: true,
   },
 ];
