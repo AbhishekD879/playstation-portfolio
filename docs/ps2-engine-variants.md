@@ -182,10 +182,44 @@ having the panel rather than a number in a document.
 
 "FPS after N seconds" is not a fair comparison: with the limiter unlocked the
 faster build has run *further into the game* by then, so the two are measuring
-different scenes. Compare at the same **emulated** point instead — skip a fixed
-number of fields, then time how long the next fixed span of fields takes. Same
-work, wall time is the score. `scratchpad/fields.js` in the session that built
-this does it that way.
+different scenes. On the same build the two methods gave 34.0% and 37.9% — the
+spread is the scene, not the build.
+
+Compare at the same **emulated** point instead: skip a fixed number of fields,
+then time how long the next fixed span takes. Same work, wall time is the score.
+A good check that it worked — the JIT counters come out byte-identical on both
+builds (1053 blocks compiled, 23,224 live), because the same emulated span
+compiles the same blocks.
+
+### play-fast vs play-prof
+
+`WASM_EH` + `SIMD`, same disc, ~6000 fields:
+
+| | `play-prof` | `play-fast` | |
+| --- | --- | --- | --- |
+| fields | 6006 | 5996 | |
+| seconds | 264.5 | 246.5 | −6.8% |
+| fields/sec | 22.7 | **24.3** | **+7.1%** |
+| speed | 37.9% | 40.6% | |
+
+Shares converted back to absolute time, which is what actually moved:
+
+| zone | change | kind |
+| --- | --- | --- |
+| GPU feed (GIF) | **−17%** | ahead-of-time C++ |
+| Vector feed (VIF) | **−9%** | ahead-of-time C++ |
+| Vector units (VU) | −6.6% | recompiled |
+| CPU (EE) | −2% | recompiled |
+
+The shape is what the zone kinds predict: `SIMD` reaches the two ahead-of-time
+transfer units hardest, `WASM_EH` gives a broad smaller win across the
+recompiled zones. Note EE's *share* rose (29.9% to 31.4%) while its absolute
+time fell — a share going up only means everything around it got faster.
+
+**+7% is not free but it is not transformative either.** Worth taking; not
+worth expecting it to turn 40% speed into playable. Build `ehx` and `simd`
+separately if the split between the two levers matters — on this evidence
+`SIMD` is carrying more of it than the code-size win from `WASM_EH` suggested.
 
 ## These are local-only
 
