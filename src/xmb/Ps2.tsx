@@ -886,7 +886,7 @@ export default function Ps2(props: {
                 ? "The emulator needs cross-origin isolation headers, which this deployment isn't sending. Try the local/dev build, or Chrome/Edge."
                 : "Emulating the PlayStation 2 is enormously demanding — it needs a desktop with a real GPU and keyboard. But you CAN play here as player 2 of a 2-player game hosted on a desktop."}</p>
               <Show when={!isDesktop}>
-                <button class="ps2-launch" onClick={() => { sfx.tickH(); setJoinStage("code"); setJoinInput(""); }}>🎮 &nbsp;JOIN A 2-PLAYER GAME</button>
+                <button class="ps2-launch ps2-lab-btn" onClick={() => { sfx.tickH(); setJoinStage("code"); setJoinInput(""); }}><Icon name="gamepad" /> &nbsp;JOIN A 2-PLAYER GAME</button>
                 <p class="ps2-warn">The host's game streams to this screen — an on-screen pad appears for your input.</p>
               </Show>
             </div>
@@ -938,7 +938,9 @@ export default function Ps2(props: {
                   the one that decides how loud the game sits next to whoever
                   you are talking to. */}
               <label class="ps2-vol ps2-vol-join" title="Game volume (yours)">
-                <span class="ps2-vol-k" aria-hidden="true">{remoteVol() === 0 ? "🔇" : "🔊"}</span>
+                <span class="ps2-vol-k" classList={{ off: remoteVol() === 0 }} aria-hidden="true">
+                  <Icon name="speaker" />
+                </span>
                 <input
                   type="range" min="0" max="100" step="5"
                   value={volumePercent(remoteVol())}
@@ -967,7 +969,7 @@ export default function Ps2(props: {
             <div class="ps2-bar">
               {/* the real pad, from the host's roster — "Player 2" was a guess
                   that was simply wrong for anyone past the second seat */}
-              <span class="flash-now">🎮 Player {members().find((m) => m.id === meId())?.pad ?? 2} · room {mpCode()} · {mpStatus()}</span>
+              <span class="flash-now ps2-lab-btn"><Icon name="gamepad" /> Player {members().find((m) => m.id === meId())?.pad ?? 2} · room {mpCode()} · {mpStatus()}</span>
               <span class="flash-bar-btns">
                 <Show when={joinStage() === "live"}>
                   <button class="ghost-btn" classList={{ on: chatOpen() }} aria-pressed={chatOpen()}
@@ -1022,7 +1024,9 @@ export default function Ps2(props: {
                   nudge it while the game is running and hear the result. Only
                   this machine's speakers — joiners set their own. */}
               <label class="ps2-vol" title="Game volume (yours only — joiners set their own)">
-                <span class="ps2-vol-k" aria-hidden="true">{gameVol() === 0 ? "🔇" : "🔊"}</span>
+                <span class="ps2-vol-k" classList={{ off: gameVol() === 0 }} aria-hidden="true">
+                  <Icon name="speaker" />
+                </span>
                 <input
                   type="range" min="0" max="100" step="5"
                   value={volumePercent(gameVol())}
@@ -1059,7 +1063,7 @@ export default function Ps2(props: {
               )}</Show>
               <button class="ghost-btn" onClick={() => setHelp(true)} title="How to play (?)">? controls</button>
               <ControlsCard id="ps2" title="PlayStation 2" open={help()} onClose={() => setHelp(false)} onToggle={() => setHelp(!help())} />
-              <button class="ghost-btn" classList={{ on: showDiag() }} onClick={() => setShowDiag((v) => !v)}>🩺 diagnostics</button>
+              <button class="ghost-btn ps2-lab-btn" classList={{ on: showDiag() }} onClick={() => setShowDiag((v) => !v)}><Icon name="info" /> diagnostics</button>
               <button class="ghost-btn" onClick={goFullscreen}>⛶ full screen</button>
               <button class="ghost-btn" onClick={eject}>⏏ eject</button>
             </span>
@@ -1174,9 +1178,9 @@ export default function Ps2(props: {
                 <div class="ps2-big">Insert a PlayStation 2 disc</div>
                 <p>A game image <b>you own</b> — .iso, .cso, .chd, .isz, .bin or .elf. It's read locally by the emulator, never uploaded. No BIOS needed.</p>
                 <button class="ps2-launch" onClick={() => fileInput.click()}>⏏ &nbsp;INSERT DISC</button>
-                <button class="ps2-join-btn" onClick={() => { sfx.tickH(); setJoinStage("code"); setJoinInput(""); }}>🎮 &nbsp;JOIN A 2-PLAYER GAME</button>
+                <button class="ps2-join-btn ps2-lab-btn" onClick={() => { sfx.tickH(); setJoinStage("code"); setJoinInput(""); }}><Icon name="gamepad" /> &nbsp;JOIN A 2-PLAYER GAME</button>
 
-                <p class="ps2-warn">Experimental core — many titles run slowly or not at all. 🎮 Xbox pad mapped: A=✕ B=◯ X=◻ Y=△ · sticks work · Start/Back = Start/Select.</p>
+                <p class="ps2-warn">Experimental core — many titles run slowly or not at all. <Icon name="gamepad" /> Xbox pad mapped: A=✕ B=◯ X=◻ Y=△ · sticks work · Start/Back = Start/Select.</p>
               </div>
             </Show>
 

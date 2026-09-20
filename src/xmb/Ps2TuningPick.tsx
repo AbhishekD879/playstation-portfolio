@@ -14,6 +14,7 @@
 // choose between and no pill.
 import { Show, createSignal, onCleanup, onMount } from "solid-js";
 import * as sfx from "../audio";
+import { Icon } from "./icons";
 import type { Ps2Override } from "../ps2knobs";
 import { recommends, writeChoice, type TunedChoice } from "../ps2/tunedChoice";
 
@@ -86,8 +87,8 @@ export default function Ps2TuningPick(props: Props) {
       {/* ghost-btn, not hz-btn: this lives in the in-game action row beside
           "save card" and "eject", which is where a player whose game breaks
           three levels in will actually go looking. */}
-      <button class="ghost-btn" ref={pill} aria-haspopup="dialog" aria-expanded={open()} onClick={show}>
-        ⚙ {props.choice === "tuned" ? "tuned" : "standard"}
+      <button class="ghost-btn ps2-lab-btn" ref={pill} aria-haspopup="dialog" aria-expanded={open()} onClick={show}>
+        <Icon name="sliders" /> {props.choice === "tuned" ? "tuned" : "standard"}
       </button>
 
       <Show when={open()}><div class="hz-sheet-scrim" onClick={close} /></Show>

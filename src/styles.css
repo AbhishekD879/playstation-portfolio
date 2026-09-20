@@ -1285,7 +1285,12 @@ body.party-col .share-btn { right: calc(var(--pty-w) + clamp(12px, 2vw, 22px)); 
   cursor: pointer;
 }
 .ps2-vol:hover, .ps2-vol:focus-within { background: rgba(255,255,255,0.08); }
-.ps2-vol-k { font-size: 12px; line-height: 1; }
+/* Icons come from the shared library as bare <svg> with no intrinsic size, so
+   every container states its own — the convention used throughout this file. */
+.ps2-vol-k { display: inline-flex; width: 14px; height: 14px; line-height: 1; color: var(--text); }
+.ps2-vol-k svg { width: 100%; height: 100%; }
+/* Silence used to be a different glyph; with one icon it is carried by state. */
+.ps2-vol-k.off { opacity: 0.4; }
 .ps2-vol-n { font-size: 10.5px; letter-spacing: 0.06em; color: var(--dim); min-width: 3.1em; text-align: right; }
 .ps2-vol input[type="range"] {
   -webkit-appearance: none; appearance: none;
@@ -1306,6 +1311,17 @@ body.party-col .share-btn { right: calc(var(--pty-w) + clamp(12px, 2vw, 22px)); 
 
 /* The joiner has no action row — their slider sits over the picture, bottom
    right, clear of the "tap for sound" area in the middle. */
+.ps2-lab-btn { display: inline-flex; align-items: center; gap: 6px; }
+.ps2-lab-btn svg { width: 13px; height: 13px; }
+/* Inline icons inside running text take their size from the type around them
+   rather than a fixed pixel value, so they stay on the baseline as the copy
+   scales. */
+.ps2-warn svg { width: 1.05em; height: 1.05em; vertical-align: -0.16em; }
+/* Trophy counts sit inline in running text, so they scale with it too. */
+.status-troph svg, .ptile-meta svg, .sdx-next svg {
+  width: 1.05em; height: 1.05em; vertical-align: -0.16em;
+}
+
 .ps2-vol-join {
   position: absolute; right: 16px; bottom: 16px; z-index: 9;
   background: linear-gradient(180deg, rgba(6,10,20,0.82), rgba(6,10,20,0.62));

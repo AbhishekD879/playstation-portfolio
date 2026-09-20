@@ -2108,7 +2108,7 @@ export default function XMB(props: {
             <img class="status-avatar" src={avatarSrc()} alt="" />
           </Show>
           {props.profile.name}
-          <span class="status-troph">🏆 {trophyCount()}</span>
+          <span class="status-troph"><Icon name="trophy" /> {trophyCount()}</span>
           <Show when={radioOn() || station()}>
             <button class="status-radio" title="Stop the music" aria-label={`Stop ${station()?.label ?? "the music"}`}
               onClick={() => { stopStation(); if (sfx.radioPlaying()) sfx.radioToggle(); setRadioOn(false); sfx.tickV(); }}>

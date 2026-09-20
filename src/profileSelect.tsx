@@ -1,5 +1,6 @@
 // PS3-style user select: a row of avatar tiles + Create New User.
 import { For, Show, createSignal, onMount } from "solid-js";
+import { Icon } from "./xmb/icons";
 import { AVATARS, createProfile, loadProfiles, type Profile } from "./profiles";
 import * as sfx from "./audio";
 import { onNav, setNavEnabled } from "./input";
@@ -95,7 +96,7 @@ export default function ProfileSelect(props: { onSelect: (p: Profile, isNew: boo
                     <img class="ptile-avatar" src={p!.avatarImg} alt="" />
                   </Show>
                   <div class="ptile-name">{p!.name}</div>
-                  <div class="ptile-meta">🏆 {Object.keys(p!.trophies).length}</div>
+                  <div class="ptile-meta"><Icon name="trophy" /> {Object.keys(p!.trophies).length}</div>
                 </Show>
               </div>
             )}

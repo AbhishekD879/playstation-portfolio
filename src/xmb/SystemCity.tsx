@@ -4,6 +4,7 @@
 // lesson + a standing Library, and per-level color identity so a beginner
 // always knows where they are. Progress persists locally; nothing is locked.
 import { For, Show, createMemo, createSignal } from "solid-js";
+import { Icon } from "./icons";
 import type { NavAction } from "../input";
 import * as sfx from "../audio";
 import SysTutor from "./SysTutor";
@@ -346,7 +347,7 @@ export default function SystemCity(props: { onClose: () => void; bind: (nav: (a:
                   <h2 class="sdx-done-title">Lesson complete</h2>
                   <div class="sdx-done-name">{l().title} · {doneCount()}/{ALL_LESSONS.length} · you're {/^[AEIOU]/.test(rank()) ? "an" : "a"} <b>{rank()}</b></div>
                   <div class="sdx-done-acts">
-                    <Show when={nxt()} fallback={<button class="sdx-next" onClick={() => setView({ t: "home" })}>🏆 Course complete — back to path</button>}>
+                    <Show when={nxt()} fallback={<button class="sdx-next" onClick={() => setView({ t: "home" })}><Icon name="trophy" /> Course complete — back to path</button>}>
                       <button class="sdx-next" onClick={() => openLesson(nxt()!)}>Next: {nxt()!.title} →</button>
                     </Show>
                     <button class="sdx-ghost" onClick={() => { sfx.back?.(); setView({ t: "home" }); }}>Back to path</button>

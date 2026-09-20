@@ -17,6 +17,7 @@
 // 60 frames and reports 100%, so nothing can be told apart; unlocked,
 // frames-per-second is the score.
 import { For, Show, createSignal, onCleanup, onMount } from "solid-js";
+import { Icon } from "./icons";
 import * as sfx from "../audio";
 import { ZONE_LABEL, type Reading } from "../ps2/enginePerf";
 import { engineVariant } from "../ps2/engineVariants";
@@ -89,8 +90,8 @@ export default function Ps2EngineLab(props: Props) {
 
   return (
     <>
-      <button class="ghost-btn" ref={pill} aria-haspopup="dialog" aria-expanded={open()} onClick={show}>
-        ⚡ performance
+      <button class="ghost-btn ps2-lab-btn" ref={pill} aria-haspopup="dialog" aria-expanded={open()} onClick={show}>
+        <Icon name="lightning" /> performance
       </button>
 
       <Show when={open()}><div class="hz-sheet-scrim" onClick={close} /></Show>
