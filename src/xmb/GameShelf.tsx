@@ -13,6 +13,8 @@ import { generateCover } from "../covers";
 import * as sfx from "../audio";
 import { ago, isSaveFile, packSaves, pickResume, unpackSaves, type SaveRecord } from "../saves";
 import ControlsCard from "../emulator/ControlsCard";
+import { parsePs2Save, describeSave } from "../ps2/saveImport";
+import { importSaveToCard } from "../ps2/memoryCard";
 
 const mb = (n?: number) => (!n ? "" : n >= 1073741824 ? `${(n / 1073741824).toFixed(1)} GB` : `${(n / 1048576).toFixed(1)} MB`);
 const sysLabel = (s: string) => (s === "ps2" ? "PlayStation 2" : CORE_NAMES[s] ?? s);
@@ -67,6 +69,45 @@ export default function GameShelf(props: {
     setTimeout(() => URL.revokeObjectURL(a.href), 10_000);
     sfx.confirm(); setNote(`Saved progress exported — ${packed.name}`); closeOpts();
   }
+  /** Put a downloaded PS2 memory card save onto this profile's card.
+   *
+   *  PS2 is excluded from the generic export/import above because its saves do
+   *  not live in the save store — they live in the emulator's memory card. What
+   *  people actually have is one of five container formats written by 2000s
+   *  cheat hardware, so the file is unpacked here rather than asking anyone to
+   *  convert it first. See saveImport.ts.
+   *
+   *  The game is not running at this point, so this writes straight to the card
+   *  record and the next boot picks it up. Nothing about saving DURING play
+   *  changes: that stays manual. */
+  function importPs2Card() {
+    const g = cur()!;
+    const input = document.createElement("input");
+    input.type = "file";
+    input.accept = ".psu,.max,.cbs,.sps,.xps,.psv,.PSV,application/octet-stream";
+    input.onchange = async () => {
+      const f = input.files?.[0];
+      if (!f) return;
+      try {
+        setNote(`Reading ${f.name}…`);
+        const parsed = await parsePs2Save(new Uint8Array(await f.arrayBuffer()));
+        const res = await importSaveToCard(props.profileId, parsed);
+        sfx.confirm();
+        setNote(
+          `${describeSave(parsed)} → memory card${res.replaced ? " (replaced the save that was there)" : ""}.`
+          + " Boot the game to use it.",
+        );
+        closeOpts();
+      } catch (e) {
+        // Say WHICH file and WHY: the usual failure is a save for another
+        // region, which unpacks perfectly and is then invisible in-game.
+        sfx.deny();
+        setNote(`Could not read ${f.name}: ${(e as Error).message}`);
+      }
+    };
+    input.click();
+  }
+
   function importSaves() {
     const g = cur()!;
     const input = document.createElement("input");
@@ -299,6 +340,14 @@ export default function GameShelf(props: {
                 <span><span class="t">Run with {sysLabel(to())}</span><span class="s">romsets differ per core — try the other one if this one will not start</span></span>
               </button>
             )}</Show>
+            <Show when={cur()!.sys === "ps2"}>
+              <button class="hz-srow" onClick={importPs2Card}>
+                <span>
+                  <span class="t">Import a memory card save…</span>
+                  <span class="s">.psu · .max · .cbs · .sps · .xps · .psv — unlocks and progress from a save archive</span>
+                </span>
+              </button>
+            </Show>
             <Show when={cur()!.sys !== "ps2"}>
               <button class="hz-srow" onClick={() => void exportSaves()} disabled={!(saves()[cur()!.id]?.length)}>
                 <span><span class="t">Export saved progress…</span><span class="s">{saves()[cur()!.id]?.length ? "one small file you can take to another device" : "nothing saved for this game yet"}</span></span>
