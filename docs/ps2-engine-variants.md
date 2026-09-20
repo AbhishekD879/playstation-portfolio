@@ -240,6 +240,45 @@ Note also that EE's *share* rises with the levers (29.7% to 32.2%) while its
 absolute time falls — a share going up only means everything around it got
 faster.
 
+### Validation of the WASM_EH build
+
+Browsers — the real artifact, not a synthetic probe:
+
+| engine | validates `play-ehx/Play.wasm` | boots the VM |
+| --- | --- | --- |
+| Chrome 153 | yes | yes (all benchmarks above ran here) |
+| Firefox 150 | yes | yes, profiler live |
+| WebKit / Safari 26.4 | yes | not locally — see below |
+
+WebKit could not boot **either** core locally, reporting `SharedArrayBuffer`
+absent and `crossOriginIsolated` false. That is the dev server sending
+`COEP: credentialless`, which Safari has never supported; production already
+gives `/play/`, `/play-mt/` and `/play-tune/` their own `require-corp` block
+for exactly this reason, so a promoted `WASM_EH` inherits working Safari
+support unchanged. Not an EH issue — the shared core fails identically.
+
+A first attempt used a hand-built 13-byte module with a tag section as the
+capability probe. It reported `false` in Chrome, which demonstrably runs the EH
+build — the module was malformed, not the browser. Validate the real artifact.
+
+Games — boot to first fields, `play-ehx`:
+
+| disc | result |
+| --- | --- |
+| Shadow of the Colossus | boots, benchmarked at length |
+| Batman Vengeance | boots |
+| WWE SmackDown! Here Comes the Pain | boots |
+
+Two further ISOs reached zero fields on `ehx` — and identically on the shared
+core, because they turned out to be **PSP UMD images** (`PSP_GAME` present, no
+`SYSTEM.CNF`), picked out of a downloads folder by file size without checking
+the disc format. A PS2 emulator refusing them is correct. Check the volume
+descriptor before treating a non-boot as a finding.
+
+Still untested: deep gameplay, and the exception paths themselves — bad disc
+reads, FS errors, codegen rejections. Native EH changes how every throw
+unwinds, and a boot-and-idle run never reaches those.
+
 ### Recommendation
 
 Promote `PORTFOLIO_WASM_EH` into the shared core: +5.6% and 197KB smaller, one
