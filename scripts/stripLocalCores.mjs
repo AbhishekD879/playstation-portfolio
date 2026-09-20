@@ -24,7 +24,16 @@ import { rmSync, existsSync } from "node:fs";
 
 const { WEB_GAMES, SELF_HOSTED_WEB_GAME_IDS } = await import("../src/webgames.ts");
 
-const LOCAL_ONLY = ["play-diag", "play-oph"];
+// Local-only cores. Kept in step with .gitignore by src/ps2/localCores.test.ts,
+// which fails if a gitignored public/play-* directory is missing from here —
+// the drift that put 7.3MB of debug cores into production the first time.
+const LOCAL_ONLY = [
+  "play-diag",   // CPU-sampling bindings, CLog enabled
+  "play-oph",    // A/B baseline, no WebGL feedback change
+  // Engine speed variants: one compiler lever each, built to be compared and
+  // thrown away. See src/ps2/engineVariants.ts.
+  "play-prof", "play-fast", "play-ehx", "play-simd", "play-lto",
+];
 
 const notOurs = SELF_HOSTED_WEB_GAME_IDS
   // publishEngine opts a slot back in: its directory holds an engine and a host

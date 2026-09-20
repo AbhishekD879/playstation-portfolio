@@ -1271,6 +1271,51 @@ body.party-col .share-btn { right: calc(var(--pty-w) + clamp(12px, 2vw, 22px)); 
 .ps2-perf-sep { width: 1px; height: 12px; margin: 0 4px; align-self: center; background: rgba(255,255,255,0.22); }
 .ps2-perf-na { font-size: 10.5px; letter-spacing: 0.09em; color: var(--dim); }
 
+/* —— Engine lab (?perf=1) ——————————————————————————————————————————————
+   Numbers first, chrome second: this panel exists to be read at a glance while
+   a game is running, so the figures are large and tabular and everything
+   around them stays quiet. It borrows the sheet's own type and spacing — it is
+   a debug surface, not a second design. */
+.lab-top {
+  display: flex; gap: clamp(14px, 2cqw, 28px); align-items: baseline;
+  margin: 2px 0 10px; font-variant-numeric: tabular-nums;
+  font-size: clamp(10px, 0.95cqw, 12.5px); letter-spacing: 0.1em; color: var(--faint2);
+}
+.lab-top b { font-size: clamp(20px, 2.2cqw, 30px); font-weight: 300; letter-spacing: 0;
+  color: var(--text); margin-right: 5px; }
+
+.lab-zones { display: flex; flex-direction: column; gap: 5px; }
+/* label · bar · share · ms — the bar takes the slack so the four columns stay
+   aligned down the list however long a label is. */
+.lab-zone {
+  display: grid; grid-template-columns: 7.5em 1fr 3.4em;
+  align-items: center; gap: 8px;
+  font-size: clamp(10px, 0.95cqw, 12.5px); font-variant-numeric: tabular-nums;
+}
+/* one line always: eight rows only read as a chart if every row is the same
+   height and the bars start at the same x. */
+.lab-zone-k { color: var(--faint2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.lab-zone-track { height: 6px; background: rgba(255,255,255,0.08); overflow: hidden; }
+.lab-zone-fill {
+  display: block; height: 100%;
+  background: color-mix(in oklab, var(--xmb-tint) 85%, transparent);
+  transition: width 0.3s ease;
+}
+/* Waiting on the GPU is the one zone no compiler flag can shrink, so it reads
+   as a different kind of cost rather than as more of the same. */
+.lab-zone-fill.gpu { background: color-mix(in oklab, #e0a860 80%, transparent); }
+.lab-zone-v { text-align: right; color: var(--text); }
+
+.lab-jit {
+  display: flex; flex-wrap: wrap; gap: 4px clamp(10px, 1.6cqw, 22px);
+  margin-top: 12px; padding-top: 10px; border-top: 1px solid rgba(255,255,255,0.09);
+  font-size: clamp(10px, 0.95cqw, 12.5px); color: var(--faint2);
+  font-variant-numeric: tabular-nums;
+}
+.lab-jit b { color: var(--text); font-weight: 400; margin-right: 3px; }
+
+@media (prefers-reduced-motion: reduce) { .lab-zone-fill { transition: none; } }
+
 /* —— Reader Browser —— */
 .browser { position: fixed; inset: 0; z-index: 32; display: flex; flex-direction: column;
   background: linear-gradient(200deg, rgba(6,10,22,0.98), rgba(2,4,12,0.99)); }

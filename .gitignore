@@ -31,6 +31,16 @@ public/play-diag/
 # A/B baseline core (no WebGL feedback change). Local-only.
 public/play-oph/
 
+# Engine speed variants, one CMake lever each, for measuring a flag against the
+# shared core. Local-only: they exist to be compared and thrown away. When a
+# lever wins it goes into the shared core (public/play-mt/, which IS tracked)
+# and its variant directory stops existing. See docs/ps2-engine-variants.md.
+public/play-prof/
+public/play-fast/
+public/play-ehx/
+public/play-simd/
+public/play-lto/
+
 # Self-hosted game builds — not redistributed with this repo, supplied by the
 # owner and deployed from their machine. See src/webgames.ts and
 # docs/self-hosted-games.md.

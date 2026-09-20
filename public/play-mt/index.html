@@ -19,7 +19,14 @@
      for its WebGL context — any other id boots to a black screen. -->
 <canvas id="outputCanvas" width="640" height="480" tabindex="0"></canvas>
 <script type="module">
-  import Play from "/play-mt/Play.js";
+  // This page is copied verbatim into each engine variant directory
+  // (play-prof, play-fast, …), so it must not name its own. It used to hardcode
+  // the shared core's directory, which meant a copy loaded THAT wasm while
+  // sitting at its own URL — an A/B measurement silently comparing a build
+  // against itself. Derive the directory from the URL instead; both
+  // "/play-fast/index.html" and a bare "/play-fast/" give "/play-fast/".
+  const BASE = location.pathname.replace(/[^/]*$/, "");
+  const { default: Play } = await import(BASE + "Play.js");
   // The wasm reads the disc through this device (mirrors upstream's wiring).
   class DiscImageDevice {
     constructor(module) { this.module = module; this.doneFlag = false; this.file = null; }
@@ -255,11 +262,11 @@
 
   Play({
     canvas,
-    locateFile: (f) => "/play-mt/" + f,
+    locateFile: (f) => BASE + f,
     // The shim installs a trap-stack reporter inside each pthread worker and
     // then imports Play.js — see worker-trap-shim.js for why the stack cannot
     // be captured from the page side.
-    mainScriptUrlOrBlob: location.origin + "/play-mt/worker-trap-shim.js",
+    mainScriptUrlOrBlob: location.origin + BASE + "worker-trap-shim.js",
   }).then((m) => {
     mod = m;
     window.__mod = m; // debug/stats handle (same-origin parent can read fps)

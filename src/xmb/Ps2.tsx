@@ -19,7 +19,13 @@ import { Icon } from "./icons";
 import { makeRoomCode, startHost, startJoinerResilient, type HostHandle, type ResilientJoiner } from "../ps2mp/webrtc";
 import { captureLocalInput, makeInjector, type PadState } from "../ps2mp/input";
 import { bumpPlays, resolveGameFile, type GameRecord } from "../gamesdb";
-import { clockDen, engineUrl, readClock, readEngine, readRes } from "../ps2/engineChoice";
+import { clockDen, engineUrl, readClock, readEngine, readRes, writeClock, writeRes,
+         type Ps2Clock, type Ps2Res } from "../ps2/engineChoice";
+import { readVariant, variantAvailable, variantUrl, writeVariant, ENGINE_VARIANTS,
+         DEFAULT_VARIANT } from "../ps2/engineVariants";
+import { read as readCounters, sample as sampleCounters, type Counters, type Reading }
+  from "../ps2/enginePerf";
+import Ps2EngineLab from "./Ps2EngineLab";
 import { readTitleId } from "../ps2compat";
 import Ps2TuningPick from "./Ps2TuningPick";
 import { tunedCoreAvailable, tunedCoreUrl } from "../ps2/tunedCores";
@@ -34,8 +40,6 @@ import { createHostVoice, createJoinerVoice, openMic, type HostVoice, type Joine
 import { loadProfiles } from "../profiles";
 
 type Stage = "insert" | "reading" | "playing" | "error";
-/** A real PS2's field rate. Speed is measured against this, not against 60. */
-const NTSC_HZ = 59.94;
 
 export default function Ps2(props: {
   /** how many controllers to boot with — chosen on the PS2 home screen */
@@ -88,13 +92,31 @@ export default function Ps2(props: {
   // to keep its WebGL drawing buffer readable, which the upscaler and motion
   // smoothing need to copy frames out of the frame — it costs a per-frame copy,
   // so it is only requested when one of them is actually on.
-  const res = readRes();
   const wantsFrames = upscale() !== "off" || frameGen() !== "off";
-  const coreQuery = engine === "advanced" ? `?res=${res}${wantsFrames ? "&keepbuf=1" : ""}` : "";
-  const engineSrc = engine === "advanced" ? `${engineUrl(engine)}${coreQuery}` : engineUrl(engine);
+  // ?perf=1 opens the engine lab: the speed variants, the profiler readout and
+  // the knobs that make a measurement mean anything. Debug surface — a player
+  // who has not asked for it never sees a pill for it.
+  const labOn = q.has("perf");
+  // Resolution and build were read-once consts. The lab can change both, and
+  // routeAndBoot rebuilds the frame URL from scratch on every insert — so a
+  // const base would silently put the old value back on the next disc. They are
+  // signals, and the URL is a function of them.
+  //
+  // Both are still LATCHED in the sense that changing them reloads the frame;
+  // nothing here pretends a running VM can be re-pointed.
+  const [resNow, setResNow] = createSignal<Ps2Res>(readRes());
+  const [variant, setVariant] = createSignal(readVariant());
+  const coreQuery = () => (engine === "advanced" ? `?res=${resNow()}${wantsFrames ? "&keepbuf=1" : ""}` : "");
+  // Every variant is a fork build in its own directory, and
+  // variantUrl(DEFAULT_VARIANT) is the shared core's own path — so on the
+  // default this composes to exactly the URL it always was.
+  const engineSrc = () =>
+    engine === "advanced"
+      ? `${variantUrl(variant())}${coreQuery()}`
+      : engineUrl(engine);
   // The shared core is what the frame loads while the user picks a disc. A disc
   // we have tuned re-points it once, at insert — see routeAndBoot.
-  const [frameSrc, setFrameSrc] = createSignal(engineSrc);
+  const [frameSrc, setFrameSrc] = createSignal(engineSrc());
   // What we know about the disc that just went in, for the tuning picker.
   // Bumped when a tuning choice changes, to force the frame to reload even
   // when its URL is otherwise identical.
@@ -102,9 +124,11 @@ export default function Ps2(props: {
   const [tuning, setTuning] = createSignal<
     { id: string; over: Ps2Override; choice: TunedChoice } | null
   >(null);
-  // Same read-once rule as the engine: the clock is applied at boot, so it is
-  // settled on PS2 home before this component exists.
-  const eeClockDen = clockDen(readClock());
+  // Settled on PS2 home before this component exists, and reactive only so the
+  // lab can change it. Still latched at boot either way: the setter reboots the
+  // disc rather than pretending a running VM can take a new clock.
+  const [clockNow, setClockNow] = createSignal<Ps2Clock>(readClock());
+  const eeClockDen = () => clockDen(clockNow());
   void loadOverrides(); // warm the per-game table before a disc arrives
   // A normal boot is still 1 player; the fork only enables a tap above two, so
   // one- and two-player sessions behave exactly as they did on stock.
@@ -134,18 +158,18 @@ export default function Ps2(props: {
   // at full speed reads "30 FPS · 100%", while a 60fps title struggling reads
   // "30 FPS · 50%" — same FPS, completely different problem. Both come from
   // counters the advanced build exports; the native build has neither.
-  const [perf, setPerf] = createSignal<{ fps: number; speed: number } | null>(null);
+  // The sampler reads the module's cumulative counters once a second and hands
+  // the pair to enginePerf.read, which is where the rate and percentage maths
+  // lives — including the cases that otherwise produce a believable wrong
+  // number, like a counter reset by booting a disc.
+  const [perf, setPerf] = createSignal<Reading | null>(null);
   const [showPerf, setShowPerf] = createSignal((() => {
     try { return localStorage.getItem("asp.ps2.fps") === "1"; } catch { return false; }
   })());
   let perfTimer: ReturnType<typeof setInterval> | null = null;
-  let perfPrev: { f: number; v: number; t: number } | null = null;
-  const sampleCounters = () => {
-    // same-origin iframe, so the module is directly reachable
-    const m = (frame?.contentWindow as any)?.__mod;
-    if (!m || typeof m.getFrameCount !== "function" || typeof m.getVblankCount !== "function") return null;
-    return { f: m.getFrameCount(), v: m.getVblankCount(), t: performance.now() };
-  };
+  let perfPrev: Counters | null = null;
+  /** same-origin iframe, so the module is directly reachable */
+  const engineModule = () => (frame?.contentWindow as { __mod?: unknown } | null)?.__mod ?? null;
   const stopPerf = () => {
     if (perfTimer) clearInterval(perfTimer);
     perfTimer = null; perfPrev = null; setPerf(null);
@@ -154,18 +178,12 @@ export default function Ps2(props: {
     if (perfTimer) return;
     perfPrev = null;
     perfTimer = setInterval(() => {
-      const s = sampleCounters();
-      if (!s) { setPerf(null); return; }   // native engine, or not booted yet
-      // Rates need two samples; the first only establishes the baseline.
-      if (perfPrev) {
-        const dt = (s.t - perfPrev.t) / 1000;
-        if (dt > 0) {
-          setPerf({
-            fps: Math.max(0, Math.round((s.f - perfPrev.f) / dt)),
-            speed: Math.max(0, Math.round(((s.v - perfPrev.v) / dt / NTSC_HZ) * 100)),
-          });
-        }
-      }
+      const s = sampleCounters(engineModule(), performance.now());
+      if (!s) { setPerf(null); perfPrev = null; return; }  // native engine, or not booted yet
+      // Rates need two samples; the first only establishes the baseline. A null
+      // reading means the counters reset under us, so the NEXT interval starts
+      // from this sample rather than from the pre-reset one.
+      if (perfPrev) setPerf(readCounters(perfPrev, s) ?? null);
       perfPrev = s;
     }, 1000);
   };
@@ -176,10 +194,56 @@ export default function Ps2(props: {
     try { localStorage.setItem("asp.ps2.fps", on ? "1" : "0"); } catch {}
   };
   createEffect(() => {
-    if (showPerf() && stage() === "playing") startPerf();
+    // The lab needs the same sampler, and needs it whether or not the corner
+    // readout is showing — it is the panel's entire content.
+    if ((showPerf() || labOn) && stage() === "playing") startPerf();
     else stopPerf();
   });
   onCleanup(stopPerf);
+
+  // —— the engine lab's knobs ————————————————————————————————————————————
+  // Everything here talks to the module directly, and every call is guarded:
+  // these bindings exist only on the fork, and a variant deployed by hand may
+  // be an older build that lacks one.
+  // Seeded with the shared core and whatever is already running: the frame is
+  // pointed at that build, so it is demonstrably there, and listing it as "not
+  // built" for the few hundred ms until the probe answers just reads as a bug.
+  const [built, setBuilt] = createSignal<ReadonlySet<string>>(
+    new Set([DEFAULT_VARIANT, variant()]),
+  );
+  if (labOn) {
+    // Which variants were actually built on this machine. One HEAD each.
+    void Promise.all(
+      ENGINE_VARIANTS.map(async (v) => ((await variantAvailable(v.id)) ? v.id : null)),
+    ).then((ids) => setBuilt(new Set(ids.filter((x): x is string => x !== null))));
+  }
+
+  // The engine boots with the limiter ON; nothing reads it back, so this
+  // mirrors what we have set rather than claiming to know the engine's mind.
+  const [frameLimit, setFrameLimit] = createSignal(true);
+  const applyFrameLimit = (on: boolean) => {
+    const m = engineModule() as { setFrameLimit?: (on: boolean) => void } | null;
+    m?.setFrameLimit?.(on);
+    setFrameLimit(on);
+  };
+
+  const applyResLive = (r: Ps2Res) => {
+    // The same path the parent already uses for a live resolution change, so
+    // the GS-thread marshalling and the presentation size stay in one place.
+    frame?.contentWindow?.postMessage({ type: "play-res", factor: r }, location.origin);
+    writeRes(r);
+    setResNow(r);
+  };
+
+  /** Switching build or clock cannot be done under a running VM — both are
+   *  latched when a game boots — so each remembers the choice and restarts the
+   *  disc through the same path the tuning picker uses. */
+  const relaunch = () => { const f = disc(); if (f) reboot(f); };
+  // Setting the signal is enough: routeAndBoot rebuilds the URL from engineSrc()
+  // on the way through, and the nonce reboot forces the frame to reload even
+  // when nothing else about the URL moved.
+  const applyVariant = (id: string) => { writeVariant(id); setVariant(id); relaunch(); };
+  const applyClock = (c: Ps2Clock) => { writeClock(c); setClockNow(c); relaunch(); };
 
   // —— multiplayer (host-authoritative WebRTC streaming) ————————————————————
   // Host: streams the emulator canvas to a joiner and injects the joiner's
@@ -678,7 +742,7 @@ export default function Ps2(props: {
   // actually broke Urban Reign.
   async function bootNow(f: File) {
     pending = null;
-    let den = eeClockDen;
+    let den = eeClockDen();
     let gameConfigXml: string | null = null;
     try {
       const id = await readTitleId(f);
@@ -733,7 +797,7 @@ export default function Ps2(props: {
    *  Anything unrecognised, unreadable, or not actually deployed stays on the
    *  shared core. A missing tuned build must never mean a game will not start. */
   async function routeAndBoot(f: File) {
-    let want = engineSrc;
+    let want = engineSrc();
     try {
       const id = await readTitleId(f);
       const known = id ? overridesFor(id) : null;
@@ -741,7 +805,7 @@ export default function Ps2(props: {
       // other way round — and told how far we actually checked.
       setTuning(id && known ? { id, over: known, choice: effectiveChoice(id, known) } : null);
       const core = id ? activeOverride(id, known)?.core : null;
-      if (core && (await tunedCoreAvailable(core))) want = tunedCoreUrl(core) + coreQuery;
+      if (core && (await tunedCoreAvailable(core))) want = tunedCoreUrl(core) + coreQuery();
     } catch { /* unreadable disc — let the shared core read it and say why */ }
 
     const withNonce = bootNonce() ? `${want}${want.includes("?") ? "&" : "?"}boot=${bootNonce()}` : want;
@@ -909,6 +973,24 @@ export default function Ps2(props: {
               </Show>
               <button class="ghost-btn" classList={{ on: showPerf() }} aria-pressed={showPerf()}
                 onClick={togglePerf}>▤ fps</button>
+              {/* ?perf=1 only, and only on the fork: every variant is a fork
+                  build, and the native engine exports none of the counters the
+                  panel is made of. The variants are gitignored debug builds, so
+                  on a normal deploy there is nothing here to choose between. */}
+              <Show when={labOn && engine === "advanced"}>
+                <Ps2EngineLab
+                  reading={perf}
+                  variant={variant}
+                  built={built}
+                  onVariant={applyVariant}
+                  frameLimit={frameLimit}
+                  onFrameLimit={applyFrameLimit}
+                  res={resNow}
+                  onRes={applyResLive}
+                  clock={clockNow}
+                  onClock={applyClock}
+                />
+              </Show>
               <button class="ghost-btn" onClick={() => requestSave()}>▪ save card</button>
               {/* only for a disc we have tuning for; everything else has
                   nothing to choose between, so it gets no pill. Here rather
@@ -982,10 +1064,10 @@ export default function Ps2(props: {
                   {engine === "native" ? "no speed counters on the native engine" : "measuring…"}
                 </span>
               }>
-                <span class="ps2-perf-n">{perf()!.fps}</span>
+                <span class="ps2-perf-n">{Math.round(perf()!.fps)}</span>
                 <span class="ps2-perf-u">FPS</span>
                 <i class="ps2-perf-sep" />
-                <span class="ps2-perf-n">{perf()!.speed}</span>
+                <span class="ps2-perf-n">{Math.round(perf()!.speed)}</span>
                 <span class="ps2-perf-u">% SPEED</span>
               </Show>
             </div>
