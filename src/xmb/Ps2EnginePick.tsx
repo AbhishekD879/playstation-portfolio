@@ -14,6 +14,10 @@ import {
   readClock, readEngine, readRes, writeClock, writeEngine, writeRes,
   type Ps2Clock, type Ps2Engine, type Ps2Res,
 } from "../ps2/engineChoice";
+import {
+  ENGINE_VARIANTS, readVariant, variantAvailable, writeVariant,
+} from "../ps2/engineVariants";
+import { createResource } from "solid-js";
 
 const ENGINES: { id: Ps2Engine; title: string; sub: string }[] = [
   {
@@ -72,6 +76,27 @@ export default function Ps2EnginePick() {
   const [res, setRes] = createSignal<Ps2Res>(readRes());
   const pickRes = (r: Ps2Res) => { if (r !== res()) { writeRes(r); setRes(r); } };
   const [open, setOpen] = createSignal(false);
+
+  // —— which BUILD of the advanced engine ——————————————————————————————
+  // A speed variant is one compiler lever, compiled separately, so choosing
+  // between them is the same kind of decision as choosing an engine and
+  // belongs on the same screen — before a disc spins.
+  //
+  // These directories are gitignored and stripped from any deploy, so in
+  // production exactly one build exists and this whole section renders
+  // nothing. It appears only on a machine where someone has built a variant,
+  // which is the only place the choice means anything.
+  const [variant, setVariant] = createSignal(readVariant());
+  const [builds] = createResource(async () => {
+    const found = await Promise.all(
+      ENGINE_VARIANTS.map(async (v) => ((await variantAvailable(v.id)) ? v : null)),
+    );
+    return found.filter((v) => v !== null);
+  });
+  const pickVariant = (id: string) => {
+    if (id !== variant()) { writeVariant(id); setVariant(id); }
+    sfx.tickH();
+  };
   const pickEngine = (e: Ps2Engine) => {
     if (e !== engine()) { writeEngine(e); setEngine(e); }
     sfx.tickH();
@@ -153,6 +178,27 @@ export default function Ps2EnginePick() {
               </button>
             )}</For>
           </div>
+
+          {/* Only when more than one build of the advanced engine is actually
+              deployed. In production there is exactly one, so this renders
+              nothing at all rather than offering a choice of one. */}
+          <Show when={!advancedOnly() && (builds()?.length ?? 0) > 1}>
+            <h4 id="hz-build" class="gap">Engine build</h4>
+            <p class="hz-sheet-note">
+              Separate compiles of the advanced engine, each with one compiler option
+              changed. They exist to be measured against each other — pick one, then open
+              Performance while a game runs to see what it changed.
+            </p>
+            <div role="radiogroup" aria-labelledby="hz-build">
+              <For each={builds()}>{(v) => (
+                <button class="hz-srow" classList={{ pri: variant() === v.id }}
+                  role="radio" aria-checked={variant() === v.id} onClick={() => pickVariant(v.id)}>
+                  <span><span class="t">{v.label}</span><span class="s">{v.why}</span></span>
+                  <span class="s">{variant() === v.id ? "ON" : ""}</span>
+                </button>
+              )}</For>
+            </div>
+          </Show>
 
           <h4 id="hz-perf" class="gap">Performance</h4>
           <Show when={advancedOnly()}><p class="hz-sheet-note">Advanced engine only — the native build runs at the console's clock.</p></Show>

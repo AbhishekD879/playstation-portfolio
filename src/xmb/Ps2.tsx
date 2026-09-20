@@ -19,10 +19,9 @@ import { Icon } from "./icons";
 import { makeRoomCode, startHost, startJoinerResilient, type HostHandle, type ResilientJoiner } from "../ps2mp/webrtc";
 import { captureLocalInput, makeInjector, type PadState } from "../ps2mp/input";
 import { bumpPlays, resolveGameFile, type GameRecord } from "../gamesdb";
-import { clockDen, engineUrl, readClock, readEngine, readRes, writeClock, writeRes,
+import { clockDen, engineUrl, readClock, readEngine, readRes,
          type Ps2Clock, type Ps2Res } from "../ps2/engineChoice";
-import { readVariant, variantAvailable, variantUrl, writeVariant, ENGINE_VARIANTS,
-         DEFAULT_VARIANT } from "../ps2/engineVariants";
+import { readVariant, variantUrl } from "../ps2/engineVariants";
 import { read as readCounters, sample as sampleCounters, type Counters, type Reading }
   from "../ps2/enginePerf";
 import Ps2EngineLab from "./Ps2EngineLab";
@@ -93,19 +92,13 @@ export default function Ps2(props: {
   // smoothing need to copy frames out of the frame — it costs a per-frame copy,
   // so it is only requested when one of them is actually on.
   const wantsFrames = upscale() !== "off" || frameGen() !== "off";
-  // ?perf=1 opens the engine lab: the speed variants, the profiler readout and
-  // the knobs that make a measurement mean anything. Debug surface — a player
-  // who has not asked for it never sees a pill for it.
-  const labOn = q.has("perf");
-  // Resolution and build were read-once consts. The lab can change both, and
-  // routeAndBoot rebuilds the frame URL from scratch on every insert — so a
-  // const base would silently put the old value back on the next disc. They are
-  // signals, and the URL is a function of them.
-  //
-  // Both are still LATCHED in the sense that changing them reloads the frame;
-  // nothing here pretends a running VM can be re-pointed.
-  const [resNow, setResNow] = createSignal<Ps2Res>(readRes());
-  const [variant, setVariant] = createSignal(readVariant());
+  // Read once at mount, like the engine. All three are chosen under Emulator on
+  // PS2 home — every launch passes through that screen, and each has to be
+  // settled before a disc spins. Signals rather than consts only because
+  // routeAndBoot rebuilds the frame URL on every insert and reads them through
+  // engineSrc(); nothing in the player writes them.
+  const [resNow] = createSignal<Ps2Res>(readRes());
+  const [variant] = createSignal(readVariant());
   const coreQuery = () => (engine === "advanced" ? `?res=${resNow()}${wantsFrames ? "&keepbuf=1" : ""}` : "");
   // Every variant is a fork build in its own directory, and
   // variantUrl(DEFAULT_VARIANT) is the shared core's own path — so on the
@@ -124,10 +117,8 @@ export default function Ps2(props: {
   const [tuning, setTuning] = createSignal<
     { id: string; over: Ps2Override; choice: TunedChoice } | null
   >(null);
-  // Settled on PS2 home before this component exists, and reactive only so the
-  // lab can change it. Still latched at boot either way: the setter reboots the
-  // disc rather than pretending a running VM can take a new clock.
-  const [clockNow, setClockNow] = createSignal<Ps2Clock>(readClock());
+  // Settled on PS2 home before this component exists; latched at boot.
+  const [clockNow] = createSignal<Ps2Clock>(readClock());
   const eeClockDen = () => clockDen(clockNow());
   void loadOverrides(); // warm the per-game table before a disc arrives
   // A normal boot is still 1 player; the fork only enables a tap above two, so
@@ -194,9 +185,11 @@ export default function Ps2(props: {
     try { localStorage.setItem("asp.ps2.fps", on ? "1" : "0"); } catch {}
   };
   createEffect(() => {
-    // The lab needs the same sampler, and needs it whether or not the corner
-    // readout is showing — it is the panel's entire content.
-    if ((showPerf() || labOn) && stage() === "playing") startPerf();
+    // Runs whenever a game is playing on the fork, because the panel is now a
+    // click away at all times and an empty one the first second after opening
+    // it reads as broken. One sample a second costs nothing.
+    if (stage() === "playing" && engine === "advanced") startPerf();
+    else if (showPerf() && stage() === "playing") startPerf();
     else stopPerf();
   });
   onCleanup(stopPerf);
@@ -205,19 +198,6 @@ export default function Ps2(props: {
   // Everything here talks to the module directly, and every call is guarded:
   // these bindings exist only on the fork, and a variant deployed by hand may
   // be an older build that lacks one.
-  // Seeded with the shared core and whatever is already running: the frame is
-  // pointed at that build, so it is demonstrably there, and listing it as "not
-  // built" for the few hundred ms until the probe answers just reads as a bug.
-  const [built, setBuilt] = createSignal<ReadonlySet<string>>(
-    new Set([DEFAULT_VARIANT, variant()]),
-  );
-  if (labOn) {
-    // Which variants were actually built on this machine. One HEAD each.
-    void Promise.all(
-      ENGINE_VARIANTS.map(async (v) => ((await variantAvailable(v.id)) ? v.id : null)),
-    ).then((ids) => setBuilt(new Set(ids.filter((x): x is string => x !== null))));
-  }
-
   // The engine boots with the limiter ON; nothing reads it back, so this
   // mirrors what we have set rather than claiming to know the engine's mind.
   const [frameLimit, setFrameLimit] = createSignal(true);
@@ -227,23 +207,6 @@ export default function Ps2(props: {
     setFrameLimit(on);
   };
 
-  const applyResLive = (r: Ps2Res) => {
-    // The same path the parent already uses for a live resolution change, so
-    // the GS-thread marshalling and the presentation size stay in one place.
-    frame?.contentWindow?.postMessage({ type: "play-res", factor: r }, location.origin);
-    writeRes(r);
-    setResNow(r);
-  };
-
-  /** Switching build or clock cannot be done under a running VM — both are
-   *  latched when a game boots — so each remembers the choice and restarts the
-   *  disc through the same path the tuning picker uses. */
-  const relaunch = () => { const f = disc(); if (f) reboot(f); };
-  // Setting the signal is enough: routeAndBoot rebuilds the URL from engineSrc()
-  // on the way through, and the nonce reboot forces the frame to reload even
-  // when nothing else about the URL moved.
-  const applyVariant = (id: string) => { writeVariant(id); setVariant(id); relaunch(); };
-  const applyClock = (c: Ps2Clock) => { writeClock(c); setClockNow(c); relaunch(); };
 
   // —— multiplayer (host-authoritative WebRTC streaming) ————————————————————
   // Host: streams the emulator canvas to a joiner and injects the joiner's
@@ -973,22 +936,16 @@ export default function Ps2(props: {
               </Show>
               <button class="ghost-btn" classList={{ on: showPerf() }} aria-pressed={showPerf()}
                 onClick={togglePerf}>▤ fps</button>
-              {/* ?perf=1 only, and only on the fork: every variant is a fork
-                  build, and the native engine exports none of the counters the
-                  panel is made of. The variants are gitignored debug builds, so
-                  on a normal deploy there is nothing here to choose between. */}
-              <Show when={labOn && engine === "advanced"}>
+              {/* Advanced engine only: the native build exports none of the
+                  counters this panel is made of, so there would be nothing to
+                  show. Which BUILD of the advanced engine runs is chosen under
+                  Emulator on PS2 home, with the other boot-time settings. */}
+              <Show when={engine === "advanced"}>
                 <Ps2EngineLab
                   reading={perf}
                   variant={variant}
-                  built={built}
-                  onVariant={applyVariant}
                   frameLimit={frameLimit}
                   onFrameLimit={applyFrameLimit}
-                  res={resNow}
-                  onRes={applyResLive}
-                  clock={clockNow}
-                  onClock={applyClock}
                 />
               </Show>
               <button class="ghost-btn" onClick={() => requestSave()}>▪ save card</button>

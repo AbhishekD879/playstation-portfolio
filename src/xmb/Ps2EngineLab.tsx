@@ -1,42 +1,33 @@
-// The engine lab: which wasm build is running, what it costs, and the knobs
-// that make a measurement mean something. Debug surface, behind ?perf=1.
+// What the emulator is doing right now: where the second goes, and the one
+// control that only makes sense while a game is running.
 //
-// Three sections, in the order the questions get asked:
+// Reached from the in-game bar, next to the fps toggle. It used to hide behind
+// a ?perf=1 URL flag, which is not a UI — nobody lands on a query string they
+// have not been told about.
 //
-//   READING   where the time actually goes, sampled once a second. Without
-//             this, tuning is guessing — the whole reason the panel exists is
-//             that a compiler flag helping the sound chip looks identical to
-//             one helping nothing at all.
-//   BUILD     which variant boots. Each is one compiler lever; swapping means
-//             reloading the frame, so it restarts the disc.
-//   KNOBS     runtime settings, live where the engine allows it.
+// It also used to carry its own copies of the clock and the internal-resolution
+// settings. Those already live in the Emulator sheet on PS2 home, which is
+// where every boot-time choice is made, so a second set here was two homes for
+// one decision. Same for the choice of engine build, which moved there too.
+// What is left is the part that could not live anywhere else: a live reading,
+// and the frame limiter.
 //
-// The frame limiter is first among the knobs on purpose. Left on, every build
-// presents 60 frames and reports 100%, and every lever reads as "no change".
-// Unlocked, frames-per-second is the score.
+// The limiter is here rather than in the Emulator sheet because unlocking it is
+// not a preference, it is an act of measurement. Locked, every build presents
+// 60 frames and reports 100%, so nothing can be told apart; unlocked,
+// frames-per-second is the score.
 import { For, Show, createSignal, onCleanup, onMount } from "solid-js";
 import * as sfx from "../audio";
 import { ZONE_LABEL, type Reading } from "../ps2/enginePerf";
-import { ENGINE_VARIANTS, engineVariant, type EngineVariant } from "../ps2/engineVariants";
-import type { Ps2Clock, Ps2Res } from "../ps2/engineChoice";
+import { engineVariant } from "../ps2/engineVariants";
 
 interface Props {
   /** Live reading, or null while the first interval is still being collected. */
   reading: () => Reading | null;
-  /** Which build is running. */
+  /** Which build is running — named, so a reading can be attributed to one. */
   variant: () => string;
-  /** Which builds are actually deployed — the rest were never built here. */
-  built: () => ReadonlySet<string>;
-  /** Chosen anew. The caller reloads the frame, which restarts the disc. */
-  onVariant: (id: string) => void;
-
   frameLimit: () => boolean;
   onFrameLimit: (on: boolean) => void;
-  res: () => Ps2Res;
-  onRes: (r: Ps2Res) => void;
-  clock: () => Ps2Clock;
-  /** Latched at boot, so the caller restarts the disc. */
-  onClock: (c: Ps2Clock) => void;
 }
 
 const pct = (n: number) => `${n.toFixed(n < 10 ? 1 : 0)}%`;
@@ -96,34 +87,27 @@ export default function Ps2EngineLab(props: Props) {
 
   const current = () => engineVariant(props.variant());
 
-  const pickVariant = (v: EngineVariant) => {
-    if (v.id !== props.variant()) props.onVariant(v.id);
-    sfx.tickH();
-    close();
-  };
-
   return (
     <>
       <button class="ghost-btn" ref={pill} aria-haspopup="dialog" aria-expanded={open()} onClick={show}>
-        ⚡ {current()?.label ?? "engine"}
+        ⚡ performance
       </button>
 
       <Show when={open()}><div class="hz-sheet-scrim" onClick={close} /></Show>
 
-      <aside class="hz-sheet" ref={sheet} hidden={!open()} role="dialog" aria-label="Engine lab">
+      <aside class="hz-sheet" ref={sheet} hidden={!open()} role="dialog" aria-label="Performance">
         <div class="hz-sheet-head">
           <div>
-            <div class="t">Engine lab</div>
+            <div class="t">Performance</div>
             <div class="s">
-              {current()?.label ?? props.variant()}
-              {current()?.levers.length ? ` · ${current()!.levers.join(" ")}` : " · no levers"}
+              Running on {current()?.label ?? props.variant()}
+              {current()?.levers.length ? ` · ${current()!.levers.join(" ")}` : ""}
             </div>
           </div>
         </div>
 
         <div class="hz-sheet-body">
           {/* —— what it is doing right now ———————————————————————————— */}
-          <h4>Reading</h4>
           <Show when={props.reading()} fallback={<p class="hz-sheet-note">Measuring…</p>}>
             {(r) => (
               <>
@@ -171,47 +155,17 @@ export default function Ps2EngineLab(props: Props) {
                 <Show when={r().jit.pctOfWall >= 5}>
                   <p class="hz-sheet-note">
                     A twentieth of the second or more is going into compiling new blocks, not
-                    into running them. That is recompilation stutter, and no flag below fixes it.
+                    into running them. That is recompilation stutter, and no engine build fixes it.
                   </p>
                 </Show>
               </>
             )}
           </Show>
 
-          {/* —— which build ——————————————————————————————————————————— */}
-          <h4 class="gap">Build</h4>
-          <div role="radiogroup" aria-label="Engine build">
-            <For each={ENGINE_VARIANTS}>
-              {(v) => {
-                const here = () => props.built().has(v.id);
-                const on = () => props.variant() === v.id;
-                return (
-                  <button
-                    class="hz-srow"
-                    classList={{ pri: on() }}
-                    role="radio"
-                    aria-checked={on()}
-                    disabled={!here()}
-                    onClick={() => pickVariant(v)}
-                  >
-                    <span>
-                      <span class="t">{v.label}</span>
-                      <span class="s">{here() ? v.why : "Not built on this machine."}</span>
-                    </span>
-                    <span class="s">{on() ? "ON" : here() ? "" : "—"}</span>
-                  </button>
-                );
-              }}
-            </For>
-          </div>
-          <p class="hz-sheet-note">
-            Each is a separate compile, so switching restarts the disc. Your memory card is kept.
-            A build that is not here has not been made yet — see docs/ps2-engine-variants.md for
-            the one-line recipe.
-          </p>
-
-          {/* —— knobs ————————————————————————————————————————————————— */}
-          <h4 class="gap">Knobs</h4>
+          {/* The one control that is an act of measurement rather than a
+              preference, so it does not belong in the Emulator sheet with the
+              settings that persist. */}
+          <h4 class="gap">While measuring</h4>
           <button
             class="hz-srow"
             classList={{ pri: !props.frameLimit() }}
@@ -222,65 +176,16 @@ export default function Ps2EngineLab(props: Props) {
             <span>
               <span class="t">Unlock the frame limiter</span>
               <span class="s">
-                Lets the emulator run as fast as this machine allows, so FPS becomes the score.
-                Leave it locked to play; unlock it to compare two builds, because a locked one
-                reports 100% on both.
+                Lets the emulator run as fast as this machine allows, so the numbers above
+                become a score instead of a target. Leave it locked to play — unlocked, the
+                game runs too fast to control.
               </span>
             </span>
             <span class="s">{props.frameLimit() ? "LOCKED" : "UNLOCKED"}</span>
           </button>
-
-          <div role="radiogroup" aria-label="Internal resolution">
-            <For each={[1, 2, 3] as Ps2Res[]}>
-              {(r) => (
-                <button
-                  class="hz-srow"
-                  classList={{ pri: props.res() === r }}
-                  role="radio"
-                  aria-checked={props.res() === r}
-                  onClick={() => { sfx.tickH(); props.onRes(r); }}
-                >
-                  <span>
-                    <span class="t">{r}× internal resolution</span>
-                    <span class="s">
-                      {r === 1
-                        ? "Native. The only setting that cannot be GPU-bound."
-                        : `Draws every framebuffer at ${r}× — sharper, and the first thing to lower if "GPU wait" is the tall bar above.`}
-                    </span>
-                  </span>
-                  <span class="s">{props.res() === r ? "ON" : ""}</span>
-                </button>
-              )}
-            </For>
-          </div>
-
-          <div role="radiogroup" aria-label="Console clock">
-            <For each={[["full", "Full clock"], ["half", "Half clock"], ["third", "Third clock"]] as [Ps2Clock, string][]}>
-              {([c, label]) => (
-                <button
-                  class="hz-srow"
-                  classList={{ pri: props.clock() === c }}
-                  role="radio"
-                  aria-checked={props.clock() === c}
-                  onClick={() => { sfx.tickH(); props.onClock(c); }}
-                >
-                  <span>
-                    <span class="t">{label}</span>
-                    <span class="s">
-                      {c === "full"
-                        ? "What a real PS2 runs at. Measure here — an underclocked run is not comparable."
-                        : `Emulates fewer CPU cycles per frame, so a struggling machine reaches real time and the game's own framerate drops instead. Restarts the disc.`}
-                    </span>
-                  </span>
-                  <span class="s">{props.clock() === c ? "ON" : ""}</span>
-                </button>
-              )}
-            </For>
-          </div>
-
           <p class="hz-sheet-note">
-            Resolution and the limiter apply immediately. The clock is latched when a game boots,
-            so changing it restarts the disc.
+            The clock, the internal resolution and the engine build are all settled before a
+            disc spins — they live under Emulator on the PS2 screen.
           </p>
         </div>
 

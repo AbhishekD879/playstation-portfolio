@@ -133,7 +133,14 @@ export function variantAvailable(id: string, doFetch: typeof fetch = fetch): Pro
   let probe = probes.get(id);
   if (!probe) {
     probe = doFetch(`/play-${id}/Play.wasm`, { method: "HEAD" })
-      .then((r) => r.ok)
+      // `r.ok` is NOT enough, and this is the trap the host serves up: Cloudflare
+      // Pages answers an unknown path with the SPA fallback — 200, text/html —
+      // so a variant that was never built reads as present. Verified against
+      // production: /play-ehx/Play.wasm and an invented /play-control-xyz/ both
+      // return 200 with text/html, while the real /play-mt/ returns
+      // application/wasm. Only the content type tells them apart, and getting
+      // this wrong offers a build that boots to a blank screen.
+      .then((r) => r.ok && (r.headers.get("content-type") ?? "").includes("wasm"))
       .catch(() => false);
     probes.set(id, probe);
   }

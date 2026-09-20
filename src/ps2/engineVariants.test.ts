@@ -82,9 +82,23 @@ const {
 
 // —— availability: a build that was never made must not boot a blank screen ——
 {
+  // A host that answers unknown paths with an SPA fallback (200, text/html —
+  // Cloudflare Pages does exactly this) must not make an unbuilt variant look
+  // present, or the panel offers a build that boots to a blank screen.
+  resetVariantProbes();
+  const fallback = (async () => ({
+    ok: true, headers: new Headers({ "content-type": "text/html; charset=utf-8" }),
+  })) as unknown as typeof fetch;
+  assert.equal(await variantAvailable("ehx", fallback), false,
+    "200 text/html is the host's catch-all, not a wasm binary");
+}
+{
   resetVariantProbes();
   const seen: string[] = [];
-  const ok = (async (url: string) => { seen.push(url); return { ok: true }; }) as unknown as typeof fetch;
+  const ok = (async (url: string) => {
+    seen.push(url);
+    return { ok: true, headers: new Headers({ "content-type": "application/wasm" }) };
+  }) as unknown as typeof fetch;
 
   assert.equal(await variantAvailable("fast", ok), true);
   assert.deepEqual(seen, ["/play-fast/Play.wasm"], "probes the build's own wasm");
@@ -94,7 +108,7 @@ const {
 }
 {
   resetVariantProbes();
-  const missing = (async () => ({ ok: false })) as unknown as typeof fetch;
+  const missing = (async () => ({ ok: false, headers: new Headers() })) as unknown as typeof fetch;
   assert.equal(await variantAvailable("lto", missing), false, "a 404 reads as unavailable");
 }
 {
@@ -106,7 +120,7 @@ const {
 {
   resetVariantProbes();
   let called = false;
-  const spy = (async () => { called = true; return { ok: true }; }) as unknown as typeof fetch;
+  const spy = (async () => { called = true; return { ok: true, headers: new Headers() }; }) as unknown as typeof fetch;
   assert.equal(await variantAvailable("../../evil", spy), false);
   assert.equal(called, false, "an id off the allowlist is never turned into a request");
 }
